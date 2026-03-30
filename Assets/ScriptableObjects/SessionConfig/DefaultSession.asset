@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
+  m_Name: DefaultSession
+  m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
+  rewardFunction:
+    shapeComponent:
+      basisFunctionType: 0
+      weight: 1
+      peak: 0.5
+      width: 0.25
+    colorComponent:
+      basisFunctionType: 0
+      weight: 1
+      peak: 0.5
+      width: 0.25
+    moistureComponent:
+      basisFunctionType: 0
+      weight: 1
+      peak: 0.5
+      width: 0.25
+  sessionDuration: 120
+  worldSeed: 0
+  treeCount: 50
+  fruitCount: 12
+  fruitRadius: 0.3
+  playerMoveSpeed: 5
+  harvestDuration: 2
+  shapeRange: {x: 0, y: 1}
+  canopyWidthRange: {x: 1, y: 3}
+  canopyHeightRange: {x: 0.5, y: 3}
+  fruitColorLow: {r: 0.2, g: 0.4, b: 1, a: 1}
+  fruitColorHigh: {r: 1, g: 0.5, b: 0.1, a: 1}
+  terrainArid: {r: 0.89505583, g: 0.86208713, b: 0.2910288, a: 1}
+  terrainGrassland: {r: 0.20265628, g: 0.34599388, b: 0.059318677, a: 1}
+  terrainSwampy: {r: 0.1, g: 0.2, b: 0.08, a: 1}
+  terrainNoiseFrequency: 4
+  terrainNoiseOctaves: 1
