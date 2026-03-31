@@ -43,5 +43,9 @@ MonoBehaviour:
   terrainArid: {r: 0.89505583, g: 0.86208713, b: 0.2910288, a: 1}
   terrainGrassland: {r: 0.20265628, g: 0.34599388, b: 0.059318677, a: 1}
   terrainSwampy: {r: 0.1, g: 0.2, b: 0.08, a: 1}
-  terrainNoiseFrequency: 4
+  terrainNoiseFrequency: 3
   terrainNoiseOctaves: 1
+  terrainMaxElevation: 10
+  terrainMeshResolution: 64
+  worldHalfExtent: 100
+  colorContrast: 1

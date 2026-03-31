@@ -25,13 +25,18 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private Color fruitColorHigh = new Color(1.0f, 0.5f, 0.1f);
 
     // Terrain color range
-    [SerializeField] private Color terrainArid = new Color(0.85f, 0.72f, 0.35f);
-    [SerializeField] private Color terrainGrassland = new Color(0.35f, 0.55f, 0.15f);
-    [SerializeField] private Color terrainSwampy = new Color(0.1f, 0.2f, 0.08f);
+    [SerializeField] private Color terrainArid = new Color(0.76f, 0.65f, 0.42f);
+    [SerializeField] private Color terrainGrassland = new Color(0.44f, 0.56f, 0.24f);
+    [SerializeField] private Color terrainSwampy = new Color(0.22f, 0.29f, 0.18f);
 
     // Terrain noise
     [SerializeField] private float terrainNoiseFrequency = 4f;
     [SerializeField] private int terrainNoiseOctaves = 1;
+
+    [SerializeField] private float terrainMaxElevation = 3f;
+    [SerializeField] private int terrainMeshResolution = 64;
+    [SerializeField] private float worldHalfExtent = 50f;
+    [SerializeField] private float colorContrast = 1.5f;
 
     public RewardFunction RewardFunction => rewardFunction;
     public float SessionDuration => sessionDuration;
@@ -51,6 +56,10 @@ public class SessionConfig : ScriptableObject
     public Color TerrainSwampy => terrainSwampy;
     public float TerrainNoiseFrequency => terrainNoiseFrequency;
     public int TerrainNoiseOctaves => terrainNoiseOctaves;
+    public float TerrainMaxElevation => terrainMaxElevation;
+    public int TerrainMeshResolution => terrainMeshResolution;
+    public float WorldHalfExtent => worldHalfExtent;
+    public float ColorContrast => colorContrast;
 
     public float EvaluateReward(TreeAttributes attributes)
     {

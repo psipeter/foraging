@@ -4,49 +4,137 @@ using UnityEngine;
 public class TerrainManager : MonoBehaviour
 {
     [SerializeField] private SessionConfig sessionConfig;
-    [SerializeField] private MeshRenderer groundRenderer;
-    [SerializeField] private int textureResolution = 256;
+    [SerializeField] private GameObject groundObject;
+    [SerializeField] private Material terrainMaterial;
+
+    // Fallback noise values if no SessionConfig is assigned.
     [SerializeField] private float noiseFrequency = 4f;
     [SerializeField] private int noiseOctaves = 1;
 
-    private const float WorldHalfExtent = 50f;
+    private static readonly Color Arid = new Color(0.76f, 0.65f, 0.42f);
+    private static readonly Color Grassland = new Color(0.44f, 0.56f, 0.24f);
+    private static readonly Color Swampy = new Color(0.22f, 0.29f, 0.18f);
 
-    private static readonly Color Arid = new Color(0.85f, 0.72f, 0.35f);
-    private static readonly Color Grassland = new Color(0.35f, 0.55f, 0.15f);
-    private static readonly Color Swampy = new Color(0.1f, 0.2f, 0.08f);
+    public GameObject GroundObject => groundObject;
 
     private void Start()
     {
-        if (groundRenderer == null)
+        if (groundObject == null)
         {
             return;
         }
 
-        int res = Mathf.Max(2, textureResolution);
-        var texture = new Texture2D(res, res, TextureFormat.RGBA32, false)
+        int res = sessionConfig != null ? Mathf.Max(2, sessionConfig.TerrainMeshResolution) : 64;
+        float maxElevation = sessionConfig != null ? sessionConfig.TerrainMaxElevation : 3f;
+
+        var mesh = new Mesh
         {
-            wrapMode = TextureWrapMode.Clamp,
-            filterMode = FilterMode.Bilinear
+            name = $"ForagingTerrain_{res}"
         };
 
-        for (int py = 0; py < res; py++)
+        // Vertex layout: i across X (worldX), j across Z (worldZ).
+        int vertexCount = res * res;
+        var vertices = new Vector3[vertexCount];
+        var uvs = new Vector2[vertexCount];
+        var colors = new Color[vertexCount];
+
+        float inv = 1f / (res - 1);
+
+        float halfExtent = sessionConfig != null ? sessionConfig.WorldHalfExtent : 50f;
+
+        for (int i = 0; i < res; i++)
         {
-            for (int px = 0; px < res; px++)
+            float worldX = Mathf.Lerp(-halfExtent, halfExtent, i * inv);
+            for (int j = 0; j < res; j++)
             {
-                float wx = Mathf.Lerp(-WorldHalfExtent, WorldHalfExtent, px / (float)(res - 1));
-                float wz = Mathf.Lerp(-WorldHalfExtent, WorldHalfExtent, py / (float)(res - 1));
-                float m = SampleMoisture(wx, wz);
-                texture.SetPixel(px, py, MoistureToColor(m));
+                float worldZ = Mathf.Lerp(-halfExtent, halfExtent, j * inv);
+
+                float m = SampleMoisture(worldX, worldZ);
+                float elevation = (1f - m) * maxElevation;
+
+                int idx = i * res + j;
+                vertices[idx] = new Vector3(worldX, elevation, worldZ);
+                uvs[idx] = new Vector2(i * inv, j * inv);
+                colors[idx] = MoistureToColor(m);
             }
         }
 
-        texture.Apply();
-        groundRenderer.material.mainTexture = texture;
+        // Two triangles per grid cell, consistent winding order.
+        int quadCount = (res - 1) * (res - 1);
+        var triangles = new int[quadCount * 6];
+
+        int t = 0;
+        for (int i = 0; i < res - 1; i++)
+        {
+            for (int j = 0; j < res - 1; j++)
+            {
+                int v00 = i * res + j;
+                int v10 = (i + 1) * res + j;
+                int v01 = i * res + (j + 1);
+                int v11 = (i + 1) * res + (j + 1);
+
+                // Upward facing triangles.
+                triangles[t++] = v00;
+                triangles[t++] = v01;
+                triangles[t++] = v10;
+
+                triangles[t++] = v10;
+                triangles[t++] = v01;
+                triangles[t++] = v11;
+            }
+        }
+
+        mesh.vertices = vertices;
+        mesh.uv = uvs;
+        mesh.colors = colors;
+        mesh.triangles = triangles;
+        mesh.RecalculateNormals();
+
+        MeshFilter meshFilter = groundObject.GetComponent<MeshFilter>();
+        if (meshFilter == null)
+        {
+            meshFilter = groundObject.AddComponent<MeshFilter>();
+        }
+        meshFilter.sharedMesh = mesh;
+
+        MeshRenderer meshRenderer = groundObject.GetComponent<MeshRenderer>();
+        if (meshRenderer == null)
+        {
+            meshRenderer = groundObject.AddComponent<MeshRenderer>();
+        }
+
+        if (terrainMaterial != null)
+        {
+            meshRenderer.sharedMaterial = terrainMaterial;
+        }
+        else
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit/VertexColor");
+            if (shader == null)
+            {
+                Debug.LogWarning("VertexColor shader not found. Falling back to Unlit/Color.");
+                shader = Shader.Find("Unlit/Color");
+            }
+            meshRenderer.sharedMaterial = new Material(shader);
+        }
+
+        MeshCollider meshCollider = groundObject.GetComponent<MeshCollider>();
+        if (meshCollider == null)
+        {
+            meshCollider = groundObject.AddComponent<MeshCollider>();
+        }
+        meshCollider.sharedMesh = mesh;
     }
 
     public float SampleMoisture(float worldX, float worldZ)
     {
         return Mathf.Clamp01(ComputeMoisture(worldX, worldZ));
+    }
+
+    public float SampleElevation(float worldX, float worldZ)
+    {
+        float maxElevation = sessionConfig != null ? sessionConfig.TerrainMaxElevation : 3f;
+        return (1f - SampleMoisture(worldX, worldZ)) * maxElevation;
     }
 
     private float ComputeMoisture(float worldX, float worldZ)
@@ -86,6 +174,24 @@ public class TerrainManager : MonoBehaviour
         Color swampy = sessionConfig != null ? sessionConfig.TerrainSwampy : Swampy;
 
         float m = Mathf.Clamp01(moisture);
+
+        // Apply contrast curve before mapping to the gradient.
+        float contrast = sessionConfig != null ? sessionConfig.ColorContrast : 1.5f;
+        contrast = Mathf.Max(0.0001f, contrast);
+
+        if (m <= 0.5f)
+        {
+            float t = m * 2f;
+            t = Mathf.Pow(t, 1f / contrast);
+            m = t * 0.5f;
+        }
+        else
+        {
+            float t = (1f - m) * 2f;
+            t = Mathf.Pow(t, 1f / contrast);
+            m = 1f - t * 0.5f;
+        }
+
         if (m <= 0.5f)
         {
             return Color.Lerp(arid, grassland, m / 0.5f);

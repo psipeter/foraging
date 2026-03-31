@@ -8,7 +8,6 @@ public class TreeGenerator : MonoBehaviour
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private GameObject treePrefab;
 
-    private const float WorldHalfExtent = 50f;
     private const float MinTreeDistance = 5f;
     private const int MaxPlacementAttempts = 800;
 
@@ -33,7 +32,9 @@ public class TreeGenerator : MonoBehaviour
                 break;
             }
 
-            Vector3 pos = candidate.Value;
+            Vector3 candidatePos = candidate.Value;
+            float elevation = terrainManager.SampleElevation(candidatePos.x, candidatePos.z);
+            Vector3 pos = new Vector3(candidatePos.x, elevation, candidatePos.z);
             GameObject instance = Instantiate(treePrefab, pos, Quaternion.identity);
             var tree = instance.GetComponent<Tree>();
             if (tree == null)
@@ -63,10 +64,12 @@ public class TreeGenerator : MonoBehaviour
 
     private Vector3? TryFindPosition(List<Vector3> existing)
     {
+        float halfExtent = sessionConfig != null ? sessionConfig.WorldHalfExtent : 50f;
+
         for (int attempt = 0; attempt < MaxPlacementAttempts; attempt++)
         {
-            float x = Random.Range(-WorldHalfExtent, WorldHalfExtent);
-            float z = Random.Range(-WorldHalfExtent, WorldHalfExtent);
+            float x = Random.Range(-halfExtent, halfExtent);
+            float z = Random.Range(-halfExtent, halfExtent);
             var candidate = new Vector3(x, 0f, z);
 
             if (IsFarEnough(candidate, existing))
