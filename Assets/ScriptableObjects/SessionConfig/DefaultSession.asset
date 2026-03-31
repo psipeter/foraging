@@ -28,24 +28,34 @@ MonoBehaviour:
       weight: 1
       peak: 0.5
       width: 0.25
-  sessionDuration: 120
+  sessionDuration: 60
   worldSeed: 0
-  treeCount: 50
+  treeCount: 100
   fruitCount: 12
   fruitRadius: 0.3
   playerMoveSpeed: 5
   harvestDuration: 2
   shapeRange: {x: 0, y: 1}
-  canopyWidthRange: {x: 1, y: 3}
+  canopyWidthRange: {x: 0.25, y: 1.5}
   canopyHeightRange: {x: 0.5, y: 3}
   fruitColorLow: {r: 0.2, g: 0.4, b: 1, a: 1}
   fruitColorHigh: {r: 1, g: 0.5, b: 0.1, a: 1}
   terrainArid: {r: 0.89505583, g: 0.86208713, b: 0.2910288, a: 1}
   terrainGrassland: {r: 0.20265628, g: 0.34599388, b: 0.059318677, a: 1}
   terrainSwampy: {r: 0.1, g: 0.2, b: 0.08, a: 1}
-  terrainNoiseFrequency: 3
+  terrainNoiseFrequency: 4
   terrainNoiseOctaves: 1
-  terrainMaxElevation: 10
-  terrainMeshResolution: 64
+  terrainMaxElevation: 25
+  terrainMeshResolution: 256
   worldHalfExtent: 100
-  colorContrast: 1
+  colorContrast: 0.5
+  sunArcHeight: 90
+  sunRiseDirection: {x: 0, y: 0, z: 1}
+  sunColorDawn: {r: 0.7058824, g: 0.3137255, b: 0.11764706, a: 1}
+  sunColorNoon: {r: 1, g: 0.95, b: 0.8, a: 1}
+  skyColorDawn: {r: 0.8, g: 0.4, b: 0.2, a: 1}
+  skyColorNoon: {r: 0.3, g: 0.6, b: 1, a: 1}
+  skyColorDusk: {r: 0.6, g: 0.2, b: 0.1, a: 1}
+  ambientDawn: {r: 0.11764706, g: 0.078431375, b: 0.039215688, a: 1}
+  ambientNoon: {r: 0.3019608, g: 0.3019608, b: 0.34901962, a: 1}
+  ambientDusk: {r: 0.09803922, g: 0.039215688, b: 0.019607844, a: 1}

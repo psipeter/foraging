@@ -38,6 +38,24 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float worldHalfExtent = 50f;
     [SerializeField] private float colorContrast = 1.5f;
 
+    // Sun arc
+    [SerializeField] private float sunArcHeight = 60f;
+    [SerializeField] private Vector3 sunRiseDirection = new Vector3(0f, 0f, 1f);
+
+    // Sun color gradient (sunrise/set → midday)
+    [SerializeField] private Color sunColorDawn = new Color(1.0f, 0.4f, 0.1f);
+    [SerializeField] private Color sunColorNoon = new Color(1.0f, 0.95f, 0.8f);
+
+    // Sky color gradient
+    [SerializeField] private Color skyColorDawn = new Color(0.8f, 0.4f, 0.2f);
+    [SerializeField] private Color skyColorNoon = new Color(0.3f, 0.6f, 1.0f);
+    [SerializeField] private Color skyColorDusk = new Color(0.6f, 0.2f, 0.1f);
+
+    // Ambient light gradient
+    [SerializeField] private Color ambientDawn = new Color(0.15f, 0.1f, 0.08f);
+    [SerializeField] private Color ambientNoon = new Color(0.2f, 0.2f, 0.25f);
+    [SerializeField] private Color ambientDusk = new Color(0.12f, 0.08f, 0.06f);
+
     public RewardFunction RewardFunction => rewardFunction;
     public float SessionDuration => sessionDuration;
     public int WorldSeed => worldSeed;
@@ -60,6 +78,16 @@ public class SessionConfig : ScriptableObject
     public int TerrainMeshResolution => terrainMeshResolution;
     public float WorldHalfExtent => worldHalfExtent;
     public float ColorContrast => colorContrast;
+    public float SunArcHeight => sunArcHeight;
+    public Vector3 SunRiseDirection => sunRiseDirection;
+    public Color SunColorDawn => sunColorDawn;
+    public Color SunColorNoon => sunColorNoon;
+    public Color SkyColorDawn => skyColorDawn;
+    public Color SkyColorNoon => skyColorNoon;
+    public Color SkyColorDusk => skyColorDusk;
+    public Color AmbientDawn => ambientDawn;
+    public Color AmbientNoon => ambientNoon;
+    public Color AmbientDusk => ambientDusk;
 
     public float EvaluateReward(TreeAttributes attributes)
     {

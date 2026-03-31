@@ -6,6 +6,7 @@ public class TerrainManager : MonoBehaviour
     [SerializeField] private SessionConfig sessionConfig;
     [SerializeField] private GameObject groundObject;
     [SerializeField] private Material terrainMaterial;
+    [SerializeField] private SunController sunController;
 
     // Fallback noise values if no SessionConfig is assigned.
     [SerializeField] private float noiseFrequency = 4f;
@@ -16,6 +17,8 @@ public class TerrainManager : MonoBehaviour
     private static readonly Color Swampy = new Color(0.22f, 0.29f, 0.18f);
 
     public GameObject GroundObject => groundObject;
+
+    private Color[] _baseColors;
 
     private void Start()
     {
@@ -118,12 +121,19 @@ public class TerrainManager : MonoBehaviour
             meshRenderer.sharedMaterial = new Material(shader);
         }
 
+        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.TwoSided;
+        meshRenderer.receiveShadows = true;
+
         MeshCollider meshCollider = groundObject.GetComponent<MeshCollider>();
         if (meshCollider == null)
         {
             meshCollider = groundObject.AddComponent<MeshCollider>();
         }
         meshCollider.sharedMesh = mesh;
+
+        _baseColors = colors;
+
+        UpdateTerrainLighting();
     }
 
     public float SampleMoisture(float worldX, float worldZ)
@@ -135,6 +145,38 @@ public class TerrainManager : MonoBehaviour
     {
         float maxElevation = sessionConfig != null ? sessionConfig.TerrainMaxElevation : 3f;
         return (1f - SampleMoisture(worldX, worldZ)) * maxElevation;
+    }
+
+    public void UpdateTerrainLighting()
+    {
+        if (groundObject == null)
+        {
+            return;
+        }
+
+        MeshFilter meshFilter = groundObject.GetComponent<MeshFilter>();
+        if (meshFilter == null || meshFilter.sharedMesh == null || _baseColors == null)
+        {
+            return;
+        }
+
+        Mesh mesh = meshFilter.sharedMesh;
+        Color[] tintedColors = mesh.colors;
+        if (tintedColors == null || tintedColors.Length != _baseColors.Length)
+        {
+            tintedColors = new Color[_baseColors.Length];
+        }
+
+        Color ambient = sunController != null ? sunController.CurrentAmbientColor : RenderSettings.ambientLight;
+        Color ambientScaled = ambient * 2f;
+
+        for (int i = 0; i < _baseColors.Length; i++)
+        {
+            tintedColors[i] = _baseColors[i] * ambientScaled;
+        }
+
+        mesh.colors = tintedColors;
+        mesh.UploadMeshData(false);
     }
 
     private float ComputeMoisture(float worldX, float worldZ)

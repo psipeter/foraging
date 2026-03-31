@@ -1,0 +1,34 @@
+# Foraging Project — Cursor Rules
+
+Always read README.md at the start of every task for full project context.
+
+## Stack
+- Unity 6000.0 LTS, URP, C# 9.0
+- New Unity Input System
+- Git/GitHub for version control
+
+## Core Rules
+- SessionConfig is the single source of truth for ALL parameters — never hardcode values that a researcher might want to change
+- Always add public properties for new SessionConfig fields
+- MonoBehaviours use [SerializeField] for inspector-exposed fields
+- Use C# Actions for events, not UnityEvents
+- Never use FindObjectOfType — use direct references or FindObjectsByType sparingly
+- Never modify ProjectSettings/, Packages/, or .meta files unless explicitly asked
+- Fruits are runtime-instantiated, never prefab children
+- Player is kinematic — never re-enable physics-based movement
+
+## Patterns
+- New session parameters go in SessionConfig.cs with a [SerializeField] field, private backing field, and public property
+- Visual ranges (colors, scales) go in SessionConfig so researchers can tune without code changes
+- Procedural systems use sessionConfig.WorldSeed for reproducibility
+- Always include fallback values when sessionConfig is null
+
+## File Locations
+- Player scripts: Assets/Scripts/Player/
+- Bush/tree scripts: Assets/Scripts/Trees/
+- World generation: Assets/Scripts/World/
+- Session management: Assets/Scripts/Session/
+- Shaders: Assets/Shaders/
+- Materials: Assets/Materials/
+- Prefabs: Assets/Prefabs/
+- ScriptableObjects: Assets/ScriptableObjects/

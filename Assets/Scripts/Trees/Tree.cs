@@ -18,6 +18,7 @@ public class Tree : MonoBehaviour
 {
     public TreeAttributes attributes;
     [SerializeField] public SessionConfig sessionConfig;
+    [SerializeField] public SunController sunController;
 
     [SerializeField] private GameObject canopy;
     [SerializeField] private int hemisphereSegments = 24;
@@ -30,6 +31,9 @@ public class Tree : MonoBehaviour
 
     private static readonly Color ColorLow = new Color(0.2f, 0.4f, 1.0f);
     private static readonly Color ColorHigh = new Color(1.0f, 0.5f, 0.1f);
+
+    private Color _baseCanopyColor = Color.white;
+    private bool _hasBaseCanopyColor;
 
     private void Awake()
     {
@@ -81,6 +85,19 @@ public class Tree : MonoBehaviour
         sphere.isTrigger = true;
         sphere.radius = 0.5f; // Unit hemisphere radius in local mesh space.
         sphere.center = Vector3.zero;
+
+        // Cache base canopy color once so ambient tinting can be applied relative to it.
+        MeshRenderer canopyRenderer = canopy.GetComponent<MeshRenderer>();
+        if (canopyRenderer != null && !_hasBaseCanopyColor && canopyRenderer.sharedMaterial != null)
+        {
+            _baseCanopyColor = canopyRenderer.sharedMaterial.color;
+            _hasBaseCanopyColor = true;
+
+            if (sunController != null)
+            {
+                UpdateLighting(sunController.CurrentAmbientColor);
+            }
+        }
 
         // Rebuild fruits procedurally.
         // Destroy existing runtime fruits first.
@@ -141,7 +158,7 @@ public class Tree : MonoBehaviour
             MeshRenderer renderer = fruit.GetComponent<MeshRenderer>();
             if (renderer != null)
             {
-                renderer.material.color = fruitColor;
+                renderer.sharedMaterial = FruitMaterialManager.GetMaterial(fruitColor);
             }
 
             _fruits.Add(fruit);
@@ -162,5 +179,28 @@ public class Tree : MonoBehaviour
                 fruit.SetActive(!harvested);
             }
         }
+    }
+
+    public void UpdateLighting(Color ambientColor)
+    {
+        if (canopy == null)
+        {
+            return;
+        }
+
+        MeshRenderer canopyRenderer = canopy.GetComponent<MeshRenderer>();
+        if (canopyRenderer == null || canopyRenderer.sharedMaterial == null)
+        {
+            return;
+        }
+
+        if (!_hasBaseCanopyColor)
+        {
+            _baseCanopyColor = canopyRenderer.sharedMaterial.color;
+            _hasBaseCanopyColor = true;
+        }
+
+        Color tinted = _baseCanopyColor * (ambientColor * 2f);
+        canopyRenderer.sharedMaterial.color = tinted;
     }
 }

@@ -7,6 +7,7 @@ public class TreeGenerator : MonoBehaviour
     [SerializeField] private SessionConfig sessionConfig;
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private GameObject treePrefab;
+    [SerializeField] private SunController sunController;
 
     private const float MinTreeDistance = 5f;
     private const int MaxPlacementAttempts = 800;
@@ -45,6 +46,7 @@ public class TreeGenerator : MonoBehaviour
 
             int treeIndex = placed;
             tree.sessionConfig = sessionConfig;
+            tree.sunController = sunController;
             tree.fruitCount = sessionConfig.FruitCount;
             tree.fruitRadius = sessionConfig.FruitRadius;
             tree.fruitSeed = sessionConfig.WorldSeed + treeIndex * 7;
