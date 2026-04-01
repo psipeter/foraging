@@ -94,6 +94,7 @@ Assets/
 - Fruits are runtime-instantiated (not prefab children) — no manual fruit management in Editor
 - No FindObjectOfType in production code (FindObjectsByType is acceptable for infrequent calls)
 - Terrain and canopy lighting tinted at runtime by SunController via ambient color multiplication
+- **GameManager is the single point of config assignment** — never assign SessionConfig directly in Inspector on individual components
 
 # Key Design Decisions (and Rationale)
 - **Fruit count constant**: avoids strong prior that more fruit = more reward

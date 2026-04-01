@@ -109,6 +109,7 @@ public class HarvestManager : MonoBehaviour
         if (playerController != null)
         {
             playerController.SetFrozen(false);
+            playerController.ClearTarget();
         }
 
         _isHarvesting = false;

@@ -24,7 +24,9 @@ public class Tree : MonoBehaviour
     [SerializeField] private GameObject canopy;
     [SerializeField] private int hemisphereSegments = 24;
 
-    [SerializeField] public int fruitCount = 12;
+    [SerializeField] private BushHighlight highlight;
+
+    [SerializeField] public int fruitCount = 10;
     [SerializeField] public float fruitRadius = 0.15f;
     [SerializeField] public int fruitSeed;
 
@@ -82,14 +84,43 @@ public class Tree : MonoBehaviour
         }
         meshFilter.sharedMesh = HemisphereMesh.Create(hemisphereSegments);
 
-        SphereCollider sphere = canopy.GetComponent<SphereCollider>();
-        if (sphere == null)
+        // Adjust trigger radius to match bush size in world space, using a collider on the root.
+        float maxScaleXZ = Mathf.Max(canopyScale.x, canopyScale.z);
+        float worldRadius = maxScaleXZ * 0.5f + 0.8f;
+
+        // Ensure no collider remains on the canopy child.
+        SphereCollider canopyCollider = canopy.GetComponent<SphereCollider>();
+        if (canopyCollider != null)
         {
-            sphere = canopy.AddComponent<SphereCollider>();
+            Destroy(canopyCollider);
         }
-        sphere.isTrigger = true;
-        sphere.radius = 0.5f; // Unit hemisphere radius in local mesh space.
-        sphere.center = Vector3.zero;
+
+        SphereCollider rootCollider = GetComponent<SphereCollider>();
+        if (rootCollider == null)
+        {
+            rootCollider = gameObject.AddComponent<SphereCollider>();
+        }
+
+        rootCollider.isTrigger = true;
+        rootCollider.center = new Vector3(0f, canopyScale.y * 0.3f, 0f);
+        rootCollider.radius = worldRadius;
+
+        // Add a capsule collider for physical blocking.
+        CapsuleCollider cap = GetComponent<CapsuleCollider>();
+        if (cap == null)
+        {
+            cap = gameObject.AddComponent<CapsuleCollider>();
+        }
+        cap.isTrigger = false;
+        cap.direction = 1; // Y axis
+        cap.center = new Vector3(0f, canopyScale.y * 0.3f, 0f);
+        cap.radius = maxScaleXZ * 0.4f;
+        cap.height = canopyScale.y * 0.8f;
+
+        if (highlight != null)
+        {
+            highlight.SetRingRadius(worldRadius);
+        }
 
         // Cache base canopy color once so ambient tinting can be applied relative to it.
         MeshRenderer canopyRenderer = canopy.GetComponent<MeshRenderer>();
@@ -205,6 +236,14 @@ public class Tree : MonoBehaviour
         return canopy != null ? canopy.transform.position : transform.position;
     }
 
+    public void SetTerrainManager(TerrainManager tm)
+    {
+        if (highlight != null)
+        {
+            highlight.terrainManager = tm;
+        }
+    }
+
     public void UpdateLighting(Color ambientColor)
     {
         if (canopy == null)
@@ -226,5 +265,13 @@ public class Tree : MonoBehaviour
 
         Color tinted = _baseCanopyColor * (ambientColor * 2f);
         canopyRenderer.sharedMaterial.color = tinted;
+    }
+
+    public void SetHighlight(bool active)
+    {
+        if (highlight != null)
+        {
+            highlight.SetVisible(active);
+        }
     }
 }

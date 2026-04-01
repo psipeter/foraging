@@ -100,6 +100,7 @@ public class PlayerController : MonoBehaviour
         {
             canHarvest = true;
             _targetTree = tree;
+            _targetTree.SetHighlight(true);
         }
     }
 
@@ -109,6 +110,7 @@ public class PlayerController : MonoBehaviour
         if (tree != null)
         {
             canHarvest = false;
+            tree.SetHighlight(false);
             _targetTree = null;
         }
     }
@@ -120,5 +122,16 @@ public class PlayerController : MonoBehaviour
         {
             moveInput = Vector2.zero;
         }
+    }
+
+    public void ClearTarget()
+    {
+        if (_targetTree != null)
+        {
+            _targetTree.SetHighlight(false);
+        }
+
+        _targetTree = null;
+        canHarvest = false;
     }
 }

@@ -48,6 +48,7 @@ public class TreeGenerator : MonoBehaviour
             tree.treeId = treeIndex;
             tree.sessionConfig = sessionConfig;
             tree.sunController = sunController;
+            tree.SetTerrainManager(terrainManager);
             tree.fruitCount = sessionConfig.FruitCount;
             tree.fruitRadius = sessionConfig.FruitRadius;
             tree.fruitSeed = sessionConfig.WorldSeed + treeIndex * 7;

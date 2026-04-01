@@ -100,6 +100,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4789055294063279746}
   - component: {fileID: 2232081367341753524}
+  - component: {fileID: 776677564590751556}
   m_Layer: 0
   m_Name: Tree
   m_TagString: Untagged
@@ -139,9 +140,36 @@ MonoBehaviour:
     shape: 0
     color: 0
     moisture: 0
+  treeId: 0
   sessionConfig: {fileID: 11400000, guid: 1b2cf37538a2f83b0a1b11dc29893c5a, type: 2}
+  sunController: {fileID: 0}
   canopy: {fileID: 4033088253865625869}
   hemisphereSegments: 24
-  fruitCount: 12
+  highlight: {fileID: 776677564590751556}
+  fruitCount: 10
   fruitRadius: 0.15
   fruitSeed: 0
+  isHarvested: 0
+--- !u!114 &776677564590751556
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4163433376014564458}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5fd059d117091347b91cff1dd36f84e0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BushHighlight
+  terrainManager: {fileID: 0}
+  ringRadius: 2
+  ringSegments: 48
+  yOffset: 0.15
+  terrainMask:
+    serializedVersion: 2
+    m_Bits: 8
+  pulseSpeed: 1
+  pulseMinAlpha: 0.1
+  pulseMaxAlpha: 0.4
+  discColor: {r: 1, g: 1, b: 1, a: 0.039215688}
