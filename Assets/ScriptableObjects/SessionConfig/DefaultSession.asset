@@ -28,7 +28,7 @@ MonoBehaviour:
       weight: 1
       peak: 0.5
       width: 0.25
-  sessionDuration: 20
+  sessionDuration: 60
   worldSeed: 0
   treeCount: 100
   fruitCount: 12
@@ -47,7 +47,7 @@ MonoBehaviour:
   terrainNoiseFrequency: 4
   terrainNoiseOctaves: 1
   terrainMaxElevation: 25
-  terrainMeshResolution: 256
+  terrainMeshResolution: 128
   worldHalfExtent: 100
   colorContrast: 0.5
   sunArcHeight: 90

@@ -17,6 +17,7 @@ Fruits:
 public class Tree : MonoBehaviour
 {
     public TreeAttributes attributes;
+    public int treeId;
     [SerializeField] public SessionConfig sessionConfig;
     [SerializeField] public SunController sunController;
 

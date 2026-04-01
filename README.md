@@ -128,10 +128,9 @@ All tunable from the Unity Inspector:
 - Always commit before starting a Claude session
 
 # Current State
-- ✅ Session timer with MM:SS countdown display (top-left HUD)
-- ✅ Session ends at sunset, freezes player, shows end panel
-- ✅ Final score displayed on session end
-- ✅ Mid-harvest session end handled cleanly
+- ✅ Data logging: movement sampled at 0.1s with visibility tracking
+- ✅ Harvest events logged with attributes, rewards, fruit-level detail
+- ✅ Session metadata JSON with bush registry and reward function
 
 # Next Steps (suggested build order)
 1. Harvest mechanic — time cost, trigger detection, call SetHarvested()

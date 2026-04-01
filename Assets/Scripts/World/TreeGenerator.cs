@@ -45,6 +45,7 @@ public class TreeGenerator : MonoBehaviour
             }
 
             int treeIndex = placed;
+            tree.treeId = treeIndex;
             tree.sessionConfig = sessionConfig;
             tree.sunController = sunController;
             tree.fruitCount = sessionConfig.FruitCount;

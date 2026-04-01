@@ -9,6 +9,11 @@ public class RewardComponent
     [SerializeField] private float peak = 0.5f;
     [SerializeField] private float width = 0.25f;
 
+    public string TypeName => basisFunctionType.ToString();
+    public float Weight => weight;
+    public float Peak => peak;
+    public float Width => width;
+
     public float Evaluate(float attributeValue)
     {
         float normalizedValue = Mathf.Clamp01(attributeValue);

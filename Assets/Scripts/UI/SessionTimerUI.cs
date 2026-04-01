@@ -63,7 +63,7 @@ public class SessionTimerUI : MonoBehaviour
     private void HandleSessionEnd()
     {
         // Freeze player and disable input.
-        PlayerController player = FindObjectOfType<PlayerController>();
+        PlayerController player = FindFirstObjectByType<PlayerController>();
         if (player != null)
         {
             player.SetFrozen(true);
