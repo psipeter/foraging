@@ -35,7 +35,7 @@ public float moveSpeed = 5f;
             _capsuleCollider = gameObject.AddComponent<CapsuleCollider>();
         }
 
-        PhysicMaterial mat = new PhysicMaterial("PlayerCapsuleMaterial")
+        PhysicsMaterial mat = new PhysicsMaterial("PlayerCapsuleMaterial")
         {
             dynamicFriction = 0f,
             staticFriction = 0f,
