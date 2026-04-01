@@ -9,11 +9,11 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float sessionDuration = 120f;
     [SerializeField] private int worldSeed;
     [SerializeField] private int treeCount = 50;
-    [SerializeField] private int fruitCount = 12;
+    [SerializeField] private int fruitCount = 10;
     [SerializeField] private float fruitRadius = 0.15f;
     [SerializeField] private float playerMoveSpeed = 5f;
     [SerializeField] private float fruitHarvestDuration = 0.8f;
-    [SerializeField] private float rewardNoiseMagnitude = 0.1f;
+    [SerializeField] private float rewardStd = 1.0f;
 
     // Shape range
     [SerializeField] private Vector2 shapeRange = new Vector2(0f, 1f);
@@ -66,7 +66,7 @@ public class SessionConfig : ScriptableObject
     public float PlayerMoveSpeed => playerMoveSpeed;
     public float FruitHarvestDuration => fruitHarvestDuration;
     public float HarvestDuration => fruitHarvestDuration * Mathf.Max(1, fruitCount);
-    public float RewardNoiseMagnitude => rewardNoiseMagnitude;
+    public float RewardStd => rewardStd;
     public Vector2 ShapeRange => shapeRange;
     public Vector2 CanopyWidthRange => canopyWidthRange;
     public Vector2 CanopyHeightRange => canopyHeightRange;

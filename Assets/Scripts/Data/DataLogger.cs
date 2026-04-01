@@ -49,7 +49,7 @@ public class DataLogger : MonoBehaviour
     private void Start()
     {
         _sessionId = Guid.NewGuid().ToString("N").Substring(0, 8);
-        string root = Path.Combine(Application.persistentDataPath, "ForagingData");
+        string root = Path.Combine(Application.dataPath, "..", "ForagingData");
         _sessionDataPath = Path.Combine(root, _sessionId);
 
         try
@@ -191,7 +191,7 @@ public class DataLogger : MonoBehaviour
         float trueReward = sessionConfig.EvaluateReward(tree.attributes);
         float timeRemaining = sunController != null ? sunController.SessionTimeRemaining : 0f;
 
-        string fruitRewards = string.Join(";", _currentFruitRewards.ConvertAll(v => v.ToString("F3", CultureInfo.InvariantCulture)));
+        string fruitRewards = string.Join(";", _currentFruitRewards.ConvertAll(v => v.ToString("F0", CultureInfo.InvariantCulture)));
 
         string line = string.Format(CultureInfo.InvariantCulture,
             "{0},{1:F3},{2:F3},{3},{4:F3},{5:F3},{6:F3},{7:F3},{8:F3},{9:F3},{10:F3},{11:F3},{12:F3},{13:F3},\"{14}\"",
@@ -286,7 +286,7 @@ public class DataLogger : MonoBehaviour
         sb.AppendLine($"  \"treeCount\": {sessionConfig.TreeCount},");
         sb.AppendLine($"  \"fruitCount\": {sessionConfig.FruitCount},");
         sb.AppendLine($"  \"fruitHarvestDuration\": {sessionConfig.FruitHarvestDuration.ToString(CultureInfo.InvariantCulture)},");
-        sb.AppendLine($"  \"rewardNoiseMagnitude\": {sessionConfig.RewardNoiseMagnitude.ToString(CultureInfo.InvariantCulture)},");
+        sb.AppendLine($"  \"rewardStd\": {sessionConfig.RewardStd.ToString(CultureInfo.InvariantCulture)},");
         sb.AppendLine($"  \"playerMoveSpeed\": {sessionConfig.PlayerMoveSpeed.ToString(CultureInfo.InvariantCulture)},");
         sb.AppendLine($"  \"maxVisibilityDistance\": {maxVisibilityDistance.ToString(CultureInfo.InvariantCulture)},");
         sb.AppendLine($"  \"movementSampleInterval\": {movementSampleInterval.ToString(CultureInfo.InvariantCulture)},");

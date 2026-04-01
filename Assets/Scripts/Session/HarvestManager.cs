@@ -72,14 +72,10 @@ public class HarvestManager : MonoBehaviour
 
         for (int i = _fruitsCollected; i < targetFruits; i++)
         {
-            float baseReward = 0f;
-            if (_currentTree.FruitCount > 0)
-            {
-                baseReward = _currentTree.Evaluate(sessionConfig.RewardFunction) / _currentTree.FruitCount;
-            }
-
-            float noise = GaussianNoise() * sessionConfig.RewardNoiseMagnitude;
-            float fruitReward = Mathf.Max(0f, baseReward + noise);
+            float bushReward = _currentTree.Evaluate(sessionConfig.RewardFunction);
+            float noise = GaussianNoise() * sessionConfig.RewardStd;
+            float fruitReward = Mathf.Max(0f,
+                Mathf.RoundToInt(bushReward + noise));
 
             _currentTree.HideFruit(i);
 

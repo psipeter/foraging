@@ -15,18 +15,18 @@ MonoBehaviour:
   rewardFunction:
     shapeComponent:
       basisFunctionType: 0
-      weight: 1
-      peak: 0.5
+      weight: 2
+      peak: 1
       width: 0.25
     colorComponent:
       basisFunctionType: 0
       weight: 1
-      peak: 0.5
+      peak: 1
       width: 0.25
     moistureComponent:
       basisFunctionType: 0
-      weight: 1
-      peak: 0.5
+      weight: 0.5
+      peak: 1
       width: 0.25
   sessionDuration: 60
   worldSeed: 0
@@ -34,8 +34,8 @@ MonoBehaviour:
   fruitCount: 12
   fruitRadius: 0.3
   playerMoveSpeed: 5
-  fruitHarvestDuration: 0.8
-  rewardNoiseMagnitude: 0.1
+  fruitHarvestDuration: 0.5
+  rewardStd: 1
   shapeRange: {x: 0, y: 1}
   canopyWidthRange: {x: 0.25, y: 1.5}
   canopyHeightRange: {x: 0.5, y: 3}

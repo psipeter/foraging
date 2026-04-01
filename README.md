@@ -120,6 +120,7 @@ All tunable from the Unity Inspector:
 - Terrain does not self-shadow (URP limitation at landscape scale) — hills do not cast shadows onto adjacent hills
 - Shadow bias artifacts at very low sun angles — mitigated by minSunElevation on SunController
 - FruitMaterialManager cache persists across Play mode sessions in Editor — restart Unity if fruit colors appear stale
+- ForagingData/ folder is gitignored — back up participant data separately before pushing
 
 # Git Workflow
 - main: stable builds only
@@ -128,9 +129,11 @@ All tunable from the Unity Inspector:
 - Always commit before starting a Claude session
 
 # Current State
-- ✅ Data logging: movement sampled at 0.1s with visibility tracking
-- ✅ Harvest events logged with attributes, rewards, fruit-level detail
-- ✅ Session metadata JSON with bush registry and reward function
+- ✅ Per-fruit integer rewards sampled from Gaussian(bushReward, rewardStd)
+- ✅ No reward normalization — bush reward is raw weighted sum
+- ✅ Reward function weights and basis functions tunable per-session in DefaultSession
+- ✅ Integer display (F0) for all reward feedback
+- ✅ Session data saved to ForagingData/ in project root (gitignored)
 
 # Next Steps (suggested build order)
 1. Harvest mechanic — time cost, trigger detection, call SetHarvested()

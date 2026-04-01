@@ -29,19 +29,19 @@ public class HarvestUI : MonoBehaviour
 
     private void HandleFruitCollected(float amount, Vector3 worldPos)
     {
-        SpawnFloatingText($"+{amount:F1}", worldPos, fruitTextDuration, fruitTextRise, 1f, true);
+        SpawnFloatingText($"+{amount:F0}", worldPos, fruitTextDuration, fruitTextRise, 1f, true);
     }
 
     private void HandleHarvestSummary(float totalAmount, Vector3 worldPos)
     {
-        SpawnFloatingText($"Total: {totalAmount:F1}", worldPos + Vector3.up * 1.5f, 2.5f, 100f, 1.2f, false);
+        SpawnFloatingText($"Total: {totalAmount:F0}", worldPos + Vector3.up * 1.5f, 2.5f, 100f, 1.2f, false);
     }
 
     private void HandleHarvestComplete(float runningTotal)
     {
         if (totalScoreText != null)
         {
-            totalScoreText.text = $"Score: {runningTotal:F1}";
+            totalScoreText.text = $"Score: {runningTotal:F0}";
         }
     }
 

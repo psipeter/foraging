@@ -19,6 +19,6 @@ public class RewardFunction
             colorComponent.Evaluate(attributes.color) +
             moistureComponent.Evaluate(attributes.moisture);
 
-        return Mathf.Clamp01(reward);
+        return reward;
     }
 }
