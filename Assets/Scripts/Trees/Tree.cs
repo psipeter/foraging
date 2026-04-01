@@ -35,6 +35,10 @@ public class Tree : MonoBehaviour
     private Color _baseCanopyColor = Color.white;
     private bool _hasBaseCanopyColor;
 
+    public bool isHarvested = false;
+
+    public int FruitCount => _fruits.Count;
+
     private void Awake()
     {
         gameObject.tag = "Interactable";
@@ -179,6 +183,25 @@ public class Tree : MonoBehaviour
                 fruit.SetActive(!harvested);
             }
         }
+    }
+
+    public void HideFruit(int index)
+    {
+        if (index < 0 || index >= _fruits.Count)
+        {
+            return;
+        }
+
+        GameObject fruit = _fruits[index];
+        if (fruit != null)
+        {
+            fruit.SetActive(false);
+        }
+    }
+
+    public Vector3 GetWorldCenter()
+    {
+        return canopy != null ? canopy.transform.position : transform.position;
     }
 
     public void UpdateLighting(Color ambientColor)

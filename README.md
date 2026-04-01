@@ -128,15 +128,12 @@ All tunable from the Unity Inspector:
 - Always commit before starting a Claude session
 
 # Current State
-- ✅ Player movement (WASD, kinematic, terrain-following)
-- ✅ Procedural bush generation with 3 continuous attributes
-- ✅ Hemisphere mesh with Fibonacci fruit placement
-- ✅ Perlin noise terrain with elevation and moisture-based vertex coloring
-- ✅ Dynamic day/night cycle: sun arc, sky gradient, ambient tinting
-- ✅ Terrain and canopy tinted by ambient light over session duration
-- ✅ Unlit fruit materials — color always readable regardless of lighting
-- ✅ All visual parameters tunable via SessionConfig
-- ✅ Reward function framework (modular basis functions)
+- ✅ Harvest mechanic: Space to harvest, player frozen during harvest
+- ✅ Sequential fruit collection with per-fruit reward feedback
+- ✅ Gaussian noise on per-fruit rewards for distributional experience
+- ✅ Floating reward numbers with rise/linger/fade animation
+- ✅ Summary total shown on harvest completion
+- ✅ Running score displayed in HUD
 
 # Next Steps (suggested build order)
 1. Harvest mechanic — time cost, trigger detection, call SetHarvested()

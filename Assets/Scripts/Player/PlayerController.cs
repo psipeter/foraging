@@ -7,10 +7,13 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float moveSpeed = 5f;
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private float groundOffset = 1.0f;
+    [SerializeField] private HarvestManager harvestManager;
 
     private Rigidbody playerRigidbody;
     private Vector2 moveInput;
     private bool canHarvest;
+    private bool _frozen;
+    private Tree _targetTree;
 
     private void Awake()
     {
@@ -25,6 +28,11 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (_frozen)
+        {
+            return;
+        }
+
         Vector3 currentPos = playerRigidbody.position;
         Vector3 delta = new Vector3(moveInput.x, 0f, moveInput.y) * moveSpeed * Time.fixedDeltaTime;
 
@@ -64,31 +72,53 @@ public class PlayerController : MonoBehaviour
 
     public void OnHarvest(InputAction.CallbackContext context)
     {
-        if (!context.performed || !canHarvest)
+        if (!context.performed)
         {
             return;
         }
 
-        Harvest();
+        if (!canHarvest)
+        {
+            return;
+        }
+
+        if (harvestManager != null && harvestManager.IsHarvesting)
+        {
+            return;
+        }
+
+        if (harvestManager != null && _targetTree != null)
+        {
+            harvestManager.StartHarvest(_targetTree);
+        }
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        if (other.CompareTag("Interactable"))
+        Tree tree = other.GetComponentInParent<Tree>();
+        if (tree != null)
         {
             canHarvest = true;
+            _targetTree = tree;
         }
     }
 
     private void OnTriggerExit(Collider other)
     {
-        if (other.CompareTag("Interactable"))
+        Tree tree = other.GetComponentInParent<Tree>();
+        if (tree != null)
         {
             canHarvest = false;
+            _targetTree = null;
         }
     }
 
-    private void Harvest()
+    public void SetFrozen(bool frozen)
     {
+        _frozen = frozen;
+        if (frozen)
+        {
+            moveInput = Vector2.zero;
+        }
     }
 }

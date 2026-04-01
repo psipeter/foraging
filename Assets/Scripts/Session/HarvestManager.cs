@@ -1,0 +1,113 @@
+using System;
+using UnityEngine;
+
+public class HarvestManager : MonoBehaviour
+{
+    [SerializeField] private SessionConfig sessionConfig;
+    [SerializeField] private PlayerController playerController;
+
+    private bool _isHarvesting;
+    private float _harvestTimer;
+    private Tree _currentTree;
+    private float _runningTotal;
+    private int _fruitsCollected;
+    private float _totalHarvestReward;
+
+    public static event Action<float> OnHarvestComplete;
+    public static event Action<float, Vector3> OnFruitCollected;
+    public static event Action<float, Vector3> OnHarvestSummary;
+
+    public bool IsHarvesting => _isHarvesting;
+
+    public void StartHarvest(Tree tree)
+    {
+        if (_isHarvesting || tree == null || tree.isHarvested)
+        {
+            return;
+        }
+
+        _currentTree = tree;
+        _isHarvesting = true;
+        _harvestTimer = 0f;
+        _fruitsCollected = 0;
+        _totalHarvestReward = 0f;
+
+        if (playerController != null)
+        {
+            playerController.SetFrozen(true);
+        }
+    }
+
+    private void Update()
+    {
+        if (!_isHarvesting || _currentTree == null || sessionConfig == null)
+        {
+            return;
+        }
+
+        _harvestTimer += Time.deltaTime;
+
+        int fruitCount = Mathf.Max(1, _currentTree.FruitCount);
+        float duration = Mathf.Max(sessionConfig.FruitHarvestDuration * fruitCount, 0.0001f);
+        float normalized = Mathf.Clamp01(_harvestTimer / duration);
+
+        int targetFruits = Mathf.FloorToInt(normalized * _currentTree.FruitCount);
+        targetFruits = Mathf.Min(targetFruits, _currentTree.FruitCount);
+
+        for (int i = _fruitsCollected; i < targetFruits; i++)
+        {
+            float baseReward = 0f;
+            if (_currentTree.FruitCount > 0)
+            {
+                baseReward = _currentTree.Evaluate(sessionConfig.RewardFunction) / _currentTree.FruitCount;
+            }
+
+            float noise = GaussianNoise() * sessionConfig.RewardNoiseMagnitude;
+            float fruitReward = Mathf.Max(0f, baseReward + noise);
+
+            _currentTree.HideFruit(i);
+
+            Vector3 worldPos = _currentTree.GetWorldCenter();
+            OnFruitCollected?.Invoke(fruitReward, worldPos);
+
+            _totalHarvestReward += fruitReward;
+            _fruitsCollected++;
+        }
+
+        if (_harvestTimer >= duration)
+        {
+            CompleteHarvest();
+        }
+    }
+
+    private void CompleteHarvest()
+    {
+        if (_currentTree != null)
+        {
+            _currentTree.isHarvested = true;
+            _currentTree.SetHarvested(true);
+
+            _runningTotal += _totalHarvestReward;
+
+            Vector3 worldPos = _currentTree.GetWorldCenter();
+            OnHarvestSummary?.Invoke(_totalHarvestReward, worldPos);
+            OnHarvestComplete?.Invoke(_runningTotal);
+        }
+
+        if (playerController != null)
+        {
+            playerController.SetFrozen(false);
+        }
+
+        _isHarvesting = false;
+        _currentTree = null;
+    }
+
+    private float GaussianNoise()
+    {
+        float u1 = 1f - UnityEngine.Random.value;
+        float u2 = 1f - UnityEngine.Random.value;
+        return Mathf.Sqrt(-2f * Mathf.Log(u1)) * Mathf.Sin(2f * Mathf.PI * u2);
+    }
+}
+
