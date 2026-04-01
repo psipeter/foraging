@@ -128,12 +128,10 @@ All tunable from the Unity Inspector:
 - Always commit before starting a Claude session
 
 # Current State
-- ✅ Harvest mechanic: Space to harvest, player frozen during harvest
-- ✅ Sequential fruit collection with per-fruit reward feedback
-- ✅ Gaussian noise on per-fruit rewards for distributional experience
-- ✅ Floating reward numbers with rise/linger/fade animation
-- ✅ Summary total shown on harvest completion
-- ✅ Running score displayed in HUD
+- ✅ Session timer with MM:SS countdown display (top-left HUD)
+- ✅ Session ends at sunset, freezes player, shows end panel
+- ✅ Final score displayed on session end
+- ✅ Mid-harvest session end handled cleanly
 
 # Next Steps (suggested build order)
 1. Harvest mechanic — time cost, trigger detection, call SetHarvested()
