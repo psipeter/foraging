@@ -4,7 +4,7 @@ using UnityEngine;
 [DefaultExecutionOrder(10)]
 public class TreeGenerator : MonoBehaviour
 {
-    [SerializeField] private SessionConfig sessionConfig;
+    public SessionConfig sessionConfig;
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private GameObject treePrefab;
     [SerializeField] private SunController sunController;

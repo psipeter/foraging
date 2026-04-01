@@ -7,7 +7,7 @@ public class SessionTimerUI : MonoBehaviour
 {
     [SerializeField] private TextMeshProUGUI timerText;
     [SerializeField] private SunController sunController;
-    [SerializeField] private SessionConfig sessionConfig;
+    public SessionConfig sessionConfig;
     [SerializeField] private GameObject sessionEndPanel;
     [SerializeField] private TextMeshProUGUI finalScoreText;
 

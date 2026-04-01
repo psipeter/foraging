@@ -129,11 +129,8 @@ All tunable from the Unity Inspector:
 - Always commit before starting a Claude session
 
 # Current State
-- ✅ Per-fruit integer rewards sampled from Gaussian(bushReward, rewardStd)
-- ✅ No reward normalization — bush reward is raw weighted sum
-- ✅ Reward function weights and basis functions tunable per-session in DefaultSession
-- ✅ Integer display (F0) for all reward feedback
-- ✅ Session data saved to ForagingData/ in project root (gitignored)
+- ✅ GameManager distributes SessionConfig to all systems — single place to change configs
+- ✅ Five reward function configs: linear, gaussian, three-linear, mixed, all-nonlinear
 
 # Next Steps (suggested build order)
 1. Harvest mechanic — time cost, trigger detection, call SetHarvested()

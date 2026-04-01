@@ -9,7 +9,7 @@ using UnityEngine;
 [DefaultExecutionOrder(20)]
 public class DataLogger : MonoBehaviour
 {
-    [SerializeField] private SessionConfig sessionConfig;
+    public SessionConfig sessionConfig;
     [SerializeField] private SunController sunController;
     [SerializeField] private PlayerController playerController;
     [SerializeField] private Camera mainCamera;

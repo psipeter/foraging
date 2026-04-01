@@ -3,7 +3,7 @@ using UnityEngine;
 
 public class HarvestManager : MonoBehaviour
 {
-    [SerializeField] private SessionConfig sessionConfig;
+    public SessionConfig sessionConfig;
     [SerializeField] private PlayerController playerController;
     [SerializeField] private SunController sunController;
 

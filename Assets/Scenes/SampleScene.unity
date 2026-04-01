@@ -256,6 +256,58 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 151448830}
   m_CullTransparentMesh: 1
+--- !u!1 &205307909
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 205307911}
+  - component: {fileID: 205307910}
+  m_Layer: 0
+  m_Name: GameManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &205307910
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 205307909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 405d309d6eb8e36adb0ca11b7a71aaca, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameManager
+  sessionConfig: {fileID: 11400000, guid: 756a0f7e0d78f61cd999cf0ef194b19a, type: 2}
+  sunController: {fileID: 419207779}
+  harvestManager: {fileID: 528505460}
+  terrainManager: {fileID: 1847944418}
+  treeGenerator: {fileID: 1544515995}
+  playerController: {fileID: 581266112}
+  dataLogger: {fileID: 718741463}
+  sessionTimerUI: {fileID: 1153043574}
+--- !u!4 &205307911
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 205307909}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.12702, y: 1.58975, z: 0.47519}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &301916360
 GameObject:
   m_ObjectHideFlags: 0
@@ -686,7 +738,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3fcfdb5ff972e1939a850fa8b602df9d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SunController
-  sessionConfig: {fileID: 11400000, guid: 1b2cf37538a2f83b0a1b11dc29893c5a, type: 2}
+  sessionConfig: {fileID: 0}
   sunLight: {fileID: 410087040}
   mainCamera: {fileID: 330585545}
   minSunElevation: 40
@@ -736,7 +788,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f7c87f9648aa21a9b5b8f0454734323, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HarvestManager
-  sessionConfig: {fileID: 11400000, guid: 1b2cf37538a2f83b0a1b11dc29893c5a, type: 2}
+  sessionConfig: {fileID: 0}
   playerController: {fileID: 581266112}
   sunController: {fileID: 0}
 --- !u!4 &528505461
@@ -1174,7 +1226,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fc3c4fcca6fff4497be602ae8feeda8b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DataLogger
-  sessionConfig: {fileID: 11400000, guid: 1b2cf37538a2f83b0a1b11dc29893c5a, type: 2}
+  sessionConfig: {fileID: 0}
   sunController: {fileID: 419207779}
   playerController: {fileID: 581266112}
   mainCamera: {fileID: 330585545}
@@ -1493,7 +1545,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SessionTimerUI
   timerText: {fileID: 1016130530}
   sunController: {fileID: 419207779}
-  sessionConfig: {fileID: 11400000, guid: 1b2cf37538a2f83b0a1b11dc29893c5a, type: 2}
+  sessionConfig: {fileID: 0}
   sessionEndPanel: {fileID: 1050203413}
   finalScoreText: {fileID: 301916361}
 --- !u!4 &1153043575
@@ -1664,7 +1716,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 203b1f919c9772f389ff47262822d9dc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TreeGenerator
-  sessionConfig: {fileID: 11400000, guid: 1b2cf37538a2f83b0a1b11dc29893c5a, type: 2}
+  sessionConfig: {fileID: 0}
   terrainManager: {fileID: 1847944418}
   treePrefab: {fileID: 4163433376014564458, guid: 938a0f117e809833c8cf07626d56ae32, type: 3}
   sunController: {fileID: 0}
@@ -1712,7 +1764,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c7a7a71bcc95e34dabf55f7f38f8a3b7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TerrainManager
-  sessionConfig: {fileID: 11400000, guid: 1b2cf37538a2f83b0a1b11dc29893c5a, type: 2}
+  sessionConfig: {fileID: 0}
   groundObject: {fileID: 698392481}
   terrainMaterial: {fileID: 2100000, guid: d242da58f5aac8407bddacc6b0edbd6f, type: 2}
   sunController: {fileID: 419207779}
@@ -1828,3 +1880,4 @@ SceneRoots:
   - {fileID: 1977193274}
   - {fileID: 1153043575}
   - {fileID: 718741464}
+  - {fileID: 205307911}

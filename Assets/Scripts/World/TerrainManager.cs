@@ -3,7 +3,7 @@ using UnityEngine;
 [DefaultExecutionOrder(-10)]
 public class TerrainManager : MonoBehaviour
 {
-    [SerializeField] private SessionConfig sessionConfig;
+    public SessionConfig sessionConfig;
     [SerializeField] private GameObject groundObject;
     [SerializeField] private Material terrainMaterial;
     [SerializeField] private SunController sunController;

@@ -15,7 +15,7 @@ Scene setup instructions (SampleScene):
 */
 public class SunController : MonoBehaviour
 {
-    [SerializeField] private SessionConfig sessionConfig;
+    public SessionConfig sessionConfig;
     [SerializeField] private Light sunLight;
     [SerializeField] private Camera mainCamera;
     [SerializeField] private float minSunElevation = 30f;
