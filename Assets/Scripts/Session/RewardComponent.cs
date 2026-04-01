@@ -33,9 +33,6 @@ public class RewardComponent
             case BasisFunctionType.InvertedGaussian:
                 basisValue = 1f - EvaluateGaussian(normalizedValue);
                 break;
-            case BasisFunctionType.Sinusoidal:
-                basisValue = 0.5f + 0.5f * Mathf.Sin(normalizedValue * Mathf.PI * 2f);
-                break;
             case BasisFunctionType.Constant:
                 basisValue = 1f;
                 break;

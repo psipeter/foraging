@@ -10,24 +10,24 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
-  m_Name: DefaultSession
+  m_Name: Config_4_Mixed
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
   rewardFunction:
     shapeComponent:
       basisFunctionType: 2
-      weight: 3
-      peak: 0.5
+      weight: 2
+      peak: 0.4
       width: 0.2
     colorComponent:
       basisFunctionType: 0
-      weight: 0
-      peak: 1
-      width: 0.2
+      weight: 1
+      peak: 0
+      width: 0
     moistureComponent:
-      basisFunctionType: 0
-      weight: 0
-      peak: 1
-      width: 0.2
+      basisFunctionType: 1
+      weight: 1
+      peak: 0
+      width: 0
   sessionDuration: 60
   worldSeed: 0
   treeCount: 100

@@ -4,6 +4,5 @@ public enum BasisFunctionType
     InvertedLinear,
     GaussianPeak,
     InvertedGaussian,
-    Sinusoidal,
     Constant
 }
