@@ -28,13 +28,14 @@ MonoBehaviour:
       weight: 1
       peak: 0.5
       width: 0.25
-  sessionDuration: 60
+  sessionDuration: 20
   worldSeed: 0
   treeCount: 100
   fruitCount: 12
   fruitRadius: 0.3
   playerMoveSpeed: 5
-  harvestDuration: 2
+  fruitHarvestDuration: 0.8
+  rewardNoiseMagnitude: 0.1
   shapeRange: {x: 0, y: 1}
   canopyWidthRange: {x: 0.25, y: 1.5}
   canopyHeightRange: {x: 0.5, y: 3}

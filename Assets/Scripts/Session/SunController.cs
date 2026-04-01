@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 /*
@@ -22,6 +23,7 @@ public class SunController : MonoBehaviour
     [SerializeField] private TreeGenerator treeGenerator;
 
     private float sessionTime;
+    private bool _sessionEndFired;
 
     private float SessionDuration =>
         sessionConfig != null ? sessionConfig.SessionDuration : 120f;
@@ -29,6 +31,10 @@ public class SunController : MonoBehaviour
     public float SessionProgress => Mathf.Clamp01(sessionTime / Mathf.Max(SessionDuration, 0.0001f));
     public bool SessionComplete => sessionTime >= SessionDuration;
     public Color CurrentAmbientColor => RenderSettings.ambientLight;
+
+    public static event Action OnSessionEnd;
+
+    public float SessionTimeRemaining => Mathf.Max(0f, SessionDuration - sessionTime);
 
     private void Start()
     {
@@ -42,6 +48,11 @@ public class SunController : MonoBehaviour
     {
         if (SessionComplete)
         {
+            if (!_sessionEndFired)
+            {
+                _sessionEndFired = true;
+                OnSessionEnd?.Invoke();
+            }
             return;
         }
 

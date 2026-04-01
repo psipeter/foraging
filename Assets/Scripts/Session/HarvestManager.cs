@@ -5,6 +5,7 @@ public class HarvestManager : MonoBehaviour
 {
     [SerializeField] private SessionConfig sessionConfig;
     [SerializeField] private PlayerController playerController;
+    [SerializeField] private SunController sunController;
 
     private bool _isHarvesting;
     private float _harvestTimer;
@@ -19,8 +20,23 @@ public class HarvestManager : MonoBehaviour
 
     public bool IsHarvesting => _isHarvesting;
 
+    private void OnEnable()
+    {
+        SunController.OnSessionEnd += HandleSessionEnd;
+    }
+
+    private void OnDisable()
+    {
+        SunController.OnSessionEnd -= HandleSessionEnd;
+    }
+
     public void StartHarvest(Tree tree)
     {
+        if (sunController != null && sunController.SessionComplete)
+        {
+            return;
+        }
+
         if (_isHarvesting || tree == null || tree.isHarvested)
         {
             return;
@@ -97,6 +113,17 @@ public class HarvestManager : MonoBehaviour
         if (playerController != null)
         {
             playerController.SetFrozen(false);
+        }
+
+        _isHarvesting = false;
+        _currentTree = null;
+    }
+
+    private void HandleSessionEnd()
+    {
+        if (_isHarvesting)
+        {
+            CompleteHarvest();
         }
 
         _isHarvesting = false;
