@@ -20,7 +20,6 @@ public class SunController : MonoBehaviour
     [SerializeField] private Camera mainCamera;
     [SerializeField] private float minSunElevation = 30f;
     [SerializeField] private TerrainManager terrainManager;
-    [SerializeField] private TreeGenerator treeGenerator;
 
     private float sessionTime;
     private bool _sessionEndFired;

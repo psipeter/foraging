@@ -35,8 +35,9 @@ Fruits are **unlit** — their color is always fully readable regardless of ligh
 - Canopy shape controlled by scaling the hemisphere: wide/flat vs narrow/tall
 - Fruits are runtime-generated spheres distributed across the dome surface using a Fibonacci/sunflower spiral pattern with per-bush seed jitter for even coverage
 - Fruit count is constant across all bushes (configured in SessionConfig)
-- Ground is a flat-based mesh with Perlin noise elevation and vertex color moisture gradient
+- Ground is a mesh with Perlin noise elevation and vertex color moisture gradient
 - Dynamic day/night cycle: sun arc drives directional light rotation, color, and intensity; ambient light tints terrain and canopy over session duration
+- Tree highlight: pulsing semi-transparent disc projected onto terrain surface when player is in harvest range
 - All visual parameters tunable via SessionConfig in the Unity Inspector
 
 # Camera
@@ -54,73 +55,106 @@ Fruits are **unlit** — their color is always fully readable regardless of ligh
 Assets/
   Scripts/
     Player/
-      PlayerController.cs       — WASD kinematic movement, terrain-following, trigger-based harvest detection
+      PlayerController.cs       — non-kinematic physics movement, terrain-following, trigger-based harvest detection
     Trees/
       TreeAttributes.cs          — struct: shape, color, moisture (all float 0-1)
-      BasisFunctionType.cs       — enum: Linear, InvertedLinear, GaussianPeak, etc.
+      BasisFunctionType.cs       — enum: Linear, InvertedLinear, GaussianPeak, InvertedGaussian, Constant
       RewardComponent.cs         — serializable: basis function + weight, Evaluate(float)
       RewardFunction.cs          — serializable: 3 RewardComponents, Evaluate(TreeAttributes)
       HemisphereMesh.cs          — static utility: generates cached hemisphere mesh
-      Tree.cs                    — MonoBehaviour: applies attributes, generates fruits, trigger collider, lighting update
+      Tree.cs                    — MonoBehaviour: applies attributes, generates fruits, colliders, lighting, highlight
       FruitMaterialManager.cs    — static: caches unlit fruit materials by color
+      TreeHighlight.cs           — terrain-projected pulsing disc highlight
     World/
       TerrainManager.cs          — generates Perlin noise elevation mesh, vertex color moisture map, runtime lighting tint
       TreeGenerator.cs           — places bushes procedurally using seeded random placement
     Session/
       SessionConfig.cs           — ScriptableObject: ALL session and visual parameters
       SunController.cs           — drives directional light arc, sky color, ambient tinting over session duration
+      HarvestManager.cs          — manages harvest process, per-fruit reward sampling, events
+      GameManager.cs             — distributes SessionConfig to all systems at startup
+    UI/
+      HarvestUI.cs               — floating reward text, score HUD
+      SessionTimerUI.cs          — countdown timer, session end panel
+    Data/
+      DataLogger.cs              — movement CSV, harvest CSV, session metadata JSON
   Scenes/
     SampleScene.unity            — main scene
   Prefabs/
     Trees/
       Tree.prefab                — canopy sphere only (no fruits, no trunk — all runtime generated)
+    UI/
+      FloatingText.prefab        — floating reward number UI element
   ScriptableObjects/
     SessionConfig/
       DefaultSession.asset       — default session configuration
+      Config_1_Linear.asset      — one feature, linear
+      Config_2_Gaussian.asset    — one feature, gaussian peak
+      Config_3_ThreeLinear.asset — three features, all linear
+      Config_4_Mixed.asset       — three features, mixed linear/nonlinear
+      Config_5_AllNonlinear.asset— three features, all nonlinear
   Materials/
     CanopyMaterial.mat           — double-sided URP/Lit material for bush canopy
     TerrainMaterial.mat          — uses custom VertexColor shader with shadow receiving
   Shaders/
     VertexColor.shader           — URP unlit + shadow receiving shader for terrain
     FruitUnlit.shader            — fully unlit shader for fruits (_Color property)
+    RingUnlit.shader             — transparent unlit shader for tree highlight disc
 
 # Architecture Principles
-- **SessionConfig is the single source of truth** for ALL session parameters and visual ranges — never hardcode values that researchers might want to change
-- MonoBehaviours use [SerializeField] for all inspector-exposed fields
-- Game events will use C# Actions (not UnityEvents)
+- **GameManager is the single point of SessionConfig assignment** — never assign SessionConfig directly in Inspector on individual components; GameManager distributes it in Awake()
+- **SessionConfig is the single source of truth** for ALL session parameters and visual ranges
+- Components that receive SessionConfig from GameManager use `public SessionConfig sessionConfig` (no [SerializeField])
+- Components that need Inspector wiring use `[SerializeField] private` fields
+- `[SerializeField] public` is never correct — avoid it
+- MonoBehaviours use [SerializeField] private for all inspector-exposed fields
+- Game events use C# Actions (not UnityEvents)
 - Reward function is modular and swappable — defined entirely in SessionConfig, never hardcoded
 - Tree visuals driven entirely by attribute values via SessionConfig ranges
 - Procedural content uses WorldSeed for full reproducibility
 - Fruits are runtime-instantiated (not prefab children) — no manual fruit management in Editor
-- No FindObjectOfType in production code (FindObjectsByType is acceptable for infrequent calls)
-- Terrain and canopy lighting tinted at runtime by SunController via ambient color multiplication
-- **GameManager is the single point of config assignment** — never assign SessionConfig directly in Inspector on individual components
+- No FindObjectOfType in production code (FindObjectsByType acceptable for infrequent calls)
+- Player uses non-kinematic Rigidbody with zero-friction physics material
+- Player/Terrain/Tree on separate layers — collision matrix prevents terrain sliding while allowing tree collision
+- Terrain following via downward raycast each FixedUpdate, not physics gravity
 
-# Key Design Decisions (and Rationale)
-- **Fruit count constant**: avoids strong prior that more fruit = more reward
-- **Abstract fruit color axis (blue→orange)**: avoids red/green ripeness associations
-- **Moisture as terrain attribute**: ecologically valid, spatially continuous, no strong reward prior
-- **Unlit fruit materials**: fruit color always readable regardless of time of day
-- **Fibonacci spiral fruit placement**: ensures even dome coverage without clustering
-- **Shape as aspect ratio not overall size**: decouples shape from size to avoid size-based priors
-- **All visual ranges in SessionConfig**: allows rapid experimental iteration without code changes
-- **Kinematic Rigidbody**: player position driven entirely by code, no physics interference
+# Layer Setup
+- **Default**: ground plane (Terrain), general scene objects
+- **Terrain**: Ground GameObject — Player does not physically collide with this layer
+- **Tree**: all Tree GameObjects and children — Player physically collides with this layer
+- **Player**: Player GameObject only
+- Layer Collision Matrix: Player↔Terrain unchecked, Player↔Tree checked
 
-# Session Configuration (DefaultSession)
-All tunable from the Unity Inspector:
-- Reward function (per-attribute basis functions and weights)
+# Reward System
+- Bush reward = weighted sum of basis functions, no normalization: `R = w1*f1(shape) + w2*f2(color) + w3*f3(moisture)`
+- Per-fruit reward = `round(Gaussian(bushReward, rewardStd))`, clamped to >= 0
+- Each fruit independently samples from the bush reward distribution
+- Total harvest reward = sum of all per-fruit rewards
+- Running total tracked across session
+- Reward function configured entirely in SessionConfig per experiment
+
+# Session Configuration (SessionConfig)
+All tunable from the Unity Inspector on the active config asset:
+- Reward function (per-attribute basis functions, weights, peaks, widths)
 - Session duration, world seed, tree count
-- Fruit count, fruit radius, fruit color range, sun intensities
+- Fruit count, fruit radius, fruit color range (low/high)
 - Canopy width/height ranges, shape range
 - Terrain colors (arid/grassland/swampy), noise frequency, noise octaves, max elevation, mesh resolution
 - World half extent, color contrast
-- Sun arc height, rise direction, sun colors (dawn/noon), sky colors (dawn/noon/dusk), ambient colors
-- Player move speed, harvest duration
+- Sun arc height, sun colors (dawn/noon), sky colors (dawn/noon/dusk), ambient colors
+- Player move speed, fruit harvest duration, reward std
+
+# Data Logging
+Three files per session saved to `ForagingData/` in project root (gitignored):
+- `movement.csv` — sampled every 0.1s: position, heading, camera transform, visible tree IDs and distances
+- `harvests.csv` — per harvest: tree ID, position, attributes, true reward, per-fruit rewards, running total
+- `session_metadata.json` — session config, reward function, camera parameters, full tree registry
 
 # Known Limitations
-- Terrain does not self-shadow (URP limitation at landscape scale) — hills do not cast shadows onto adjacent hills
+- Terrain does not self-shadow (URP limitation at landscape scale)
 - Shadow bias artifacts at very low sun angles — mitigated by minSunElevation on SunController
-- FruitMaterialManager cache persists across Play mode sessions in Editor — restart Unity if fruit colors appear stale
+- Player capsule visually overlaps wide bushes slightly — will improve with proper player model
+- FruitMaterialManager cache persists across Play mode sessions in Editor
 - ForagingData/ folder is gitignored — back up participant data separately before pushing
 
 # Git Workflow
@@ -130,20 +164,35 @@ All tunable from the Unity Inspector:
 - Always commit before starting a Claude session
 
 # Current State
-- ✅ Non-kinematic physics movement with zero-friction material
-- ✅ Player-tree collision via CapsuleCollider on tree root
-- ✅ Player/Terrain/Tree layers with collision matrix separation
-- ✅ Terrain sliding eliminated via layer collision matrix
+- ✅ Player movement: non-kinematic physics, terrain-following, zero-friction material
+- ✅ Player/Terrain/Tree layer separation — no terrain sliding, tree collision works
+- ✅ Procedural bush generation with 3 continuous attributes
+- ✅ Hemisphere mesh with Fibonacci fruit placement
+- ✅ Perlin noise terrain with elevation and moisture-based vertex coloring
+- ✅ Dynamic day/night cycle: sun arc, sky gradient, ambient tinting
+- ✅ Terrain and canopy tinted by ambient light over session duration
+- ✅ Unlit fruit materials — color always readable regardless of lighting
+- ✅ Tree highlight: terrain-projected pulsing disc when in harvest range
+- ✅ All visual parameters tunable via SessionConfig
+- ✅ Reward function framework (modular basis functions, no normalization)
+- ✅ Five reward function configs: linear → all nonlinear progression
+- ✅ Harvest mechanic: Space to harvest, player frozen, sequential fruit collection
+- ✅ Per-fruit integer rewards sampled from Gaussian(bushReward, rewardStd)
+- ✅ Floating reward numbers with rise/linger/fade animation
+- ✅ Session timer with MM:SS countdown, session end panel
+- ✅ Data logging: movement, harvests, session metadata JSON with tree registry
+- ✅ GameManager distributes SessionConfig — single place to change configs
 
 # Next Steps (suggested build order)
-1. Harvest mechanic — time cost, trigger detection, call SetHarvested()
-2. Reward feedback UI — display reward value on harvest
-3. Session timer — countdown display, session end screen
-4. Data logging — record all actions to CSV/JSON per session
-5. Session management — start screen, config selection, multiple runs
+1. Session management — start screen, participant flow, clean restarts
+2. Instructions overlay — participants need rules before starting
+3. Harvest progress indicator — show how far through harvest the player is
+4. Visual polish — player model, minimap
+5. Probabilistic reward between sessions
 
 # Do Not Modify
 - ProjectSettings/ (unless explicitly asked)
 - Packages/
 - .meta files
 - .git/
+- ForagingData/ (participant data)

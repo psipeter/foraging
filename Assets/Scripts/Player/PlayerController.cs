@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(Rigidbody))]
 public class PlayerController : MonoBehaviour
 {
-    [SerializeField] private float moveSpeed = 5f;
+public float moveSpeed = 5f;
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private float groundOffset = 1.0f;
     [SerializeField] private HarvestManager harvestManager;
@@ -35,7 +35,7 @@ public class PlayerController : MonoBehaviour
             _capsuleCollider = gameObject.AddComponent<CapsuleCollider>();
         }
 
-        PhysicsMaterial mat = new PhysicsMaterial("PlayerCapsuleMaterial")
+        PhysicMaterial mat = new PhysicMaterial("PlayerCapsuleMaterial")
         {
             dynamicFriction = 0f,
             staticFriction = 0f,

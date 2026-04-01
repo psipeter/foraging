@@ -76,13 +76,13 @@ public class DataLogger : MonoBehaviour
 
     private void WriteMovementHeader()
     {
-        _movementWriter?.WriteLine("time,player_x,player_y,player_z,player_heading,camera_x,camera_y,camera_z,camera_rot_x,camera_rot_y,camera_rot_z,visible_bush_ids,visible_bush_distances");
+        _movementWriter?.WriteLine("time,player_x,player_y,player_z,player_heading,camera_x,camera_y,camera_z,camera_rot_x,camera_rot_y,camera_rot_z,visible_tree_ids,visible_tree_distances");
         _movementWriter?.Flush();
     }
 
     private void WriteHarvestHeader()
     {
-        _harvestWriter?.WriteLine("harvest_index,time_start,time_end,bush_id,bush_x,bush_y,bush_z,shape,color,moisture,true_reward,total_received,running_total,time_remaining,fruit_rewards");
+        _harvestWriter?.WriteLine("harvest_index,time_start,time_end,tree_id,tree_x,tree_y,tree_z,shape,color,moisture,true_reward,total_received,running_total,time_remaining,fruit_rewards");
         _harvestWriter?.Flush();
     }
 
@@ -309,10 +309,10 @@ public class DataLogger : MonoBehaviour
         sb.AppendLine();
         sb.AppendLine("  },");
 
-        // Bush registry
+        // Tree registry
         _allTrees.Clear();
         _allTrees.AddRange(FindObjectsByType<Tree>(FindObjectsSortMode.None));
-        sb.AppendLine("  \"bushRegistry\": [");
+        sb.AppendLine("  \"treeRegistry\": [");
         for (int i = 0; i < _allTrees.Count; i++)
         {
             Tree tree = _allTrees[i];

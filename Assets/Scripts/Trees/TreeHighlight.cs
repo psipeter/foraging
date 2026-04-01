@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class BushHighlight : MonoBehaviour
+public class TreeHighlight : MonoBehaviour
 {
     [SerializeField] public TerrainManager terrainManager;
     [SerializeField] private float ringRadius = 2.0f;
@@ -30,7 +30,7 @@ public class BushHighlight : MonoBehaviour
 
         _discMesh = new Mesh
         {
-            name = "BushHighlightDisc"
+            name = "TreeHighlightDisc"
         };
         discMf.sharedMesh = _discMesh;
 

@@ -3,7 +3,7 @@ using UnityEngine;
 [DefaultExecutionOrder(-20)]
 public class GameManager : MonoBehaviour
 {
-    [SerializeField] public SessionConfig sessionConfig;
+    public SessionConfig sessionConfig;
 
     [SerializeField] private SunController sunController;
     [SerializeField] private HarvestManager harvestManager;
@@ -43,6 +43,11 @@ public class GameManager : MonoBehaviour
         if (treeGenerator != null)
         {
             treeGenerator.sessionConfig = sessionConfig;
+        }
+
+        if (playerController != null)
+        {
+            playerController.moveSpeed = sessionConfig.PlayerMoveSpeed;
         }
 
         if (dataLogger != null)

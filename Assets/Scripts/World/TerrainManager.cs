@@ -8,10 +8,6 @@ public class TerrainManager : MonoBehaviour
     [SerializeField] private Material terrainMaterial;
     [SerializeField] private SunController sunController;
 
-    // Fallback noise values if no SessionConfig is assigned.
-    [SerializeField] private float noiseFrequency = 4f;
-    [SerializeField] private int noiseOctaves = 1;
-
     private static readonly Color Arid = new Color(0.76f, 0.65f, 0.42f);
     private static readonly Color Grassland = new Color(0.44f, 0.56f, 0.24f);
     private static readonly Color Swampy = new Color(0.22f, 0.29f, 0.18f);
@@ -181,8 +177,8 @@ public class TerrainManager : MonoBehaviour
 
     private float ComputeMoisture(float worldX, float worldZ)
     {
-        float frequency = sessionConfig != null ? sessionConfig.TerrainNoiseFrequency : noiseFrequency;
-        int octaves = sessionConfig != null ? Mathf.Max(1, sessionConfig.TerrainNoiseOctaves) : Mathf.Max(1, noiseOctaves);
+        float frequency = sessionConfig != null ? sessionConfig.TerrainNoiseFrequency : 4f;
+        int octaves = sessionConfig != null ? Mathf.Max(1, sessionConfig.TerrainNoiseOctaves) : 1;
         float seedX = sessionConfig != null ? sessionConfig.WorldSeed * 0.0012345f : 0f;
         float seedZ = sessionConfig != null ? sessionConfig.WorldSeed * 0.006789f : 0f;
 

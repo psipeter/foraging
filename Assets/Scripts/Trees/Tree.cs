@@ -18,13 +18,13 @@ public class Tree : MonoBehaviour
 {
     public TreeAttributes attributes;
     public int treeId;
-    [SerializeField] public SessionConfig sessionConfig;
-    [SerializeField] public SunController sunController;
+    public SessionConfig sessionConfig;
+    public SunController sunController;
 
     [SerializeField] private GameObject canopy;
     [SerializeField] private int hemisphereSegments = 24;
 
-    [SerializeField] private BushHighlight highlight;
+    [SerializeField] private TreeHighlight highlight;
 
     [SerializeField] public int fruitCount = 10;
     [SerializeField] public float fruitRadius = 0.15f;
