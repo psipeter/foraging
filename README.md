@@ -130,8 +130,10 @@ All tunable from the Unity Inspector:
 - Always commit before starting a Claude session
 
 # Current State
-- ✅ GameManager distributes SessionConfig to all systems — single place to change configs
-- ✅ Five reward function configs: linear, gaussian, three-linear, mixed, all-nonlinear
+- ✅ Non-kinematic physics movement with zero-friction material
+- ✅ Player-tree collision via CapsuleCollider on tree root
+- ✅ Player/Terrain/Tree layers with collision matrix separation
+- ✅ Terrain sliding eliminated via layer collision matrix
 
 # Next Steps (suggested build order)
 1. Harvest mechanic — time cost, trigger detection, call SetHarvested()

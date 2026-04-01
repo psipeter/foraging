@@ -10,6 +10,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private HarvestManager harvestManager;
 
     private Rigidbody playerRigidbody;
+    private CapsuleCollider _capsuleCollider;
     private Vector2 moveInput;
     private bool canHarvest;
     private bool _frozen;
@@ -19,22 +20,50 @@ public class PlayerController : MonoBehaviour
     {
         playerRigidbody = GetComponent<Rigidbody>();
 
-        // Terrain drives Y position, so ensure Y-position freezing is disabled.
-        playerRigidbody.constraints &= ~RigidbodyConstraints.FreezePositionY;
-
-        playerRigidbody.isKinematic = true;
+        // Non-kinematic physics, no gravity, locked rotation for capsule movement.
+        playerRigidbody.isKinematic = false;
         playerRigidbody.useGravity = false;
+        playerRigidbody.constraints = RigidbodyConstraints.FreezeRotationX |
+                                      RigidbodyConstraints.FreezeRotationY |
+                                      RigidbodyConstraints.FreezeRotationZ;
+        playerRigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+
+        // Ensure a capsule collider with a low-friction physics material.
+        _capsuleCollider = GetComponent<CapsuleCollider>();
+        if (_capsuleCollider == null)
+        {
+            _capsuleCollider = gameObject.AddComponent<CapsuleCollider>();
+        }
+
+        PhysicsMaterial mat = new PhysicsMaterial("PlayerCapsuleMaterial")
+        {
+            dynamicFriction = 0f,
+            staticFriction = 0f,
+            bounciness = 0f,
+            frictionCombine = PhysicsMaterialCombine.Minimum,
+            bounceCombine = PhysicsMaterialCombine.Minimum
+        };
+        _capsuleCollider.material = mat;
     }
 
     private void FixedUpdate()
     {
         if (_frozen)
         {
+            if (playerRigidbody != null)
+            {
+                playerRigidbody.linearVelocity = Vector3.zero;
+            }
             return;
         }
 
         Vector3 currentPos = playerRigidbody.position;
-        Vector3 delta = new Vector3(moveInput.x, 0f, moveInput.y) * moveSpeed * Time.fixedDeltaTime;
+        Vector3 desiredVelocity = new Vector3(moveInput.x, 0f, moveInput.y) * moveSpeed;
+
+        Vector3 v = playerRigidbody.linearVelocity;
+        v.x = desiredVelocity.x;
+        v.z = desiredVelocity.z;
+        playerRigidbody.linearVelocity = v;
 
         float targetY = currentPos.y;
         if (terrainManager != null)
@@ -52,7 +81,17 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        playerRigidbody.position = new Vector3(currentPos.x + delta.x, targetY, currentPos.z + delta.z);
+        float yDiff = Mathf.Abs(playerRigidbody.position.y - targetY);
+        if (yDiff > 0.05f)
+        {
+            Vector3 pos = playerRigidbody.position;
+            pos.y = targetY;
+            playerRigidbody.position = pos;
+
+            v = playerRigidbody.linearVelocity;
+            v.y = 0f;
+            playerRigidbody.linearVelocity = v;
+        }
     }
 
     public void OnMove(InputAction.CallbackContext context)
@@ -121,6 +160,10 @@ public class PlayerController : MonoBehaviour
         if (frozen)
         {
             moveInput = Vector2.zero;
+            if (playerRigidbody != null)
+            {
+                playerRigidbody.linearVelocity = Vector3.zero;
+            }
         }
     }
 

@@ -114,7 +114,7 @@ public class Tree : MonoBehaviour
         cap.isTrigger = false;
         cap.direction = 1; // Y axis
         cap.center = new Vector3(0f, canopyScale.y * 0.3f, 0f);
-        cap.radius = maxScaleXZ * 0.4f;
+        cap.radius = maxScaleXZ * 0.5f;
         cap.height = canopyScale.y * 0.8f;
 
         if (highlight != null)

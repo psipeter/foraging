@@ -61,6 +61,13 @@ public class TreeGenerator : MonoBehaviour
             };
             tree.attributes = attributes;
             tree.ApplyAttributes();
+
+            int treeLayer = LayerMask.NameToLayer("Tree");
+            if (treeLayer >= 0)
+            {
+                SetLayerRecursively(instance, treeLayer);
+            }
+
             positions.Add(pos);
             placed++;
         }
@@ -99,5 +106,14 @@ public class TreeGenerator : MonoBehaviour
         }
 
         return true;
+    }
+
+    private static void SetLayerRecursively(GameObject obj, int layer)
+    {
+        obj.layer = layer;
+        foreach (Transform child in obj.transform)
+        {
+            SetLayerRecursively(child.gameObject, layer);
+        }
     }
 }
