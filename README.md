@@ -185,13 +185,16 @@ Three files per session saved to `ForagingData/` in project root (gitignored):
 - ✅ Canopy color driven by canopyBaseColor field on Tree prefab
 - ✅ Fruit shader: specular highlight + ambient tint with high floor
 - ✅ Sun intensity dawn/noon tunable via SessionConfig
+- ✅ Session management: ordered list of SessionConfigs on GameManager
+- ✅ Instructions panel shown on first session only, hidden on reload
+- ✅ Session number shown from session 2 onwards
+- ✅ End panel shows Session Complete / Experiment Complete
+- ✅ Space/Enter advances to next session via scene reload
 
 # Next Steps (suggested build order)
-1. Session management — start screen, participant flow, clean restarts
-2. Instructions overlay — participants need rules before starting
-3. Harvest progress indicator — show how far through harvest the player is
-4. Visual polish — player model, minimap
-5. Probabilistic reward between sessions
+1. Harvest progress indicator — show how far through harvest
+2. Player model — replace capsule
+3. Visual polish — minimap, sound, textures
 
 # Do Not Modify
 - ProjectSettings/ (unless explicitly asked)

@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 using TMPro;
 
 public class SessionTimerUI : MonoBehaviour
@@ -10,8 +11,11 @@ public class SessionTimerUI : MonoBehaviour
     public SessionConfig sessionConfig;
     [SerializeField] private GameObject sessionEndPanel;
     [SerializeField] private TextMeshProUGUI finalScoreText;
+    [SerializeField] private TextMeshProUGUI sessionCompleteText;
+    [SerializeField] private TextMeshProUGUI nextSessionPromptText;
 
     private float _lastTotalScore;
+    private bool _sessionEndHandled;
 
     private void Awake()
     {
@@ -43,6 +47,20 @@ public class SessionTimerUI : MonoBehaviour
         if (sunController.SessionComplete)
         {
             timerText.text = "00:00";
+
+            if (sessionEndPanel != null && sessionEndPanel.activeSelf && !GameManager.IsLastSession)
+            {
+                if (Keyboard.current != null &&
+                    (Keyboard.current.spaceKey.wasPressedThisFrame ||
+                     Keyboard.current.enterKey.wasPressedThisFrame ||
+                     Keyboard.current.numpadEnterKey.wasPressedThisFrame))
+                {
+                    GameManager.AdvanceSession();
+                    Scene current = SceneManager.GetActiveScene();
+                    SceneManager.LoadScene(current.name);
+                }
+            }
+
             return;
         }
 
@@ -62,6 +80,12 @@ public class SessionTimerUI : MonoBehaviour
 
     private void HandleSessionEnd()
     {
+        if (_sessionEndHandled)
+        {
+            return;
+        }
+        _sessionEndHandled = true;
+
         // Freeze player and disable input.
         PlayerController player = FindFirstObjectByType<PlayerController>();
         if (player != null)
@@ -77,6 +101,22 @@ public class SessionTimerUI : MonoBehaviour
         if (sessionEndPanel != null)
         {
             sessionEndPanel.SetActive(true);
+        }
+
+        bool isLast = GameManager.IsLastSession;
+
+        if (sessionCompleteText != null)
+        {
+            sessionCompleteText.text = isLast ? "Experiment Complete" : "Session Complete";
+        }
+
+        if (nextSessionPromptText != null)
+        {
+            nextSessionPromptText.gameObject.SetActive(!isLast);
+            if (!isLast)
+            {
+                nextSessionPromptText.text = "Press Space to continue";
+            }
         }
 
         if (finalScoreText != null)

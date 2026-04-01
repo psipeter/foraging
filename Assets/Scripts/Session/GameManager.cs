@@ -1,9 +1,10 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 [DefaultExecutionOrder(-20)]
 public class GameManager : MonoBehaviour
 {
-    public SessionConfig sessionConfig;
+    [SerializeField] public List<SessionConfig> sessionConfigs;
 
     [SerializeField] private SunController sunController;
     [SerializeField] private HarvestManager harvestManager;
@@ -15,50 +16,81 @@ public class GameManager : MonoBehaviour
 
     public static GameManager Instance { get; private set; }
 
+    public static int CurrentSessionIndex = 0;
+    public static List<SessionConfig> AllSessionConfigs;
+
+    public static int TotalSessions => AllSessionConfigs?.Count ?? 0;
+    public static bool IsLastSession => TotalSessions == 0 || CurrentSessionIndex >= TotalSessions - 1;
+
     private void Awake()
     {
         Instance = this;
 
-        if (sessionConfig == null)
+        if (AllSessionConfigs == null || AllSessionConfigs.Count == 0)
         {
-            Debug.LogWarning("GameManager: SessionConfig is not assigned.");
+            AllSessionConfigs = sessionConfigs != null
+                ? new List<SessionConfig>(sessionConfigs)
+                : new List<SessionConfig>();
+            CurrentSessionIndex = 0;
+        }
+
+        if (AllSessionConfigs == null || AllSessionConfigs.Count == 0)
+        {
+            Debug.LogWarning("GameManager: No SessionConfigs assigned.");
+            return;
+        }
+
+        if (CurrentSessionIndex < 0 || CurrentSessionIndex >= AllSessionConfigs.Count)
+        {
+            CurrentSessionIndex = 0;
+        }
+
+        SessionConfig activeConfig = AllSessionConfigs[CurrentSessionIndex];
+        if (activeConfig == null)
+        {
+            Debug.LogWarning("GameManager: Active SessionConfig is null.");
             return;
         }
 
         if (sunController != null)
         {
-            sunController.sessionConfig = sessionConfig;
+            sunController.sessionConfig = activeConfig;
         }
 
         if (harvestManager != null)
         {
-            harvestManager.sessionConfig = sessionConfig;
+            harvestManager.sessionConfig = activeConfig;
         }
 
         if (terrainManager != null)
         {
-            terrainManager.sessionConfig = sessionConfig;
+            terrainManager.sessionConfig = activeConfig;
         }
 
         if (treeGenerator != null)
         {
-            treeGenerator.sessionConfig = sessionConfig;
+            treeGenerator.sessionConfig = activeConfig;
         }
 
         if (playerController != null)
         {
-            playerController.moveSpeed = sessionConfig.PlayerMoveSpeed;
+            playerController.moveSpeed = activeConfig.PlayerMoveSpeed;
         }
 
         if (dataLogger != null)
         {
-            dataLogger.sessionConfig = sessionConfig;
+            dataLogger.sessionConfig = activeConfig;
         }
 
         if (sessionTimerUI != null)
         {
-            sessionTimerUI.sessionConfig = sessionConfig;
+            sessionTimerUI.sessionConfig = activeConfig;
         }
+    }
+
+    public static void AdvanceSession()
+    {
+        CurrentSessionIndex++;
     }
 }
 
