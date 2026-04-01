@@ -182,6 +182,9 @@ Three files per session saved to `ForagingData/` in project root (gitignored):
 - ✅ Session timer with MM:SS countdown, session end panel
 - ✅ Data logging: movement, harvests, session metadata JSON with tree registry
 - ✅ GameManager distributes SessionConfig — single place to change configs
+- ✅ Canopy color driven by canopyBaseColor field on Tree prefab
+- ✅ Fruit shader: specular highlight + ambient tint with high floor
+- ✅ Sun intensity dawn/noon tunable via SessionConfig
 
 # Next Steps (suggested build order)
 1. Session management — start screen, participant flow, clean restarts

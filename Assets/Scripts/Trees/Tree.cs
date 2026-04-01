@@ -35,8 +35,9 @@ public class Tree : MonoBehaviour
     private static readonly Color ColorLow = new Color(0.2f, 0.4f, 1.0f);
     private static readonly Color ColorHigh = new Color(1.0f, 0.5f, 0.1f);
 
-    private Color _baseCanopyColor = Color.white;
-    private bool _hasBaseCanopyColor;
+    [SerializeField] private Color canopyBaseColor = new Color(0.24f, 0.35f, 0.18f);
+    private MeshRenderer _canopyRenderer;
+    private Material _canopyMaterial;
 
     public bool isHarvested = false;
 
@@ -44,7 +45,19 @@ public class Tree : MonoBehaviour
 
     private void Awake()
     {
+        Debug.Log("Awake canopyBaseColor: " + canopyBaseColor);
         gameObject.tag = "Interactable";
+
+        if (canopy != null)
+        {
+            _canopyRenderer = canopy.GetComponent<MeshRenderer>();
+            if (_canopyRenderer != null && _canopyRenderer.sharedMaterial != null)
+            {
+                _canopyMaterial = new Material(_canopyRenderer.sharedMaterial);
+                _canopyRenderer.material = _canopyMaterial;
+                _canopyMaterial.color = canopyBaseColor;
+            }
+        }
     }
 
     private void Start()
@@ -122,17 +135,14 @@ public class Tree : MonoBehaviour
             highlight.SetRingRadius(worldRadius);
         }
 
-        // Cache base canopy color once so ambient tinting can be applied relative to it.
-        MeshRenderer canopyRenderer = canopy.GetComponent<MeshRenderer>();
-        if (canopyRenderer != null && !_hasBaseCanopyColor && canopyRenderer.sharedMaterial != null)
+        // Apply lighting after geometry updates.
+        if (sunController != null)
         {
-            _baseCanopyColor = canopyRenderer.sharedMaterial.color;
-            _hasBaseCanopyColor = true;
-
-            if (sunController != null)
-            {
-                UpdateLighting(sunController.CurrentAmbientColor);
-            }
+            UpdateLighting(sunController.CurrentAmbientColor);
+        }
+        else if (_canopyMaterial != null)
+        {
+            _canopyMaterial.color = canopyBaseColor;
         }
 
         // Rebuild fruits procedurally.
@@ -246,25 +256,11 @@ public class Tree : MonoBehaviour
 
     public void UpdateLighting(Color ambientColor)
     {
-        if (canopy == null)
+        if (_canopyMaterial == null)
         {
             return;
         }
-
-        MeshRenderer canopyRenderer = canopy.GetComponent<MeshRenderer>();
-        if (canopyRenderer == null || canopyRenderer.sharedMaterial == null)
-        {
-            return;
-        }
-
-        if (!_hasBaseCanopyColor)
-        {
-            _baseCanopyColor = canopyRenderer.sharedMaterial.color;
-            _hasBaseCanopyColor = true;
-        }
-
-        Color tinted = _baseCanopyColor * (ambientColor * 2f);
-        canopyRenderer.sharedMaterial.color = tinted;
+        _canopyMaterial.color = canopyBaseColor;
     }
 
     public void SetHighlight(bool active)

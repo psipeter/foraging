@@ -54,6 +54,8 @@ MonoBehaviour:
   sunRiseDirection: {x: 0, y: 0, z: 1}
   sunColorDawn: {r: 0.7058824, g: 0.3137255, b: 0.11764706, a: 1}
   sunColorNoon: {r: 1, g: 0.95, b: 0.8, a: 1}
+  sunIntensityDawn: 0.3
+  sunIntensityNoon: 0.9
   skyColorDawn: {r: 0.8, g: 0.4, b: 0.2, a: 1}
   skyColorNoon: {r: 0.3, g: 0.6, b: 1, a: 1}
   skyColorDusk: {r: 0.6, g: 0.2, b: 0.1, a: 1}

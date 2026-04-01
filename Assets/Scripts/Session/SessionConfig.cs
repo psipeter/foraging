@@ -46,6 +46,8 @@ public class SessionConfig : ScriptableObject
     // Sun color gradient (sunrise/set → midday)
     [SerializeField] private Color sunColorDawn = new Color(1.0f, 0.4f, 0.1f);
     [SerializeField] private Color sunColorNoon = new Color(1.0f, 0.95f, 0.8f);
+    [SerializeField] private float sunIntensityDawn = 0.4f;
+    [SerializeField] private float sunIntensityNoon = 1.2f;
 
     // Sky color gradient
     [SerializeField] private Color skyColorDawn = new Color(0.8f, 0.4f, 0.2f);
@@ -85,6 +87,8 @@ public class SessionConfig : ScriptableObject
     public Vector3 SunRiseDirection => sunRiseDirection;
     public Color SunColorDawn => sunColorDawn;
     public Color SunColorNoon => sunColorNoon;
+    public float SunIntensityDawn => sunIntensityDawn;
+    public float SunIntensityNoon => sunIntensityNoon;
     public Color SkyColorDawn => skyColorDawn;
     public Color SkyColorNoon => skyColorNoon;
     public Color SkyColorDusk => skyColorDusk;

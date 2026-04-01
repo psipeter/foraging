@@ -107,7 +107,9 @@ public class SunController : MonoBehaviour
 
         sunLight.color = Color.Lerp(dawn, noon, noonFactor);
 
-        float intensity = Mathf.Lerp(0.1f, 1.2f, noonFactor);
+        float dawnIntensity = sessionConfig != null ? sessionConfig.SunIntensityDawn : 0.4f;
+        float noonIntensity = sessionConfig != null ? sessionConfig.SunIntensityNoon : 1.2f;
+        float intensity = Mathf.Lerp(dawnIntensity, noonIntensity, noonFactor);
         sunLight.intensity = intensity;
     }
 
