@@ -292,6 +292,7 @@ MonoBehaviour:
   harvestManager: {fileID: 528505460}
   terrainManager: {fileID: 1847944418}
   treeGenerator: {fileID: 1544515995}
+  borderWalls: {fileID: 1809223776}
   playerController: {fileID: 581266112}
   dataLogger: {fileID: 718741463}
   sessionTimerUI: {fileID: 1153043574}
@@ -2138,6 +2139,53 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1809223775
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1809223777}
+  - component: {fileID: 1809223776}
+  m_Layer: 0
+  m_Name: BorderWalls
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1809223776
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1809223775}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30a063a36704eea1198ab2d8750fb386, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BorderWalls
+  sessionConfig: {fileID: 0}
+  terrainManager: {fileID: 1847944418}
+  sunController: {fileID: 419207779}
+--- !u!4 &1809223777
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1809223775}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1847944417
 GameObject:
   m_ObjectHideFlags: 0
@@ -2418,6 +2466,7 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
+  - {fileID: 205307911}
   - {fileID: 410087041}
   - {fileID: 832575519}
   - {fileID: 581266117}
@@ -2430,5 +2479,5 @@ SceneRoots:
   - {fileID: 1977193274}
   - {fileID: 1153043575}
   - {fileID: 718741464}
-  - {fileID: 205307911}
   - {fileID: 269841568}
+  - {fileID: 1809223777}

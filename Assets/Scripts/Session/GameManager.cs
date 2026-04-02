@@ -10,6 +10,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private HarvestManager harvestManager;
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private TreeGenerator treeGenerator;
+    [SerializeField] private BorderWalls borderWalls;
     [SerializeField] private PlayerController playerController;
     [SerializeField] private DataLogger dataLogger;
     [SerializeField] private SessionTimerUI sessionTimerUI;
@@ -70,6 +71,12 @@ public class GameManager : MonoBehaviour
         if (treeGenerator != null)
         {
             treeGenerator.sessionConfig = activeConfig;
+        }
+
+        if (borderWalls != null)
+        {
+            borderWalls.sessionConfig = activeConfig;
+            borderWalls.terrainManager = terrainManager;
         }
 
         if (playerController != null)

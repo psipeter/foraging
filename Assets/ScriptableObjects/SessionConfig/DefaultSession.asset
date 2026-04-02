@@ -33,13 +33,14 @@ MonoBehaviour:
   worldSeed: 0
   treeCount: 100
   fruitCount: 10
-  fruitRadius: 0.5
+  fruitRadius: 0.7
   playerMoveSpeed: 5
   fruitHarvestDuration: 0.5
   rewardStd: 1
   shapeRange: {x: 0, y: 1}
-  canopyWidthRange: {x: 0.25, y: 1.5}
-  canopyHeightRange: {x: 0.25, y: 4}
+  canopyWidthRange: {x: 1, y: 5}
+  canopyHeightRange: {x: 1, y: 10}
+  highlightRadiusPadding: 0.8
   fruitColorLow: {r: 0.2, g: 0.4, b: 1, a: 1}
   fruitColorHigh: {r: 1, g: 0.5, b: 0.1, a: 1}
   terrainArid: {r: 0.89505583, g: 0.86208713, b: 0.2910288, a: 1}
@@ -50,6 +51,8 @@ MonoBehaviour:
   terrainMaxElevation: 25
   terrainMeshResolution: 128
   worldHalfExtent: 100
+  borderWallHeight: 20
+  borderWallColor: {r: 0, g: 0.4554662, b: 0.07834591, a: 1}
   colorContrast: 0.5
   sunArcHeight: 90
   sunRiseDirection: {x: 0, y: 0, z: 1}

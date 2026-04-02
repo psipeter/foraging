@@ -40,6 +40,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float terrainMaxElevation = 3f;
     [SerializeField] private int terrainMeshResolution = 64;
     [SerializeField] private float worldHalfExtent = 50f;
+    [SerializeField] private float borderWallHeight = 20f;
+    [SerializeField] private Color borderWallColor = new Color(0.25f, 0.20f, 0.15f, 1.0f);
     [SerializeField] private float colorContrast = 1.5f;
 
     // Sun arc
@@ -88,6 +90,8 @@ public class SessionConfig : ScriptableObject
     public float TerrainMaxElevation => baseConfig != null ? baseConfig.TerrainMaxElevation : terrainMaxElevation;
     public int TerrainMeshResolution => baseConfig != null ? baseConfig.TerrainMeshResolution : terrainMeshResolution;
     public float WorldHalfExtent => baseConfig != null ? baseConfig.WorldHalfExtent : worldHalfExtent;
+    public float BorderWallHeight => baseConfig != null ? baseConfig.BorderWallHeight : borderWallHeight;
+    public Color BorderWallColor => baseConfig != null ? baseConfig.BorderWallColor : borderWallColor;
     public float ColorContrast => baseConfig != null ? baseConfig.ColorContrast : colorContrast;
     public float SunArcHeight => baseConfig != null ? baseConfig.SunArcHeight : sunArcHeight;
     public Vector3 SunRiseDirection => baseConfig != null ? baseConfig.SunRiseDirection : sunRiseDirection;
