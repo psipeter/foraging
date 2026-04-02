@@ -5,6 +5,8 @@ using UnityEngine;
     menuName = "Foraging/Session Config")]
 public class SessionConfig : ScriptableObject
 {
+    [SerializeField] private SessionConfig baseConfig;
+
     [SerializeField] private RewardFunction rewardFunction = new RewardFunction();
     [SerializeField] private float sessionDuration = 120f;
     [SerializeField] private int worldSeed;
@@ -59,42 +61,44 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private Color ambientNoon = new Color(0.2f, 0.2f, 0.25f);
     [SerializeField] private Color ambientDusk = new Color(0.12f, 0.08f, 0.06f);
 
+    public SessionConfig BaseConfig => baseConfig;
+
     public RewardFunction RewardFunction => rewardFunction;
-    public float SessionDuration => sessionDuration;
-    public int WorldSeed => worldSeed;
-    public int TreeCount => treeCount;
-    public int FruitCount => fruitCount;
-    public float FruitRadius => fruitRadius;
-    public float PlayerMoveSpeed => playerMoveSpeed;
-    public float FruitHarvestDuration => fruitHarvestDuration;
-    public float HarvestDuration => fruitHarvestDuration * Mathf.Max(1, fruitCount);
-    public float RewardStd => rewardStd;
-    public Vector2 ShapeRange => shapeRange;
-    public Vector2 CanopyWidthRange => canopyWidthRange;
-    public Vector2 CanopyHeightRange => canopyHeightRange;
-    public Color FruitColorLow => fruitColorLow;
-    public Color FruitColorHigh => fruitColorHigh;
-    public Color TerrainArid => terrainArid;
-    public Color TerrainGrassland => terrainGrassland;
-    public Color TerrainSwampy => terrainSwampy;
-    public float TerrainNoiseFrequency => terrainNoiseFrequency;
-    public int TerrainNoiseOctaves => terrainNoiseOctaves;
-    public float TerrainMaxElevation => terrainMaxElevation;
-    public int TerrainMeshResolution => terrainMeshResolution;
-    public float WorldHalfExtent => worldHalfExtent;
-    public float ColorContrast => colorContrast;
-    public float SunArcHeight => sunArcHeight;
-    public Vector3 SunRiseDirection => sunRiseDirection;
-    public Color SunColorDawn => sunColorDawn;
-    public Color SunColorNoon => sunColorNoon;
-    public float SunIntensityDawn => sunIntensityDawn;
-    public float SunIntensityNoon => sunIntensityNoon;
-    public Color SkyColorDawn => skyColorDawn;
-    public Color SkyColorNoon => skyColorNoon;
-    public Color SkyColorDusk => skyColorDusk;
-    public Color AmbientDawn => ambientDawn;
-    public Color AmbientNoon => ambientNoon;
-    public Color AmbientDusk => ambientDusk;
+    public float SessionDuration => baseConfig != null ? baseConfig.SessionDuration : sessionDuration;
+    public int WorldSeed => baseConfig != null ? baseConfig.WorldSeed : worldSeed;
+    public int TreeCount => baseConfig != null ? baseConfig.TreeCount : treeCount;
+    public int FruitCount => baseConfig != null ? baseConfig.FruitCount : fruitCount;
+    public float FruitRadius => baseConfig != null ? baseConfig.FruitRadius : fruitRadius;
+    public float PlayerMoveSpeed => baseConfig != null ? baseConfig.PlayerMoveSpeed : playerMoveSpeed;
+    public float FruitHarvestDuration => baseConfig != null ? baseConfig.FruitHarvestDuration : fruitHarvestDuration;
+    public float HarvestDuration => baseConfig != null ? baseConfig.HarvestDuration : fruitHarvestDuration * Mathf.Max(1, fruitCount);
+    public float RewardStd => baseConfig != null ? baseConfig.RewardStd : rewardStd;
+    public Vector2 ShapeRange => baseConfig != null ? baseConfig.ShapeRange : shapeRange;
+    public Vector2 CanopyWidthRange => baseConfig != null ? baseConfig.CanopyWidthRange : canopyWidthRange;
+    public Vector2 CanopyHeightRange => baseConfig != null ? baseConfig.CanopyHeightRange : canopyHeightRange;
+    public Color FruitColorLow => baseConfig != null ? baseConfig.FruitColorLow : fruitColorLow;
+    public Color FruitColorHigh => baseConfig != null ? baseConfig.FruitColorHigh : fruitColorHigh;
+    public Color TerrainArid => baseConfig != null ? baseConfig.TerrainArid : terrainArid;
+    public Color TerrainGrassland => baseConfig != null ? baseConfig.TerrainGrassland : terrainGrassland;
+    public Color TerrainSwampy => baseConfig != null ? baseConfig.TerrainSwampy : terrainSwampy;
+    public float TerrainNoiseFrequency => baseConfig != null ? baseConfig.TerrainNoiseFrequency : terrainNoiseFrequency;
+    public int TerrainNoiseOctaves => baseConfig != null ? baseConfig.TerrainNoiseOctaves : terrainNoiseOctaves;
+    public float TerrainMaxElevation => baseConfig != null ? baseConfig.TerrainMaxElevation : terrainMaxElevation;
+    public int TerrainMeshResolution => baseConfig != null ? baseConfig.TerrainMeshResolution : terrainMeshResolution;
+    public float WorldHalfExtent => baseConfig != null ? baseConfig.WorldHalfExtent : worldHalfExtent;
+    public float ColorContrast => baseConfig != null ? baseConfig.ColorContrast : colorContrast;
+    public float SunArcHeight => baseConfig != null ? baseConfig.SunArcHeight : sunArcHeight;
+    public Vector3 SunRiseDirection => baseConfig != null ? baseConfig.SunRiseDirection : sunRiseDirection;
+    public Color SunColorDawn => baseConfig != null ? baseConfig.SunColorDawn : sunColorDawn;
+    public Color SunColorNoon => baseConfig != null ? baseConfig.SunColorNoon : sunColorNoon;
+    public float SunIntensityDawn => baseConfig != null ? baseConfig.SunIntensityDawn : sunIntensityDawn;
+    public float SunIntensityNoon => baseConfig != null ? baseConfig.SunIntensityNoon : sunIntensityNoon;
+    public Color SkyColorDawn => baseConfig != null ? baseConfig.SkyColorDawn : skyColorDawn;
+    public Color SkyColorNoon => baseConfig != null ? baseConfig.SkyColorNoon : skyColorNoon;
+    public Color SkyColorDusk => baseConfig != null ? baseConfig.SkyColorDusk : skyColorDusk;
+    public Color AmbientDawn => baseConfig != null ? baseConfig.AmbientDawn : ambientDawn;
+    public Color AmbientNoon => baseConfig != null ? baseConfig.AmbientNoon : ambientNoon;
+    public Color AmbientDusk => baseConfig != null ? baseConfig.AmbientDusk : ambientDusk;
 
     public float EvaluateReward(TreeAttributes attributes)
     {

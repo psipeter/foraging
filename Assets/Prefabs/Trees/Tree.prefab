@@ -145,11 +145,11 @@ MonoBehaviour:
   sunController: {fileID: 0}
   canopy: {fileID: 4033088253865625869}
   hemisphereSegments: 24
-  canopyBaseColor: {r: 0.4, g: 0.7, b: 0.3, a: 1}
   highlight: {fileID: 8641197722873255664}
   fruitCount: 10
-  fruitRadius: 0.15
+  fruitRadius: 0.3
   fruitSeed: 0
+  canopyBaseColor: {r: 0.4, g: 0.7, b: 0.3, a: 1}
   isHarvested: 0
 --- !u!114 &8641197722873255664
 MonoBehaviour:

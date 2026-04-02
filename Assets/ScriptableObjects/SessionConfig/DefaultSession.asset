@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: DefaultSession
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
+  baseConfig: {fileID: 0}
   rewardFunction:
     shapeComponent:
       basisFunctionType: 2
@@ -31,14 +32,14 @@ MonoBehaviour:
   sessionDuration: 60
   worldSeed: 0
   treeCount: 100
-  fruitCount: 12
-  fruitRadius: 0.3
+  fruitCount: 10
+  fruitRadius: 0.5
   playerMoveSpeed: 5
   fruitHarvestDuration: 0.5
   rewardStd: 1
   shapeRange: {x: 0, y: 1}
   canopyWidthRange: {x: 0.25, y: 1.5}
-  canopyHeightRange: {x: 0.5, y: 3}
+  canopyHeightRange: {x: 0.25, y: 4}
   fruitColorLow: {r: 0.2, g: 0.4, b: 1, a: 1}
   fruitColorHigh: {r: 1, g: 0.5, b: 0.1, a: 1}
   terrainArid: {r: 0.89505583, g: 0.86208713, b: 0.2910288, a: 1}
@@ -54,6 +55,8 @@ MonoBehaviour:
   sunRiseDirection: {x: 0, y: 0, z: 1}
   sunColorDawn: {r: 0.7058824, g: 0.3137255, b: 0.11764706, a: 1}
   sunColorNoon: {r: 1, g: 0.95, b: 0.8, a: 1}
+  sunIntensityDawn: 0.4
+  sunIntensityNoon: 1.2
   skyColorDawn: {r: 0.8, g: 0.4, b: 0.2, a: 1}
   skyColorNoon: {r: 0.3, g: 0.6, b: 1, a: 1}
   skyColorDusk: {r: 0.6, g: 0.2, b: 0.1, a: 1}

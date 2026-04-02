@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: Config_1_Linear
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
+  baseConfig: {fileID: 11400000, guid: 1b2cf37538a2f83b0a1b11dc29893c5a, type: 2}
   rewardFunction:
     shapeComponent:
       basisFunctionType: 0

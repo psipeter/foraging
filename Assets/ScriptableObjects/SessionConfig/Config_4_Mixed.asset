@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: Config_4_Mixed
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
+  baseConfig: {fileID: 11400000, guid: 1b2cf37538a2f83b0a1b11dc29893c5a, type: 2}
   rewardFunction:
     shapeComponent:
       basisFunctionType: 2
@@ -54,6 +55,8 @@ MonoBehaviour:
   sunRiseDirection: {x: 0, y: 0, z: 1}
   sunColorDawn: {r: 0.7058824, g: 0.3137255, b: 0.11764706, a: 1}
   sunColorNoon: {r: 1, g: 0.95, b: 0.8, a: 1}
+  sunIntensityDawn: 0.4
+  sunIntensityNoon: 1.2
   skyColorDawn: {r: 0.8, g: 0.4, b: 0.2, a: 1}
   skyColorNoon: {r: 0.3, g: 0.6, b: 1, a: 1}
   skyColorDusk: {r: 0.6, g: 0.2, b: 0.1, a: 1}
