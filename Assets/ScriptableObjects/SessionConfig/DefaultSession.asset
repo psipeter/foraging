@@ -52,7 +52,7 @@ MonoBehaviour:
   terrainMeshResolution: 128
   worldHalfExtent: 100
   borderWallHeight: 20
-  borderWallColor: {r: 0, g: 0.4554662, b: 0.07834591, a: 1}
+  borderWallColor: {r: 0, g: 0.70145404, b: 0.12094037, a: 1}
   colorContrast: 0.5
   sunArcHeight: 90
   sunRiseDirection: {x: 0, y: 0, z: 1}

@@ -189,8 +189,8 @@ When starting a new Claude chat, paste: README.md, .cursorrules, and the 2-3 C# 
 
 ## Active Debugging / In-Progress Work
 - Current issue: none
-- Recently completed: border walls replacing border objects
-- Next: player model — replace capsule
+- Recently completed: player model (X-Bot) with idle/walk/harvest animations and directional turning
+- Next: visual polish — minimap, sound, textures
 
 # Do Not Modify
 - ProjectSettings/ (unless explicitly asked)

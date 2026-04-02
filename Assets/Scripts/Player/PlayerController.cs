@@ -8,6 +8,8 @@ public float moveSpeed = 5f;
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private float groundOffset = 1.0f;
     [SerializeField] private HarvestManager harvestManager;
+    [SerializeField] private Animator animator;
+    [SerializeField] private Transform characterModel;
 
     private Rigidbody playerRigidbody;
     private CapsuleCollider _capsuleCollider;
@@ -54,6 +56,12 @@ public float moveSpeed = 5f;
             {
                 playerRigidbody.linearVelocity = Vector3.zero;
             }
+
+            if (animator != null)
+            {
+                animator.SetFloat("Speed", _frozen ? 0f : new Vector3(moveInput.x, 0f, moveInput.y).magnitude);
+            }
+
             return;
         }
 
@@ -64,6 +72,18 @@ public float moveSpeed = 5f;
         v.x = desiredVelocity.x;
         v.z = desiredVelocity.z;
         playerRigidbody.linearVelocity = v;
+
+        if (characterModel != null && !_frozen && moveInput.sqrMagnitude > 0.01f)
+        {
+            Vector3 moveDir = new Vector3(moveInput.x, 0f, moveInput.y).normalized;
+            Quaternion targetRot = Quaternion.LookRotation(moveDir, Vector3.up);
+            characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRot, Time.fixedDeltaTime * 10f);
+        }
+
+        if (animator != null)
+        {
+            animator.SetFloat("Speed", _frozen ? 0f : new Vector3(moveInput.x, 0f, moveInput.y).magnitude);
+        }
 
         float targetY = currentPos.y;
         if (terrainManager != null)
@@ -129,6 +149,11 @@ public float moveSpeed = 5f;
         if (harvestManager != null && _targetTree != null)
         {
             harvestManager.StartHarvest(_targetTree);
+
+            if (animator != null)
+            {
+                animator.SetTrigger("Harvest");
+            }
         }
     }
 
