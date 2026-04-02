@@ -313,6 +313,16 @@ public class Tree : MonoBehaviour
         return canopy != null ? canopy.transform.position : transform.position;
     }
 
+    public Vector3 GetFruitWorldPosition(int index)
+    {
+        if (index < 0 || index >= _fruits.Count || _fruits[index] == null)
+        {
+            return GetWorldCenter();
+        }
+
+        return _fruits[index].transform.position;
+    }
+
     public void SetTerrainManager(TerrainManager tm)
     {
         terrainManager = tm;
