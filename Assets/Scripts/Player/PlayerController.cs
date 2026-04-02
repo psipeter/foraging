@@ -10,6 +10,7 @@ public float moveSpeed = 5f;
     [SerializeField] private HarvestManager harvestManager;
     [SerializeField] private Animator animator;
     [SerializeField] private Transform characterModel;
+    [SerializeField] private float harvestAnimationClipLength = 6.2f;
 
     private Rigidbody playerRigidbody;
     private CapsuleCollider _capsuleCollider;
@@ -189,6 +190,22 @@ public float moveSpeed = 5f;
             {
                 playerRigidbody.linearVelocity = Vector3.zero;
             }
+        }
+    }
+
+    public void SetHarvestAnimationSpeed(float totalHarvestDuration)
+    {
+        if (animator != null && totalHarvestDuration > 0f)
+        {
+            animator.speed = harvestAnimationClipLength / totalHarvestDuration;
+        }
+    }
+
+    public void ResetAnimationSpeed()
+    {
+        if (animator != null)
+        {
+            animator.speed = 1f;
         }
     }
 

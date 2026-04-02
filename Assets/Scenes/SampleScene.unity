@@ -1032,6 +1032,7 @@ MonoBehaviour:
   harvestManager: {fileID: 528505460}
   animator: {fileID: 1527045063}
   characterModel: {fileID: 1527045062}
+  harvestAnimationClipLength: 6.2
 --- !u!54 &581266113
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -2104,15 +2105,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 02edef1fca4320b1fbffc1b537459705, type: 3}
       propertyPath: m_LocalScale.x
-      value: 3
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02edef1fca4320b1fbffc1b537459705, type: 3}
       propertyPath: m_LocalScale.y
-      value: 3
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02edef1fca4320b1fbffc1b537459705, type: 3}
       propertyPath: m_LocalScale.z
-      value: 3
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02edef1fca4320b1fbffc1b537459705, type: 3}
       propertyPath: m_LocalPosition.x
