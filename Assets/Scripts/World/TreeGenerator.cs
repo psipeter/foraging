@@ -48,7 +48,6 @@ public class TreeGenerator : MonoBehaviour
             tree.treeId = treeIndex;
             tree.sessionConfig = sessionConfig;
             tree.sunController = sunController;
-            tree.SetTerrainManager(terrainManager);
             tree.fruitCount = sessionConfig.FruitCount;
             tree.fruitRadius = sessionConfig.FruitRadius;
             tree.fruitSeed = sessionConfig.WorldSeed + treeIndex * 7;
@@ -60,6 +59,10 @@ public class TreeGenerator : MonoBehaviour
                 moisture = terrainManager.SampleMoisture(pos.x, pos.z)
             };
             tree.attributes = attributes;
+
+            Vector3 terrainNormal = terrainManager.SampleNormal(pos.x, pos.z);
+            tree.SetTerrainNormal(terrainNormal);
+            tree.SetTerrainManager(terrainManager);
             tree.ApplyAttributes();
 
             int treeLayer = LayerMask.NameToLayer("Tree");

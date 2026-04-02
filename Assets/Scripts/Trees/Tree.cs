@@ -6,8 +6,8 @@ using UnityEngine;
 Tree Prefab Setup (local space under this `Tree` object):
 
 Canopy:
-  - Sphere GameObject (mesh replaced at runtime with a hemisphere)
-  - Code sets: position (0, 0.3, 0), rotation (0, 0, 0)
+  - Sphere GameObject (mesh replaced at runtime with Unity default sphere)
+  - Code sets: position (0, 0, 0), rotation aligns canopy up with terrain normal
   - No colliders on prefab children; Tree adds a canopy trigger collider via code
 
 Fruits:
@@ -21,8 +21,9 @@ public class Tree : MonoBehaviour
     public SessionConfig sessionConfig;
     public SunController sunController;
 
+    [SerializeField] private TerrainManager terrainManager;
+
     [SerializeField] private GameObject canopy;
-    [SerializeField] private int hemisphereSegments = 24;
 
     [SerializeField] private TreeHighlight highlight;
 
@@ -35,17 +36,26 @@ public class Tree : MonoBehaviour
     private static readonly Color ColorLow = new Color(0.2f, 0.4f, 1.0f);
     private static readonly Color ColorHigh = new Color(1.0f, 0.5f, 0.1f);
 
+    private static Mesh _sphereMesh;
+
     [SerializeField] private Color canopyBaseColor = new Color(0.24f, 0.35f, 0.18f);
     private MeshRenderer _canopyRenderer;
     private Material _canopyMaterial;
 
     public bool isHarvested = false;
 
+    private Vector3 _terrainNormal = Vector3.up;
+
     public int FruitCount => _fruits.Count;
+
+    public TerrainManager TerrainManager
+    {
+        get => terrainManager;
+        set => terrainManager = value;
+    }
 
     private void Awake()
     {
-        Debug.Log("Awake canopyBaseColor: " + canopyBaseColor);
         gameObject.tag = "Interactable";
 
         if (canopy != null)
@@ -63,6 +73,11 @@ public class Tree : MonoBehaviour
     private void Start()
     {
         ApplyAttributes();
+    }
+
+    public void SetTerrainNormal(Vector3 normal)
+    {
+        _terrainNormal = normal.sqrMagnitude > 1e-8f ? normal.normalized : Vector3.up;
     }
 
     public void ApplyAttributes()
@@ -85,21 +100,31 @@ public class Tree : MonoBehaviour
 
         canopy.transform.localScale = new Vector3(sx, sy, sz);
         canopy.transform.localPosition = new Vector3(0f, 0f, 0f);
-        canopy.transform.localRotation = Quaternion.identity;
 
         Vector3 canopyScale = canopy.transform.localScale;
 
-        // Replace the canopy mesh with a procedurally generated hemisphere.
+        Quaternion normalRotation = Quaternion.FromToRotation(Vector3.up, _terrainNormal);
+        canopy.transform.localRotation = normalRotation;
+
         MeshFilter meshFilter = canopy.GetComponent<MeshFilter>();
         if (meshFilter == null)
         {
             meshFilter = canopy.AddComponent<MeshFilter>();
         }
-        meshFilter.sharedMesh = HemisphereMesh.Create(hemisphereSegments);
+
+        if (_sphereMesh == null)
+        {
+            GameObject primitive = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            _sphereMesh = primitive.GetComponent<MeshFilter>().sharedMesh;
+            Destroy(primitive);
+        }
+
+        meshFilter.sharedMesh = _sphereMesh;
 
         // Adjust trigger radius to match bush size in world space, using a collider on the root.
         float maxScaleXZ = Mathf.Max(canopyScale.x, canopyScale.z);
-        float worldRadius = maxScaleXZ * 0.5f + 0.8f;
+        float padding = sessionConfig != null ? sessionConfig.HighlightRadiusPadding : 1.2f;
+        float worldRadius = maxScaleXZ * 0.5f + padding;
 
         // Ensure no collider remains on the canopy child.
         SphereCollider canopyCollider = canopy.GetComponent<SphereCollider>();
@@ -115,7 +140,7 @@ public class Tree : MonoBehaviour
         }
 
         rootCollider.isTrigger = true;
-        rootCollider.center = new Vector3(0f, canopyScale.y * 0.3f, 0f);
+        rootCollider.center = Vector3.zero;
         rootCollider.radius = worldRadius;
 
         // Add a capsule collider for physical blocking.
@@ -126,9 +151,9 @@ public class Tree : MonoBehaviour
         }
         cap.isTrigger = false;
         cap.direction = 1; // Y axis
-        cap.center = new Vector3(0f, canopyScale.y * 0.3f, 0f);
+        cap.center = new Vector3(0f, 0f, 0f);
         cap.radius = maxScaleXZ * 0.5f;
-        cap.height = canopyScale.y * 0.8f;
+        cap.height = canopyScale.y;
 
         if (highlight != null)
         {
@@ -175,26 +200,40 @@ public class Tree : MonoBehaviour
         System.Random rng = new System.Random(fruitSeed);
         float goldenAngle = Mathf.PI * (3f - Mathf.Sqrt(5f));
 
-        for (int i = 0; i < count; i++)
+        const int maxFibonacciAttempts = 5000;
+        int placed = 0;
+        int attempt = 0;
+        while (placed < count && attempt < maxFibonacciAttempts)
         {
-            GameObject fruit = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            fruit.name = $"Fruit_{i}";
-            fruit.transform.SetParent(canopy.transform, false);
-            fruit.transform.localScale = compensatedScale;
-
-            float t = (i + 0.5f) / count; // 0..1
-            float theta = Mathf.Acos(1f - t); // elevation from apex downward
+            float t = (attempt + 0.5f) / Mathf.Max(count, attempt + 1);
+            t = Mathf.Clamp01(t);
+            float theta = Mathf.Acos(1f - t);
             theta = Mathf.Min(theta, Mathf.PI * 0.5f);
 
-            float phi = goldenAngle * i;
-            phi += (float)(rng.NextDouble() * 0.3f); // jitter to break perfect alignment across trees
+            float phi = goldenAngle * attempt;
+            phi += (float)(rng.NextDouble() * 0.3f);
 
-            float x = Mathf.Sin(theta) * Mathf.Cos(phi) * 1.05f;
-            float y = Mathf.Cos(theta) * 1.05f;
-            float z = Mathf.Sin(theta) * Mathf.Sin(phi) * 1.05f;
+            float x = Mathf.Sin(theta) * Mathf.Cos(phi) * 0.5f;
+            float y = Mathf.Cos(theta) * 0.5f;
+            float z = Mathf.Sin(theta) * Mathf.Sin(phi) * 0.5f;
+
+            Vector3 worldFruitPos = canopy.transform.TransformPoint(new Vector3(x, y, z));
+            float terrainY = terrainManager != null
+                ? terrainManager.SampleElevation(worldFruitPos.x, worldFruitPos.z)
+                : 0f;
+
+            if (worldFruitPos.y <= terrainY)
+            {
+                attempt++;
+                continue;
+            }
+
+            GameObject fruit = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            fruit.name = $"Fruit_{placed}";
+            fruit.transform.SetParent(canopy.transform, false);
+            fruit.transform.localScale = compensatedScale;
             fruit.transform.localPosition = new Vector3(x, y, z);
 
-            // Remove the default collider from the primitive.
             SphereCollider collider = fruit.GetComponent<SphereCollider>();
             if (collider != null)
             {
@@ -208,6 +247,34 @@ public class Tree : MonoBehaviour
             }
 
             _fruits.Add(fruit);
+            placed++;
+            attempt++;
+        }
+
+        while (placed < count)
+        {
+            Vector3 apexLocal = new Vector3(0f, 0.5f, 0f);
+
+            GameObject fruit = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            fruit.name = $"Fruit_{placed}";
+            fruit.transform.SetParent(canopy.transform, false);
+            fruit.transform.localScale = compensatedScale;
+            fruit.transform.localPosition = apexLocal;
+
+            SphereCollider collider = fruit.GetComponent<SphereCollider>();
+            if (collider != null)
+            {
+                Destroy(collider);
+            }
+
+            MeshRenderer renderer = fruit.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                renderer.sharedMaterial = FruitMaterialManager.GetMaterial(fruitColor);
+            }
+
+            _fruits.Add(fruit);
+            placed++;
         }
     }
 
@@ -248,6 +315,7 @@ public class Tree : MonoBehaviour
 
     public void SetTerrainManager(TerrainManager tm)
     {
+        terrainManager = tm;
         if (highlight != null)
         {
             highlight.terrainManager = tm;

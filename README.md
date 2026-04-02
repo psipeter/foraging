@@ -11,6 +11,11 @@ This is a **research tool first, game second**. Design decisions prioritize ecol
 - **Key constraint**: Bush attributes must be clearly visible and perceptually independent; reward feedback must be unambiguous
 - **Prior management**: Attributes chosen to minimize strong ecological priors — fruit count is held constant across all bushes to avoid count-based priors; fruit color uses an abstract blue→orange axis to avoid red/green ripeness associations
 
+# Workflow
+This chat (Claude) is used for high-level discussion, debugging diagnosis, and generating Cursor prompts.
+**Claude should never output direct code edits. Instead, Claude outputs a Cursor prompt that instructs Cursor to make the change.**
+Cursor handles all actual file edits via the prompt provided by Claude.
+
 # Gameplay
 - Participant controls a single avatar in a 3D procedurally generated landscape
 - A countdown timer limits each session (sunrise → sunset)
@@ -191,10 +196,19 @@ Three files per session saved to `ForagingData/` in project root (gitignored):
 - ✅ End panel shows Session Complete / Experiment Complete
 - ✅ Space/Enter advances to next session via scene reload
 
-# Next Steps (suggested build order)
-1. Harvest progress indicator — show how far through harvest
-2. Player model — replace capsule
-3. Visual polish — minimap, sound, textures
+# Conversation Handoff
+When starting a new Claude chat, paste: README.md, .cursorrules, and the 2-3 C# files most relevant to the current task.
+
+## Recent Decisions (update as project evolves)
+- Fruits use unlit shader — do not switch to lit materials
+- Canopy uses double-sided URP/Lit — do not change to single-sided
+- Player is non-kinematic Rigidbody
+- FruitMaterialManager cache is intentionally persistent across Play sessions
+- Reward function deliberately has no normalization — this is a research decision, not an oversight
+
+## Active Debugging / In-Progress Work
+- Current issue: none — tree visuals complete
+- Next: Player model — replace capsule
 
 # Do Not Modify
 - ProjectSettings/ (unless explicitly asked)

@@ -8,6 +8,8 @@ Always read README.md at the start of every task for full project context.
 - Git/GitHub for version control
 
 ## Core Rules
+- Claude generates Cursor prompts, not direct code edits — when Claude proposes a change, it will be in the form of a prompt for you to paste into Cursor
+- When Claude proposes a change, it delivers a Cursor prompt as a single copy-pasteable code block — never as direct code edits
 - SessionConfig is the single source of truth for ALL parameters — never hardcode values that a researcher might want to change
 - Always add public properties for new SessionConfig fields
 - MonoBehaviours use [SerializeField] for inspector-exposed fields
@@ -15,7 +17,7 @@ Always read README.md at the start of every task for full project context.
 - Never use FindObjectOfType — use direct references or FindObjectsByType sparingly
 - Never modify ProjectSettings/, Packages/, or .meta files unless explicitly asked
 - Fruits are runtime-instantiated, never prefab children
-- Player is kinematic — never re-enable physics-based movement
+- Player is non-kinematic Rigidbody
 
 ## Patterns
 - New session parameters go in SessionConfig.cs with a [SerializeField] field, private backing field, and public property
@@ -32,3 +34,9 @@ Always read README.md at the start of every task for full project context.
 - Materials: Assets/Materials/
 - Prefabs: Assets/Prefabs/
 - ScriptableObjects: Assets/ScriptableObjects/
+
+## Additional Constraints  
+- Never normalize the reward function output — this is intentional
+- Fruit count is always constant across bushes — never vary it per-bush
+- Fruit color uses blue→orange axis only — do not introduce red/green hues
+- DataLogger output goes to ForagingData/ — never change this path

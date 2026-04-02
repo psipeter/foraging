@@ -20,8 +20,9 @@ public class SessionConfig : ScriptableObject
     // Shape range
     [SerializeField] private Vector2 shapeRange = new Vector2(0f, 1f);
     // Maps attribute 0..1 to canopy scale range
-    [SerializeField] private Vector2 canopyWidthRange = new Vector2(1.0f, 2.5f);
-    [SerializeField] private Vector2 canopyHeightRange = new Vector2(0.6f, 1.4f);
+    [SerializeField] private Vector2 canopyWidthRange = new Vector2(2.0f, 5.0f);
+    [SerializeField] private Vector2 canopyHeightRange = new Vector2(1.2f, 2.8f);
+    [SerializeField] private float highlightRadiusPadding = 1.2f;
 
     // Fruit color range
     [SerializeField] private Color fruitColorLow = new Color(0.2f, 0.4f, 1.0f);
@@ -76,6 +77,7 @@ public class SessionConfig : ScriptableObject
     public Vector2 ShapeRange => baseConfig != null ? baseConfig.ShapeRange : shapeRange;
     public Vector2 CanopyWidthRange => baseConfig != null ? baseConfig.CanopyWidthRange : canopyWidthRange;
     public Vector2 CanopyHeightRange => baseConfig != null ? baseConfig.CanopyHeightRange : canopyHeightRange;
+    public float HighlightRadiusPadding => baseConfig != null ? baseConfig.HighlightRadiusPadding : highlightRadiusPadding;
     public Color FruitColorLow => baseConfig != null ? baseConfig.FruitColorLow : fruitColorLow;
     public Color FruitColorHigh => baseConfig != null ? baseConfig.FruitColorHigh : fruitColorHigh;
     public Color TerrainArid => baseConfig != null ? baseConfig.TerrainArid : terrainArid;

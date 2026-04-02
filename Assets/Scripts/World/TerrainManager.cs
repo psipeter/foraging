@@ -143,6 +143,16 @@ public class TerrainManager : MonoBehaviour
         return (1f - SampleMoisture(worldX, worldZ)) * maxElevation;
     }
 
+    public Vector3 SampleNormal(float worldX, float worldZ)
+    {
+        float hL = SampleElevation(worldX - 0.5f, worldZ);
+        float hR = SampleElevation(worldX + 0.5f, worldZ);
+        float hD = SampleElevation(worldX, worldZ - 0.5f);
+        float hU = SampleElevation(worldX, worldZ + 0.5f);
+        Vector3 normal = new Vector3(hL - hR, 1f, hD - hU);
+        return normal.normalized;
+    }
+
     public void UpdateTerrainLighting()
     {
         if (groundObject == null)
