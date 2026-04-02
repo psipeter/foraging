@@ -169,32 +169,13 @@ Three files per session saved to `ForagingData/` in project root (gitignored):
 - Always commit before starting a Claude session
 
 # Current State
-- ✅ Player movement: non-kinematic physics, terrain-following, zero-friction material
-- ✅ Player/Terrain/Tree layer separation — no terrain sliding, tree collision works
-- ✅ Procedural bush generation with 3 continuous attributes
-- ✅ Hemisphere mesh with Fibonacci fruit placement
-- ✅ Perlin noise terrain with elevation and moisture-based vertex coloring
-- ✅ Dynamic day/night cycle: sun arc, sky gradient, ambient tinting
-- ✅ Terrain and canopy tinted by ambient light over session duration
-- ✅ Unlit fruit materials — color always readable regardless of lighting
-- ✅ Tree highlight: terrain-projected pulsing disc when in harvest range
-- ✅ All visual parameters tunable via SessionConfig
-- ✅ Reward function framework (modular basis functions, no normalization)
-- ✅ Five reward function configs: linear → all nonlinear progression
-- ✅ Harvest mechanic: Space to harvest, player frozen, sequential fruit collection
-- ✅ Per-fruit integer rewards sampled from Gaussian(bushReward, rewardStd)
-- ✅ Floating reward numbers with rise/linger/fade animation
-- ✅ Session timer with MM:SS countdown, session end panel
-- ✅ Data logging: movement, harvests, session metadata JSON with tree registry
-- ✅ GameManager distributes SessionConfig — single place to change configs
-- ✅ Canopy color driven by canopyBaseColor field on Tree prefab
-- ✅ Fruit shader: specular highlight + ambient tint with high floor
-- ✅ Sun intensity dawn/noon tunable via SessionConfig
-- ✅ Session management: ordered list of SessionConfigs on GameManager
-- ✅ Instructions panel shown on first session only, hidden on reload
-- ✅ Session number shown from session 2 onwards
-- ✅ End panel shows Session Complete / Experiment Complete
-- ✅ Space/Enter advances to next session via scene reload
+Core systems complete and stable: player movement, terrain, procedural bushes, 
+day/night cycle, harvest mechanic, reward system, data logging, session management, UI.
+
+## Recently completed
+- Border objects (BorderObject.cs, BorderGenerator.cs) — perimeter enclosure
+- Floating reward numbers rise from individual fruit positions
+- Canopy size and highlight radius fixes
 
 # Conversation Handoff
 When starting a new Claude chat, paste: README.md, .cursorrules, and the 2-3 C# files most relevant to the current task.
@@ -207,8 +188,9 @@ When starting a new Claude chat, paste: README.md, .cursorrules, and the 2-3 C# 
 - Reward function deliberately has no normalization — this is a research decision, not an oversight
 
 ## Active Debugging / In-Progress Work
-- Current issue: none — tree visuals complete
-- Next: Player model — replace capsule
+- Current issue: none
+- Recently completed: border walls replacing border objects
+- Next: player model — replace capsule
 
 # Do Not Modify
 - ProjectSettings/ (unless explicitly asked)
