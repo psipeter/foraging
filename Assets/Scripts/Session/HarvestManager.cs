@@ -79,7 +79,7 @@ public class HarvestManager : MonoBehaviour
 
             _currentTree.HideFruit(i);
 
-            Vector3 worldPos = _currentTree.GetWorldCenter();
+            Vector3 worldPos = _currentTree.GetFruitWorldPosition(i);
             OnFruitCollected?.Invoke(fruitReward, worldPos);
 
             _totalHarvestReward += fruitReward;
