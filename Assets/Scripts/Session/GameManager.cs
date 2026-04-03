@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 
 [DefaultExecutionOrder(-20)]
@@ -12,6 +13,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private TreeGenerator treeGenerator;
     [SerializeField] private BorderWalls borderWalls;
     [SerializeField] private PlayerController playerController;
+    [SerializeField] private CameraController cameraController;
     [SerializeField] private DataLogger dataLogger;
     [SerializeField] private SessionTimerUI sessionTimerUI;
 
@@ -22,6 +24,14 @@ public class GameManager : MonoBehaviour
 
     public static int TotalSessions => AllSessionConfigs?.Count ?? 0;
     public static bool IsLastSession => TotalSessions == 0 || CurrentSessionIndex >= TotalSessions - 1;
+
+    public static void LogDiagnostic(string message)
+    {
+        string path = Path.Combine(
+            Path.GetDirectoryName(Application.dataPath),
+            "diagnostic.log");
+        File.AppendAllText(path, $"{System.DateTime.Now}: {message}\n");
+    }
 
     private void Awake()
     {
@@ -81,7 +91,13 @@ public class GameManager : MonoBehaviour
 
         if (playerController != null)
         {
+            playerController.sessionConfig = activeConfig;
             playerController.moveSpeed = activeConfig.PlayerMoveSpeed;
+        }
+
+        if (cameraController != null)
+        {
+            cameraController.sessionConfig = activeConfig;
         }
 
         if (dataLogger != null)
@@ -95,6 +111,8 @@ public class GameManager : MonoBehaviour
         }
 
         FruitMaterialManager.SetSessionConfig(activeConfig);
+
+        LogDiagnostic($"GameManager.Awake complete: activeConfig={activeConfig != null}, treeGenerator={treeGenerator != null}, terrainManager={terrainManager != null}");
     }
 
     public static void AdvanceSession()

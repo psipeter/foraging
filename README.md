@@ -161,6 +161,8 @@ Three files per session saved to `ForagingData/` in project root (gitignored):
 - Player capsule visually overlaps wide bushes slightly — will improve with proper player model
 - FruitMaterialManager cache persists across Play mode sessions in Editor
 - ForagingData/ folder is gitignored — back up participant data separately before pushing
+- Custom shaders must be explicitly added to Always Included Shaders in Project Settings → Graphics, 
+  or Shader.Find() will return null in standalone builds
 
 # Git Workflow
 - main: stable builds only
@@ -189,8 +191,8 @@ When starting a new Claude chat, paste: README.md, .cursorrules, and the 2-3 C# 
 
 ## Active Debugging / In-Progress Work
 - Current issue: none
-- Recently completed: procedural skybox driven by SunController, fog, terrain/canopy/fruit textures, simplified sun parameters, camera angle lowered
-- Next: player/camera turning
+- Recently completed: standalone build fixes — shader inclusion, cursor lock, camera modes with isometric/exploration support
+- Next: participant ID screen, further visual polish, or sound
 
 # Do Not Modify
 - ProjectSettings/ (unless explicitly asked)

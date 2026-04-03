@@ -266,6 +266,7 @@ GameObject:
   m_Component:
   - component: {fileID: 205307911}
   - component: {fileID: 205307910}
+  - component: {fileID: 205307912}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -294,6 +295,7 @@ MonoBehaviour:
   treeGenerator: {fileID: 1544515995}
   borderWalls: {fileID: 1809223776}
   playerController: {fileID: 581266112}
+  cameraController: {fileID: 581266119}
   dataLogger: {fileID: 718741463}
   sessionTimerUI: {fileID: 1153043574}
 --- !u!4 &205307911
@@ -311,6 +313,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &205307912
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 205307909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9296d767b862187bc80844ca8f01b504, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::QuitHandler
 --- !u!1 &269841566
 GameObject:
   m_ObjectHideFlags: 0
@@ -1007,6 +1021,7 @@ GameObject:
   - component: {fileID: 581266113}
   - component: {fileID: 581266112}
   - component: {fileID: 581266118}
+  - component: {fileID: 581266119}
   m_Layer: 6
   m_Name: Player
   m_TagString: Untagged
@@ -1027,11 +1042,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   moveSpeed: 5
+  sessionConfig: {fileID: 0}
   terrainManager: {fileID: 1847944418}
   groundOffset: 0.5
   harvestManager: {fileID: 528505460}
   animator: {fileID: 1527045063}
   characterModel: {fileID: 1527045062}
+  cameraController: {fileID: 0}
   harvestAnimationClipLength: 6.2
 --- !u!54 &581266113
 Rigidbody:
@@ -1214,11 +1231,31 @@ MonoBehaviour:
         m_CallState: 2
     m_ActionId: ea12c0d8-b419-40d1-ba17-498789eb51d0
     m_ActionName: 'Player/Harvest[/Keyboard/space]'
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: 2446320a-b3f7-493b-874b-1c975db04bcf
+    m_ActionName: 'Player/Look[/Mouse/delta]'
   m_NeverAutoSwitchControlSchemes: 0
   m_DefaultControlScheme: 
   m_DefaultActionMap: Player
   m_SplitScreenIndex: -1
   m_Camera: {fileID: 0}
+--- !u!114 &581266119
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 581266111}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d8bb1c6790157fc40ba8d75b12b6bc0b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CameraController
+  sessionConfig: {fileID: 0}
+  cameraTransform: {fileID: 330585546}
+  playerController: {fileID: 581266112}
+  lookAction: {fileID: -4193367150617012660, guid: fdefa915547554fa8a5a5bd5592c4380, type: 3}
 --- !u!1 &698392481
 GameObject:
   m_ObjectHideFlags: 0

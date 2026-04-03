@@ -54,11 +54,6 @@ public class Tree : MonoBehaviour
         gameObject.tag = "Interactable";
     }
 
-    private void Start()
-    {
-        ApplyAttributes();
-    }
-
     public void SetTerrainNormal(Vector3 normal)
     {
         _terrainNormal = normal.sqrMagnitude > 1e-8f ? normal.normalized : Vector3.up;
@@ -70,6 +65,8 @@ public class Tree : MonoBehaviour
         {
             return;
         }
+
+        GameManager.LogDiagnostic($"ApplyAttributes: canopy={canopy != null}, sessionConfig={sessionConfig != null}, terrainManager={terrainManager != null}");
 
         Vector2 shapeRange = sessionConfig != null ? sessionConfig.ShapeRange : new Vector2(0f, 1f);
         float shapeT = Mathf.InverseLerp(shapeRange.x, shapeRange.y, attributes.shape);
@@ -158,6 +155,7 @@ public class Tree : MonoBehaviour
         int count = Mathf.Max(0, fruitCount);
         if (count == 0)
         {
+            GameManager.LogDiagnostic($"ApplyAttributes: count=0, returning early");
             return;
         }
 
@@ -166,6 +164,8 @@ public class Tree : MonoBehaviour
             fruitRadius / Mathf.Max(canopyScale.x, 0.0001f),
             fruitRadius / Mathf.Max(canopyScale.y, 0.0001f),
             fruitRadius / Mathf.Max(canopyScale.z, 0.0001f));
+
+        GameManager.LogDiagnostic($"Starting fruit placement: count={count}, fruitRadius={fruitRadius}, canopyScale={canopyScale}");
 
         // Deterministic distribution per tree.
         Color lowColor = sessionConfig != null ? sessionConfig.FruitColorLow : ColorLow;
@@ -179,6 +179,13 @@ public class Tree : MonoBehaviour
         int attempt = 0;
         while (placed < count && attempt < maxFibonacciAttempts)
         {
+            if (attempt == 0) GameManager.LogDiagnostic($"While loop iteration 0 starting");
+            if (attempt == 0)
+            {
+                Vector3 testPos = canopy.transform.TransformPoint(Vector3.zero);
+                GameManager.LogDiagnostic($"canopy.TransformPoint test: {testPos}");
+            }
+
             float t = (attempt + 0.5f) / Mathf.Max(count, attempt + 1);
             t = Mathf.Clamp01(t);
             float theta = Mathf.Acos(1f - t);
@@ -202,17 +209,14 @@ public class Tree : MonoBehaviour
                 continue;
             }
 
-            GameObject fruit = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            GameObject fruit = new GameObject();
+            MeshFilter mf = fruit.AddComponent<MeshFilter>();
+            mf.sharedMesh = _sphereMesh;
+            fruit.AddComponent<MeshRenderer>();
             fruit.name = $"Fruit_{placed}";
             fruit.transform.SetParent(canopy.transform, false);
             fruit.transform.localScale = compensatedScale;
             fruit.transform.localPosition = new Vector3(x, y, z);
-
-            SphereCollider collider = fruit.GetComponent<SphereCollider>();
-            if (collider != null)
-            {
-                Destroy(collider);
-            }
 
             MeshRenderer renderer = fruit.GetComponent<MeshRenderer>();
             if (renderer != null)
@@ -225,21 +229,20 @@ public class Tree : MonoBehaviour
             attempt++;
         }
 
+        GameManager.LogDiagnostic($"Fruit while loop done: placed={placed}, attempts={attempt}");
+
         while (placed < count)
         {
             Vector3 apexLocal = new Vector3(0f, 0.5f, 0f);
 
-            GameObject fruit = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            GameObject fruit = new GameObject();
+            MeshFilter mf = fruit.AddComponent<MeshFilter>();
+            mf.sharedMesh = _sphereMesh;
+            fruit.AddComponent<MeshRenderer>();
             fruit.name = $"Fruit_{placed}";
             fruit.transform.SetParent(canopy.transform, false);
             fruit.transform.localScale = compensatedScale;
             fruit.transform.localPosition = apexLocal;
-
-            SphereCollider collider = fruit.GetComponent<SphereCollider>();
-            if (collider != null)
-            {
-                Destroy(collider);
-            }
 
             MeshRenderer renderer = fruit.GetComponent<MeshRenderer>();
             if (renderer != null)
@@ -250,6 +253,8 @@ public class Tree : MonoBehaviour
             _fruits.Add(fruit);
             placed++;
         }
+
+        GameManager.LogDiagnostic($"ApplyAttributes complete: placed={placed}, _fruits.Count={_fruits.Count}");
     }
 
     public float Evaluate(RewardFunction rf)

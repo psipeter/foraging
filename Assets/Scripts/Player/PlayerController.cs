@@ -5,11 +5,13 @@ using UnityEngine.InputSystem;
 public class PlayerController : MonoBehaviour
 {
 public float moveSpeed = 5f;
+    public SessionConfig sessionConfig;
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private float groundOffset = 1.0f;
     [SerializeField] private HarvestManager harvestManager;
     [SerializeField] private Animator animator;
     [SerializeField] private Transform characterModel;
+    [SerializeField] private CameraController cameraController;
     [SerializeField] private float harvestAnimationClipLength = 6.2f;
 
     private Rigidbody playerRigidbody;
@@ -47,6 +49,12 @@ public float moveSpeed = 5f;
             bounceCombine = PhysicsMaterialCombine.Minimum
         };
         _capsuleCollider.material = mat;
+
+        if (sessionConfig != null && sessionConfig.CameraMode == CameraMode.Exploration)
+        {
+            playerRigidbody.constraints = RigidbodyConstraints.FreezeRotationX |
+                                          RigidbodyConstraints.FreezeRotationZ;
+        }
     }
 
     private void FixedUpdate()
@@ -67,7 +75,17 @@ public float moveSpeed = 5f;
         }
 
         Vector3 currentPos = playerRigidbody.position;
-        Vector3 desiredVelocity = new Vector3(moveInput.x, 0f, moveInput.y) * moveSpeed;
+        Vector3 desiredVelocity;
+        if (sessionConfig != null && sessionConfig.CameraMode == CameraMode.Exploration)
+        {
+            Vector3 localMove = new Vector3(moveInput.x, 0f, moveInput.y);
+            Vector3 worldMove = transform.rotation * localMove;
+            desiredVelocity = worldMove * moveSpeed;
+        }
+        else
+        {
+            desiredVelocity = new Vector3(moveInput.x, 0f, moveInput.y) * moveSpeed;
+        }
 
         Vector3 v = playerRigidbody.linearVelocity;
         v.x = desiredVelocity.x;
@@ -76,7 +94,9 @@ public float moveSpeed = 5f;
 
         if (characterModel != null && !_frozen && moveInput.sqrMagnitude > 0.01f)
         {
-            Vector3 moveDir = new Vector3(moveInput.x, 0f, moveInput.y).normalized;
+            Vector3 moveDir = sessionConfig != null && sessionConfig.CameraMode == CameraMode.Exploration
+                ? (transform.rotation * new Vector3(moveInput.x, 0f, moveInput.y)).normalized
+                : new Vector3(moveInput.x, 0f, moveInput.y).normalized;
             Quaternion targetRot = Quaternion.LookRotation(moveDir, Vector3.up);
             characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRot, Time.fixedDeltaTime * 10f);
         }

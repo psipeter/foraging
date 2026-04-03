@@ -13,6 +13,8 @@ public class TreeGenerator : MonoBehaviour
 
     private void Start()
     {
+        GameManager.LogDiagnostic($"TreeGenerator.Start: sessionConfig={sessionConfig != null}, treePrefab={treePrefab != null}, terrainManager={terrainManager != null}, treeCount={sessionConfig?.TreeCount}");
+
         if (sessionConfig == null || treePrefab == null || terrainManager == null)
         {
             return;
@@ -26,7 +28,10 @@ public class TreeGenerator : MonoBehaviour
         int placed = 0;
         while (placed < targetCount)
         {
+            GameManager.LogDiagnostic($"Attempting placement {placed + 1}...");
+
             Vector3? candidate = TryFindPosition(positions);
+            GameManager.LogDiagnostic($"TryFindPosition result: hasValue={candidate.HasValue}");
             if (!candidate.HasValue)
             {
                 break;
@@ -36,19 +41,21 @@ public class TreeGenerator : MonoBehaviour
             float elevation = terrainManager.SampleElevation(candidatePos.x, candidatePos.z);
             Vector3 pos = new Vector3(candidatePos.x, elevation, candidatePos.z);
             GameObject instance = Instantiate(treePrefab, pos, Quaternion.identity);
-            var tree = instance.GetComponent<Tree>();
-            if (tree == null)
+            var treeComp = instance.GetComponent<Tree>();
+            GameManager.LogDiagnostic($"instance={instance != null}, treeComp={treeComp != null}, prefabName={instance?.name}");
+            if (treeComp == null)
             {
+                GameManager.LogDiagnostic($"Tree component missing on prefab instance {placed}");
                 Destroy(instance);
                 continue;
             }
 
             int treeIndex = placed;
-            tree.treeId = treeIndex;
-            tree.sessionConfig = sessionConfig;
-            tree.fruitCount = sessionConfig.FruitCount;
-            tree.fruitRadius = sessionConfig.FruitRadius;
-            tree.fruitSeed = sessionConfig.WorldSeed + treeIndex * 7;
+            treeComp.treeId = treeIndex;
+            treeComp.sessionConfig = sessionConfig;
+            treeComp.fruitCount = sessionConfig.FruitCount;
+            treeComp.fruitRadius = sessionConfig.FruitRadius;
+            treeComp.fruitSeed = sessionConfig.WorldSeed + treeIndex * 7;
 
             TreeAttributes attributes = new TreeAttributes
             {
@@ -56,12 +63,14 @@ public class TreeGenerator : MonoBehaviour
                 color = Random.Range(0f, 1f),
                 moisture = terrainManager.SampleMoisture(pos.x, pos.z)
             };
-            tree.attributes = attributes;
+            treeComp.attributes = attributes;
 
             Vector3 terrainNormal = terrainManager.SampleNormal(pos.x, pos.z);
-            tree.SetTerrainNormal(terrainNormal);
-            tree.SetTerrainManager(terrainManager);
-            tree.ApplyAttributes();
+            treeComp.SetTerrainNormal(terrainNormal);
+            treeComp.SetTerrainManager(terrainManager);
+            treeComp.ApplyAttributes();
+
+            GameManager.LogDiagnostic($"Tree {placed}: FruitCount={treeComp.FruitCount}, sessionConfig={treeComp.sessionConfig != null}, terrainManager={treeComp.TerrainManager != null}");
 
             int treeLayer = LayerMask.NameToLayer("Tree");
             if (treeLayer >= 0)
@@ -72,10 +81,15 @@ public class TreeGenerator : MonoBehaviour
             positions.Add(pos);
             placed++;
         }
+
+        GameManager.LogDiagnostic($"Placement loop complete: placed={placed}");
+        GameManager.LogDiagnostic($"TreeGenerator finished: placed={placed} trees out of {targetCount}");
     }
 
     private Vector3? TryFindPosition(List<Vector3> existing)
     {
+        GameManager.LogDiagnostic($"TryFindPosition called: halfExtent={sessionConfig?.WorldHalfExtent}, existing={existing.Count}");
+
         float halfExtent = sessionConfig != null ? sessionConfig.WorldHalfExtent : 50f;
 
         for (int attempt = 0; attempt < MaxPlacementAttempts; attempt++)
@@ -90,6 +104,8 @@ public class TreeGenerator : MonoBehaviour
             }
         }
 
+        GameManager.LogDiagnostic($"TryFindPosition failed after {MaxPlacementAttempts} attempts, existing={existing.Count}");
+        GameManager.LogDiagnostic($"TryFindPosition returning null after {MaxPlacementAttempts} attempts");
         return null;
     }
 

@@ -49,6 +49,14 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private Color skyColorDawn = new Color(0.8f, 0.4f, 0.2f);
     [SerializeField] private Color skyColorNoon = new Color(0.3f, 0.6f, 1.0f);
 
+    [SerializeField] private CameraMode cameraMode = CameraMode.Isometric;
+    [SerializeField] private float mouseSensitivity = 120f;
+    [SerializeField] private float cameraSmoothing = 8f;
+    [SerializeField] private Vector3 isometricCameraPosition = new Vector3(0f, 20f, -15f);
+    [SerializeField] private Vector3 isometricCameraRotation = new Vector3(50f, 0f, 0f);
+    [SerializeField] private Vector3 explorationCameraPosition = new Vector3(0f, 12f, -18f);
+    [SerializeField] private Vector3 explorationCameraRotation = new Vector3(30f, 0f, 0f);
+
     public SessionConfig BaseConfig => baseConfig;
 
     public RewardFunction RewardFunction => rewardFunction;
@@ -81,6 +89,13 @@ public class SessionConfig : ScriptableObject
     public float SunIntensityNoon => baseConfig != null ? baseConfig.SunIntensityNoon : sunIntensityNoon;
     public Color SkyColorDawn => baseConfig != null ? baseConfig.SkyColorDawn : skyColorDawn;
     public Color SkyColorNoon => baseConfig != null ? baseConfig.SkyColorNoon : skyColorNoon;
+    public CameraMode CameraMode => baseConfig != null ? baseConfig.CameraMode : cameraMode;
+    public float MouseSensitivity => baseConfig != null ? baseConfig.MouseSensitivity : mouseSensitivity;
+    public float CameraSmoothing => baseConfig != null ? baseConfig.CameraSmoothing : cameraSmoothing;
+    public Vector3 IsometricCameraPosition => baseConfig != null ? baseConfig.IsometricCameraPosition : isometricCameraPosition;
+    public Vector3 IsometricCameraRotation => baseConfig != null ? baseConfig.IsometricCameraRotation : isometricCameraRotation;
+    public Vector3 ExplorationCameraPosition => baseConfig != null ? baseConfig.ExplorationCameraPosition : explorationCameraPosition;
+    public Vector3 ExplorationCameraRotation => baseConfig != null ? baseConfig.ExplorationCameraRotation : explorationCameraRotation;
 
     public float EvaluateReward(TreeAttributes attributes)
     {
