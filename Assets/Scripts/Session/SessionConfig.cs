@@ -27,11 +27,7 @@ public class SessionConfig : ScriptableObject
     // Fruit color range
     [SerializeField] private Color fruitColorLow = new Color(0.2f, 0.4f, 1.0f);
     [SerializeField] private Color fruitColorHigh = new Color(1.0f, 0.5f, 0.1f);
-
-    // Terrain color range
-    [SerializeField] private Color terrainArid = new Color(0.76f, 0.65f, 0.42f);
-    [SerializeField] private Color terrainGrassland = new Color(0.44f, 0.56f, 0.24f);
-    [SerializeField] private Color terrainSwampy = new Color(0.22f, 0.29f, 0.18f);
+    [SerializeField] private float fruitColorPreservation = 0.5f;
 
     // Terrain noise
     [SerializeField] private float terrainNoiseFrequency = 4f;
@@ -42,27 +38,16 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float worldHalfExtent = 50f;
     [SerializeField] private float borderWallHeight = 20f;
     [SerializeField] private Color borderWallColor = new Color(0.25f, 0.20f, 0.15f, 1.0f);
-    [SerializeField] private float colorContrast = 1.5f;
 
     // Sun arc
     [SerializeField] private float sunArcHeight = 60f;
-    [SerializeField] private Vector3 sunRiseDirection = new Vector3(0f, 0f, 1f);
-
-    // Sun color gradient (sunrise/set → midday)
-    [SerializeField] private Color sunColorDawn = new Color(1.0f, 0.4f, 0.1f);
-    [SerializeField] private Color sunColorNoon = new Color(1.0f, 0.95f, 0.8f);
+    [SerializeField] private float minSunElevation = 5f;
     [SerializeField] private float sunIntensityDawn = 0.4f;
     [SerializeField] private float sunIntensityNoon = 1.2f;
 
-    // Sky color gradient
+    // Sky color (dawn ↔ noon; ambient derived in SunController)
     [SerializeField] private Color skyColorDawn = new Color(0.8f, 0.4f, 0.2f);
     [SerializeField] private Color skyColorNoon = new Color(0.3f, 0.6f, 1.0f);
-    [SerializeField] private Color skyColorDusk = new Color(0.6f, 0.2f, 0.1f);
-
-    // Ambient light gradient
-    [SerializeField] private Color ambientDawn = new Color(0.15f, 0.1f, 0.08f);
-    [SerializeField] private Color ambientNoon = new Color(0.2f, 0.2f, 0.25f);
-    [SerializeField] private Color ambientDusk = new Color(0.12f, 0.08f, 0.06f);
 
     public SessionConfig BaseConfig => baseConfig;
 
@@ -82,9 +67,7 @@ public class SessionConfig : ScriptableObject
     public float HighlightRadiusPadding => baseConfig != null ? baseConfig.HighlightRadiusPadding : highlightRadiusPadding;
     public Color FruitColorLow => baseConfig != null ? baseConfig.FruitColorLow : fruitColorLow;
     public Color FruitColorHigh => baseConfig != null ? baseConfig.FruitColorHigh : fruitColorHigh;
-    public Color TerrainArid => baseConfig != null ? baseConfig.TerrainArid : terrainArid;
-    public Color TerrainGrassland => baseConfig != null ? baseConfig.TerrainGrassland : terrainGrassland;
-    public Color TerrainSwampy => baseConfig != null ? baseConfig.TerrainSwampy : terrainSwampy;
+    public float FruitColorPreservation => baseConfig != null ? baseConfig.FruitColorPreservation : fruitColorPreservation;
     public float TerrainNoiseFrequency => baseConfig != null ? baseConfig.TerrainNoiseFrequency : terrainNoiseFrequency;
     public int TerrainNoiseOctaves => baseConfig != null ? baseConfig.TerrainNoiseOctaves : terrainNoiseOctaves;
     public float TerrainMaxElevation => baseConfig != null ? baseConfig.TerrainMaxElevation : terrainMaxElevation;
@@ -92,19 +75,12 @@ public class SessionConfig : ScriptableObject
     public float WorldHalfExtent => baseConfig != null ? baseConfig.WorldHalfExtent : worldHalfExtent;
     public float BorderWallHeight => baseConfig != null ? baseConfig.BorderWallHeight : borderWallHeight;
     public Color BorderWallColor => baseConfig != null ? baseConfig.BorderWallColor : borderWallColor;
-    public float ColorContrast => baseConfig != null ? baseConfig.ColorContrast : colorContrast;
     public float SunArcHeight => baseConfig != null ? baseConfig.SunArcHeight : sunArcHeight;
-    public Vector3 SunRiseDirection => baseConfig != null ? baseConfig.SunRiseDirection : sunRiseDirection;
-    public Color SunColorDawn => baseConfig != null ? baseConfig.SunColorDawn : sunColorDawn;
-    public Color SunColorNoon => baseConfig != null ? baseConfig.SunColorNoon : sunColorNoon;
+    public float MinSunElevation => baseConfig != null ? baseConfig.MinSunElevation : minSunElevation;
     public float SunIntensityDawn => baseConfig != null ? baseConfig.SunIntensityDawn : sunIntensityDawn;
     public float SunIntensityNoon => baseConfig != null ? baseConfig.SunIntensityNoon : sunIntensityNoon;
     public Color SkyColorDawn => baseConfig != null ? baseConfig.SkyColorDawn : skyColorDawn;
     public Color SkyColorNoon => baseConfig != null ? baseConfig.SkyColorNoon : skyColorNoon;
-    public Color SkyColorDusk => baseConfig != null ? baseConfig.SkyColorDusk : skyColorDusk;
-    public Color AmbientDawn => baseConfig != null ? baseConfig.AmbientDawn : ambientDawn;
-    public Color AmbientNoon => baseConfig != null ? baseConfig.AmbientNoon : ambientNoon;
-    public Color AmbientDusk => baseConfig != null ? baseConfig.AmbientDusk : ambientDusk;
 
     public float EvaluateReward(TreeAttributes attributes)
     {

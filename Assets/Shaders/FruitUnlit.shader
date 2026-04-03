@@ -2,7 +2,12 @@ Shader "Foraging/FruitUnlit"
 {
     Properties
     {
-        _Color("Color", Color) = (1,1,1,1)
+        _Color ("Color", Color) = (1,1,1,1)
+        _MainTex ("Main Texture", 2D) = "white" {}
+        _NormalMap ("Normal Map", 2D) = "bump" {}
+        _Tiling ("Tiling", Float) = 4.0
+        _NormalStrength ("Normal Strength", Float) = 0.5
+        _ColorPreservation ("Color Preservation", Range(0,1)) = 0.5
     }
 
     SubShader
@@ -23,7 +28,7 @@ Shader "Foraging/FruitUnlit"
             Cull Back
 
             HLSLPROGRAM
-            #pragma target 2.0
+            #pragma target 3.0
             #pragma vertex vert
             #pragma fragment frag
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
@@ -33,14 +38,24 @@ Shader "Foraging/FruitUnlit"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
+            TEXTURE2D(_MainTex);
+            SAMPLER(sampler_MainTex);
+            TEXTURE2D(_NormalMap);
+            SAMPLER(sampler_NormalMap);
+
             CBUFFER_START(UnityPerMaterial)
                 float4 _Color;
+                float _Tiling;
+                float _NormalStrength;
+                float _ColorPreservation;
             CBUFFER_END
 
             struct Attributes
             {
                 float4 positionOS : POSITION;
                 float3 normalOS   : NORMAL;
+                float4 tangentOS  : TANGENT;
+                float2 uv         : TEXCOORD0;
             };
 
             struct Varyings
@@ -48,56 +63,60 @@ Shader "Foraging/FruitUnlit"
                 float4 positionHCS : SV_POSITION;
                 float3 positionWS  : TEXCOORD0;
                 float3 normalWS    : TEXCOORD1;
-                float4 shadowCoord : TEXCOORD2;
+                float3 tangentWS   : TEXCOORD2;
+                float3 bitangentWS : TEXCOORD3;
+                float4 shadowCoord : TEXCOORD4;
+                float2 uv          : TEXCOORD5;
             };
 
             Varyings vert(Attributes v)
             {
                 Varyings o;
-                float3 positionWS = TransformObjectToWorld(v.positionOS.xyz);
-                float3 normalWS = TransformObjectToWorldNormal(v.normalOS);
+                VertexPositionInputs posInputs = GetVertexPositionInputs(v.positionOS.xyz);
+                VertexNormalInputs normInputs = GetVertexNormalInputs(v.normalOS, v.tangentOS);
 
-                o.positionWS = positionWS;
-                o.normalWS = normalWS;
-                o.positionHCS = TransformWorldToHClip(positionWS);
-                o.shadowCoord = TransformWorldToShadowCoord(positionWS);
+                o.positionHCS = posInputs.positionCS;
+                o.positionWS = posInputs.positionWS;
+                o.normalWS = normInputs.normalWS;
+                o.tangentWS = normInputs.tangentWS;
+                o.bitangentWS = normInputs.bitangentWS;
+                o.shadowCoord = TransformWorldToShadowCoord(posInputs.positionWS);
+                o.uv = v.uv * _Tiling;
                 return o;
             }
 
             half4 frag(Varyings i) : SV_Target
             {
-                // Normalize world-space normal and compute main light with shadows.
-                float3 normalWS = normalize(i.normalWS);
+                half3 albedo = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv).rgb * (half3)_Color.rgb;
+
+                half3 tangentNormal = UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, i.uv));
+                tangentNormal = lerp(half3(0, 0, 1), tangentNormal, (half)_NormalStrength);
+
+                float3x3 TBN = float3x3(i.tangentWS, i.bitangentWS, i.normalWS);
+                float3 normalWS = normalize(mul(tangentNormal, TBN));
+
                 Light mainLight = GetMainLight(i.shadowCoord);
-
-                // View direction from world position toward camera.
-                float3 viewDir = normalize(_WorldSpaceCameraPos.xyz - i.positionWS);
                 float3 lightDir = normalize(mainLight.direction);
+                float3 viewDir = normalize(GetWorldSpaceViewDir(i.positionWS));
 
-                // Blinn-Phong specular highlight.
+                half NdotL = saturate(dot((half3)normalWS, (half3)lightDir));
+                half diffuse = 0.3h + 0.7h * NdotL * mainLight.shadowAttenuation;
+
                 float3 halfDir = normalize(lightDir + viewDir);
-                float spec = pow(saturate(dot(normalWS, halfDir)), 64.0);
-                float3 specular = mainLight.color.rgb * spec * 0.5;
+                half specTerm = pow(saturate(dot((half3)normalWS, (half3)halfDir)), 64.0h) * 0.5h * mainLight.shadowAttenuation;
+                half3 specular = specTerm * (half3)mainLight.color.rgb;
 
-                // Base fruit color (always full, no diffuse darkening).
-                float3 baseColor = _Color.rgb;
+                half3 ambient = (half3)unity_AmbientSky.rgb * 2.5h;
+                ambient.r = max(ambient.r, 0.35h);
+                ambient.g = max(ambient.g, 0.35h);
+                ambient.b = max(ambient.b, 0.35h);
 
-                // Combine base and specular.
-                float3 litColor = baseColor + specular;
-
-                // Ambient tint with high floor so fruits never get too dark.
-                float3 ambientColor = unity_AmbientSky.rgb;
-                float3 ambientScaled = ambientColor * 2.0;
-                ambientScaled.r = max(ambientScaled.r, 0.85);
-                ambientScaled.g = max(ambientScaled.g, 0.85);
-                ambientScaled.b = max(ambientScaled.b, 0.85);
-
-                float3 finalColor = litColor * ambientScaled;
-
-                return half4(finalColor, _Color.a);
+                half3 fullyLit = albedo * diffuse + specular;
+                half3 colorPreserved = (half3)_Color.rgb * ambient;
+                half3 lit = lerp(fullyLit, colorPreserved, (half)_ColorPreservation);
+                return half4(lit, _Color.a);
             }
             ENDHLSL
         }
     }
 }
-

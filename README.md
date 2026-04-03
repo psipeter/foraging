@@ -189,8 +189,8 @@ When starting a new Claude chat, paste: README.md, .cursorrules, and the 2-3 C# 
 
 ## Active Debugging / In-Progress Work
 - Current issue: none
-- Recently completed: player model (X-Bot) with idle/walk/harvest animations and directional turning
-- Next: visual polish — minimap, sound, textures
+- Recently completed: major visual polish pass — terrain texture splatting, canopy moss texture, fruit plaster texture with color preservation, simplified sun parameters, border walls
+- Next: further visual polish
 
 # Do Not Modify
 - ProjectSettings/ (unless explicitly asked)

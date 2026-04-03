@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: TerrainMaterial
-  m_Shader: {fileID: 4800000, guid: d71a4fa0b74f08c5d9a9ecb96842ba83, type: 3}
+  m_Shader: {fileID: 4800000, guid: c2913fd4e7b3ddb23a9d36c1dfa75cdf, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -24,6 +24,14 @@ Material:
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
+    - _AridNormal:
+        m_Texture: {fileID: 2800000, guid: c041095463fe8589ba02f3f068e722b2, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _AridTex:
+        m_Texture: {fileID: 2800000, guid: b52ff22cc96d1280fbae1efa4dc3d0f8, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _BaseMap:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -48,6 +56,14 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _GrasslandNormal:
+        m_Texture: {fileID: 2800000, guid: 7095abb195578c0a5ad59dde6c35c2d4, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _GrasslandTex:
+        m_Texture: {fileID: 2800000, guid: 54381c2e7b002cdc297e27eb8c46a20f, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _MainTex:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -66,6 +82,14 @@ Material:
         m_Offset: {x: 0, y: 0}
     - _SpecGlossMap:
         m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SwampNormal:
+        m_Texture: {fileID: 2800000, guid: 698100556318f27b886d8de402d60c9b, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SwampTex:
+        m_Texture: {fileID: 2800000, guid: 84a58561b46ff675faf7fa922a34620a, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - unity_Lightmaps:
@@ -101,6 +125,7 @@ Material:
     - _Glossiness: 0
     - _GlossyReflections: 0
     - _Metallic: 0
+    - _NormalStrength: 0.5
     - _OcclusionStrength: 1
     - _Parallax: 0.005
     - _QueueOffset: 0
@@ -111,6 +136,8 @@ Material:
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
     - _Surface: 0
+    - _TextureBlend: 0.9
+    - _Tiling: 8
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1

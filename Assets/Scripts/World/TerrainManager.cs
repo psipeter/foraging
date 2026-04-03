@@ -35,6 +35,7 @@ public class TerrainManager : MonoBehaviour
         int vertexCount = res * res;
         var vertices = new Vector3[vertexCount];
         var uvs = new Vector2[vertexCount];
+        var uvs2 = new Vector2[vertexCount];
         var colors = new Color[vertexCount];
 
         float inv = 1f / (res - 1);
@@ -54,6 +55,7 @@ public class TerrainManager : MonoBehaviour
                 int idx = i * res + j;
                 vertices[idx] = new Vector3(worldX, elevation, worldZ);
                 uvs[idx] = new Vector2(i * inv, j * inv);
+                uvs2[idx] = new Vector2(m, 0f);
                 colors[idx] = MoistureToColor(m);
             }
         }
@@ -85,9 +87,11 @@ public class TerrainManager : MonoBehaviour
 
         mesh.vertices = vertices;
         mesh.uv = uvs;
+        mesh.uv2 = uvs2;
         mesh.colors = colors;
         mesh.triangles = triangles;
         mesh.RecalculateNormals();
+        mesh.RecalculateTangents();
 
         MeshFilter meshFilter = groundObject.GetComponent<MeshFilter>();
         if (meshFilter == null)
@@ -160,6 +164,8 @@ public class TerrainManager : MonoBehaviour
             return;
         }
 
+        Color ambient = sunController != null ? sunController.CurrentAmbientColor : RenderSettings.ambientLight;
+
         MeshFilter meshFilter = groundObject.GetComponent<MeshFilter>();
         if (meshFilter == null || meshFilter.sharedMesh == null || _baseColors == null)
         {
@@ -173,7 +179,6 @@ public class TerrainManager : MonoBehaviour
             tintedColors = new Color[_baseColors.Length];
         }
 
-        Color ambient = sunController != null ? sunController.CurrentAmbientColor : RenderSettings.ambientLight;
         Color ambientScaled = ambient * 2f;
 
         for (int i = 0; i < _baseColors.Length; i++)
@@ -217,14 +222,14 @@ public class TerrainManager : MonoBehaviour
 
     private Color MoistureToColor(float moisture)
     {
-        Color arid = sessionConfig != null ? sessionConfig.TerrainArid : Arid;
-        Color grassland = sessionConfig != null ? sessionConfig.TerrainGrassland : Grassland;
-        Color swampy = sessionConfig != null ? sessionConfig.TerrainSwampy : Swampy;
+        Color arid = Arid;
+        Color grassland = Grassland;
+        Color swampy = Swampy;
 
         float m = Mathf.Clamp01(moisture);
 
         // Apply contrast curve before mapping to the gradient.
-        float contrast = sessionConfig != null ? sessionConfig.ColorContrast : 1.5f;
+        float contrast = 1.5f;
         contrast = Mathf.Max(0.0001f, contrast);
 
         if (m <= 0.5f)

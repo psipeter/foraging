@@ -18,7 +18,6 @@ public class SunController : MonoBehaviour
     public SessionConfig sessionConfig;
     [SerializeField] private Light sunLight;
     [SerializeField] private Camera mainCamera;
-    [SerializeField] private float minSunElevation = 30f;
     [SerializeField] private TerrainManager terrainManager;
 
     private float sessionTime;
@@ -66,14 +65,6 @@ public class SunController : MonoBehaviour
         {
             terrainManager.UpdateTerrainLighting();
         }
-
-        Color ambient = CurrentAmbientColor;
-        // For now, use a simple global query; this keeps TreeGenerator free of extra tracking.
-        Tree[] trees = FindObjectsByType<Tree>(FindObjectsSortMode.None);
-        for (int i = 0; i < trees.Length; i++)
-        {
-            trees[i].UpdateLighting(ambient);
-        }
     }
 
     private void UpdateSunTransform(float t)
@@ -84,9 +75,10 @@ public class SunController : MonoBehaviour
         }
 
         float sunArcHeight = sessionConfig != null ? sessionConfig.SunArcHeight : 60f;
+        float minEl = sessionConfig != null ? sessionConfig.MinSunElevation : 5f;
 
         float elevation = Mathf.Sin(t * Mathf.PI) * sunArcHeight;
-        elevation = Mathf.Max(elevation, minSunElevation);
+        elevation = Mathf.Max(elevation, minEl);
         float azimuth = Mathf.Lerp(-90f, 90f, t) + 180f;
 
         sunLight.transform.rotation = Quaternion.Euler(elevation, azimuth, 0f);
@@ -99,45 +91,22 @@ public class SunController : MonoBehaviour
             return;
         }
 
-        Color dawn = sessionConfig != null ? sessionConfig.SunColorDawn : new Color(1.0f, 0.4f, 0.1f);
-        Color noon = sessionConfig != null ? sessionConfig.SunColorNoon : new Color(1.0f, 0.95f, 0.8f);
+        sunLight.color = new Color(1.0f, 0.95f, 0.85f);
 
-        float noonFactor = Mathf.Sin(t * Mathf.PI);
-        noonFactor = Mathf.Clamp01(noonFactor);
-
-        sunLight.color = Color.Lerp(dawn, noon, noonFactor);
-
+        float blend = Mathf.Sin(t * Mathf.PI);
         float dawnIntensity = sessionConfig != null ? sessionConfig.SunIntensityDawn : 0.4f;
         float noonIntensity = sessionConfig != null ? sessionConfig.SunIntensityNoon : 1.2f;
-        float intensity = Mathf.Lerp(dawnIntensity, noonIntensity, noonFactor);
-        sunLight.intensity = intensity;
+        sunLight.intensity = Mathf.Lerp(dawnIntensity, noonIntensity, blend);
     }
 
     private void UpdateSkyAndAmbient(float t)
     {
         Color skyDawn = sessionConfig != null ? sessionConfig.SkyColorDawn : new Color(0.8f, 0.4f, 0.2f);
         Color skyNoon = sessionConfig != null ? sessionConfig.SkyColorNoon : new Color(0.3f, 0.6f, 1.0f);
-        Color skyDusk = sessionConfig != null ? sessionConfig.SkyColorDusk : new Color(0.6f, 0.2f, 0.1f);
 
-        Color ambientDawn = sessionConfig != null ? sessionConfig.AmbientDawn : new Color(0.15f, 0.1f, 0.08f);
-        Color ambientNoon = sessionConfig != null ? sessionConfig.AmbientNoon : new Color(0.2f, 0.2f, 0.25f);
-        Color ambientDusk = sessionConfig != null ? sessionConfig.AmbientDusk : new Color(0.12f, 0.08f, 0.06f);
-
-        Color skyColor;
-        Color ambientColor;
-
-        if (t < 0.5f)
-        {
-            float nt = t * 2f;
-            skyColor = Color.Lerp(skyDawn, skyNoon, nt);
-            ambientColor = Color.Lerp(ambientDawn, ambientNoon, nt);
-        }
-        else
-        {
-            float nt = (t - 0.5f) * 2f;
-            skyColor = Color.Lerp(skyNoon, skyDusk, nt);
-            ambientColor = Color.Lerp(ambientNoon, ambientDusk, nt);
-        }
+        float blend = Mathf.Sin(t * Mathf.PI);
+        Color skyColor = Color.Lerp(skyDawn, skyNoon, blend);
+        Color ambientColor = skyColor * 0.7f;
 
         if (mainCamera != null)
         {

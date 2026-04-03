@@ -791,7 +791,6 @@ MonoBehaviour:
   sessionConfig: {fileID: 0}
   sunLight: {fileID: 410087040}
   mainCamera: {fileID: 330585545}
-  minSunElevation: 40
   terrainManager: {fileID: 1847944418}
 --- !u!4 &419207780
 Transform:
@@ -2214,7 +2213,6 @@ MonoBehaviour:
   sessionConfig: {fileID: 0}
   terrainManager: {fileID: 1847944418}
   treePrefab: {fileID: 4163433376014564458, guid: 938a0f117e809833c8cf07626d56ae32, type: 3}
-  sunController: {fileID: 0}
 --- !u!4 &1544515996
 Transform:
   m_ObjectHideFlags: 0

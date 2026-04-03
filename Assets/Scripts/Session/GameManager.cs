@@ -93,6 +93,8 @@ public class GameManager : MonoBehaviour
         {
             sessionTimerUI.sessionConfig = activeConfig;
         }
+
+        FruitMaterialManager.SetSessionConfig(activeConfig);
     }
 
     public static void AdvanceSession()

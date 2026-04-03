@@ -19,7 +19,6 @@ public class Tree : MonoBehaviour
     public TreeAttributes attributes;
     public int treeId;
     public SessionConfig sessionConfig;
-    public SunController sunController;
 
     [SerializeField] private TerrainManager terrainManager;
 
@@ -38,10 +37,6 @@ public class Tree : MonoBehaviour
 
     private static Mesh _sphereMesh;
 
-    [SerializeField] private Color canopyBaseColor = new Color(0.24f, 0.35f, 0.18f);
-    private MeshRenderer _canopyRenderer;
-    private Material _canopyMaterial;
-
     public bool isHarvested = false;
 
     private Vector3 _terrainNormal = Vector3.up;
@@ -57,17 +52,6 @@ public class Tree : MonoBehaviour
     private void Awake()
     {
         gameObject.tag = "Interactable";
-
-        if (canopy != null)
-        {
-            _canopyRenderer = canopy.GetComponent<MeshRenderer>();
-            if (_canopyRenderer != null && _canopyRenderer.sharedMaterial != null)
-            {
-                _canopyMaterial = new Material(_canopyRenderer.sharedMaterial);
-                _canopyRenderer.material = _canopyMaterial;
-                _canopyMaterial.color = canopyBaseColor;
-            }
-        }
     }
 
     private void Start()
@@ -158,16 +142,6 @@ public class Tree : MonoBehaviour
         if (highlight != null)
         {
             highlight.SetRingRadius(worldRadius);
-        }
-
-        // Apply lighting after geometry updates.
-        if (sunController != null)
-        {
-            UpdateLighting(sunController.CurrentAmbientColor);
-        }
-        else if (_canopyMaterial != null)
-        {
-            _canopyMaterial.color = canopyBaseColor;
         }
 
         // Rebuild fruits procedurally.
@@ -330,15 +304,6 @@ public class Tree : MonoBehaviour
         {
             highlight.terrainManager = tm;
         }
-    }
-
-    public void UpdateLighting(Color ambientColor)
-    {
-        if (_canopyMaterial == null)
-        {
-            return;
-        }
-        _canopyMaterial.color = canopyBaseColor;
     }
 
     public void SetHighlight(bool active)
