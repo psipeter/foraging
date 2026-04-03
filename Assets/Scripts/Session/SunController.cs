@@ -10,14 +10,15 @@ Scene setup instructions (SampleScene):
   - `sessionConfig` to your SessionConfig asset (e.g., DefaultSession).
   - `sunLight` to the existing Directional Light in the scene.
   - `mainCamera` to the Main Camera.
-- Set the Main Camera clear flags to SolidColor so `backgroundColor`
-  drives the sky color over the session.
+  - `skyboxMaterial` to SkyboxMaterial.mat (used for procedural sky tint / atmosphere).
+- Set the Main Camera clear flags to Skybox (also applied at runtime in Start()).
 */
 public class SunController : MonoBehaviour
 {
     public SessionConfig sessionConfig;
     [SerializeField] private Light sunLight;
     [SerializeField] private Camera mainCamera;
+    [SerializeField] private Material skyboxMaterial;
     [SerializeField] private TerrainManager terrainManager;
 
     private float sessionTime;
@@ -38,7 +39,7 @@ public class SunController : MonoBehaviour
     {
         if (mainCamera != null)
         {
-            mainCamera.clearFlags = CameraClearFlags.SolidColor;
+            mainCamera.clearFlags = CameraClearFlags.Skybox;
         }
     }
 
@@ -108,9 +109,10 @@ public class SunController : MonoBehaviour
         Color skyColor = Color.Lerp(skyDawn, skyNoon, blend);
         Color ambientColor = skyColor * 0.7f;
 
-        if (mainCamera != null)
+        if (skyboxMaterial != null)
         {
-            mainCamera.backgroundColor = skyColor;
+            skyboxMaterial.SetColor("_SkyTint", skyColor);
+            skyboxMaterial.SetFloat("_AtmosphereThickness", Mathf.Lerp(0.4f, 0.8f, blend));
         }
 
         RenderSettings.ambientLight = ambientColor;

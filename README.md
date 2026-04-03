@@ -189,8 +189,8 @@ When starting a new Claude chat, paste: README.md, .cursorrules, and the 2-3 C# 
 
 ## Active Debugging / In-Progress Work
 - Current issue: none
-- Recently completed: major visual polish pass — terrain texture splatting, canopy moss texture, fruit plaster texture with color preservation, simplified sun parameters, border walls
-- Next: further visual polish
+- Recently completed: procedural skybox driven by SunController, fog, terrain/canopy/fruit textures, simplified sun parameters, camera angle lowered
+- Next: player/camera turning
 
 # Do Not Modify
 - ProjectSettings/ (unless explicitly asked)
