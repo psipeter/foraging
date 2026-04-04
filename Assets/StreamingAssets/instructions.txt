@@ -1,0 +1,7 @@
+<size=28><b>Welcome to the Foraging Task</b></size>
+
+Navigate the environment using WASD.
+Press Space when near a bush to harvest it.
+Collect as much reward as possible before sunset.
+
+<i>Press Space to begin.</i>

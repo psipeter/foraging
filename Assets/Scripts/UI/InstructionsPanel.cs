@@ -1,14 +1,20 @@
+using System.IO;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class InstructionsPanel : MonoBehaviour
 {
+    private const string FallbackInstructions =
+        "<size=28><b>Welcome to the Foraging Task</b></size>\n\n" +
+        "Navigate the environment using WASD.\n" +
+        "Press Space when near a bush to harvest it.\n" +
+        "Collect as much reward as possible before sunset.\n\n" +
+        "<i>Press Space to begin.</i>";
+
     [SerializeField] private GameObject panel;
     [SerializeField] private TextMeshProUGUI bodyText;
     [SerializeField] private TextMeshProUGUI sessionLabel;
-
-    private static bool _instructionsShown = false;
 
     private void Start()
     {
@@ -17,35 +23,58 @@ public class InstructionsPanel : MonoBehaviour
 
         if (sessionLabel != null)
         {
-            if (currentIndex > 0)
-            {
-                sessionLabel.gameObject.SetActive(true);
-                sessionLabel.text = $"Session {currentIndex + 1} of {Mathf.Max(1, total)}";
-            }
-            else
-            {
-                sessionLabel.gameObject.SetActive(false);
-            }
+            sessionLabel.gameObject.SetActive(currentIndex > 0);
         }
 
-        if (bodyText != null && string.IsNullOrWhiteSpace(bodyText.text))
+        if (currentIndex == 0 && !GameManager.HasCompletedSession)
         {
-            bodyText.text =
-                "Welcome to the Foraging Task\n\n" +
-                "Navigate using WASD.\n" +
-                "Press Space when near a bush to harvest it.\n" +
-                "Collect as much reward as possible before sunset.\n\n" +
-                "Press Space to begin.";
-        }
+            if (bodyText != null)
+            {
+                bodyText.richText = true;
+                string path = Path.Combine(Application.streamingAssetsPath, "instructions.txt");
+                string text = FallbackInstructions;
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        text = File.ReadAllText(path);
+                    }
+                }
+                catch (IOException)
+                {
+                    text = FallbackInstructions;
+                }
 
-        if (!_instructionsShown)
-        {
+                bodyText.text = text;
+            }
+
             if (panel != null)
             {
                 panel.SetActive(true);
             }
+
             Time.timeScale = 0f;
-            _instructionsShown = true;
+        }
+        else if (currentIndex > 0)
+        {
+            if (bodyText != null)
+            {
+                bodyText.gameObject.SetActive(false);
+            }
+
+            if (sessionLabel != null)
+            {
+                sessionLabel.text =
+                    $"Session {GameManager.CurrentSessionIndex + 1} of {GameManager.TotalSessions}\n\nPress Space to continue";
+                sessionLabel.gameObject.SetActive(true);
+            }
+
+            if (panel != null)
+            {
+                panel.SetActive(true);
+            }
+
+            Time.timeScale = 0f;
         }
         else
         {
@@ -53,6 +82,7 @@ public class InstructionsPanel : MonoBehaviour
             {
                 panel.SetActive(false);
             }
+
             Time.timeScale = 1f;
         }
     }
@@ -60,6 +90,11 @@ public class InstructionsPanel : MonoBehaviour
     private void Update()
     {
         if (panel == null || !panel.activeSelf)
+        {
+            return;
+        }
+
+        if (Keyboard.current == null)
         {
             return;
         }
@@ -73,4 +108,3 @@ public class InstructionsPanel : MonoBehaviour
         }
     }
 }
-

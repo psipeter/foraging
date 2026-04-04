@@ -22,6 +22,9 @@ public class GameManager : MonoBehaviour
     public static int CurrentSessionIndex = 0;
     public static List<SessionConfig> AllSessionConfigs;
 
+    public static float LastSessionScore = 0f;
+    public static bool HasCompletedSession = false;
+
     public static int TotalSessions => AllSessionConfigs?.Count ?? 0;
     public static bool IsLastSession => TotalSessions == 0 || CurrentSessionIndex >= TotalSessions - 1;
 

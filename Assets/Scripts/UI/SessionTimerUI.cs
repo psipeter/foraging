@@ -1,8 +1,10 @@
-using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using TMPro;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public class SessionTimerUI : MonoBehaviour
 {
@@ -48,16 +50,25 @@ public class SessionTimerUI : MonoBehaviour
         {
             timerText.text = "00:00";
 
-            if (sessionEndPanel != null && sessionEndPanel.activeSelf && !GameManager.IsLastSession)
+            if (sessionEndPanel != null && sessionEndPanel.activeSelf)
             {
                 if (Keyboard.current != null &&
                     (Keyboard.current.spaceKey.wasPressedThisFrame ||
                      Keyboard.current.enterKey.wasPressedThisFrame ||
                      Keyboard.current.numpadEnterKey.wasPressedThisFrame))
                 {
-                    GameManager.AdvanceSession();
-                    Scene current = SceneManager.GetActiveScene();
-                    SceneManager.LoadScene(current.name);
+                    if (GameManager.IsLastSession)
+                    {
+                        Application.Quit();
+#if UNITY_EDITOR
+                        EditorApplication.isPlaying = false;
+#endif
+                    }
+                    else
+                    {
+                        GameManager.AdvanceSession();
+                        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+                    }
                 }
             }
 
@@ -98,12 +109,15 @@ public class SessionTimerUI : MonoBehaviour
             }
         }
 
+        GameManager.LastSessionScore = _lastTotalScore;
+        GameManager.HasCompletedSession = true;
+
+        bool isLast = GameManager.IsLastSession;
+
         if (sessionEndPanel != null)
         {
             sessionEndPanel.SetActive(true);
         }
-
-        bool isLast = GameManager.IsLastSession;
 
         if (sessionCompleteText != null)
         {
@@ -112,11 +126,10 @@ public class SessionTimerUI : MonoBehaviour
 
         if (nextSessionPromptText != null)
         {
-            nextSessionPromptText.gameObject.SetActive(!isLast);
-            if (!isLast)
-            {
-                nextSessionPromptText.text = "Press Space to continue";
-            }
+            nextSessionPromptText.gameObject.SetActive(true);
+            nextSessionPromptText.text = isLast
+                ? "Press Space to exit"
+                : "Press Space to continue";
         }
 
         if (finalScoreText != null)
@@ -125,4 +138,3 @@ public class SessionTimerUI : MonoBehaviour
         }
     }
 }
-

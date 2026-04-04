@@ -191,8 +191,8 @@ When starting a new Claude chat, paste: README.md, .cursorrules, and the 2-3 C# 
 
 ## Active Debugging / In-Progress Work
 - Current issue: none
-- Recently completed: standalone build fixes — shader inclusion, cursor lock, camera modes with isometric/exploration support
-- Next: participant ID screen, further visual polish, or sound
+- Recently completed: session flow overhaul — instructions from StreamingAssets/instructions.txt, between-session panel, score screen with Space to continue
+- Next: font polish, sound, or participant ID screen
 
 # Do Not Modify
 - ProjectSettings/ (unless explicitly asked)
