@@ -191,7 +191,7 @@ When starting a new Claude chat, paste: README.md, .cursorrules, and the 2-3 C# 
 
 ## Active Debugging / In-Progress Work
 - Current issue: none
-- Recently completed: canopy emission highlight replaces disc, terrain seed fix, fog on custom shaders, trees vertical
+- Recently completed: Remy character model with correctly calibrated animations
 - Next: participant ID screen, sound, font polish
 
 # Do Not Modify

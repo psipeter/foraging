@@ -12,6 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: S1
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
+  sessionDuration: 60
+  worldSeed: 1
+  treeCount: 300
   rewardFunction:
     shapeComponent:
       basisFunctionType: 0
@@ -28,34 +31,9 @@ MonoBehaviour:
       weight: 0
       peak: 0
       width: 0
-  sessionDuration: 20
-  worldSeed: 1
-  treeCount: 300
-  fruitCount: 10
-  fruitRadius: 0.6
+  rewardStd: 0.3
   playerMoveSpeed: 5
   fruitHarvestDuration: 0.5
-  rewardStd: 0
-  shapeRange: {x: 0, y: 1}
-  canopyWidthRange: {x: 1, y: 5}
-  canopyHeightRange: {x: 1, y: 10}
-  highlightRadiusPadding: 0.8
-  fruitColorLow: {r: 0, g: 0.2, b: 1, a: 1}
-  fruitColorHigh: {r: 1, g: 0.4, b: 0, a: 1}
-  fruitColorPreservation: 0.5
-  terrainNoiseFrequency: 5
-  terrainNoiseOctaves: 1
-  terrainMaxElevation: 20
-  terrainMeshResolution: 128
-  worldHalfExtent: 200
-  borderWallHeight: 30
-  borderWallColor: {r: 0.15, g: 0.18, b: 0.12, a: 1}
-  sunArcHeight: 90
-  minSunElevation: 25
-  sunIntensityDawn: 0.5
-  sunIntensityNoon: 1.5
-  skyColorDawn: {r: 0.8700711, g: 0.4351538, b: 0, a: 1}
-  skyColorNoon: {r: 0, g: 0.72206545, b: 1, a: 1}
   cameraMode: 1
   mouseSensitivity: 10
   cameraSmoothing: 12
@@ -63,3 +41,25 @@ MonoBehaviour:
   isometricCameraRotation: {x: 75, y: 0, z: 0}
   explorationCameraPosition: {x: 0, y: 12, z: -18}
   explorationCameraRotation: {x: 30, y: 0, z: 0}
+  fruitCount: 10
+  fruitRadius: 0.6
+  fruitColorLow: {r: 0, g: 0.2, b: 1, a: 1}
+  fruitColorHigh: {r: 1, g: 0.4, b: 0, a: 1}
+  shapeRange: {x: 0, y: 1}
+  canopyWidthRange: {x: 1, y: 5}
+  canopyHeightRange: {x: 1, y: 10}
+  highlightRadiusPadding: 0.8
+  fruitColorPreservation: 0.5
+  terrainNoiseFrequency: 2
+  terrainNoiseOctaves: 1
+  terrainMaxElevation: 20
+  terrainMeshResolution: 128
+  worldHalfExtent: 200
+  sunArcHeight: 90
+  minSunElevation: 25
+  sunIntensityDawn: 0.5
+  sunIntensityNoon: 1.5
+  skyColorDawn: {r: 0.8700711, g: 0.4351538, b: 0, a: 1}
+  skyColorNoon: {r: 0, g: 0.72206545, b: 1, a: 1}
+  borderWallHeight: 30
+  borderWallColor: {r: 0.15, g: 0.18, b: 0.12, a: 1}

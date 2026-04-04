@@ -35,7 +35,7 @@ public class TreeGenerator : MonoBehaviour
             Vector3 candidatePos = candidate.Value;
             float elevation = terrainManager.SampleElevation(candidatePos.x, candidatePos.z);
             Vector3 pos = new Vector3(candidatePos.x, elevation, candidatePos.z);
-            GameObject instance = Instantiate(treePrefab, pos, Quaternion.identity);
+            GameObject instance = Instantiate(treePrefab, pos, Quaternion.identity, transform);
             var treeComp = instance.GetComponent<Tree>();
             if (treeComp == null)
             {
