@@ -47,6 +47,11 @@ public class CameraController : MonoBehaviour
             return;
         }
 
+        if (playerController != null && playerController.IsFrozen)
+        {
+            return;
+        }
+
         float mouseDeltaX = Mouse.current != null ? Mouse.current.delta.ReadValue().x : 0f;
         float yaw = mouseDeltaX * Time.deltaTime * sessionConfig.MouseSensitivity;
         Rigidbody playerRb = playerController.GetComponent<Rigidbody>();

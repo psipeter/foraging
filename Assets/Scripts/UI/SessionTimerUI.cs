@@ -110,7 +110,6 @@ public class SessionTimerUI : MonoBehaviour
         }
 
         GameManager.LastSessionScore = _lastTotalScore;
-        GameManager.HasCompletedSession = true;
 
         bool isLast = GameManager.IsLastSession;
 
@@ -129,7 +128,7 @@ public class SessionTimerUI : MonoBehaviour
             nextSessionPromptText.gameObject.SetActive(true);
             nextSessionPromptText.text = isLast
                 ? "Press Space to exit"
-                : "Press Space to continue";
+                : $"Press Space to continue to Session {GameManager.CurrentSessionIndex + 2}/{GameManager.TotalSessions}";
         }
 
         if (finalScoreText != null)

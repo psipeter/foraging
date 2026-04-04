@@ -191,8 +191,8 @@ When starting a new Claude chat, paste: README.md, .cursorrules, and the 2-3 C# 
 
 ## Active Debugging / In-Progress Work
 - Current issue: none
-- Recently completed: session flow overhaul — instructions from StreamingAssets/instructions.txt, between-session panel, score screen with Space to continue
-- Next: font polish, sound, or participant ID screen
+- Recently completed: cleanup pass, fog on all shaders, harvest turning fix, session flow simplification
+- Next: font polish, sound, participant ID screen
 
 # Do Not Modify
 - ProjectSettings/ (unless explicitly asked)

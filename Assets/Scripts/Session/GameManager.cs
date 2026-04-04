@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 
 [DefaultExecutionOrder(-20)]
@@ -23,18 +22,9 @@ public class GameManager : MonoBehaviour
     public static List<SessionConfig> AllSessionConfigs;
 
     public static float LastSessionScore = 0f;
-    public static bool HasCompletedSession = false;
 
     public static int TotalSessions => AllSessionConfigs?.Count ?? 0;
     public static bool IsLastSession => TotalSessions == 0 || CurrentSessionIndex >= TotalSessions - 1;
-
-    public static void LogDiagnostic(string message)
-    {
-        string path = Path.Combine(
-            Path.GetDirectoryName(Application.dataPath),
-            "diagnostic.log");
-        File.AppendAllText(path, $"{System.DateTime.Now}: {message}\n");
-    }
 
     private void Awake()
     {
@@ -114,8 +104,6 @@ public class GameManager : MonoBehaviour
         }
 
         FruitMaterialManager.SetSessionConfig(activeConfig);
-
-        LogDiagnostic($"GameManager.Awake complete: activeConfig={activeConfig != null}, treeGenerator={treeGenerator != null}, terrainManager={terrainManager != null}");
     }
 
     public static void AdvanceSession()

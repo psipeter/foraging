@@ -29,7 +29,7 @@ MonoBehaviour:
       weight: 0
       peak: 1
       width: 0.2
-  sessionDuration: 30
+  sessionDuration: 12
   worldSeed: 0
   treeCount: 300
   fruitCount: 10

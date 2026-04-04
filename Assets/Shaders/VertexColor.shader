@@ -38,6 +38,7 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile _ _SHADOWS_SOFT
+            #pragma multi_compile_fog
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -72,6 +73,7 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
                 float3 normalWS    : TEXCOORD3;
                 float3 tangentWS   : TEXCOORD4;
                 float3 bitangentWS : TEXCOORD5;
+                float  fogCoord    : TEXCOORD6;
             };
 
             Varyings vert(Attributes v)
@@ -86,6 +88,7 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
                 o.normalWS     = normInputs.normalWS;
                 o.tangentWS    = normInputs.tangentWS;
                 o.bitangentWS  = normInputs.bitangentWS;
+                o.fogCoord     = ComputeFogFactor(o.positionHCS.z);
                 return o;
             }
 
@@ -133,7 +136,9 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
                 half lighting = 0.15h + 0.85h * shadow * NdotL;
 
                 half3 ambient = unity_AmbientSky.rgb;
-                return half4(albedo * lighting + albedo * ambient * 0.3, 1.0h);
+                half4 color = half4(albedo * lighting + albedo * ambient * 0.3, 1.0h);
+                color.rgb = MixFog(color.rgb, i.fogCoord);
+                return color;
             }
             ENDHLSL
         }

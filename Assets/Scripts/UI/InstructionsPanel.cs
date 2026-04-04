@@ -18,18 +18,16 @@ public class InstructionsPanel : MonoBehaviour
 
     private void Start()
     {
-        int currentIndex = GameManager.CurrentSessionIndex;
-        int total = GameManager.TotalSessions;
-
         if (sessionLabel != null)
         {
-            sessionLabel.gameObject.SetActive(currentIndex > 0);
+            sessionLabel.gameObject.SetActive(false);
         }
 
-        if (currentIndex == 0 && !GameManager.HasCompletedSession)
+        if (GameManager.CurrentSessionIndex == 0)
         {
             if (bodyText != null)
             {
+                bodyText.gameObject.SetActive(true);
                 bodyText.richText = true;
                 string path = Path.Combine(Application.streamingAssetsPath, "instructions.txt");
                 string text = FallbackInstructions;
@@ -46,27 +44,6 @@ public class InstructionsPanel : MonoBehaviour
                 }
 
                 bodyText.text = text;
-            }
-
-            if (panel != null)
-            {
-                panel.SetActive(true);
-            }
-
-            Time.timeScale = 0f;
-        }
-        else if (currentIndex > 0)
-        {
-            if (bodyText != null)
-            {
-                bodyText.gameObject.SetActive(false);
-            }
-
-            if (sessionLabel != null)
-            {
-                sessionLabel.text =
-                    $"Session {GameManager.CurrentSessionIndex + 1} of {GameManager.TotalSessions}\n\nPress Space to continue";
-                sessionLabel.gameObject.SetActive(true);
             }
 
             if (panel != null)

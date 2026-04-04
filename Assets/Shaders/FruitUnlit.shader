@@ -34,6 +34,7 @@ Shader "Foraging/FruitUnlit"
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile _ _SHADOWS_SOFT
+            #pragma multi_compile_fog
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -67,6 +68,7 @@ Shader "Foraging/FruitUnlit"
                 float3 bitangentWS : TEXCOORD3;
                 float4 shadowCoord : TEXCOORD4;
                 float2 uv          : TEXCOORD5;
+                float  fogCoord    : TEXCOORD6;
             };
 
             Varyings vert(Attributes v)
@@ -82,6 +84,7 @@ Shader "Foraging/FruitUnlit"
                 o.bitangentWS = normInputs.bitangentWS;
                 o.shadowCoord = TransformWorldToShadowCoord(posInputs.positionWS);
                 o.uv = v.uv * _Tiling;
+                o.fogCoord = ComputeFogFactor(o.positionHCS.z);
                 return o;
             }
 
@@ -114,7 +117,9 @@ Shader "Foraging/FruitUnlit"
                 half3 fullyLit = albedo * diffuse + specular;
                 half3 colorPreserved = (half3)_Color.rgb * ambient;
                 half3 lit = lerp(fullyLit, colorPreserved, (half)_ColorPreservation);
-                return half4(lit, _Color.a);
+                half4 color = half4(lit, _Color.a);
+                color.rgb = MixFog(color.rgb, i.fogCoord);
+                return color;
             }
             ENDHLSL
         }

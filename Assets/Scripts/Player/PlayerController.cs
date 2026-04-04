@@ -19,6 +19,7 @@ public float moveSpeed = 5f;
     private Vector2 moveInput;
     private bool canHarvest;
     private bool _frozen;
+    public bool IsFrozen => _frozen;
     private Tree _targetTree;
 
     private void Awake()
