@@ -100,7 +100,6 @@ GameObject:
   m_Component:
   - component: {fileID: 4789055294063279746}
   - component: {fileID: 2232081367341753524}
-  - component: {fileID: 8641197722873255664}
   m_Layer: 0
   m_Name: Tree
   m_TagString: Untagged
@@ -142,35 +141,13 @@ MonoBehaviour:
     moisture: 0
   treeId: 0
   sessionConfig: {fileID: 11400000, guid: 1b2cf37538a2f83b0a1b11dc29893c5a, type: 2}
-  sunController: {fileID: 0}
+  terrainManager: {fileID: 0}
   canopy: {fileID: 4033088253865625869}
-  hemisphereSegments: 24
-  highlight: {fileID: 8641197722873255664}
   fruitCount: 10
   fruitRadius: 0.3
   fruitSeed: 0
-  canopyBaseColor: {r: 0.4, g: 0.7, b: 0.3, a: 1}
+  highlightEmissionColor: {r: 1, g: 0.95, b: 0.7, a: 1}
+  highlightPulseSpeed: 0.3
+  highlightMinIntensity: 0.05
+  highlightMaxIntensity: 0.2
   isHarvested: 0
---- !u!114 &8641197722873255664
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4163433376014564458}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5df9e19dae2133753ba5302750764322, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TreeHighlight
-  terrainManager: {fileID: 0}
-  ringRadius: 2
-  ringSegments: 48
-  yOffset: 0.15
-  terrainMask:
-    serializedVersion: 2
-    m_Bits: 8
-  pulseSpeed: 1.5
-  pulseMinAlpha: 0.4
-  pulseMaxAlpha: 0.9
-  discColor: {r: 1, g: 1, b: 1, a: 0.08}

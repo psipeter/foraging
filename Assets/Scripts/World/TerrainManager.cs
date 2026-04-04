@@ -18,6 +18,8 @@ public class TerrainManager : MonoBehaviour
 
     private void Start()
     {
+        Debug.Log($"TerrainManager.Start: sessionConfig={sessionConfig != null}, WorldSeed={sessionConfig?.WorldSeed}");
+
         if (groundObject == null)
         {
             return;
@@ -194,8 +196,8 @@ public class TerrainManager : MonoBehaviour
     {
         float frequency = sessionConfig != null ? sessionConfig.TerrainNoiseFrequency : 4f;
         int octaves = sessionConfig != null ? Mathf.Max(1, sessionConfig.TerrainNoiseOctaves) : 1;
-        float seedX = sessionConfig != null ? sessionConfig.WorldSeed * 0.0012345f : 0f;
-        float seedZ = sessionConfig != null ? sessionConfig.WorldSeed * 0.006789f : 0f;
+        float seedX = sessionConfig != null ? sessionConfig.WorldSeed * 127.3f : 0f;
+        float seedZ = sessionConfig != null ? sessionConfig.WorldSeed * 311.7f : 0f;
 
         float value = 0f;
         float amplitude = 1f;

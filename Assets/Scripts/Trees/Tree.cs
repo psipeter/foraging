@@ -7,8 +7,9 @@ Tree Prefab Setup (local space under this `Tree` object):
 
 Canopy:
   - Sphere GameObject (mesh replaced at runtime with Unity default sphere)
-  - Code sets: position (0, 0, 0), rotation aligns canopy up with terrain normal
+  - Code sets: position (0, 0, 0), local rotation identity
   - No colliders on prefab children; Tree adds a canopy trigger collider via code
+  - MeshRenderer material instance; proximity highlight uses pulsing emission on the canopy
 
 Fruits:
   - Fruits are fully runtime-generated in `ApplyAttributes()` (no fruit children required in the prefab).
@@ -24,11 +25,18 @@ public class Tree : MonoBehaviour
 
     [SerializeField] private GameObject canopy;
 
-    [SerializeField] private TreeHighlight highlight;
-
     [SerializeField] public int fruitCount = 10;
     [SerializeField] public float fruitRadius = 0.15f;
     [SerializeField] public int fruitSeed;
+
+    private MeshRenderer _canopyRenderer;
+    private Material _canopyMaterial;
+    [SerializeField] private Color highlightEmissionColor = new Color(1f, 0.95f, 0.7f);
+    [SerializeField] private float highlightPulseSpeed = 1.5f;
+    [SerializeField] private float highlightMinIntensity = 0f;
+    [SerializeField] private float highlightMaxIntensity = 1.2f;
+
+    private bool _isHighlighted;
 
     private List<GameObject> _fruits = new List<GameObject>();
 
@@ -52,6 +60,30 @@ public class Tree : MonoBehaviour
     private void Awake()
     {
         gameObject.tag = "Interactable";
+
+        if (canopy != null)
+        {
+            _canopyRenderer = canopy.GetComponent<MeshRenderer>();
+            if (_canopyRenderer != null)
+            {
+                _canopyMaterial = new Material(_canopyRenderer.sharedMaterial);
+                _canopyRenderer.material = _canopyMaterial;
+                _canopyMaterial.EnableKeyword("_EMISSION");
+                _canopyMaterial.SetColor("_EmissionColor", Color.black);
+            }
+        }
+    }
+
+    private void Update()
+    {
+        if (!_isHighlighted || _canopyMaterial == null)
+        {
+            return;
+        }
+
+        float t = (Mathf.Sin(Time.time * highlightPulseSpeed * Mathf.PI * 2f) + 1f) * 0.5f;
+        float intensity = Mathf.Lerp(highlightMinIntensity, highlightMaxIntensity, t);
+        _canopyMaterial.SetColor("_EmissionColor", highlightEmissionColor * intensity);
     }
 
     public void SetTerrainNormal(Vector3 normal)
@@ -82,8 +114,7 @@ public class Tree : MonoBehaviour
 
         Vector3 canopyScale = canopy.transform.localScale;
 
-        Quaternion normalRotation = Quaternion.FromToRotation(Vector3.up, _terrainNormal);
-        canopy.transform.localRotation = normalRotation;
+        canopy.transform.localRotation = Quaternion.identity;
 
         MeshFilter meshFilter = canopy.GetComponent<MeshFilter>();
         if (meshFilter == null)
@@ -133,11 +164,6 @@ public class Tree : MonoBehaviour
         cap.center = new Vector3(0f, 0f, 0f);
         cap.radius = maxScaleXZ * 0.5f;
         cap.height = canopyScale.y;
-
-        if (highlight != null)
-        {
-            highlight.SetRingRadius(worldRadius);
-        }
 
         // Rebuild fruits procedurally.
         // Destroy existing runtime fruits first.
@@ -289,17 +315,14 @@ public class Tree : MonoBehaviour
     public void SetTerrainManager(TerrainManager tm)
     {
         terrainManager = tm;
-        if (highlight != null)
-        {
-            highlight.terrainManager = tm;
-        }
     }
 
     public void SetHighlight(bool active)
     {
-        if (highlight != null)
+        _isHighlighted = active;
+        if (!active && _canopyMaterial != null)
         {
-            highlight.SetVisible(active);
+            _canopyMaterial.SetColor("_EmissionColor", Color.black);
         }
     }
 }

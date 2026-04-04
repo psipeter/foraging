@@ -10,57 +10,56 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
-  m_Name: Config_1_Linear
+  m_Name: S2
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
-  baseConfig: {fileID: 11400000, guid: 1b2cf37538a2f83b0a1b11dc29893c5a, type: 2}
   rewardFunction:
     shapeComponent:
       basisFunctionType: 0
-      weight: 3
+      weight: 1
       peak: 0
       width: 0
     colorComponent:
       basisFunctionType: 0
-      weight: 0
+      weight: 3
       peak: 0
       width: 0
     moistureComponent:
       basisFunctionType: 0
-      weight: 0
+      weight: 2
       peak: 0
       width: 0
-  sessionDuration: 30
-  worldSeed: 1
-  treeCount: 100
-  fruitCount: 12
-  fruitRadius: 0.3
+  sessionDuration: 20
+  worldSeed: 2
+  treeCount: 300
+  fruitCount: 10
+  fruitRadius: 0.6
   playerMoveSpeed: 5
   fruitHarvestDuration: 0.5
-  rewardStd: 1
+  rewardStd: 0
   shapeRange: {x: 0, y: 1}
-  canopyWidthRange: {x: 0.25, y: 1.5}
-  canopyHeightRange: {x: 0.5, y: 3}
-  highlightRadiusPadding: 1.2
-  fruitColorLow: {r: 0.2, g: 0.4, b: 1, a: 1}
-  fruitColorHigh: {r: 1, g: 0.5, b: 0.1, a: 1}
+  canopyWidthRange: {x: 1, y: 5}
+  canopyHeightRange: {x: 1, y: 10}
+  highlightRadiusPadding: 0.8
+  fruitColorLow: {r: 0, g: 0.2, b: 1, a: 1}
+  fruitColorHigh: {r: 1, g: 0.4, b: 0, a: 1}
   fruitColorPreservation: 0.5
-  terrainNoiseFrequency: 4
+  terrainNoiseFrequency: 5
   terrainNoiseOctaves: 1
-  terrainMaxElevation: 25
+  terrainMaxElevation: 20
   terrainMeshResolution: 128
-  worldHalfExtent: 100
-  borderWallHeight: 20
-  borderWallColor: {r: 0.25, g: 0.2, b: 0.15, a: 1}
+  worldHalfExtent: 200
+  borderWallHeight: 30
+  borderWallColor: {r: 0.15, g: 0.18, b: 0.12, a: 1}
   sunArcHeight: 90
-  minSunElevation: 5
-  sunIntensityDawn: 0.3
-  sunIntensityNoon: 0.9
-  skyColorDawn: {r: 0.8, g: 0.4, b: 0.2, a: 1}
-  skyColorNoon: {r: 0.3, g: 0.6, b: 1, a: 1}
-  cameraMode: 0
-  mouseSensitivity: 120
-  cameraSmoothing: 8
-  isometricCameraPosition: {x: 0, y: 20, z: -15}
-  isometricCameraRotation: {x: 50, y: 0, z: 0}
+  minSunElevation: 25
+  sunIntensityDawn: 0.5
+  sunIntensityNoon: 1.5
+  skyColorDawn: {r: 0.8700711, g: 0.4351538, b: 0, a: 1}
+  skyColorNoon: {r: 0, g: 0.72206545, b: 1, a: 1}
+  cameraMode: 1
+  mouseSensitivity: 10
+  cameraSmoothing: 12
+  isometricCameraPosition: {x: 0, y: 35, z: -10}
+  isometricCameraRotation: {x: 75, y: 0, z: 0}
   explorationCameraPosition: {x: 0, y: 12, z: -18}
   explorationCameraRotation: {x: 30, y: 0, z: 0}

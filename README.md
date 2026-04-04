@@ -191,8 +191,8 @@ When starting a new Claude chat, paste: README.md, .cursorrules, and the 2-3 C# 
 
 ## Active Debugging / In-Progress Work
 - Current issue: none
-- Recently completed: cleanup pass, fog on all shaders, harvest turning fix, session flow simplification
-- Next: font polish, sound, participant ID screen
+- Recently completed: canopy emission highlight replaces disc, terrain seed fix, fog on custom shaders, trees vertical
+- Next: participant ID screen, sound, font polish
 
 # Do Not Modify
 - ProjectSettings/ (unless explicitly asked)

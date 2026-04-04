@@ -287,8 +287,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   sessionConfigs:
-  - {fileID: 11400000, guid: 7468bc62ef0abe00db01666d200857bf, type: 2}
-  - {fileID: 11400000, guid: d60d6c295c84ee90096f5fac54cdb4e7, type: 2}
+  - {fileID: 11400000, guid: a2c1af91c6840f167b2e2427d351cbd4, type: 2}
+  - {fileID: 11400000, guid: 45f20c00f9a142cb28d96fa60cf9fac4, type: 2}
+  - {fileID: 11400000, guid: 70d0a86c90c759779a1bbd61114eb02d, type: 2}
   sunController: {fileID: 419207779}
   harvestManager: {fileID: 528505460}
   terrainManager: {fileID: 1847944418}
@@ -1252,7 +1253,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d8bb1c6790157fc40ba8d75b12b6bc0b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraController
-  sessionConfig: {fileID: 0}
+  sessionConfig: {fileID: 11400000, guid: 1b2cf37538a2f83b0a1b11dc29893c5a, type: 2}
   cameraTransform: {fileID: 330585546}
   playerController: {fileID: 581266112}
   lookAction: {fileID: -4193367150617012660, guid: fdefa915547554fa8a5a5bd5592c4380, type: 3}

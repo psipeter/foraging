@@ -10,30 +10,29 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
-  m_Name: DefaultSession
+  m_Name: S3
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
-  baseConfig: {fileID: 0}
   rewardFunction:
     shapeComponent:
+      basisFunctionType: 0
+      weight: 1
+      peak: 0
+      width: 0
+    colorComponent:
       basisFunctionType: 2
       weight: 3
       peak: 0.5
       width: 0.2
-    colorComponent:
-      basisFunctionType: 0
-      weight: 0
-      peak: 1
-      width: 0.2
     moistureComponent:
       basisFunctionType: 0
-      weight: 0
-      peak: 1
-      width: 0.2
-  sessionDuration: 12
-  worldSeed: 0
+      weight: 1
+      peak: 0
+      width: 0
+  sessionDuration: 20
+  worldSeed: 3
   treeCount: 300
   fruitCount: 10
-  fruitRadius: 0.7
+  fruitRadius: 0.6
   playerMoveSpeed: 5
   fruitHarvestDuration: 0.5
   rewardStd: 0
@@ -58,7 +57,7 @@ MonoBehaviour:
   skyColorDawn: {r: 0.8700711, g: 0.4351538, b: 0, a: 1}
   skyColorNoon: {r: 0, g: 0.72206545, b: 1, a: 1}
   cameraMode: 1
-  mouseSensitivity: 30
+  mouseSensitivity: 10
   cameraSmoothing: 12
   isometricCameraPosition: {x: 0, y: 35, z: -10}
   isometricCameraRotation: {x: 75, y: 0, z: 0}

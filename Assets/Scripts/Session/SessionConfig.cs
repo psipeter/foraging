@@ -5,8 +5,6 @@ using UnityEngine;
     menuName = "Foraging/Session Config")]
 public class SessionConfig : ScriptableObject
 {
-    [SerializeField] private SessionConfig baseConfig;
-
     [SerializeField] private RewardFunction rewardFunction = new RewardFunction();
     [SerializeField] private float sessionDuration = 120f;
     [SerializeField] private int worldSeed;
@@ -57,45 +55,43 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private Vector3 explorationCameraPosition = new Vector3(0f, 12f, -18f);
     [SerializeField] private Vector3 explorationCameraRotation = new Vector3(30f, 0f, 0f);
 
-    public SessionConfig BaseConfig => baseConfig;
-
     public RewardFunction RewardFunction => rewardFunction;
-    public float SessionDuration => baseConfig != null ? baseConfig.SessionDuration : sessionDuration;
-    public int WorldSeed => baseConfig != null ? baseConfig.WorldSeed : worldSeed;
-    public int TreeCount => baseConfig != null ? baseConfig.TreeCount : treeCount;
-    public int FruitCount => baseConfig != null ? baseConfig.FruitCount : fruitCount;
-    public float FruitRadius => baseConfig != null ? baseConfig.FruitRadius : fruitRadius;
-    public float PlayerMoveSpeed => baseConfig != null ? baseConfig.PlayerMoveSpeed : playerMoveSpeed;
-    public float FruitHarvestDuration => baseConfig != null ? baseConfig.FruitHarvestDuration : fruitHarvestDuration;
-    public float HarvestDuration => baseConfig != null ? baseConfig.HarvestDuration : fruitHarvestDuration * Mathf.Max(1, fruitCount);
-    public float RewardStd => baseConfig != null ? baseConfig.RewardStd : rewardStd;
-    public Vector2 ShapeRange => baseConfig != null ? baseConfig.ShapeRange : shapeRange;
-    public Vector2 CanopyWidthRange => baseConfig != null ? baseConfig.CanopyWidthRange : canopyWidthRange;
-    public Vector2 CanopyHeightRange => baseConfig != null ? baseConfig.CanopyHeightRange : canopyHeightRange;
-    public float HighlightRadiusPadding => baseConfig != null ? baseConfig.HighlightRadiusPadding : highlightRadiusPadding;
-    public Color FruitColorLow => baseConfig != null ? baseConfig.FruitColorLow : fruitColorLow;
-    public Color FruitColorHigh => baseConfig != null ? baseConfig.FruitColorHigh : fruitColorHigh;
-    public float FruitColorPreservation => baseConfig != null ? baseConfig.FruitColorPreservation : fruitColorPreservation;
-    public float TerrainNoiseFrequency => baseConfig != null ? baseConfig.TerrainNoiseFrequency : terrainNoiseFrequency;
-    public int TerrainNoiseOctaves => baseConfig != null ? baseConfig.TerrainNoiseOctaves : terrainNoiseOctaves;
-    public float TerrainMaxElevation => baseConfig != null ? baseConfig.TerrainMaxElevation : terrainMaxElevation;
-    public int TerrainMeshResolution => baseConfig != null ? baseConfig.TerrainMeshResolution : terrainMeshResolution;
-    public float WorldHalfExtent => baseConfig != null ? baseConfig.WorldHalfExtent : worldHalfExtent;
-    public float BorderWallHeight => baseConfig != null ? baseConfig.BorderWallHeight : borderWallHeight;
-    public Color BorderWallColor => baseConfig != null ? baseConfig.BorderWallColor : borderWallColor;
-    public float SunArcHeight => baseConfig != null ? baseConfig.SunArcHeight : sunArcHeight;
-    public float MinSunElevation => baseConfig != null ? baseConfig.MinSunElevation : minSunElevation;
-    public float SunIntensityDawn => baseConfig != null ? baseConfig.SunIntensityDawn : sunIntensityDawn;
-    public float SunIntensityNoon => baseConfig != null ? baseConfig.SunIntensityNoon : sunIntensityNoon;
-    public Color SkyColorDawn => baseConfig != null ? baseConfig.SkyColorDawn : skyColorDawn;
-    public Color SkyColorNoon => baseConfig != null ? baseConfig.SkyColorNoon : skyColorNoon;
-    public CameraMode CameraMode => baseConfig != null ? baseConfig.CameraMode : cameraMode;
-    public float MouseSensitivity => baseConfig != null ? baseConfig.MouseSensitivity : mouseSensitivity;
-    public float CameraSmoothing => baseConfig != null ? baseConfig.CameraSmoothing : cameraSmoothing;
-    public Vector3 IsometricCameraPosition => baseConfig != null ? baseConfig.IsometricCameraPosition : isometricCameraPosition;
-    public Vector3 IsometricCameraRotation => baseConfig != null ? baseConfig.IsometricCameraRotation : isometricCameraRotation;
-    public Vector3 ExplorationCameraPosition => baseConfig != null ? baseConfig.ExplorationCameraPosition : explorationCameraPosition;
-    public Vector3 ExplorationCameraRotation => baseConfig != null ? baseConfig.ExplorationCameraRotation : explorationCameraRotation;
+    public float SessionDuration => sessionDuration;
+    public int WorldSeed => worldSeed;
+    public int TreeCount => treeCount;
+    public int FruitCount => fruitCount;
+    public float FruitRadius => fruitRadius;
+    public float PlayerMoveSpeed => playerMoveSpeed;
+    public float FruitHarvestDuration => fruitHarvestDuration;
+    public float HarvestDuration => fruitHarvestDuration * Mathf.Max(1, fruitCount);
+    public float RewardStd => rewardStd;
+    public Vector2 ShapeRange => shapeRange;
+    public Vector2 CanopyWidthRange => canopyWidthRange;
+    public Vector2 CanopyHeightRange => canopyHeightRange;
+    public float HighlightRadiusPadding => highlightRadiusPadding;
+    public Color FruitColorLow => fruitColorLow;
+    public Color FruitColorHigh => fruitColorHigh;
+    public float FruitColorPreservation => fruitColorPreservation;
+    public float TerrainNoiseFrequency => terrainNoiseFrequency;
+    public int TerrainNoiseOctaves => terrainNoiseOctaves;
+    public float TerrainMaxElevation => terrainMaxElevation;
+    public int TerrainMeshResolution => terrainMeshResolution;
+    public float WorldHalfExtent => worldHalfExtent;
+    public float BorderWallHeight => borderWallHeight;
+    public Color BorderWallColor => borderWallColor;
+    public float SunArcHeight => sunArcHeight;
+    public float MinSunElevation => minSunElevation;
+    public float SunIntensityDawn => sunIntensityDawn;
+    public float SunIntensityNoon => sunIntensityNoon;
+    public Color SkyColorDawn => skyColorDawn;
+    public Color SkyColorNoon => skyColorNoon;
+    public CameraMode CameraMode => cameraMode;
+    public float MouseSensitivity => mouseSensitivity;
+    public float CameraSmoothing => cameraSmoothing;
+    public Vector3 IsometricCameraPosition => isometricCameraPosition;
+    public Vector3 IsometricCameraRotation => isometricCameraRotation;
+    public Vector3 ExplorationCameraPosition => explorationCameraPosition;
+    public Vector3 ExplorationCameraRotation => explorationCameraRotation;
 
     public float EvaluateReward(TreeAttributes attributes)
     {

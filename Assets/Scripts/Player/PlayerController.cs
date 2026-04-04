@@ -99,7 +99,7 @@ public float moveSpeed = 5f;
                 ? (transform.rotation * new Vector3(moveInput.x, 0f, moveInput.y)).normalized
                 : new Vector3(moveInput.x, 0f, moveInput.y).normalized;
             Quaternion targetRot = Quaternion.LookRotation(moveDir, Vector3.up);
-            characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRot, Time.fixedDeltaTime * 10f);
+            characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRot, Time.fixedDeltaTime * 3f);
         }
 
         if (animator != null)
