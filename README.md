@@ -191,7 +191,7 @@ When starting a new Claude chat, paste: README.md, .cursorrules, and the 2-3 C# 
 
 ## Active Debugging / In-Progress Work
 - Current issue: none
-- Recently completed: Remy character model with correctly calibrated animations
+- Recently completed: Remy model, exploration mode forward-only movement, canopy emission highlight in build
 - Next: participant ID screen, sound, font polish
 
 # Do Not Modify

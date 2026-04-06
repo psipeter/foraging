@@ -69,17 +69,20 @@ public float moveSpeed = 5f;
 
             if (animator != null)
             {
-                animator.SetFloat("Speed", _frozen ? 0f : new Vector3(moveInput.x, 0f, moveInput.y).magnitude);
+                animator.SetFloat("Speed", 0f);
             }
 
             return;
         }
 
         Vector3 currentPos = playerRigidbody.position;
+        bool isExploration = sessionConfig != null && sessionConfig.CameraMode == CameraMode.Exploration;
+        float forwardInput = Mathf.Max(0f, moveInput.y);
+
         Vector3 desiredVelocity;
-        if (sessionConfig != null && sessionConfig.CameraMode == CameraMode.Exploration)
+        if (isExploration)
         {
-            Vector3 localMove = new Vector3(moveInput.x, 0f, moveInput.y);
+            Vector3 localMove = new Vector3(0f, 0f, forwardInput);
             Vector3 worldMove = transform.rotation * localMove;
             desiredVelocity = worldMove * moveSpeed;
         }
@@ -93,18 +96,33 @@ public float moveSpeed = 5f;
         v.z = desiredVelocity.z;
         playerRigidbody.linearVelocity = v;
 
-        if (characterModel != null && !_frozen && moveInput.sqrMagnitude > 0.01f)
+        if (characterModel != null && !_frozen)
         {
-            Vector3 moveDir = sessionConfig != null && sessionConfig.CameraMode == CameraMode.Exploration
-                ? (transform.rotation * new Vector3(moveInput.x, 0f, moveInput.y)).normalized
-                : new Vector3(moveInput.x, 0f, moveInput.y).normalized;
-            Quaternion targetRot = Quaternion.LookRotation(moveDir, Vector3.up);
-            characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRot, Time.fixedDeltaTime * 3f);
+            if (isExploration)
+            {
+                if (forwardInput > 0.01f)
+                {
+                    Vector3 faceDir = transform.forward;
+                    faceDir.y = 0f;
+                    if (faceDir.sqrMagnitude > 1e-6f)
+                    {
+                        faceDir.Normalize();
+                        Quaternion targetRot = Quaternion.LookRotation(faceDir, Vector3.up);
+                        characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRot, Time.fixedDeltaTime * 3f);
+                    }
+                }
+            }
+            else if (moveInput.sqrMagnitude > 0.01f)
+            {
+                Vector3 moveDir = new Vector3(moveInput.x, 0f, moveInput.y).normalized;
+                Quaternion targetRot = Quaternion.LookRotation(moveDir, Vector3.up);
+                characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRot, Time.fixedDeltaTime * 3f);
+            }
         }
 
         if (animator != null)
         {
-            animator.SetFloat("Speed", _frozen ? 0f : new Vector3(moveInput.x, 0f, moveInput.y).magnitude);
+            animator.SetFloat("Speed", _frozen ? 0f : (isExploration ? forwardInput : moveInput.magnitude));
         }
 
         float targetY = currentPos.y;
