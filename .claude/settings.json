@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "ask": [
+      "Edit(./ProjectSettings/**)",
+      "Write(./ProjectSettings/**)",
+      "Edit(./Packages/**)",
+      "Write(./Packages/**)"
+    ]
+  }
+}
