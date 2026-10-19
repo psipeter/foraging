@@ -4,15 +4,12 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(Rigidbody))]
 public class PlayerController : MonoBehaviour
 {
-public float moveSpeed = 5f;
+    public float moveSpeed = 5f;
     public SessionConfig sessionConfig;
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private float groundOffset = 1.0f;
     [SerializeField] private HarvestManager harvestManager;
-    [SerializeField] private Animator animator;
-    [SerializeField] private Transform characterModel;
     [SerializeField] private CameraController cameraController;
-    [SerializeField] private float harvestAnimationClipLength = 6.2f;
 
     private Rigidbody playerRigidbody;
     private CapsuleCollider _capsuleCollider;
@@ -20,13 +17,19 @@ public float moveSpeed = 5f;
     private bool canHarvest;
     private bool _frozen;
     public bool IsFrozen => _frozen;
+    public float GroundOffset => groundOffset;
     private Tree _targetTree;
 
     private void Awake()
     {
         playerRigidbody = GetComponent<Rigidbody>();
+        if (cameraController == null)
+        {
+            cameraController = GetComponent<CameraController>();
+        }
 
-        // Non-kinematic physics, no gravity, locked rotation for capsule movement.
+        // Non-kinematic physics, no gravity, locked rotation for capsule movement. Facing direction
+        // lives on the camera (see CameraController), not on this body.
         playerRigidbody.isKinematic = false;
         playerRigidbody.useGravity = false;
         playerRigidbody.constraints = RigidbodyConstraints.FreezeRotationX |
@@ -50,12 +53,6 @@ public float moveSpeed = 5f;
             bounceCombine = PhysicsMaterialCombine.Minimum
         };
         _capsuleCollider.material = mat;
-
-        if (sessionConfig != null && sessionConfig.CameraMode == CameraMode.Exploration)
-        {
-            playerRigidbody.constraints = RigidbodyConstraints.FreezeRotationX |
-                                          RigidbodyConstraints.FreezeRotationZ;
-        }
     }
 
     private void FixedUpdate()
@@ -67,63 +64,42 @@ public float moveSpeed = 5f;
                 playerRigidbody.linearVelocity = Vector3.zero;
             }
 
-            if (animator != null)
-            {
-                animator.SetFloat("Speed", 0f);
-            }
-
             return;
         }
 
         Vector3 currentPos = playerRigidbody.position;
-        bool isExploration = sessionConfig != null && sessionConfig.CameraMode == CameraMode.Exploration;
-        float forwardInput = Mathf.Max(0f, moveInput.y);
+        // W/S move along the camera's heading; A/D are ignored.
+        float yaw = cameraController != null ? cameraController.Yaw : 0f;
+        Vector3 desiredVelocity = Quaternion.Euler(0f, yaw, 0f) * new Vector3(0f, 0f, moveInput.y) * moveSpeed;
 
-        Vector3 desiredVelocity;
-        if (isExploration)
+        // Mountains are unclimbable: refuse movement into non-walkable terrain, sliding along it when
+        // one axis is still free. (Height is a raycast snap, so physics would not stop the player.)
+        if (terrainManager != null && (desiredVelocity.x != 0f || desiredVelocity.z != 0f))
         {
-            Vector3 localMove = new Vector3(0f, 0f, forwardInput);
-            Vector3 worldMove = transform.rotation * localMove;
-            desiredVelocity = worldMove * moveSpeed;
-        }
-        else
-        {
-            desiredVelocity = new Vector3(moveInput.x, 0f, moveInput.y) * moveSpeed;
+            float nextX = currentPos.x + desiredVelocity.x * Time.fixedDeltaTime;
+            float nextZ = currentPos.z + desiredVelocity.z * Time.fixedDeltaTime;
+            if (!terrainManager.IsWalkable(nextX, nextZ))
+            {
+                if (terrainManager.IsWalkable(nextX, currentPos.z))
+                {
+                    desiredVelocity.z = 0f;
+                }
+                else if (terrainManager.IsWalkable(currentPos.x, nextZ))
+                {
+                    desiredVelocity.x = 0f;
+                }
+                else
+                {
+                    desiredVelocity.x = 0f;
+                    desiredVelocity.z = 0f;
+                }
+            }
         }
 
         Vector3 v = playerRigidbody.linearVelocity;
         v.x = desiredVelocity.x;
         v.z = desiredVelocity.z;
         playerRigidbody.linearVelocity = v;
-
-        if (characterModel != null && !_frozen)
-        {
-            if (isExploration)
-            {
-                if (forwardInput > 0.01f)
-                {
-                    Vector3 faceDir = transform.forward;
-                    faceDir.y = 0f;
-                    if (faceDir.sqrMagnitude > 1e-6f)
-                    {
-                        faceDir.Normalize();
-                        Quaternion targetRot = Quaternion.LookRotation(faceDir, Vector3.up);
-                        characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRot, Time.fixedDeltaTime * 3f);
-                    }
-                }
-            }
-            else if (moveInput.sqrMagnitude > 0.01f)
-            {
-                Vector3 moveDir = new Vector3(moveInput.x, 0f, moveInput.y).normalized;
-                Quaternion targetRot = Quaternion.LookRotation(moveDir, Vector3.up);
-                characterModel.rotation = Quaternion.Slerp(characterModel.rotation, targetRot, Time.fixedDeltaTime * 3f);
-            }
-        }
-
-        if (animator != null)
-        {
-            animator.SetFloat("Speed", _frozen ? 0f : (isExploration ? forwardInput : moveInput.magnitude));
-        }
 
         float targetY = currentPos.y;
         if (terrainManager != null)
@@ -142,7 +118,8 @@ public float moveSpeed = 5f;
         }
 
         float yDiff = Mathf.Abs(playerRigidbody.position.y - targetY);
-        if (yDiff > 0.05f)
+        // Tight threshold: the camera sits at eye level, so larger height steps would read as jitter.
+        if (yDiff > 0.001f)
         {
             Vector3 pos = playerRigidbody.position;
             pos.y = targetY;
@@ -189,11 +166,6 @@ public float moveSpeed = 5f;
         if (harvestManager != null && _targetTree != null)
         {
             harvestManager.StartHarvest(_targetTree);
-
-            if (animator != null)
-            {
-                animator.SetTrigger("Harvest");
-            }
         }
     }
 
@@ -229,22 +201,6 @@ public float moveSpeed = 5f;
             {
                 playerRigidbody.linearVelocity = Vector3.zero;
             }
-        }
-    }
-
-    public void SetHarvestAnimationSpeed(float totalHarvestDuration)
-    {
-        if (animator != null && totalHarvestDuration > 0f)
-        {
-            animator.speed = harvestAnimationClipLength / totalHarvestDuration;
-        }
-    }
-
-    public void ResetAnimationSpeed()
-    {
-        if (animator != null)
-        {
-            animator.speed = 1f;
         }
     }
 

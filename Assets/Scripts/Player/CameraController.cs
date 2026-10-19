@@ -1,79 +1,69 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
+// First-person camera. Yaw and pitch live on the camera transform itself: the player Rigidbody is
+// interpolated, which would overwrite any rotation applied to the player root every frame.
 public class CameraController : MonoBehaviour
 {
     public SessionConfig sessionConfig;
-    [SerializeField] private Transform cameraTransform;
+    [SerializeField] private Camera playerCamera;
     [SerializeField] private PlayerController playerController;
-    [SerializeField] private InputActionReference lookAction;
+
+    private ILookInput _lookInput;
+    private float _yaw;
+    private float _pitch;
+
+    // Heading (degrees about Y) that forward/back movement is relative to.
+    public float Yaw => _yaw;
+
+    private void Awake()
+    {
+        _lookInput = GetComponent<ILookInput>();
+    }
 
     private void Start()
     {
         Cursor.visible = false;
         Cursor.lockState = CursorLockMode.Locked;
 
-        ApplyCameraMode();
+        ApplyCameraSettings();
     }
 
-    public void ApplyCameraMode()
+    public void ApplyCameraSettings()
     {
-        if (cameraTransform == null || sessionConfig == null)
+        if (playerCamera == null || sessionConfig == null)
         {
             return;
         }
 
-        if (sessionConfig.CameraMode == CameraMode.Isometric)
-        {
-            cameraTransform.localPosition = sessionConfig.IsometricCameraPosition;
-            cameraTransform.localRotation = Quaternion.Euler(sessionConfig.IsometricCameraRotation);
-        }
-        else
-        {
-            cameraTransform.localPosition = sessionConfig.ExplorationCameraPosition;
-            cameraTransform.localRotation = Quaternion.Euler(sessionConfig.ExplorationCameraRotation);
-        }
+        float groundOffset = playerController != null ? playerController.GroundOffset : 0f;
+        playerCamera.transform.localPosition = new Vector3(0f, sessionConfig.EyeHeight - groundOffset, 0f);
+        playerCamera.fieldOfView = sessionConfig.CameraFieldOfView;
+        playerCamera.nearClipPlane = sessionConfig.CameraNearClip;
+        ApplyRotation();
     }
 
     private void Update()
     {
-        if (sessionConfig == null || playerController == null)
+        if (sessionConfig == null || _lookInput == null || playerCamera == null)
         {
             return;
         }
 
-        if (sessionConfig.CameraMode == CameraMode.Isometric)
+        // Mouse deltas are displacements, not rates: no Time.deltaTime. Skip while paused (instructions
+        // screen) or frozen (harvesting, session end) so the pending delta is discarded, not applied late.
+        if (Time.timeScale <= 0f || (playerController != null && playerController.IsFrozen))
         {
             return;
         }
 
-        if (playerController != null && playerController.IsFrozen)
-        {
-            return;
-        }
+        Vector2 delta = _lookInput.ReadLookDelta() * (sessionConfig.LookDegreesPerCount * sessionConfig.LookSensitivity);
+        _yaw += delta.x;
+        _pitch = Mathf.Clamp(_pitch - delta.y, -sessionConfig.LookPitchLimit, sessionConfig.LookPitchLimit);
+        ApplyRotation();
+    }
 
-        float mouseDeltaX = Mouse.current != null ? Mouse.current.delta.ReadValue().x : 0f;
-        float yaw = mouseDeltaX * Time.deltaTime * sessionConfig.MouseSensitivity;
-        Rigidbody playerRb = playerController.GetComponent<Rigidbody>();
-        if (playerRb != null)
-        {
-            playerRb.MoveRotation(playerRb.rotation * Quaternion.Euler(0f, yaw, 0f));
-        }
-        else
-        {
-            playerController.transform.Rotate(0f, yaw, 0f);
-        }
-
-        if (cameraTransform == null || cameraTransform.parent == null)
-        {
-            return;
-        }
-
-        Transform cameraParent = cameraTransform.parent;
-        float t = Mathf.Clamp01(sessionConfig.CameraSmoothing * Time.deltaTime);
-        cameraParent.rotation = Quaternion.Slerp(
-            cameraParent.rotation,
-            playerController.transform.rotation,
-            t);
+    private void ApplyRotation()
+    {
+        playerCamera.transform.localRotation = Quaternion.Euler(_pitch, _yaw, 0f);
     }
 }

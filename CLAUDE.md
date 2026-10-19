@@ -105,7 +105,41 @@ open in another Editor — the project lock will refuse it):
 Headless can't do Play mode/screenshots/scene edits; use the live-Editor
 commands above for those. Never close the person's open Editor without
 `save_all` and a clean `list_open_scenes` first (`unity close` exits without
-saving).
+saving). After headless runs, the next Editor launch may open an empty
+"Untitled" scene (Hierarchy looks wiped; the scene file is fine) — tell the
+person, and restore with `open_scene --path Assets/Scenes/SampleScene.unity`.
+
+### Playing the game without touching the person's desktop
+
+Real keyboard/mouse input goes to whichever window is focused, and the Editor
+drops keyboard input and throttles when unfocused — so **never use `xdotool`
+on the person's display (`:1`) and never drive Play mode with
+`simulate_key`** (it did not register; Space on the instructions screen was
+ignored). Instead play a **standalone build on a private virtual display**:
+
+1. Build with the live Editor: `unity command build --target StandaloneLinux64
+   --outputPath <scratchpad>/xbuild/foraging --confirm true`, poll
+   `build_status` (~40 s). Outputs outside the repo; `ForagingData/` for that
+   run lands next to the build, not in the project.
+2. `Xvfb :99 -screen 0 1280x720x24 +extension GLX &`, then from the build dir
+   `DISPLAY=:99 ./foraging -screen-fullscreen 0 -screen-width 1280
+   -screen-height 720 -force-glcore -logFile <log>` (renders fine with Mesa
+   software GL).
+3. Drive it with `DISPLAY=:99 xdotool` (window id via `xdotool search --class
+   foraging`; `windowfocus` it; `keydown`/`keyup` with a short hold rather than
+   a bare `key`). Screenshot with `DISPLAY=:99 import -window root x.png`.
+4. Navigate closed-loop from the game's own logs: `movement.csv` (position,
+   heading, remaining time) and `session_metadata.json` (every tree's position
+   and true reward). Calibrate mouse-turn gain first (heading degrees per px);
+   un-calibrated turning oscillates and burns the 60 s session. Session time
+   ticks in real time, so keep per-step latency low.
+5. Verify with `harvests.csv` (per-fruit rewards) against screenshots.
+6. Clean up: kill the player and `Xvfb :99` by PID (`pkill -f` with a pattern
+   that appears in your own command line kills your shell).
+
+Facts learned: harvest starts within ~3.7 units of a tree's center (wide
+canopies block the avatar earlier); Space on the last session's end screen
+quits the app.
 
 ---
 
@@ -114,15 +148,17 @@ saving).
 ```
 Assets/
   Scripts/
-    Player/    PlayerController (non-kinematic Rigidbody, raycast terrain
-               following, trigger harvest detection), CameraController,
-               CameraMode (enum: Isometric, Exploration)
+    Player/    PlayerController (non-kinematic Rigidbody, W/S movement along
+               the camera heading, raycast terrain following, trigger harvest
+               detection), CameraController (first-person yaw/pitch, eye
+               height, FOV), ILookInput + MouseLookInput (look input source)
     Trees/     Tree (applies attributes, generates fruits/colliders,
                canopy-emission highlight), TreeAttributes (shape/color/
                moisture, floats 0-1), FruitMaterialManager (static unlit
                fruit material cache)
-    World/     TerrainManager (Perlin elevation mesh + vertex-color
-               moisture), TreeGenerator (seeded placement), BorderWalls
+    World/     TerrainManager (Perlin valley + mountain-band elevation mesh;
+               moisture textures, rock/snow weights, walkable/tree-site
+               masks), TreeGenerator (seeded placement, valley only)
     Session/   SessionConfig (ScriptableObject — ALL parameters),
                GameManager, HarvestManager, SunController, QuitHandler,
                RewardFunction / RewardComponent / BasisFunctionType
@@ -131,8 +167,9 @@ Assets/
   ScriptableObjects/SessionConfig/   S1, S2, S3 (the experiment's sessions)
   StreamingAssets/instructions.txt   instructions text (read at runtime)
   Scenes/SampleScene.unity           the single scene
-  Shaders/   VertexColor, VertexColorUnlit (terrain), FruitUnlit, RingUnlit
-  Materials/ Prefabs/ Models/ (Remy) Animations/ Resources/Textures
+  Shaders/   VertexColor (terrain: moisture textures + mountain rock/snow; ignores
+             mesh vertex colors), VertexColorUnlit, FruitUnlit, RingUnlit
+  Materials/ Prefabs/ Resources/Textures
 docs/        SCIENCE.md, DECISIONS.md
 ```
 
@@ -253,7 +290,8 @@ design choice future-us might be tempted to "fix". Keep the README minimal.
 - Do not reintroduce the terrain-projected highlight disc — replaced by
   canopy emission pulsing (see `docs/DECISIONS.md`); `RingUnlit.shader`
   is now unreferenced.
-- Do not reintroduce hemisphere meshes or border objects — trees are
-  half-buried spheres and the border is four solid walls.
+- Do not reintroduce hemisphere meshes, border objects, or border walls —
+  trees are half-buried spheres and the border is the mountain band built into
+  the terrain geometry (see `docs/DECISIONS.md`).
 - Do not vary fruit count per bush, normalize rewards, or add red/green fruit.
 - Do not change the `ForagingData/` output location.

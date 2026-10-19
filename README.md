@@ -33,9 +33,9 @@ function.
   `Assets/ScriptableObjects/SessionConfig/`, assigned to the `GameManager`
   in the scene. All task parameters are edited there, in the Inspector.
 - Instruction text is read from `Assets/StreamingAssets/instructions.txt`.
-- Controls: Space to harvest / continue, Esc to quit. Movement depends on the
-  config's camera mode — *Exploration* (used by S1–S3): W moves forward, mouse
-  turns; *Isometric*: WASD moves in world directions.
+- Controls (first person): mouse looks around, W/S walk forward/back, Space to
+  harvest / continue, Esc to quit. Eye height, field of view, and mouse
+  sensitivity are `SessionConfig` fields.
 
 ## Data
 

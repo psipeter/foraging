@@ -84,7 +84,7 @@ public class TreeGenerator : MonoBehaviour
             float z = Random.Range(-halfExtent, halfExtent);
             var candidate = new Vector3(x, 0f, z);
 
-            if (IsFarEnough(candidate, existing))
+            if (terrainManager.IsTreeSite(x, z) && IsFarEnough(candidate, existing))
             {
                 return candidate;
             }

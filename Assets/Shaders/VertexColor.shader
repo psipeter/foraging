@@ -10,6 +10,9 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
         _SwampNormal ("Swamp Normal", 2D) = "bump" {}
         _Tiling ("Texture Tiling", Float) = 8.0
         _NormalStrength ("Normal Strength", Float) = 0.8
+        _RockColor ("Mountain Rock Color", Color) = (0.42, 0.40, 0.38, 1)
+        _SnowColor ("Mountain Snow Color", Color) = (0.93, 0.95, 0.98, 1)
+        _MountainFogStrength ("Fog multiplier on mountains", Range(0, 1)) = 0.3
     }
 
     SubShader
@@ -53,6 +56,9 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
             CBUFFER_START(UnityPerMaterial)
                 float _Tiling;
                 float _NormalStrength;
+                float4 _RockColor;
+                float4 _SnowColor;
+                float _MountainFogStrength;
             CBUFFER_END
 
             struct Attributes
@@ -60,6 +66,7 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
                 float4 positionOS : POSITION;
                 float2 uv         : TEXCOORD0;
                 float2 uv2        : TEXCOORD1;
+                float2 uv3        : TEXCOORD2;   // x = rock weight, y = snow weight (0 in the valley)
                 float3 normalOS   : NORMAL;
                 float4 tangentOS  : TANGENT;
             };
@@ -74,6 +81,7 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
                 float3 tangentWS   : TEXCOORD4;
                 float3 bitangentWS : TEXCOORD5;
                 float  fogCoord    : TEXCOORD6;
+                float2 mountain    : TEXCOORD7;
             };
 
             Varyings vert(Attributes v)
@@ -85,6 +93,7 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
                 o.positionWS   = posInputs.positionWS;
                 o.uv           = v.uv * _Tiling;
                 o.moisture     = v.uv2.x;
+                o.mountain     = v.uv3;
                 o.normalWS     = normInputs.normalWS;
                 o.tangentWS    = normInputs.tangentWS;
                 o.bitangentWS  = normInputs.bitangentWS;
@@ -108,7 +117,12 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
                 else
                     texColor = lerp(grassColor, swampColor, (moisture - 0.5) * 2.0);
 
-                half3 albedo = texColor;
+                // Mountains: rock (modulated by the ground texture's luminance for detail), then snow on top.
+                half texLum = dot(texColor, half3(0.299h, 0.587h, 0.114h));
+                half3 rockAlbedo = _RockColor.rgb * (0.55h + 0.9h * texLum);
+                half3 snowAlbedo = _SnowColor.rgb * (0.9h + 0.2h * texLum);
+                half3 albedo = lerp(texColor, rockAlbedo, i.mountain.x);
+                albedo = lerp(albedo, snowAlbedo, i.mountain.y);
 
                 // Sample and blend normal maps
                 half3 aridNorm  = UnpackNormal(SAMPLE_TEXTURE2D(_AridNormal,      sampler_AridNormal,      i.uv));
@@ -137,7 +151,9 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
 
                 half3 ambient = unity_AmbientSky.rgb;
                 half4 color = half4(albedo * lighting + albedo * ambient * 0.3, 1.0h);
-                color.rgb = MixFog(color.rgb, i.fogCoord);
+                // Distant mountains are fogged less than the valley so they stay visible as landmarks.
+                half fogAmount = lerp(1.0h, _MountainFogStrength, i.mountain.x);
+                color.rgb = lerp(color.rgb, MixFog(color.rgb, i.fogCoord), fogAmount);
                 return color;
             }
             ENDHLSL

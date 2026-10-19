@@ -18,8 +18,6 @@ public class TerrainManager : MonoBehaviour
 
     private void Start()
     {
-        Debug.Log($"TerrainManager.Start: sessionConfig={sessionConfig != null}, WorldSeed={sessionConfig?.WorldSeed}");
-
         if (groundObject == null)
         {
             return;
@@ -30,7 +28,10 @@ public class TerrainManager : MonoBehaviour
 
         var mesh = new Mesh
         {
-            name = $"ForagingTerrain_{res}"
+            name = $"ForagingTerrain_{res}",
+            indexFormat = res * res > 65535
+                ? UnityEngine.Rendering.IndexFormat.UInt32
+                : UnityEngine.Rendering.IndexFormat.UInt16
         };
 
         // Vertex layout: i across X (worldX), j across Z (worldZ).
@@ -38,6 +39,7 @@ public class TerrainManager : MonoBehaviour
         var vertices = new Vector3[vertexCount];
         var uvs = new Vector2[vertexCount];
         var uvs2 = new Vector2[vertexCount];
+        var uvs3 = new Vector2[vertexCount];
         var colors = new Color[vertexCount];
 
         float inv = 1f / (res - 1);
@@ -52,12 +54,13 @@ public class TerrainManager : MonoBehaviour
                 float worldZ = Mathf.Lerp(-halfExtent, halfExtent, j * inv);
 
                 float m = SampleMoisture(worldX, worldZ);
-                float elevation = (1f - m) * maxElevation;
+                float elevation = SampleElevation(worldX, worldZ);
 
                 int idx = i * res + j;
                 vertices[idx] = new Vector3(worldX, elevation, worldZ);
                 uvs[idx] = new Vector2(i * inv, j * inv);
                 uvs2[idx] = new Vector2(m, 0f);
+                uvs3[idx] = MountainWeights(worldX, worldZ, elevation);
                 colors[idx] = MoistureToColor(m);
             }
         }
@@ -90,6 +93,7 @@ public class TerrainManager : MonoBehaviour
         mesh.vertices = vertices;
         mesh.uv = uvs;
         mesh.uv2 = uvs2;
+        mesh.SetUVs(2, uvs3);
         mesh.colors = colors;
         mesh.triangles = triangles;
         mesh.RecalculateNormals();
@@ -123,6 +127,15 @@ public class TerrainManager : MonoBehaviour
             meshRenderer.sharedMaterial = new Material(shader);
         }
 
+        if (sessionConfig != null)
+        {
+            // Instance the material so per-session mountain settings do not modify the shared asset.
+            Material material = meshRenderer.material;
+            material.SetColor("_RockColor", sessionConfig.MountainRockColor);
+            material.SetColor("_SnowColor", sessionConfig.MountainSnowColor);
+            material.SetFloat("_MountainFogStrength", sessionConfig.MountainFogStrength);
+        }
+
         meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.TwoSided;
         meshRenderer.receiveShadows = true;
 
@@ -143,11 +156,115 @@ public class TerrainManager : MonoBehaviour
         return Mathf.Clamp01(ComputeMoisture(worldX, worldZ));
     }
 
+    // Valley elevation (coupled to moisture) plus the mountain term, which is exactly 0 inside the valley.
     public float SampleElevation(float worldX, float worldZ)
     {
         float maxElevation = sessionConfig != null ? sessionConfig.TerrainMaxElevation : 3f;
-        return (1f - SampleMoisture(worldX, worldZ)) * maxElevation;
+        return (1f - SampleMoisture(worldX, worldZ)) * maxElevation + SampleMountainElevation(worldX, worldZ);
     }
+
+    // Mountain ramp: 0 across the valley, rising to 1 at the map edge. The foot of the ramp is irregular.
+    public float SampleMountain(float worldX, float worldZ)
+    {
+        return MountainRamp(worldX, worldZ, 0f);
+    }
+
+    public float SampleMountainElevation(float worldX, float worldZ)
+    {
+        float u = MountainRamp(worldX, worldZ, 0f);
+        if (u <= 0f)
+        {
+            return 0f;
+        }
+
+        float height = sessionConfig.MountainHeight;
+        return height * Mathf.Pow(u, 1.5f) * (0.55f + 0.45f * Ridged(worldX, worldZ));
+    }
+
+    // False on mountain slopes and at the world edge; the player cannot move there.
+    public bool IsWalkable(float worldX, float worldZ)
+    {
+        float halfExtent = sessionConfig != null ? sessionConfig.WorldHalfExtent : 50f;
+        if (Mathf.Abs(worldX) > halfExtent - 1f || Mathf.Abs(worldZ) > halfExtent - 1f)
+        {
+            return false;
+        }
+
+        float threshold = sessionConfig != null ? sessionConfig.MountainBlockThreshold : 1f;
+        return MountainRamp(worldX, worldZ, 0f) < threshold;
+    }
+
+    // True where a tree may stand: in the valley and at least treeEdgeMargin back from the mountain foot.
+    public bool IsTreeSite(float worldX, float worldZ)
+    {
+        float margin = sessionConfig != null ? sessionConfig.TreeEdgeMargin : 0f;
+        return MountainRamp(worldX, worldZ, margin) <= 0f;
+    }
+
+    private float MountainRamp(float worldX, float worldZ, float inset)
+    {
+        if (sessionConfig == null || sessionConfig.MountainBandWidth <= 0f)
+        {
+            return 0f;
+        }
+
+        float band = sessionConfig.MountainBandWidth;
+        float edgeDist = sessionConfig.WorldHalfExtent - Mathf.Max(Mathf.Abs(worldX), Mathf.Abs(worldZ)) - inset;
+
+        // Jitter the band's inner boundary only: edgeDist 0 always gives ramp 1, so the crest is never
+        // lowered where the mesh ends.
+        float jitterNoise = Mathf.PerlinNoise(worldX / 70f + SeedX + 53.1f, worldZ / 70f + SeedZ + 11.7f);
+        float effectiveBand = Mathf.Max(10f, band + (jitterNoise - 0.5f) * 2f * sessionConfig.MountainBoundaryJitter);
+        return Mathf.Clamp01(1f - edgeDist / effectiveBand);
+    }
+
+    // Ridged multifractal noise in [0, 1]: sharp crests, so the skyline reads as rock, not rolling hills.
+    private float Ridged(float worldX, float worldZ)
+    {
+        float scale = Mathf.Max(1f, sessionConfig.MountainNoiseScale);
+        float value = 0f;
+        float amplitude = 1f;
+        float total = 0f;
+        float freq = 1f / scale;
+
+        for (int o = 0; o < 3; o++)
+        {
+            float n = Mathf.PerlinNoise(worldX * freq + SeedX + o * 23.9f, worldZ * freq + SeedZ + o * 41.3f);
+            value += (1f - Mathf.Abs(2f * n - 1f)) * amplitude;
+            total += amplitude;
+            amplitude *= 0.5f;
+            freq *= 2.1f;
+        }
+
+        return value / total;
+    }
+
+    // (rock weight, snow weight) for the terrain shader; (0, 0) in the valley.
+    private Vector2 MountainWeights(float worldX, float worldZ, float elevation)
+    {
+        if (sessionConfig == null)
+        {
+            return Vector2.zero;
+        }
+
+        float u = SampleMountain(worldX, worldZ);
+        if (u <= 0f)
+        {
+            return Vector2.zero;
+        }
+
+        // Noise on the ramp makes the grass-to-rock transition irregular.
+        float rockNoise = Mathf.PerlinNoise(worldX / 9f + SeedX, worldZ / 9f + SeedZ + 97.3f);
+        float rock = Mathf.SmoothStep(0f, 1f, (u + (rockNoise - 0.5f) * 0.12f) / 0.25f);
+
+        float snowLine = sessionConfig.TerrainMaxElevation + sessionConfig.SnowLineFraction * sessionConfig.MountainHeight;
+        float snowNoise = (Mathf.PerlinNoise(worldX / 14f + SeedX + 7.7f, worldZ / 14f + SeedZ + 3.1f) - 0.5f) * 12f;
+        float snow = Mathf.SmoothStep(0f, 1f, (elevation + snowNoise - (snowLine - 4f)) / 8f);
+        return new Vector2(rock, snow * rock);
+    }
+
+    private float SeedX => sessionConfig != null ? sessionConfig.WorldSeed * 127.3f : 0f;
+    private float SeedZ => sessionConfig != null ? sessionConfig.WorldSeed * 311.7f : 0f;
 
     public Vector3 SampleNormal(float worldX, float worldZ)
     {

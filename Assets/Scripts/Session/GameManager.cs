@@ -10,7 +10,6 @@ public class GameManager : MonoBehaviour
     [SerializeField] private HarvestManager harvestManager;
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private TreeGenerator treeGenerator;
-    [SerializeField] private BorderWalls borderWalls;
     [SerializeField] private PlayerController playerController;
     [SerializeField] private CameraController cameraController;
     [SerializeField] private DataLogger dataLogger;
@@ -56,6 +55,8 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        RenderSettings.fog = activeConfig.FogEnabled;
+
         if (sunController != null)
         {
             sunController.sessionConfig = activeConfig;
@@ -74,12 +75,6 @@ public class GameManager : MonoBehaviour
         if (treeGenerator != null)
         {
             treeGenerator.sessionConfig = activeConfig;
-        }
-
-        if (borderWalls != null)
-        {
-            borderWalls.sessionConfig = activeConfig;
-            borderWalls.terrainManager = terrainManager;
         }
 
         if (playerController != null)

@@ -98,7 +98,7 @@ fixed canopy emission in standalone builds. `RingUnlit.shader` remains in
 
 ---
 
-## Border: four solid walls, not scattered border objects
+## Border: four solid walls, not scattered border objects (superseded by mountains, below)
 
 **Decision:** the world edge is four solid walls anchored below the terrain
 to above max elevation, replacing the earlier `BorderObject`/`BorderGenerator`
@@ -121,13 +121,13 @@ slopes while still blocking on trees (`7b7cc58`).
 
 ---
 
-## Camera: exploration (follow, forward-only) used for S1–S3; isometric retained in code
+## Camera: exploration (follow, forward-only) used for S1–S3 (superseded by first person, below)
 
 **Decision:** the original fixed ~45° isometric follow camera (chosen so
 canopy shape in profile and fruit color on the dome were visible at once)
 was supplemented by an exploration mode — mouse turns, W moves forward only —
-and S1–S3 all use exploration. Isometric remains selectable per config via
-`cameraMode`.
+and S1–S3 all use exploration. Isometric was then selectable per config via
+`cameraMode` (since removed; see the first-person entry).
 
 **Why:** the move to exploration and forward-only movement (`51fa98b`,
 `bf96a6f`) is not explained in the commits; it fits the project's
@@ -136,16 +136,44 @@ rationale).
 
 ---
 
-## Character model: Remy (replaces X-Bot)
+## Camera: first person only; avatar, animations, and Isometric mode removed
 
-**Decision:** the avatar uses the Remy model with idle/walk/pick animations
-(`f89879f`, replacing the X-Bot, which replaced a plain capsule in
-`f97390b`). The harvest animation is synced to total harvest duration
-(`8b669e3`).
+**Decision:** the player sees the world from eye height; mouse looks (yaw +
+pitch), W/S move forward/back, no strafing. The Remy avatar, its animations
+and animator controller, the Isometric camera mode, the `CameraMode` enum, and
+camera smoothing were deleted (all recoverable from git; Remy history:
+`f89879f`, `f97390b`, `8b669e3`). Harvest has no body animation any more;
+feedback is the fruits vanishing plus the score popups.
 
-**Why:** a proper player model also resolves the earlier known limitation
-that the capsule visually overlapped wide canopies. Remy-vs-X-Bot rationale
-not recorded.
+**Design choices and why:**
+- *No `Time.deltaTime` on mouse deltas.* A mouse delta is already a per-frame
+  displacement; scaling it by `deltaTime` makes turn rate depend on frame
+  rate. The old code did this. Look is gated on `timeScale > 0` and not-frozen
+  instead (the old `deltaTime` factor had implicitly blocked look while paused).
+- *Sensitivity = degrees per count × multiplier* (`lookDegreesPerCount` ×
+  `lookSensitivity`), independent of FOV, so a future settings slider only edits
+  the multiplier and turn speed in cm/360 terms is well defined.
+- *Yaw/pitch live on the camera, not the player root.* The Rigidbody is
+  interpolated and would overwrite root rotation each frame; applying yaw via
+  `MoveRotation` would add up to one physics step of look latency. Movement
+  direction is derived from the camera yaw. `movement.csv`'s `player_heading` is
+  now the camera yaw (same meaning as before: facing direction about Y).
+- *Look input behind `ILookInput`.* For VR the headset pose should own the camera
+  and scripts should only move the rig root; a VR implementation returns zero look
+  and the rest (movement from head yaw, harvest trigger on the root) is unchanged.
+  Not built yet. VR also supplies its own projection, so `cameraFieldOfView` is
+  flat-screen only.
+- *FOV is a scientific parameter.* Unity's `fieldOfView` is vertical (75° vertical
+  ≈ 105° horizontal at 16:9); vertical stays fixed across aspect ratios.
+  Wide-FOV edge stretch could distort the apparent canopy aspect ratio (the shape
+  channel) toward the screen edge, and FOV interacts with monitor size/distance, so
+  it is logged in the metadata and should be held fixed across participants.
+- *Terrain-following height threshold 0.05 → 0.001.* From far above the 5 cm
+  snaps were invisible; at eye level they would read as stair-step jitter.
+- *Rejected:* head bob (a comfort problem for some people, and uncontrolled visual
+  motion near the fruit-color channel); a reticle (proximity-triggered harvest has
+  nothing to aim at); gaze-gated harvest (would add an aiming component to the task).
+- *Not yet done:* in-game sensitivity slider (config value only), VR provider.
 
 ---
 
@@ -226,3 +254,110 @@ redundant once the CLI worked, and it adds a Node server plus a generated
 (`com.unity.ai.assistant`) needs Unity Cloud and an AI-tools beta
 subscription (cost unconfirmed). Hand-editing scene YAML was rejected: ~100
 cross-referenced objects, risk of corrupting IDs.
+
+---
+
+## Harvest range: gap grows with canopy radius, smaller than the old constant
+
+**Decision:** the harvest/highlight trigger radius is `R + gap(R)` with
+`gap(R) = harvestRangeGapBase + harvestRangeGapPerRadius * R` (SessionConfig;
+S1-S3: 0.4 + 0.15 R, i.e. 0.48 for R = 0.5 up to 0.85 for R = 3). This replaces
+the constant `highlightRadiusPadding` of 1.5. Setting base 1.5 and per-radius 0
+reproduces the old behavior.
+
+**Why:** with the exploration camera (pitch 30 deg, ~34 deg view ray at the
+avatar), distance straight ahead is foreshortened to ~0.55x on screen, so a 1.5
+gap looked like near-contact while still being out of range, and a constant gap
+is 3x the radius of a thin tree but half that of a wide one. A smaller gap that
+scales mildly with radius makes "visibly next to the tree" and "in range" agree
+better. Not yet verified with participants-style play; the avatar capsule radius
+was not measured.
+
+**Caveat:** range sets the travel/approach time cost of each harvest, so this is
+a task-difficulty change, not purely cosmetic. Revisit if S1-S3 become too easy
+or hard.
+
+---
+
+## Border walls: flat top just above the highest possible eye level (superseded by mountains, below)
+
+**Decision:** wall top = `terrainMaxElevation + borderWallHeight` (S1–S3: 20 + 7 = 27),
+a flat height independent of seed; previously 8 boundary samples + 30, which varied
+by seed. The walls are a thin band just above the horizon instead of a tall backdrop.
+
+**Why:** with a first-person eye 5.1 above terrain (max terrain 20), eye level
+reaches ~25, so a top below that would let the player see over the wall from a
+hilltop; 27 never does, yet from valleys the far wall subtends only a few degrees.
+Anchoring to `terrainMaxElevation` keeps the look identical across seeds.
+`borderWallHeight` should be about `eyeHeight` plus a small margin.
+
+## Time of day: sessions start part-way through the day
+
+**Decision:** `dayStartFraction` (S1–S3: 0.3) offsets the sun/sky clock so a session
+runs from mid-morning (sun about 73°) to sunset rather than dawn to sunset; the
+timer and logged times are unchanged. Set 0 for the old behavior.
+
+**Why:** the dawn start spent the first part of each session in low, warm, dim
+light; later start gives brighter, more neutral light for judging fruit hue. Whether
+to also shift the sky tint palette or skew toward afternoon (>0.5) is open.
+
+---
+
+## Border: mountains in the terrain geometry replace the walls
+
+**Decision:** the map edge is a band of unclimbable mountains built into the heightmap
+(`TerrainManager`), replacing `BorderWalls` (deleted along with `borderWallHeight/Color`).
+Rocky gray with snow above a snow line, no trees on them. Per-seed ridged-noise skyline,
+so each direction has distinct peaks.
+
+**Why:** natural barriers are the standard way games hide map edges, with an invisible
+barrier only as a backstop; flat-topped walls were a visible artificial seam at the
+horizon. Because mountains are distal cues, the skyline is also a global orientation
+cue for the task (research on boundaries/distal cues in virtual navigation), so
+*distinct peaks per direction* was chosen deliberately over a uniform ring. Rectangular
+boundaries helped spatial memory in one study; our valley's inner boundary is
+irregular, which is a possible confound to keep in mind.
+
+**How it works (and why):**
+- *Elevation = valley + mountain.* Valley elevation stays coupled to moisture
+  (`(1 - moisture) × terrainMaxElevation`); the mountain term is added on top and is
+  exactly 0 in the valley, so the moisture channel and tree attributes are unchanged.
+- *Ramp* `u` = 0 across the valley, 1 at the map edge, from Chebyshev edge distance over
+  `mountainBandWidth` (60) with the band's inner boundary jittered (+/-15) by noise. Jitter
+  rescales the band only, so the crest at the mesh edge is never lowered. Height is
+  `mountainHeight × u^1.5 × (0.55 + 0.45·ridged)`, giving crests of 38–70 above valley
+  base (the lowest edge crest on seed 1 was 55 absolute, vs. at most about 30 eye height), so
+  the mesh edge is never visible.
+- *Blocking:* terrain is not physical for the player (raycast height snap), so
+  `PlayerController` refuses movement where `u >= mountainBlockThreshold` (0.15, about a 38° slope),
+  per axis so the player slides along the foot, plus a hard clamp 1 unit inside the world edge.
+  The block is derived from the same function as the visuals, so there are no invisible walls.
+- *Trees* are kept out of the band plus `treeEdgeMargin` (8). `treeCount` went 300 → 147 to hold
+  tree density constant (the valley is about 49% of the old area), since density sets travel cost.
+- *Rendering:* the terrain shader (`VertexColor.shader`) ignores mesh vertex colors and
+  blends textures by moisture, so rock/snow are per-vertex weights in `uv3` plus
+  `_RockColor/_SnowColor` set from config on a material instance. Mesh resolution 128 → 257
+  (32-bit indices).
+- *Fog:* fog is linear 80–120 and the mountains start about 140 away, so at full strength
+  they would be pure fog gray. The shader applies `mountainFogStrength` (0.3) of the normal fog on mountains,
+  so the skyline stays visible; trees and valley are unchanged, so bush visibility range is unchanged.
+
+**Open / watch:** low sun vs. mountain shading (at sunset the valley-facing slopes and
+nearby valley can darken; crest angular height from the valley center is about 20°, `minSunElevation`
+is 25°); `UpdateTerrainLighting` re-uploads the (now 66k-vertex) mesh colors every frame even
+though the shader ignores them (about 210 fps measured, so left alone).
+
+---
+
+## Fog: off by default, toggled per session (`fogEnabled`)
+
+**Decision:** `SessionConfig.fogEnabled` (default false; S1–S3 off) sets `RenderSettings.fog`
+at session start (`GameManager`). The scene's linear fog (80–120, gray) is unchanged and
+applies only when the toggle is on; `mountainFogStrength` only matters then.
+
+**Why / watch:** with fog on, bushes beyond about 120 units were invisible, which acted as
+a visibility limit on the foraging task; with it off, bushes are visible across the whole
+valley, so exploration/search behavior may differ from fog-on data. Debugging output
+collected before this change is not comparable. The fog was also the only thing hiding
+the far mountains' base, so the skyline is now sharp.
+

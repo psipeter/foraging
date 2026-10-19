@@ -56,7 +56,9 @@ public class SunController : MonoBehaviour
         }
 
         sessionTime += Time.deltaTime;
-        float t = Mathf.Clamp01(sessionTime / Mathf.Max(SessionDuration, 0.0001f));
+        // Day position: starts dayStartFraction of the way through the day and reaches sunset (1) at session end.
+        float dayStart = sessionConfig != null ? Mathf.Clamp01(sessionConfig.DayStartFraction) : 0f;
+        float t = Mathf.Lerp(dayStart, 1f, Mathf.Clamp01(sessionTime / Mathf.Max(SessionDuration, 0.0001f)));
 
         UpdateSunTransform(t);
         UpdateSunColorAndIntensity(t);

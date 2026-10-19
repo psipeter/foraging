@@ -40,7 +40,7 @@ independent, and reward feedback must be unambiguous.
 | # | Feature | How the current build realizes it |
 |---|---|---|
 | 1 | **Multidimensional, continuous-valued features** | Each tree has three continuous attributes (shape, fruit color, moisture), each on its own visual channel; reward is a function over all three |
-| 2 | **Multiple potential actions at every timestep** | ~300 trees in the world at all times; the participant can approach any, harvest any in range, or keep exploring |
+| 2 | **Multiple potential actions at every timestep** | ~150 trees in the world at all times; the participant can approach any, harvest any in range, or keep exploring |
 | 3 | **Continuous time and space** | Free movement in a continuous 3D world; a continuous sunrise→sunset clock; travel and harvesting both cost time; no trial structure |
 | 4 | **Multiple goals/objectives** (extendable) | *Not yet implemented* — single objective (total reward). The platform is meant to allow adding objectives later (e.g. a second resource, a state variable, a hazard) |
 
@@ -145,19 +145,25 @@ an oversight.
 
 ## Task design
 
-- **Session:** fixed duration (S1–S3: 60 s), a day cycle from sunrise to
-  sunset. Movement costs time (fixed player speed); harvesting a tree costs
+- **Session:** fixed duration (S1–S3: 60 s), the second part of a day cycle:
+  the session starts `dayStartFraction` (S1–S3: 0.3) of the way from sunrise to
+  sunset and ends at sunset. Movement costs time (fixed player speed); harvesting a tree costs
   `fruitHarvestDuration × fruitCount` seconds (S1–S3: 0.5 s × 10 = 5 s),
   during which the player is frozen. Goal: maximize total reward.
-- **World:** 300 trees (S1–S3) placed by seeded random placement with a
-  minimum spacing, on Perlin-noise terrain, enclosed by four solid walls. A
-  per-session `worldSeed` fixes the terrain and tree layout/attributes.
+  A tree can be harvested when the player is within `gap(R) = 0.8 + 0.3·R` of its
+  canopy edge (R = canopy radius, 0.5–3), also where its highlight appears.
+- **World:** 147 trees (S1–S3) placed by seeded random placement with a
+  minimum spacing, on Perlin-noise terrain, in a valley enclosed by an
+  unclimbable rocky/snowy mountain band built into the terrain (no trees on it).
+  A per-session `worldSeed` fixes the terrain, the mountain skyline, and the tree
+  layout/attributes.
 - **A participant plays a sequence of sessions** (`S1`, `S2`, `S3`), each with
   a different world seed and reward function. Between sessions the player
   sees a score screen and continues with Space.
-- **Camera (S1–S3):** exploration mode — third-person follow camera, mouse
-  turns, W moves forward only. An isometric fixed-angle mode also exists in
-  code (earlier design); see DECISIONS.
+- **Camera (S1–S3):** first person — mouse looks (yaw + pitch), W/S walk
+  forward/back along the view direction, no strafing. Eye height, vertical
+  field of view, and mouse sensitivity are `SessionConfig` fields; the
+  metadata JSON records the camera's FOV, pose, and clip planes. See DECISIONS.
 
 ### Attributes and their visual channels
 
@@ -193,8 +199,8 @@ running score.
 
 ### Session configurations (current)
 
-All three: 60 s, 300 trees, 10 fruit/tree, `rewardStd` 0.3, speed 5,
-exploration camera. Weights apply to (shape, color, moisture).
+All three: 60 s, 147 trees, 10 fruit/tree, `rewardStd` 0.3, speed 5,
+first-person camera. Weights apply to (shape, color, moisture).
 
 | Session | Seed | Shape | Color | Moisture | Character |
 |---|---|---|---|---|---|

@@ -133,8 +133,9 @@ public class Tree : MonoBehaviour
 
         // Adjust trigger radius to match bush size in world space, using a collider on the root.
         float maxScaleXZ = Mathf.Max(canopyScale.x, canopyScale.z);
-        float padding = sessionConfig != null ? sessionConfig.HighlightRadiusPadding : 1.2f;
-        float worldRadius = maxScaleXZ * 0.5f + padding;
+        float canopyRadius = maxScaleXZ * 0.5f;
+        float gap = sessionConfig != null ? sessionConfig.HarvestRangeGap(canopyRadius) : 0.8f + 0.3f * canopyRadius;
+        float worldRadius = canopyRadius + gap;
 
         // Ensure no collider remains on the canopy child.
         SphereCollider canopyCollider = canopy.GetComponent<SphereCollider>();

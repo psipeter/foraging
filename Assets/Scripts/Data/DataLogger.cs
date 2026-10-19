@@ -106,9 +106,10 @@ public class DataLogger : MonoBehaviour
         float time = sunController != null ? sunController.SessionTimeRemaining : Time.time;
         Transform playerTransform = playerController.transform;
         Vector3 pPos = playerTransform.position;
-        float heading = playerTransform.eulerAngles.y;
 
         Transform camT = mainCamera.transform;
+        // Facing direction lives on the camera (the player body does not rotate).
+        float heading = camT.eulerAngles.y;
         Vector3 cPos = camT.position;
         Vector3 cRot = camT.eulerAngles;
 

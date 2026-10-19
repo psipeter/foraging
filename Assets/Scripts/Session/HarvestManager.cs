@@ -51,7 +51,6 @@ public class HarvestManager : MonoBehaviour
         if (playerController != null)
         {
             playerController.SetFrozen(true);
-            playerController.SetHarvestAnimationSpeed(sessionConfig.FruitHarvestDuration * tree.FruitCount);
         }
     }
 
@@ -110,7 +109,6 @@ public class HarvestManager : MonoBehaviour
         if (playerController != null)
         {
             playerController.SetFrozen(false);
-            playerController.ResetAnimationSpeed();
             playerController.ClearTarget();
         }
 

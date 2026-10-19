@@ -7,7 +7,7 @@ public class InstructionsPanel : MonoBehaviour
 {
     private const string FallbackInstructions =
         "<size=28><b>Welcome to the Foraging Task</b></size>\n\n" +
-        "Navigate the environment using WASD.\n" +
+        "Move the mouse to look around. Press W to walk forward and S to walk backward.\n" +
         "Press Space when near a bush to harvest it.\n" +
         "Collect as much reward as possible before sunset.\n\n" +
         "<i>Press Space to begin.</i>";
