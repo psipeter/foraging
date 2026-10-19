@@ -257,7 +257,7 @@ cross-referenced objects, risk of corrupting IDs.
 
 ---
 
-## Harvest range: gap grows with canopy radius, smaller than the old constant
+## Harvest range: gap grows with canopy radius, smaller than the old constant (superseded by first-person harvesting, below)
 
 **Decision:** the harvest/highlight trigger radius is `R + gap(R)` with
 `gap(R) = harvestRangeGapBase + harvestRangeGapPerRadius * R` (SessionConfig;
@@ -360,4 +360,89 @@ a visibility limit on the foraging task; with it off, bushes are visible across 
 valley, so exploration/search behavior may differ from fog-on data. Debugging output
 collected before this change is not comparable. The fog was also the only thing hiding
 the far mountains' base, so the skyline is now sharp.
+
+---
+
+## Harvesting in first person: graded directional glow, distance + bearing threshold, hold Space
+
+**Decision:** replaced the proximity trigger and press-once harvest with distance + bearing
+targeting in `HarvestManager`: gradual glow ahead of you (steady, graded by edge distance and
+bearing), a distinct availability state (pulse + "Hold SPACE" hint) within `gap` = 7 of the
+canopy edge and 35 degrees of bearing, harvest by holding Space (one fruit per
+`fruitHarvestDuration`, nearest-to-camera first), walking locked while holding, look free, harvest
+paused when the bush leaves the cone. `Tree` lost its trigger sphere. TODO(PI): the earlier session's
+discussion of the threshold was not available when this was built; the numbers below came from
+the user's request and the geometry.
+
+**Why:** from a 5.1 eye height with 75 degrees vertical FOV the near foot of a bush is only on screen
+beyond 5.1 / tan(37.5 degrees) = 6.6 units; the old gap (about 1.7) clipped bushes and their +X
+popups. `harvestRangeGapBase` 7, `PerRadius` 0 (range is a constant edge distance, since the
+visibility argument does not depend on bush size). Bearing uses yaw only so looking down does not
+drop bushes from "in front of you", and subtracts the bush's angular radius so large near bushes count.
+
+**Movement/look regime while harvesting:** walking locked (no walking out of range, no
+hands-free chaining between bushes); look untouched by default and the harvest pauses outside the
+cone, which keeps the VR path open (a script cannot steer a head) and avoids silently changing
+each participant's effective sensitivity. Rejected as the default: a leash that slows yaw to zero as you
+look away. It exists as `harvestLookResistance` (0 = off), flat-screen only; if used, its value must be
+treated as an experimental manipulation (logged in metadata `harvest.lookResistance`).
+
+**Rewards:** +X popups at a fixed slot near screen center (neutral white; not tied to the fruit's
+position, so never off screen); the score updates per fruit, not per completed harvest (there is no
+"complete" moment any more). The random popup spread was removed, which also stops the UI from consuming
+the shared `UnityEngine.Random` stream that the reward noise uses. The per-harvest "Total" popup is gone.
+
+**Data (appended columns only):** `harvests.csv` is now one row per harvest bout (press to release or
+exhaustion): `total_received` is the bout's reward, `running_total` the session total after it, and
+`fruit_rewards` the bout's fruits only; appended `fruits_collected`, `fruits_remaining`,
+`tree_exhausted`. `movement.csv` appended `harvesting`, `focus_tree_id`. Metadata gained a `harvest` block.
+Earlier debugging output has one row per whole harvest and is not directly comparable.
+
+**Watch:** harvesting stops costing the exclusive "freeze" time it used to only in the sense that the
+player can still look around; the time cost is the held time itself. `DataLogger.maxVisibilityDistance`
+(80) still caps `visible_tree_ids` even though fog is off and bushes are visible farther.
+
+---
+
+## Highlight look: rim light replaces the whole-canopy emission wash (switchable)
+
+**Decision:** `SessionConfig.highlightStyle` selects the look. Default `RimLight`: an additive fresnel
+overlay (`CanopyRim.shader`, on a 1.03x copy of the canopy sphere, material `CanopyRim.mat` referenced
+from `TreeGenerator` so the shader ships in builds) draws a soft wide edge glow that grows with approach, and a thin
+crisp edge line (higher fresnel exponent) added only on the selected bush; both ease in and out. `EmissionWash`
+(the canopy turning pale, pulsing when selected) is kept for comparison.
+
+**Why:** the wash turned the whole canopy a flat pale beige, hiding the moss texture and shading, and the
+pulse looked out of place. The rim leaves the canopy interior alone, so the shape channel (silhouette and aspect ratio) stays readable.
+Approach and selection use different kinds of cue, not just brightness: a graded soft glow vs. a crisp line.
+Constraints held: no change to canopy aspect ratio or fruit hue/brightness (fruits untouched), no reward information, pale cream
+(not a hue near the orange end of the fruit axis), luminance-based so it works without hue discrimination, world-space so it ports to VR.
+The canopy's own double-sided Lit material is unchanged (overlay is a separate renderer).
+
+**Rejected / not built:** crisp inverted-hull outline as the selection cue (not requested; the thin rim line
+covers selection for now), drifting motes, progress ring, fruit glints/shimmer (touch the fruit channel),
+dimming non-selected bushes (biases which bush is chosen), light shaft, ground ring (terrain-projected cues were retired).
+Intensities and exponents are `SessionConfig` fields (`rim*`), live-tunable in Play mode.
+
+---
+
+## Harvest progress ring, selected rim color, exhausted bushes vanish
+
+**Decision:** (1) the selected bush's rim blends to `rimSelectedColor` (slightly warmer pale gold); (2) a
+camera-facing clock-style ring above every in-range bush shows the remaining fraction (bright arc erased
+clockwise from 12 o'clock over a faint track), `HarvestRing.shader`/`.mat`; (3) an exhausted bush shrinks
+(same linear shrink as a collected fruit, `treeShrinkDuration`), then disappears and stops blocking.
+
+**Why:** fruits on the far side of a bush are not visible, so the ring is the continuous "still harvesting" signal and a record of
+what is left on return; it is also a second, non-hue indicator of being in range. The ring is world-space at a constant
+apparent size (`harvestRingSizeDeg`) so it reads at 7 and 20 units and ports to VR.
+
+**Details / consequences:**
+- The progress through the fruit in hand is stored on the bush (`Tree.PartialProgress`) so releasing Space mid-fruit
+  and resuming continues the same fruit and the ring does not jump back up. This slightly changes harvest timing: held
+  time is never wasted.
+- `visible_tree_ids` in `movement.csv` now excludes exhausted bushes (they are gone, not just fruitless).
+- Rim color shift is a hue-adjacent change: `rimSelectedColor` should stay pale and near-neutral, not toward the
+  orange end of the fruit hue axis.
+- Ring shown for every in-range bush (distance + bearing), not just the selected one; selected is only marked by the rim.
 

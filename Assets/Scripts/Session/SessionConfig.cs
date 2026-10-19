@@ -30,6 +30,35 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float lookSensitivity = 2f;
     [SerializeField] private float lookPitchLimit = 85f;
 
+    [Header("Harvest")]
+    [Tooltip("Gradual glow starts this far (horizontal, from the canopy edge) and reaches full strength at the harvest range.")]
+    [SerializeField] private float highlightRangeGap = 20f;
+    [Tooltip("A bush within this bearing (degrees, yaw only, after subtracting its angular radius) of straight ahead glows fully; the glow fades to nothing at the fade angle.")]
+    [SerializeField] private float highlightFullAngle = 25f;
+    [SerializeField] private float highlightFadeAngle = 45f;
+    [Tooltip("Harvest is available, and keeps progressing, only while the bush is within this bearing (degrees). Looking further away pauses the harvest.")]
+    [SerializeField] private float harvestMaxAngle = 35f;
+    [Tooltip("0 = off. 1 = while harvesting, mouse yaw slows to zero as you turn away from the bush between the full and fade angles (turning back is unaffected). Flat-screen only; changes effective sensitivity, so keep it off unless studying it.")]
+    [Range(0f, 1f)]
+    [SerializeField] private float harvestLookResistance = 0f;
+    [Tooltip("How approachable/selected bushes are indicated. EmissionWash = whole canopy glows (steady, then pulsing when selected). RimLight = soft edge glow while approaching, plus a thin crisp edge line on the selected bush.")]
+    [SerializeField] private HighlightStyle highlightStyle = HighlightStyle.RimLight;
+    [SerializeField] private Color rimColor = new Color(1f, 0.96f, 0.82f);
+    [Tooltip("Rim color on the selected (harvestable) bush, blended in from rimColor. A small shift from rimColor; also the harvest ring's color. Keep it pale and near-neutral so it does not read as a fruit hue.")]
+    [SerializeField] private Color rimSelectedColor = new Color(1f, 0.9f, 0.6f);
+    [Tooltip("Rim light, approach: wide soft glow. Intensity at glow level 1 and the fresnel exponent (higher = thinner).")]
+    [SerializeField] private float rimApproachIntensity = 1.5f;
+    [SerializeField] private float rimApproachPower = 2.5f;
+    [Tooltip("Rim light, selected bush only: thin crisp edge line, added on top of the soft glow.")]
+    [SerializeField] private float rimSelectedIntensity = 2.5f;
+    [SerializeField] private float rimSelectedPower = 8f;
+    [Tooltip("Apparent size of the harvest progress ring above a bush, in degrees of view (constant regardless of distance).")]
+    [SerializeField] private float harvestRingSizeDeg = 7f;
+    [Tooltip("An exhausted bush shrinks to nothing over this long (same linear shrink as a collected fruit), then disappears and stops blocking.")]
+    [SerializeField] private float treeShrinkDuration = 0.3f;
+    [SerializeField] private float fruitPopDuration = 0.15f;
+    [SerializeField] private bool showHarvestHint = true;
+
     [Header("Trees")]
     [SerializeField] private int fruitCount = 10;
     [SerializeField] private float fruitRadius = 0.15f;
@@ -38,9 +67,9 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private Vector2 shapeRange = new Vector2(0f, 1f);
     [SerializeField] private Vector2 canopyWidthRange = new Vector2(2.0f, 5.0f);
     [SerializeField] private Vector2 canopyHeightRange = new Vector2(1.2f, 2.8f);
-    [Tooltip("Harvest/highlight range beyond the canopy edge = base + perRadius * canopyRadius (world units). Base 1.5 and per-radius 0 reproduces the old constant 1.5 padding.")]
-    [SerializeField] private float harvestRangeGapBase = 0.8f;
-    [SerializeField] private float harvestRangeGapPerRadius = 0.3f;
+    [Tooltip("Harvest becomes available when the player is within gap(R) = base + perRadius * canopyRadius of the canopy EDGE (horizontal distance). ~7 shows the whole bush at the 5.1 eye height / 75 deg vertical FOV (the near foot is visible from 5.1 / tan(37.5 deg) = 6.6).")]
+    [SerializeField] private float harvestRangeGapBase = 7f;
+    [SerializeField] private float harvestRangeGapPerRadius = 0f;
     [SerializeField] private float fruitColorPreservation = 0.5f;
 
     [Header("Terrain")]
@@ -95,6 +124,22 @@ public class SessionConfig : ScriptableObject
     public Vector2 ShapeRange => shapeRange;
     public Vector2 CanopyWidthRange => canopyWidthRange;
     public Vector2 CanopyHeightRange => canopyHeightRange;
+    public float HighlightRangeGap => highlightRangeGap;
+    public float HighlightFullAngle => highlightFullAngle;
+    public float HighlightFadeAngle => highlightFadeAngle;
+    public float HarvestMaxAngle => harvestMaxAngle;
+    public float HarvestLookResistance => harvestLookResistance;
+    public HighlightStyle HighlightStyle => highlightStyle;
+    public Color RimColor => rimColor;
+    public Color RimSelectedColor => rimSelectedColor;
+    public float HarvestRingSizeDeg => harvestRingSizeDeg;
+    public float TreeShrinkDuration => treeShrinkDuration;
+    public float RimApproachIntensity => rimApproachIntensity;
+    public float RimApproachPower => rimApproachPower;
+    public float RimSelectedIntensity => rimSelectedIntensity;
+    public float RimSelectedPower => rimSelectedPower;
+    public float FruitPopDuration => fruitPopDuration;
+    public bool ShowHarvestHint => showHarvestHint;
     public float HarvestRangeGapBase => harvestRangeGapBase;
     public float HarvestRangeGapPerRadius => harvestRangeGapPerRadius;
     public Color FruitColorLow => fruitColorLow;

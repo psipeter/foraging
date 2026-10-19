@@ -33,8 +33,8 @@ function.
   `Assets/ScriptableObjects/SessionConfig/`, assigned to the `GameManager`
   in the scene. All task parameters are edited there, in the Inspector.
 - Instruction text is read from `Assets/StreamingAssets/instructions.txt`.
-- Controls (first person): mouse looks around, W/S walk forward/back, Space to
-  harvest / continue, Esc to quit. Eye height, field of view, and mouse
+- Controls (first person): mouse looks around, W/S walk forward/back, hold Space
+  to harvest (walking is locked while harvesting) or to continue, Esc to quit. Eye height, field of view, and mouse
   sensitivity are `SessionConfig` fields.
 
 ## Data

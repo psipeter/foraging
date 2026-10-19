@@ -168,7 +168,8 @@ Assets/
   StreamingAssets/instructions.txt   instructions text (read at runtime)
   Scenes/SampleScene.unity           the single scene
   Shaders/   VertexColor (terrain: moisture textures + mountain rock/snow; ignores
-             mesh vertex colors), VertexColorUnlit, FruitUnlit, RingUnlit
+             mesh vertex colors), VertexColorUnlit, FruitUnlit, CanopyRim (additive
+             fresnel highlight overlay), HarvestRing (clock-style progress ring), RingUnlit
   Materials/ Prefabs/ Resources/Textures
 docs/        SCIENCE.md, DECISIONS.md
 ```
@@ -216,7 +217,7 @@ Constant.
 ### Data logging
 `DataLogger` writes one folder per session under `<project root>/ForagingData/<sessionId>/`:
 `movement.csv` (0.1 s samples: pose, camera, visible trees + distances),
-`harvests.csv` (per harvest: tree, attributes, true reward, per-fruit
+`harvests.csv` (one row per harvest bout, press to release or exhaustion: tree, attributes, true reward, per-fruit
 rewards, running total), `session_metadata.json` (config, reward function,
 camera, full tree registry). **The path and the column semantics are
 fixed — changing either breaks downstream analysis and comparability with

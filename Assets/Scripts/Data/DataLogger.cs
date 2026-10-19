@@ -12,6 +12,7 @@ public class DataLogger : MonoBehaviour
     public SessionConfig sessionConfig;
     [SerializeField] private SunController sunController;
     [SerializeField] private PlayerController playerController;
+    [SerializeField] private HarvestManager harvestManager;
     [SerializeField] private Camera mainCamera;
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private float movementSampleInterval = 0.1f;
@@ -25,23 +26,16 @@ public class DataLogger : MonoBehaviour
     private readonly List<Tree> _allTrees = new List<Tree>();
 
     private int _harvestIndex;
-    private readonly List<float> _currentFruitRewards = new List<float>();
-    private float _harvestStartTime = -1f;
-    private float _runningTotal = 0f;
 
     private void OnEnable()
     {
-        HarvestManager.OnFruitCollected += HandleFruitCollected;
-        HarvestManager.OnHarvestSummary += HandleHarvestSummary;
-        HarvestManager.OnHarvestComplete += HandleHarvestComplete;
+        HarvestManager.OnHarvestBoutEnded += HandleHarvestBoutEnded;
         SunController.OnSessionEnd += HandleSessionEnd;
     }
 
     private void OnDisable()
     {
-        HarvestManager.OnFruitCollected -= HandleFruitCollected;
-        HarvestManager.OnHarvestSummary -= HandleHarvestSummary;
-        HarvestManager.OnHarvestComplete -= HandleHarvestComplete;
+        HarvestManager.OnHarvestBoutEnded -= HandleHarvestBoutEnded;
         SunController.OnSessionEnd -= HandleSessionEnd;
         CloseWriters();
     }
@@ -76,13 +70,13 @@ public class DataLogger : MonoBehaviour
 
     private void WriteMovementHeader()
     {
-        _movementWriter?.WriteLine("time,player_x,player_y,player_z,player_heading,camera_x,camera_y,camera_z,camera_rot_x,camera_rot_y,camera_rot_z,visible_tree_ids,visible_tree_distances");
+        _movementWriter?.WriteLine("time,player_x,player_y,player_z,player_heading,camera_x,camera_y,camera_z,camera_rot_x,camera_rot_y,camera_rot_z,visible_tree_ids,visible_tree_distances,harvesting,focus_tree_id");
         _movementWriter?.Flush();
     }
 
     private void WriteHarvestHeader()
     {
-        _harvestWriter?.WriteLine("harvest_index,time_start,time_end,tree_id,tree_x,tree_y,tree_z,shape,color,moisture,true_reward,total_received,running_total,time_remaining,fruit_rewards");
+        _harvestWriter?.WriteLine("harvest_index,time_start,time_end,tree_id,tree_x,tree_y,tree_z,shape,color,moisture,true_reward,total_received,running_total,time_remaining,fruit_rewards,fruits_collected,fruits_remaining,tree_exhausted");
         _harvestWriter?.Flush();
     }
 
@@ -121,7 +115,7 @@ public class DataLogger : MonoBehaviour
 
         foreach (Tree tree in _allTrees)
         {
-            if (tree == null) continue;
+            if (tree == null || tree.isHarvested) continue;   // exhausted bushes have vanished
 
             Vector3 center = tree.GetWorldCenter();
             float dist = Vector3.Distance(cPos, center);
@@ -149,100 +143,61 @@ public class DataLogger : MonoBehaviour
         string dists = string.Join(";", visibleDistances.ConvertAll(d => d.ToString("F2", CultureInfo.InvariantCulture)));
 
         string line = string.Format(CultureInfo.InvariantCulture,
-            "{0:F3},{1:F3},{2:F3},{3:F3},{4:F1},{5:F3},{6:F3},{7:F3},{8:F1},{9:F1},{10:F1},{11},{12}",
+            "{0:F3},{1:F3},{2:F3},{3:F3},{4:F1},{5:F3},{6:F3},{7:F3},{8:F1},{9:F1},{10:F1},{11},{12},{13},{14}",
             time,
             pPos.x, pPos.y, pPos.z, heading,
             cPos.x, cPos.y, cPos.z,
             cRot.x, cRot.y, cRot.z,
-            ids, dists);
+            ids, dists,
+            harvestManager != null && harvestManager.IsHarvesting ? 1 : 0,
+            harvestManager != null ? harvestManager.FocusTreeId : -1);
 
         _movementWriter.WriteLine(line);
         _movementWriter.Flush();
     }
 
-    private void HandleFruitCollected(float reward, Vector3 worldPos)
+    // One row per harvest bout (press to release / exhaustion). total_received is this bout's reward;
+    // running_total is the session total after the bout; fruit_rewards lists this bout's fruits only.
+    private void HandleHarvestBoutEnded(HarvestBout bout)
     {
-        if (_harvestStartTime < 0f)
+        if (_harvestWriter == null || sessionConfig == null || bout == null || bout.tree == null)
         {
-            _harvestStartTime = sunController != null ? sunController.SessionTimeRemaining : Time.time;
-        }
-        _currentFruitRewards.Add(reward);
-    }
-
-    private void HandleHarvestSummary(float totalReward, Vector3 worldPos)
-    {
-        if (_harvestWriter == null || sessionConfig == null)
-        {
-            _currentFruitRewards.Clear();
-            _harvestStartTime = -1f;
             return;
         }
 
-        Tree tree = FindClosestTree(worldPos);
-        if (tree == null)
-        {
-            _currentFruitRewards.Clear();
-            _harvestStartTime = -1f;
-            return;
-        }
-
-        float timeEnd = sunController != null ? sunController.SessionTimeRemaining : Time.time;
-        float timeStart = _harvestStartTime >= 0f ? _harvestStartTime : timeEnd;
-
+        Tree tree = bout.tree;
+        Vector3 treePos = tree.GetWorldCenter();
         float trueReward = sessionConfig.EvaluateReward(tree.attributes);
-        float timeRemaining = sunController != null ? sunController.SessionTimeRemaining : 0f;
-
-        string fruitRewards = string.Join(";", _currentFruitRewards.ConvertAll(v => v.ToString("F0", CultureInfo.InvariantCulture)));
+        string fruitRewards = string.Join(";", bout.fruitRewards.ConvertAll(v => v.ToString("F0", CultureInfo.InvariantCulture)));
 
         string line = string.Format(CultureInfo.InvariantCulture,
-            "{0},{1:F3},{2:F3},{3},{4:F3},{5:F3},{6:F3},{7:F3},{8:F3},{9:F3},{10:F3},{11:F3},{12:F3},{13:F3},\"{14}\"",
+            "{0},{1:F3},{2:F3},{3},{4:F3},{5:F3},{6:F3},{7:F3},{8:F3},{9:F3},{10:F3},{11:F3},{12:F3},{13:F3},\"{14}\",{15},{16},{17}",
             _harvestIndex,
-            timeStart,
-            timeEnd,
+            bout.timeStart,
+            bout.timeEnd,
             tree.treeId,
-            worldPos.x, worldPos.y, worldPos.z,
+            treePos.x, treePos.y, treePos.z,
             tree.attributes.shape,
             tree.attributes.color,
             tree.attributes.moisture,
             trueReward,
-            totalReward,
-            _runningTotal + totalReward,
-            timeRemaining,
-            fruitRewards);
+            bout.boutTotal,
+            bout.runningTotal,
+            bout.timeEnd,
+            fruitRewards,
+            bout.fruitRewards.Count,
+            bout.fruitsRemaining,
+            bout.exhausted ? 1 : 0);
 
         _harvestWriter.WriteLine(line);
         _harvestWriter.Flush();
 
         _harvestIndex++;
-        _currentFruitRewards.Clear();
-        _harvestStartTime = -1f;
-    }
-
-    private Tree FindClosestTree(Vector3 worldPos)
-    {
-        Tree closest = null;
-        float bestDist = float.MaxValue;
-        foreach (Tree tree in _allTrees)
-        {
-            if (tree == null) continue;
-            float d = Vector3.SqrMagnitude(tree.GetWorldCenter() - worldPos);
-            if (d < bestDist)
-            {
-                bestDist = d;
-                closest = tree;
-            }
-        }
-        return closest;
     }
 
     private void HandleSessionEnd()
     {
         CloseWriters();
-    }
-
-    private void HandleHarvestComplete(float runningTotal)
-    {
-        _runningTotal = runningTotal;
     }
 
     private void OnDestroy()
@@ -298,6 +253,15 @@ public class DataLogger : MonoBehaviour
         sb.AppendLine($"    \"localRotation\": {{ \"x\": {euler.x.ToString(CultureInfo.InvariantCulture)}, \"y\": {euler.y.ToString(CultureInfo.InvariantCulture)}, \"z\": {euler.z.ToString(CultureInfo.InvariantCulture)} }},");
         sb.AppendLine($"    \"nearClipPlane\": {mainCamera.nearClipPlane.ToString(CultureInfo.InvariantCulture)},");
         sb.AppendLine($"    \"farClipPlane\": {mainCamera.farClipPlane.ToString(CultureInfo.InvariantCulture)}");
+        sb.AppendLine("  },");
+        sb.AppendLine("  \"harvest\": {");
+        sb.AppendLine($"    \"rangeGapBase\": {sessionConfig.HarvestRangeGapBase.ToString(CultureInfo.InvariantCulture)},");
+        sb.AppendLine($"    \"rangeGapPerRadius\": {sessionConfig.HarvestRangeGapPerRadius.ToString(CultureInfo.InvariantCulture)},");
+        sb.AppendLine($"    \"highlightRangeGap\": {sessionConfig.HighlightRangeGap.ToString(CultureInfo.InvariantCulture)},");
+        sb.AppendLine($"    \"highlightFullAngle\": {sessionConfig.HighlightFullAngle.ToString(CultureInfo.InvariantCulture)},");
+        sb.AppendLine($"    \"highlightFadeAngle\": {sessionConfig.HighlightFadeAngle.ToString(CultureInfo.InvariantCulture)},");
+        sb.AppendLine($"    \"harvestMaxAngle\": {sessionConfig.HarvestMaxAngle.ToString(CultureInfo.InvariantCulture)},");
+        sb.AppendLine($"    \"lookResistance\": {sessionConfig.HarvestLookResistance.ToString(CultureInfo.InvariantCulture)}");
         sb.AppendLine("  },");
 
         // Reward function

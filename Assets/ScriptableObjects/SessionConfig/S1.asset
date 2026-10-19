@@ -40,6 +40,13 @@ MonoBehaviour:
   lookDegreesPerCount: 0.022
   lookSensitivity: 2
   lookPitchLimit: 85
+  highlightRangeGap: 20
+  highlightFullAngle: 25
+  highlightFadeAngle: 45
+  harvestMaxAngle: 35
+  harvestLookResistance: 0
+  fruitPopDuration: 0.15
+  showHarvestHint: 1
   fruitCount: 10
   fruitRadius: 0.6
   fruitColorLow: {r: 0, g: 0.2, b: 1, a: 1}
@@ -47,8 +54,8 @@ MonoBehaviour:
   shapeRange: {x: 0, y: 1}
   canopyWidthRange: {x: 1, y: 6}
   canopyHeightRange: {x: 1, y: 15}
-  harvestRangeGapBase: 0.8
-  harvestRangeGapPerRadius: 0.3
+  harvestRangeGapBase: 7
+  harvestRangeGapPerRadius: 0
   fruitColorPreservation: 0.5
   terrainNoiseFrequency: 2
   terrainNoiseOctaves: 1
@@ -56,6 +63,7 @@ MonoBehaviour:
   terrainMeshResolution: 257
   worldHalfExtent: 200
   dayStartFraction: 0.3
+  fogEnabled: 0
   sunArcHeight: 90
   minSunElevation: 25
   sunIntensityDawn: 0.5
@@ -69,5 +77,6 @@ MonoBehaviour:
   mountainBlockThreshold: 0.15
   treeEdgeMargin: 8
   snowLineFraction: 0.45
+  mountainFogStrength: 0.3
   mountainRockColor: {r: 0.42, g: 0.4, b: 0.38, a: 1}
   mountainSnowColor: {r: 0.93, g: 0.95, b: 0.98, a: 1}

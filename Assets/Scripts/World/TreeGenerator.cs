@@ -7,6 +7,10 @@ public class TreeGenerator : MonoBehaviour
     public SessionConfig sessionConfig;
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private GameObject treePrefab;
+    [Tooltip("Material for the rim-light highlight overlay (Foraging/CanopyRim). Referenced here so its shader is included in builds.")]
+    [SerializeField] private Material rimMaterial;
+    [Tooltip("Material for the harvest progress ring (Foraging/HarvestRing).")]
+    [SerializeField] private Material ringMaterial;
 
     private const float MinTreeDistance = 5f;
     private const int MaxPlacementAttempts = 800;
@@ -46,6 +50,8 @@ public class TreeGenerator : MonoBehaviour
             int treeIndex = placed;
             treeComp.treeId = treeIndex;
             treeComp.sessionConfig = sessionConfig;
+            treeComp.rimMaterial = rimMaterial;
+            treeComp.ringMaterial = ringMaterial;
             treeComp.fruitCount = sessionConfig.FruitCount;
             treeComp.fruitRadius = sessionConfig.FruitRadius;
             treeComp.fruitSeed = sessionConfig.WorldSeed + treeIndex * 7;

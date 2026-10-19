@@ -8,17 +8,20 @@ public class PlayerController : MonoBehaviour
     public SessionConfig sessionConfig;
     [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private float groundOffset = 1.0f;
-    [SerializeField] private HarvestManager harvestManager;
     [SerializeField] private CameraController cameraController;
 
     private Rigidbody playerRigidbody;
     private CapsuleCollider _capsuleCollider;
     private Vector2 moveInput;
-    private bool canHarvest;
     private bool _frozen;
+    private bool _movementLocked;
+    private bool _harvestHeld;
+    private bool _harvestPressed;
+
+    // Session end: no movement and no looking.
     public bool IsFrozen => _frozen;
     public float GroundOffset => groundOffset;
-    private Tree _targetTree;
+    public bool HarvestHeld => _harvestHeld;
 
     private void Awake()
     {
@@ -57,7 +60,8 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (_frozen)
+        // Harvesting locks walking only (looking stays free); session end freezes everything.
+        if (_frozen || _movementLocked)
         {
             if (playerRigidbody != null)
             {
@@ -146,49 +150,31 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    // Space: started = pressed, canceled = released (Invoke Unity Events fires all phases).
     public void OnHarvest(InputAction.CallbackContext context)
     {
-        if (!context.performed)
+        if (context.started)
         {
-            return;
+            _harvestHeld = true;
+            _harvestPressed = true;
         }
-
-        if (!canHarvest)
+        else if (context.canceled)
         {
-            return;
-        }
-
-        if (harvestManager != null && harvestManager.IsHarvesting)
-        {
-            return;
-        }
-
-        if (harvestManager != null && _targetTree != null)
-        {
-            harvestManager.StartHarvest(_targetTree);
+            _harvestHeld = false;
         }
     }
 
-    private void OnTriggerEnter(Collider other)
+    // True once per Space press; the caller decides whether a press can start a harvest.
+    public bool ConsumeHarvestPress()
     {
-        Tree tree = other.GetComponentInParent<Tree>();
-        if (tree != null)
-        {
-            canHarvest = true;
-            _targetTree = tree;
-            _targetTree.SetHighlight(true);
-        }
+        bool pressed = _harvestPressed;
+        _harvestPressed = false;
+        return pressed;
     }
 
-    private void OnTriggerExit(Collider other)
+    public void SetMovementLocked(bool locked)
     {
-        Tree tree = other.GetComponentInParent<Tree>();
-        if (tree != null)
-        {
-            canHarvest = false;
-            tree.SetHighlight(false);
-            _targetTree = null;
-        }
+        _movementLocked = locked;
     }
 
     public void SetFrozen(bool frozen)
@@ -202,16 +188,5 @@ public class PlayerController : MonoBehaviour
                 playerRigidbody.linearVelocity = Vector3.zero;
             }
         }
-    }
-
-    public void ClearTarget()
-    {
-        if (_targetTree != null)
-        {
-            _targetTree.SetHighlight(false);
-        }
-
-        _targetTree = null;
-        canHarvest = false;
     }
 }

@@ -1,24 +1,60 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
+public enum HarvestHint
+{
+    None,
+    Available,
+    Paused
+}
+
+// One press-to-release (or press-to-exhaustion) of harvesting a single tree.
+public class HarvestBout
+{
+    public Tree tree;
+    public float timeStart;
+    public float timeEnd;
+    public readonly List<float> fruitRewards = new List<float>();
+    public float boutTotal;
+    public float runningTotal;
+    public int fruitsRemaining;
+    public bool exhausted;
+}
+
+// Owns targeting, the graded highlight, and the hold-Space harvest. Each frame, for every tree:
+//   edge distance = horizontal distance to the canopy axis minus canopy radius
+//   bearing       = yaw angle between the view direction and the tree, minus the tree's angular radius
+// A bush glows in proportion to (distance ramp x bearing ramp). Within the harvest range and
+// the harvest cone it is harvestable; the best such bush is shown as selected and is the target of a Space press.
 public class HarvestManager : MonoBehaviour
 {
     public SessionConfig sessionConfig;
     [SerializeField] private PlayerController playerController;
+    [SerializeField] private CameraController cameraController;
     [SerializeField] private SunController sunController;
 
-    private bool _isHarvesting;
-    private float _harvestTimer;
-    private Tree _currentTree;
+    private Tree[] _trees;
+    private float[] _levels;
+    private bool[] _inRange;
+
+    private bool _harvesting;
+    private Tree _target;
+    private float _fruitTimer;
+    private HarvestBout _bout;
     private float _runningTotal;
-    private int _fruitsCollected;
-    private float _totalHarvestReward;
+    private bool _highlightsCleared;
+    private HarvestHint _hint = HarvestHint.None;
+    private bool _targetInCone;
+    private float _targetSignedOffAngle;
 
-    public static event Action<float> OnHarvestComplete;
     public static event Action<float, Vector3> OnFruitCollected;
-    public static event Action<float, Vector3> OnHarvestSummary;
+    public static event Action<float> OnScoreChanged;
+    public static event Action<HarvestBout> OnHarvestBoutEnded;
+    public static event Action<HarvestHint> OnHintChanged;
 
-    public bool IsHarvesting => _isHarvesting;
+    public bool IsHarvesting => _harvesting;
+    public int FocusTreeId { get; private set; } = -1;
 
     private void OnEnable()
     {
@@ -30,101 +66,318 @@ public class HarvestManager : MonoBehaviour
         SunController.OnSessionEnd -= HandleSessionEnd;
     }
 
-    public void StartHarvest(Tree tree)
-    {
-        if (sunController != null && sunController.SessionComplete)
-        {
-            return;
-        }
-
-        if (_isHarvesting || tree == null || tree.isHarvested)
-        {
-            return;
-        }
-
-        _currentTree = tree;
-        _isHarvesting = true;
-        _harvestTimer = 0f;
-        _fruitsCollected = 0;
-        _totalHarvestReward = 0f;
-
-        if (playerController != null)
-        {
-            playerController.SetFrozen(true);
-        }
-    }
-
     private void Update()
     {
-        if (!_isHarvesting || _currentTree == null || sessionConfig == null)
+        if (playerController == null || cameraController == null || sessionConfig == null)
         {
             return;
         }
 
-        _harvestTimer += Time.deltaTime;
-
-        int fruitCount = Mathf.Max(1, _currentTree.FruitCount);
-        float duration = Mathf.Max(sessionConfig.FruitHarvestDuration * fruitCount, 0.0001f);
-        float normalized = Mathf.Clamp01(_harvestTimer / duration);
-
-        int targetFruits = Mathf.FloorToInt(normalized * _currentTree.FruitCount);
-        targetFruits = Mathf.Min(targetFruits, _currentTree.FruitCount);
-
-        for (int i = _fruitsCollected; i < targetFruits; i++)
+        if (sunController != null && sunController.SessionComplete)
         {
-            float bushReward = _currentTree.Evaluate(sessionConfig.RewardFunction);
-            float noise = GaussianNoise() * sessionConfig.RewardStd;
-            float fruitReward = Mathf.Max(0f,
-                Mathf.RoundToInt(bushReward + noise));
+            if (_harvesting)
+            {
+                EndBout();
+            }
 
-            _currentTree.HideFruit(i);
-
-            Vector3 worldPos = _currentTree.GetFruitWorldPosition(i);
-            OnFruitCollected?.Invoke(fruitReward, worldPos);
-
-            _totalHarvestReward += fruitReward;
-            _fruitsCollected++;
+            ClearHighlights();
+            FocusTreeId = -1;
+            SetHint(HarvestHint.None);
+            return;
         }
 
-        if (_harvestTimer >= duration)
+        if (_trees == null)
         {
-            CompleteHarvest();
+            // Trees are generated in TreeGenerator.Start, so they exist by the first Update.
+            _trees = FindObjectsByType<Tree>(FindObjectsSortMode.None);
+            _levels = new float[_trees.Length];
+            _inRange = new bool[_trees.Length];
+        }
+
+        _highlightsCleared = false;
+
+        Vector3 pos = playerController.transform.position;
+        float yaw = cameraController.Yaw;
+
+        // Pass 1: glow level for every tree; pick the best harvestable one.
+        int focusIndex = -1;
+        float focusBearing = float.MaxValue;
+        float focusEdge = float.MaxValue;
+        int targetIndex = -1;
+
+        for (int i = 0; i < _trees.Length; i++)
+        {
+            Tree tree = _trees[i];
+            _levels[i] = 0f;
+            _inRange[i] = false;
+            if (tree == null || tree.isHarvested)
+            {
+                continue;
+            }
+
+            if (tree == _target)
+            {
+                targetIndex = i;
+            }
+
+            Measure(tree, pos, yaw, out float edge, out float bearing, out _);
+            float harvestGap = sessionConfig.HarvestRangeGap(tree.CanopyRadius);
+            float highlightGap = Mathf.Max(sessionConfig.HighlightRangeGap, harvestGap + 0.01f);
+            float fullAngle = sessionConfig.HighlightFullAngle;
+            float fadeAngle = Mathf.Max(sessionConfig.HighlightFadeAngle, fullAngle + 0.01f);
+
+            float distLevel = Smooth(Mathf.InverseLerp(highlightGap, harvestGap, edge));
+            float angleLevel = 1f - Smooth(Mathf.InverseLerp(fullAngle, fadeAngle, bearing));
+            _levels[i] = distLevel * angleLevel;
+
+            if (edge <= harvestGap && bearing <= sessionConfig.HarvestMaxAngle)
+            {
+                _inRange[i] = true;
+                if (bearing < focusBearing || (Mathf.Approximately(bearing, focusBearing) && edge < focusEdge))
+                {
+                    focusIndex = i;
+                    focusBearing = bearing;
+                    focusEdge = edge;
+                }
+            }
+        }
+
+        bool pressed = playerController.ConsumeHarvestPress();
+
+        if (!_harvesting)
+        {
+            if (pressed && playerController.HarvestHeld && focusIndex >= 0)
+            {
+                StartBout(_trees[focusIndex]);
+                targetIndex = focusIndex;
+            }
+        }
+        else if (!playerController.HarvestHeld)
+        {
+            EndBout();
+            targetIndex = -1;
+        }
+
+        if (_harvesting)
+        {
+            AdvanceHarvest(pos, yaw);
+            if (!_harvesting)
+            {
+                targetIndex = -1;
+            }
+        }
+
+        // Pass 2: apply highlights. Only the bush you would harvest (or are harvesting) is selected.
+        FocusTreeId = _harvesting ? _target.treeId : (focusIndex >= 0 ? _trees[focusIndex].treeId : -1);
+        for (int i = 0; i < _trees.Length; i++)
+        {
+            Tree tree = _trees[i];
+            if (tree == null)
+            {
+                continue;
+            }
+
+            bool pulsing = _harvesting ? (i == targetIndex && _targetInCone) : (i == focusIndex);
+            tree.SetHighlight(pulsing ? 1f : _levels[i], pulsing);
+
+            // Progress ring on every bush in harvest range (and the one being harvested): remaining fraction,
+            // counting the fruit in progress so it ticks down smoothly.
+            bool showRing = !tree.isHarvested && (_inRange[i] || i == targetIndex);
+            float fill = 0f;
+            if (showRing)
+            {
+                float partial = i == targetIndex ? _fruitTimer : tree.PartialProgress;
+                float perFruit = Mathf.Max(sessionConfig.FruitHarvestDuration, 0.0001f);
+                fill = (tree.FruitsRemaining - Mathf.Clamp01(partial / perFruit)) / Mathf.Max(1, tree.FruitCount);
+            }
+
+            tree.SetRing(showRing, fill, cameraController.PlayerCamera != null ? cameraController.PlayerCamera.transform : null);
+        }
+
+        if (_harvesting)
+        {
+            SetHint(_targetInCone ? HarvestHint.None : HarvestHint.Paused);
+        }
+        else
+        {
+            SetHint(focusIndex >= 0 ? HarvestHint.Available : HarvestHint.None);
         }
     }
 
-    private void CompleteHarvest()
+    private void StartBout(Tree tree)
     {
-        if (_currentTree != null)
+        _harvesting = true;
+        _target = tree;
+        _fruitTimer = tree.PartialProgress;
+        _targetInCone = true;
+        _bout = new HarvestBout
         {
-            _currentTree.isHarvested = true;
-            _currentTree.SetHarvested(true);
+            tree = tree,
+            timeStart = SessionTimeRemaining()
+        };
+        playerController.SetMovementLocked(true);
+    }
 
-            _runningTotal += _totalHarvestReward;
+    private void AdvanceHarvest(Vector3 pos, float yaw)
+    {
+        Measure(_target, pos, yaw, out float edge, out float bearing, out float signedBearing);
+        float harvestGap = sessionConfig.HarvestRangeGap(_target.CanopyRadius);
+        _targetInCone = edge <= harvestGap && bearing <= sessionConfig.HarvestMaxAngle;
+        _targetSignedOffAngle = signedBearing;
 
-            Vector3 worldPos = _currentTree.GetWorldCenter();
-            OnHarvestSummary?.Invoke(_totalHarvestReward, worldPos);
-            OnHarvestComplete?.Invoke(_runningTotal);
+        if (!_targetInCone)
+        {
+            return;
         }
 
-        if (playerController != null)
+        _fruitTimer += Time.deltaTime;
+        float perFruit = Mathf.Max(sessionConfig.FruitHarvestDuration, 0.0001f);
+        while (_fruitTimer >= perFruit && _harvesting)
         {
-            playerController.SetFrozen(false);
-            playerController.ClearTarget();
+            _fruitTimer -= perFruit;
+            CollectNextFruit();
+        }
+    }
+
+    private void CollectNextFruit()
+    {
+        Vector3 cameraPos = cameraController.PlayerCamera != null
+            ? cameraController.PlayerCamera.transform.position
+            : playerController.transform.position;
+        int index = _target.NextFruitIndexTowards(cameraPos);
+        if (index < 0)
+        {
+            ExhaustTarget();
+            return;
         }
 
-        _isHarvesting = false;
-        _currentTree = null;
+        float bushReward = _target.Evaluate(sessionConfig.RewardFunction);
+        float noise = GaussianNoise() * sessionConfig.RewardStd;
+        float fruitReward = Mathf.Max(0f, Mathf.RoundToInt(bushReward + noise));
+
+        Vector3 worldPos = _target.GetFruitWorldPosition(index);
+        _target.CollectFruit(index, sessionConfig.FruitPopDuration);
+
+        _runningTotal += fruitReward;
+        _bout.fruitRewards.Add(fruitReward);
+        _bout.boutTotal += fruitReward;
+
+        OnFruitCollected?.Invoke(fruitReward, worldPos);
+        OnScoreChanged?.Invoke(_runningTotal);
+
+        if (_target.FruitsRemaining == 0)
+        {
+            ExhaustTarget();
+        }
+    }
+
+    // All fruit gone: the bush shrinks away and the bout ends.
+    private void ExhaustTarget()
+    {
+        _target.isHarvested = true;
+        _target.PartialProgress = 0f;
+        _target.Vanish(sessionConfig.TreeShrinkDuration);
+        EndBout();
+    }
+
+    private void EndBout()
+    {
+        if (!_harvesting)
+        {
+            return;
+        }
+
+        _harvesting = false;
+        playerController.SetMovementLocked(false);
+
+        if (_target != null && !_target.isHarvested)
+        {
+            _target.PartialProgress = _fruitTimer;
+        }
+
+        _bout.timeEnd = SessionTimeRemaining();
+        _bout.runningTotal = _runningTotal;
+        _bout.fruitsRemaining = _target != null ? _target.FruitsRemaining : 0;
+        _bout.exhausted = _target != null && _target.isHarvested;
+        HarvestBout finished = _bout;
+
+        _bout = null;
+        _target = null;
+        _fruitTimer = 0f;
+        OnHarvestBoutEnded?.Invoke(finished);
+    }
+
+    // Signed yaw offset (degrees, + = bush to the right of the view) of the bush being harvested, with its
+    // angular radius removed from the magnitude. False when not harvesting. Used for look resistance.
+    public bool TryGetHarvestOffAngle(out float signedOffAngle)
+    {
+        signedOffAngle = _targetSignedOffAngle;
+        return _harvesting && _target != null;
+    }
+
+    private static void Measure(Tree tree, Vector3 playerPos, float yawDegrees, out float edgeDistance, out float bearing, out float signedBearing)
+    {
+        Vector3 center = tree.GetWorldCenter();
+        float dx = center.x - playerPos.x;
+        float dz = center.z - playerPos.z;
+        float dist = Mathf.Sqrt(dx * dx + dz * dz);
+        float radius = tree.CanopyRadius;
+        edgeDistance = dist - radius;
+
+        float toTree = Mathf.Atan2(dx, dz) * Mathf.Rad2Deg;
+        float delta = Mathf.DeltaAngle(yawDegrees, toTree);
+        float angularRadius = dist > 0.0001f ? Mathf.Asin(Mathf.Clamp01(radius / dist)) * Mathf.Rad2Deg : 90f;
+        bearing = Mathf.Max(0f, Mathf.Abs(delta) - angularRadius);
+        signedBearing = Mathf.Sign(delta) * bearing;
+    }
+
+    private static float Smooth(float t)
+    {
+        t = Mathf.Clamp01(t);
+        return t * t * (3f - 2f * t);
+    }
+
+    private float SessionTimeRemaining()
+    {
+        return sunController != null ? sunController.SessionTimeRemaining : Time.time;
+    }
+
+    private void SetHint(HarvestHint hint)
+    {
+        if (!sessionConfig.ShowHarvestHint)
+        {
+            hint = HarvestHint.None;
+        }
+
+        if (hint == _hint)
+        {
+            return;
+        }
+
+        _hint = hint;
+        OnHintChanged?.Invoke(hint);
+    }
+
+    private void ClearHighlights()
+    {
+        if (_highlightsCleared || _trees == null)
+        {
+            return;
+        }
+
+        _highlightsCleared = true;
+        for (int i = 0; i < _trees.Length; i++)
+        {
+            if (_trees[i] != null)
+            {
+                _trees[i].SetHighlight(0f, false);
+            }
+        }
     }
 
     private void HandleSessionEnd()
     {
-        if (_isHarvesting)
-        {
-            CompleteHarvest();
-        }
-
-        _isHarvesting = false;
-        _currentTree = null;
+        EndBout();
     }
 
     private float GaussianNoise()
@@ -134,4 +387,3 @@ public class HarvestManager : MonoBehaviour
         return Mathf.Sqrt(-2f * Mathf.Log(u1)) * Mathf.Sin(2f * Mathf.PI * u2);
     }
 }
-

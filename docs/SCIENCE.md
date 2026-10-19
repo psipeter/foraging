@@ -147,11 +147,31 @@ an oversight.
 
 - **Session:** fixed duration (S1–S3: 60 s), the second part of a day cycle:
   the session starts `dayStartFraction` (S1–S3: 0.3) of the way from sunrise to
-  sunset and ends at sunset. Movement costs time (fixed player speed); harvesting a tree costs
-  `fruitHarvestDuration × fruitCount` seconds (S1–S3: 0.5 s × 10 = 5 s),
-  during which the player is frozen. Goal: maximize total reward.
-  A tree can be harvested when the player is within `gap(R) = 0.8 + 0.3·R` of its
-  canopy edge (R = canopy radius, 0.5–3), also where its highlight appears.
+  sunset and ends at sunset. Movement costs time (fixed player speed); harvesting costs
+  `fruitHarvestDuration` seconds per fruit (S1–S3: 0.5 s; 10 fruits = 5 s per bush).
+  Goal: maximize total reward.
+  **Harvesting (first person):** bushes glow gradually as you approach them, in
+  proportion to horizontal distance from the canopy edge (glow begins 20 units out,
+  full at 7) and to how directly they are in front of you (full within 25° of straight
+  ahead, none past 45°; yaw only, after subtracting the bush's angular radius). The glow
+  never reveals reward. A bush becomes harvestable within 7 units of its
+  canopy edge and within 35° of straight ahead; the best such bush (closest to
+  center) is shown as selected, and a "Hold SPACE to harvest" hint appears.
+  A clock-style progress ring floats above every bush in harvest range (constant
+  apparent size, camera-facing): a faint full track with the bright arc erased clockwise
+  from 12 o'clock as fruits are collected, so you can see how much is left even if
+  the fruits are on the far side, or on returning to a bush; progress through the fruit
+  in hand is kept on the bush. An exhausted bush shrinks away and disappears (it no longer
+  blocks movement, and is dropped from `visible_tree_ids`).
+  Looks (`highlightStyle`): *RimLight* — a soft glow on the bush's edge that grows
+  as you approach, plus a thin crisp edge line on the selected bush, in a slightly different rim color once
+  selected; or
+  *EmissionWash* — whole-canopy glow, pulsing when selected. Holding Space collects one fruit every `fruitHarvestDuration` (the fruit
+  nearest the camera first); walking is locked while Space is held, looking stays free.
+  Looking more than 35° away pauses the harvest (hint: look back); releasing Space
+  ends the bout, and a fresh press starts the next one. +X popups appear at a fixed
+  screen slot, and the score updates per fruit. Optional `harvestLookResistance`
+  (default 0, off) slows mouse yaw to zero as you turn away from the bush.
 - **World:** 147 trees (S1–S3) placed by seeded random placement with a
   minimum spacing, on Perlin-noise terrain, in a valley enclosed by an
   unclimbable rocky/snowy mountain band built into the terrain (no trees on it).

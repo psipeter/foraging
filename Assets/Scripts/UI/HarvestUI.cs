@@ -4,84 +4,117 @@ using TMPro;
 
 public class HarvestUI : MonoBehaviour
 {
-    [SerializeField] private Camera mainCamera;
     [SerializeField] private Canvas canvas;
     [SerializeField] private RectTransform floatingTextPrefab;
     [SerializeField] private TextMeshProUGUI totalScoreText;
+    [SerializeField] private TextMeshProUGUI hintText;
 
     [SerializeField] private float fruitTextDuration = 0.7f;
     [SerializeField] private float fruitTextRise = 60f;
-    [SerializeField] private float fruitTextSpread = 40f;
+    [Tooltip("Where +X popups appear, in canvas pixels from screen center. Fixed so a reward is always readable regardless of where the bush is on screen.")]
+    [SerializeField] private Vector2 popupOffset = new Vector2(0f, 90f);
+    [SerializeField] private float scorePunchScale = 1.25f;
+    [SerializeField] private float scorePunchDuration = 0.2f;
+
+    private Coroutine _punch;
 
     private void OnEnable()
     {
         HarvestManager.OnFruitCollected += HandleFruitCollected;
-        HarvestManager.OnHarvestSummary += HandleHarvestSummary;
-        HarvestManager.OnHarvestComplete += HandleHarvestComplete;
+        HarvestManager.OnScoreChanged += HandleScoreChanged;
+        HarvestManager.OnHintChanged += HandleHintChanged;
     }
 
     private void OnDisable()
     {
         HarvestManager.OnFruitCollected -= HandleFruitCollected;
-        HarvestManager.OnHarvestSummary -= HandleHarvestSummary;
-        HarvestManager.OnHarvestComplete -= HandleHarvestComplete;
+        HarvestManager.OnScoreChanged -= HandleScoreChanged;
+        HarvestManager.OnHintChanged -= HandleHintChanged;
+    }
+
+    private void Start()
+    {
+        if (hintText != null)
+        {
+            hintText.gameObject.SetActive(false);
+        }
     }
 
     private void HandleFruitCollected(float amount, Vector3 worldPos)
     {
-        SpawnFloatingText($"+{amount:F0}", worldPos, fruitTextDuration, fruitTextRise, 1f, true);
-    }
-
-    private void HandleHarvestSummary(float totalAmount, Vector3 worldPos)
-    {
-        SpawnFloatingText($"Total: {totalAmount:F0}", worldPos + Vector3.up * 1.5f, 2.5f, 100f, 1.2f, false);
-    }
-
-    private void HandleHarvestComplete(float runningTotal)
-    {
-        if (totalScoreText != null)
-        {
-            totalScoreText.text = $"Score: {runningTotal:F0}";
-        }
-    }
-
-    private void SpawnFloatingText(string text, Vector3 worldPos, float duration, float risePixels, float scale, bool applySpread)
-    {
-        if (mainCamera == null || canvas == null || floatingTextPrefab == null)
+        if (canvas == null || floatingTextPrefab == null)
         {
             return;
-        }
-
-        Vector3 screenPos = mainCamera.WorldToScreenPoint(worldPos);
-        if (screenPos.z < 0f)
-        {
-            return;
-        }
-
-        if (applySpread)
-        {
-            screenPos.x += Random.Range(-fruitTextSpread, fruitTextSpread);
         }
 
         RectTransform instance = Instantiate(floatingTextPrefab, canvas.transform);
-        instance.localScale = Vector3.one * scale;
-
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                canvas.transform as RectTransform,
-                screenPos,
-                canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : mainCamera,
-                out Vector2 localPos))
-        {
-            instance.anchoredPosition = localPos;
-        }
+        instance.anchorMin = instance.anchorMax = new Vector2(0.5f, 0.5f);
+        instance.pivot = new Vector2(0.5f, 0.5f);
+        instance.localScale = Vector3.one;
+        instance.anchoredPosition = popupOffset;
 
         TextMeshProUGUI tmp = instance.GetComponentInChildren<TextMeshProUGUI>();
         if (tmp != null)
         {
-            tmp.text = text;
+            tmp.text = $"+{amount:F0}";
         }
 
-        StartCoroutine(FadeAndRise(instance, duration, risePixels));
+        StartCoroutine(FadeAndRise(instance, fruitTextDuration, fruitTextRise));
+    }
+
+    private void HandleScoreChanged(float runningTotal)
+    {
+        if (totalScoreText == null)
+        {
+            return;
+        }
+
+        totalScoreText.text = $"Score: {runningTotal:F0}";
+        if (_punch != null)
+        {
+            StopCoroutine(_punch);
+        }
+
+        _punch = StartCoroutine(PunchScore());
+    }
+
+    private void HandleHintChanged(HarvestHint hint)
+    {
+        if (hintText == null)
+        {
+            return;
+        }
+
+        switch (hint)
+        {
+            case HarvestHint.Available:
+                hintText.text = "Hold SPACE to harvest";
+                hintText.gameObject.SetActive(true);
+                break;
+            case HarvestHint.Paused:
+                hintText.text = "Look toward the bush to keep harvesting";
+                hintText.gameObject.SetActive(true);
+                break;
+            default:
+                hintText.gameObject.SetActive(false);
+                break;
+        }
+    }
+
+    private IEnumerator PunchScore()
+    {
+        RectTransform rect = totalScoreText.rectTransform;
+        float elapsed = 0f;
+        while (elapsed < scorePunchDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / scorePunchDuration);
+            rect.localScale = Vector3.one * Mathf.Lerp(scorePunchScale, 1f, t);
+            yield return null;
+        }
+
+        rect.localScale = Vector3.one;
+        _punch = null;
     }
 
     private IEnumerator FadeAndRise(RectTransform rect, float duration, float risePixels)
@@ -139,4 +172,3 @@ public class HarvestUI : MonoBehaviour
         Destroy(rect.gameObject);
     }
 }
-

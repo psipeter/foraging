@@ -30,13 +30,13 @@ public class SessionTimerUI : MonoBehaviour
     private void OnEnable()
     {
         SunController.OnSessionEnd += HandleSessionEnd;
-        HarvestManager.OnHarvestComplete += HandleHarvestComplete;
+        HarvestManager.OnScoreChanged += HandleHarvestComplete;
     }
 
     private void OnDisable()
     {
         SunController.OnSessionEnd -= HandleSessionEnd;
-        HarvestManager.OnHarvestComplete -= HandleHarvestComplete;
+        HarvestManager.OnScoreChanged -= HandleHarvestComplete;
     }
 
     private void Update()

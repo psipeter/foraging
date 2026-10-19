@@ -7,6 +7,7 @@ public class CameraController : MonoBehaviour
     public SessionConfig sessionConfig;
     [SerializeField] private Camera playerCamera;
     [SerializeField] private PlayerController playerController;
+    [SerializeField] private HarvestManager harvestManager;
 
     private ILookInput _lookInput;
     private float _yaw;
@@ -14,6 +15,7 @@ public class CameraController : MonoBehaviour
 
     // Heading (degrees about Y) that forward/back movement is relative to.
     public float Yaw => _yaw;
+    public Camera PlayerCamera => playerCamera;
 
     private void Awake()
     {
@@ -50,16 +52,38 @@ public class CameraController : MonoBehaviour
         }
 
         // Mouse deltas are displacements, not rates: no Time.deltaTime. Skip while paused (instructions
-        // screen) or frozen (harvesting, session end) so the pending delta is discarded, not applied late.
+        // screen) or frozen (session end only; harvesting locks walking, not looking) so the pending delta is discarded, not applied late.
         if (Time.timeScale <= 0f || (playerController != null && playerController.IsFrozen))
         {
             return;
         }
 
         Vector2 delta = _lookInput.ReadLookDelta() * (sessionConfig.LookDegreesPerCount * sessionConfig.LookSensitivity);
-        _yaw += delta.x;
+        _yaw += ApplyHarvestResistance(delta.x);
         _pitch = Mathf.Clamp(_pitch - delta.y, -sessionConfig.LookPitchLimit, sessionConfig.LookPitchLimit);
         ApplyRotation();
+    }
+
+    // Optional (config, off by default): while harvesting, yaw slows toward zero as the player turns away from
+    // the bush; turning back toward it is unaffected. Pitch is never touched.
+    private float ApplyHarvestResistance(float yawDelta)
+    {
+        float resistance = sessionConfig.HarvestLookResistance;
+        if (resistance <= 0f || harvestManager == null || !harvestManager.TryGetHarvestOffAngle(out float offAngle))
+        {
+            return yawDelta;
+        }
+
+        if (yawDelta * offAngle >= 0f)
+        {
+            return yawDelta;
+        }
+
+        float full = sessionConfig.HighlightFullAngle;
+        float fade = Mathf.Max(sessionConfig.HighlightFadeAngle, full + 0.01f);
+        float t = Mathf.Clamp01(Mathf.InverseLerp(full, fade, Mathf.Abs(offAngle)));
+        t = t * t * (3f - 2f * t);
+        return yawDelta * (1f - resistance * t);
     }
 
     private void ApplyRotation()
