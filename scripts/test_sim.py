@@ -3,7 +3,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from agents import Agent
+import itertools
+
+from agents import REGISTRY, Agent, GreedyAgent, NearestAgent, PlannerAgent
 from sim import run_episode, run_n
 from world import World, make_world
 
@@ -87,3 +89,94 @@ def test_real_world_runs_and_is_paired_reproducible():
     assert np.array_equal(a.totals, b.totals) and a.mean > 0
     r = a.results[0]
     assert r.walk_time + r.harvest_time + r.idle_time == pytest.approx(60.0)
+
+
+def test_nearest_agent_visits_by_walking_time_and_exhausts():
+    # From the start: bush 0 center 30 away (walk 22), bush 1 center 20 away (walk 12). Then bush 0 is the only one left.
+    w = tiny_world([[30, 0], [0, 20]], [[1, 1], [2, 2]])
+    r = run_episode(NearestAgent(), w)
+    assert [t[0] for t in r.trace] == [1, 0] and r.total == 6 and r.n_fruits == 4
+    assert REGISTRY["nearest"] is NearestAgent
+
+
+def test_nearest_agent_stops_when_everything_is_gone():
+    w = tiny_world([[5, 0]], [[1, 1]])
+    r = run_episode(NearestAgent(), w)
+    assert r.n_visits == 1 and r.idle_time == pytest.approx(59.0)
+
+
+def _greedy_world():
+    # start at origin; speed 5, reach 8. walk times: A (center 20) 2.4 s, B (center 40) 6.4 s, C (center 100) 18.4 s
+    return tiny_world([[20, 0], [0, 40], [-100, 0]], [[1, 1], [3, 3], [9, 9]])
+
+
+def test_greedy_value_picks_best_within_time_and_falls_back():
+    w = _greedy_world()
+    r = run_episode(GreedyAgent(max_walk_time=10, score="value"), w)
+    assert r.trace[0][0] == 1                       # B beats nearer A; C is out of range
+    r = run_episode(GreedyAgent(max_walk_time=1, score="value"), _greedy_world())
+    assert r.trace[0][0] == 0                       # nothing within 1 s: falls back to the quickest (A)
+    r = run_episode(GreedyAgent(max_walk_time=30, score="value"), _greedy_world())
+    assert [t[0] for t in r.trace][0] == 2          # everything in range: highest value
+
+
+def test_greedy_rate_trades_value_against_time():
+    # Two bushes, 4 fruits each: far has value 2.0 / near has value 1.5. Walking 30 units more costs 6 s vs 2 s of harvest.
+    w = tiny_world([[18, 0], [48, 0]], [[1, 2, 2, 1], [2, 2, 2, 2]])
+    w.value = np.array([1.5, 2.0])
+    assert run_episode(GreedyAgent(30, "value"), w).trace[0][0] == 1
+    w = tiny_world([[18, 0], [48, 0]], [[1, 2, 2, 1], [2, 2, 2, 2]])
+    w.value = np.array([1.5, 2.0])
+    assert run_episode(GreedyAgent(30, "rate"), w).trace[0][0] == 0
+
+
+def test_greedy_registry_and_stop():
+    assert isinstance(REGISTRY["greedy_value_10"](), GreedyAgent)
+    r = run_episode(GreedyAgent(10), tiny_world([[5, 0]], [[1, 1]]))
+    assert r.n_visits == 1
+
+
+def _noise_free_world(seed, n=7, duration=34.0):
+    """Random small world whose fruit rewards equal R_bush exactly, so engine totals == planner objective."""
+    rng = np.random.default_rng(seed)
+    pos = rng.uniform(-60, 60, (n, 2))
+    val = rng.integers(1, 10, n)
+    w = tiny_world(pos, np.repeat(val[:, None], 4, axis=1), duration=duration)
+    w.value = val.astype(float)
+    return w
+
+
+def _brute_force_best(w):
+    best = 0.0
+    for r in range(1, w.n + 1):
+        for perm in itertools.permutations(range(w.n), r):
+            best = max(best, run_episode(Fixed(perm), w).total)
+    return best
+
+
+def test_planner_exact_matches_brute_force():
+    for seed in range(4):
+        w = _noise_free_world(seed, n=6)
+        agent = PlannerAgent("exact")
+        total = run_episode(agent, w).total
+        assert agent.exact
+        assert total == pytest.approx(_brute_force_best(w))
+        assert agent.plan_value == pytest.approx(total)
+
+
+def test_planner_beam_is_close_and_never_beats_exact():
+    for seed in range(4):
+        w = _noise_free_world(seed, n=6)
+        exact = run_episode(PlannerAgent("exact"), w).total
+        beam = run_episode(PlannerAgent("beam", beam_width=50), w).total
+        assert beam <= exact + 1e-9 and beam >= 0.9 * exact
+
+
+def test_planner_not_worse_than_greedy_on_real_world():
+    from sim import get_worlds
+    w = get_worlds("S1", [0])[0]
+    plan = PlannerAgent("beam", beam_width=100)
+    run_episode(plan, w)
+    greedy_trace = run_episode(GreedyAgent(15, "rate"), w).trace
+    greedy_expected = sum(w.value[j] * n for j, n, _ in greedy_trace)   # expected reward of greedy's own route
+    assert plan.plan_value >= greedy_expected - 1e-9

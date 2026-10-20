@@ -171,7 +171,7 @@ an oversight.
   ends the bout, and a fresh press starts the next one. +X popups appear at a fixed
   screen slot, and the score updates per fruit. Optional `harvestLookResistance`
   (default 0, off) slows mouse yaw to zero as you turn away from the bush.
-- **World:** ~155 trees (S1–S3; the count follows from the valley area) placed on a
+- **World:** ~140–146 trees (S1–S3; the count follows from the valley area) placed on a
   jittered hexagonal lattice (`treeSpacing` 23, `placementJitter` 0.5; nearest-neighbour
   distance ≈ 18.6, CV ≈ 0.13, no pair closer than 11.5, so ≈ 3.7 s walk to the
   nearest bush at speed 5), on Perlin-noise terrain, in a valley enclosed by an
@@ -221,7 +221,7 @@ running score.
 
 ### Session configurations (current)
 
-All three: 60 s, ~155 trees, 10 fruit/tree, `rewardStd` 0.3, speed 5,
+All three: 60 s, ~140–146 trees (seed-dependent: 141 / 140 / 146), 10 fruit/tree, `rewardStd` 0.3, speed 5,
 first-person camera. Weights apply to (shape, color, moisture).
 
 | Session | Seed | Shape | Color | Moisture | Character |
@@ -256,8 +256,49 @@ sessions are real and how they map to participants.
 
 ## Findings and current thread
 
-**No analyses or results are recorded in this repo.** There is no analysis
-code and no results section yet.
+**No analyses of human data are recorded in this repo.** The only results are
+the simulated agent baselines below (code in `scripts/`).
+
+### Simulated agent baselines (preliminary)
+
+Reward per 60 s session for three reference agents with a known map, run on
+the same worlds (seeds 0–99, `python scripts/sim.py <S> --seeds 0-99 --agents
+nearest,greedy_rate_15,plan_beam --baseline nearest`). Mean ± standard
+deviation across seeds; "vs nearest" is the paired difference ± SE. Rewards
+include the fruit noise (`rewardStd` 0.3).
+
+| Agent | What it knows / does | S1 | S2 | S3 | Runtime per world |
+|---|---|---|---|---|---|
+| `nearest` | nothing about value; walks to the quickest-to-reach bush, harvests it empty, repeats | 95.4 ± 25.0 | 205.6 ± 29.8 | 167.2 ± 30.7 | < 1 ms |
+| `greedy_rate_15` | full map and true `R_bush`; goes to the bush with the best expected reward per second (walk + harvest) among those within 15 s of walking; no planning | 152.4 ± 12.8 (+57.0 ± 2.8) | 254.9 ± 19.8 (+49.3 ± 3.5) | 227.8 ± 16.3 (+60.6 ± 3.3) | < 1 ms |
+| `plan_beam` | full map and true `R_bush`; plans the whole route (beam search, width 300), whole-bush harvesting, no reward noise in the plan | 166.5 ± 9.1 (+71.1 ± 2.6) | 275.4 ± 13.3 (+69.8 ± 3.1) | 246.8 ± 13.2 (+79.5 ± 3.1) | ~0.9 s |
+
+Relative to `plan_beam`: greedy gets 91.5% / 92.6% / 92.3% (S1/S2/S3) and
+nearest gets 57% / 75% / 68%.
+
+Notes for reading these numbers:
+- **`plan_beam` is a near-optimal ceiling for expected reward, not the strict
+  optimum.** The exact branch-and-bound planner (`plan_exact`, 11–28 s per
+  world, 1.3–3.0M search nodes) proved optimality in 23 of 24 worlds tested
+  (12 seeds each of S1 and S2; the other hit its 3M-node cap). The beam planner
+  was within 0.05% (S1) and 0.13% (S2) of the exact planner's expected reward,
+  found the exact optimum in 19 of those 24 worlds, and never beat it. Neither
+  uses partial harvesting (leaving a bush early) or the realized fruit rewards,
+  so a clairvoyant agent could still do slightly better.
+- **Sessions have ~7 stops.** The best route visits 6–7 bushes (5 s to harvest
+  each, ~3.4 s average walk between neighbours), so the choice is which few
+  bushes to spend the session on, not a long tour.
+- **Greedy is sensitive to its scoring rule.** Value-only greedy (best
+  expected reward within a walking-time radius, ignoring harvest and travel
+  time) beat `nearest` at a 5–10 s radius but fell below it at 20–30 s;
+  rate scoring is insensitive to the radius from 10 s up (it is worse at 5 s).
+- **These are full-information agents.** None learns the reward function, so
+  they bound what a learner could earn but are not models of participants.
+- **Engine assumptions** (see `docs/DECISIONS.md`): straight-line walking to
+  the edge of harvest range, no regrowth, facing time and canopy collisions
+  ignored, decisions at fruit boundaries, per-fruit rewards pre-drawn from the
+  seed. Re-run the baselines after changing spacing, jitter, speed, session
+  length, fruit count or reward weights; all of these move them.
 
 The project is at the platform-building stage: hypotheses are unwritten, no
 pilot has been run, and no analyses exist. When analyses exist, reference
