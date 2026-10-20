@@ -187,6 +187,21 @@ an oversight.
   field of view, and mouse sensitivity are `SessionConfig` fields; the
   metadata JSON records the camera's FOV, pose, and clip planes. See DECISIONS.
 
+### Reward feedback (HUD and audio)
+
+Each harvested fruit gives: a "+X" popup at a fixed screen position (pale gold with a dark outline, pops in
+with an overshoot and wobble, rises and fades); the score counts up with a brief flash and punch; a short
+synthesized blip whose pitch rises with the reward; and a small burst of spheres in the fruit's own color. An
+exhausted bush plays a soft two-note chime. The timer sits in a matching plate; it has no bar and no end-of-session warning
+(deliberately kept plain).
+
+Reward-dependent salience is a **scientific parameter**, not decoration: the number is always shown, but popup
+size/brightness (`rewardSizeScaling`, `popupExtraScale`) and pitch (`pitchSemitoneRange`) can scale with the
+per-fruit reward, up to `rewardFeedbackMax`. This adds a second, graded cue next to the number; set the scaling
+to 0 (and the pitch range to 0) for identical feedback on every fruit. Feedback colors are pale and near-neutral
+so they do not read as part of the fruit hue axis. Defaults (full scaling, 7 semitones) are untuned starting
+values; record the values used when collecting data (they live in `SessionConfig`).
+
 ### Attributes and their visual channels
 
 Each tree has three attributes in [0, 1], each on its own visual channel:

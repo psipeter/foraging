@@ -44,7 +44,6 @@ MonoBehaviour:
   highlightFadeAngle: 45
   harvestMaxAngle: 35
   harvestLookResistance: 0
-  highlightStyle: 1
   rimColor: {r: 1, g: 0.96, b: 0.82, a: 1}
   rimSelectedColor: {r: 1, g: 0.9, b: 0.6, a: 1}
   rimApproachIntensity: 1.5
@@ -57,6 +56,19 @@ MonoBehaviour:
   spentTint: {r: 0.55, g: 0.5, b: 0.42, a: 1}
   fruitPopDuration: 0.15
   showHarvestHint: 1
+  rewardFeedbackMax: 6
+  rewardSizeScaling: 1
+  popupScale: 1.7
+  popupExtraScale: 0.9
+  popupColor: {r: 1, g: 0.95, b: 0.78, a: 1}
+  pitchSemitoneRange: 7
+  sfxVolume: 0.5
+  burstCount: 7
+  burstSpeed: 3.5
+  burstDuration: 0.35
+  burstSize: 0.12
+  timerWarningSeconds: 10
+  timerWarningColor: {r: 1, g: 0.82, b: 0.45, a: 1}
   treeSpacing: 23
   placementJitter: 0.5
   startClearingRadius: 31

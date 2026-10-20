@@ -72,9 +72,11 @@ public class PlayerController : MonoBehaviour
         }
 
         Vector3 currentPos = playerRigidbody.position;
-        // W/S move along the camera's heading; A/D are ignored.
+        // W/S move along the camera's heading at full speed; A/D are ignored. The WASD composite is normalized,
+        // so W+A would read as y = 0.71; use only its sign so holding A/D never slows the walk.
+        float forward = Mathf.Abs(moveInput.y) > 0.01f ? Mathf.Sign(moveInput.y) : 0f;
         float yaw = cameraController != null ? cameraController.Yaw : 0f;
-        Vector3 desiredVelocity = Quaternion.Euler(0f, yaw, 0f) * new Vector3(0f, 0f, moveInput.y) * moveSpeed;
+        Vector3 desiredVelocity = Quaternion.Euler(0f, yaw, 0f) * new Vector3(0f, 0f, forward) * moveSpeed;
 
         // Mountains are unclimbable: refuse movement into non-walkable terrain, sliding along it when
         // one axis is still free. (Height is a raycast snap, so physics would not stop the player.)

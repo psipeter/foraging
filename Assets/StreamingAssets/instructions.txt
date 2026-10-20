@@ -1,8 +1,9 @@
 <size=28><b>Welcome to the Foraging Task</b></size>
 
-Move the mouse to look around. Press W to walk forward and S to walk backward.
-Bushes glow as you approach them. When a bush pulses, hold Space to harvest it.
-You cannot walk while harvesting, and harvesting pauses if you look away from the bush.
-Collect as much reward as possible before sunset.
+Your goal is to collect as many points as you can before time runs out.
 
-<i>Press Space to begin.</i>
+Move the mouse to look around.
+Press W to walk forward and S to walk backward.
+Hold Space to harvest.
+
+<i>Press Enter to begin.</i>

@@ -27,6 +27,28 @@ public class SessionTimerUI : MonoBehaviour
         }
     }
 
+    [Header("Timer display")]
+    [SerializeField] private float timerFontSize = 32f;
+    [SerializeField] private Vector2 timerPosition = new Vector2(150f, -44f);
+    [SerializeField] private Vector2 timerPlateSize = new Vector2(230f, 60f);
+    [SerializeField] private Color plateColor = new Color(0f, 0f, 0f, 0.38f);
+
+    private void Start()
+    {
+        if (timerText == null)
+        {
+            return;
+        }
+
+        RectTransform rect = timerText.rectTransform;
+        rect.anchoredPosition = timerPosition;
+        rect.sizeDelta = timerPlateSize - new Vector2(20f, 10f);
+        timerText.fontSize = timerFontSize;
+        timerText.fontStyle = FontStyles.Bold;
+        timerText.alignment = TextAlignmentOptions.Center;
+        HudWidgets.CreatePlate(rect, timerPlateSize, plateColor, "TimerPlate");
+    }
+
     private void OnEnable()
     {
         SunController.OnSessionEnd += HandleSessionEnd;
@@ -52,9 +74,9 @@ public class SessionTimerUI : MonoBehaviour
 
             if (sessionEndPanel != null && sessionEndPanel.activeSelf)
             {
+                // Space is reserved for harvesting, so screens advance with Enter only.
                 if (Keyboard.current != null &&
-                    (Keyboard.current.spaceKey.wasPressedThisFrame ||
-                     Keyboard.current.enterKey.wasPressedThisFrame ||
+                    (Keyboard.current.enterKey.wasPressedThisFrame ||
                      Keyboard.current.numpadEnterKey.wasPressedThisFrame))
                 {
                     if (GameManager.IsLastSession)
@@ -127,8 +149,8 @@ public class SessionTimerUI : MonoBehaviour
         {
             nextSessionPromptText.gameObject.SetActive(true);
             nextSessionPromptText.text = isLast
-                ? "Press Space to exit"
-                : $"Press Space to continue to Session {GameManager.CurrentSessionIndex + 2}/{GameManager.TotalSessions}";
+                ? "Press Enter to exit"
+                : $"Press Enter to continue to Session {GameManager.CurrentSessionIndex + 2}/{GameManager.TotalSessions}";
         }
 
         if (finalScoreText != null)

@@ -7,11 +7,11 @@ public class InstructionsPanel : MonoBehaviour
 {
     private const string FallbackInstructions =
         "<size=28><b>Welcome to the Foraging Task</b></size>\n\n" +
-        "Move the mouse to look around. Press W to walk forward and S to walk backward.\n" +
-        "Bushes glow as you approach them. When a bush pulses, hold Space to harvest it.\n" +
-        "You cannot walk while harvesting, and harvesting pauses if you look away from the bush.\n" +
-        "Collect as much reward as possible before sunset.\n\n" +
-        "<i>Press Space to begin.</i>";
+        "Your goal is to collect as many points as you can before time runs out.\n\n" +
+        "Move the mouse to look around.\n" +
+        "Press W to walk forward and S to walk backward.\n" +
+        "Hold Space to harvest.\n\n" +
+        "<i>Press Enter to begin.</i>";
 
     [SerializeField] private GameObject panel;
     [SerializeField] private TextMeshProUGUI bodyText;
@@ -77,8 +77,8 @@ public class InstructionsPanel : MonoBehaviour
             return;
         }
 
-        if (Keyboard.current.spaceKey.wasPressedThisFrame ||
-            Keyboard.current.enterKey.wasPressedThisFrame ||
+        // Space is reserved for harvesting, so screens advance with Enter only.
+        if (Keyboard.current.enterKey.wasPressedThisFrame ||
             Keyboard.current.numpadEnterKey.wasPressedThisFrame)
         {
             panel.SetActive(false);

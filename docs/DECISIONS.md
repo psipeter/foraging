@@ -539,3 +539,20 @@ worlds was also removed (write-only terrain normal on `Tree`, `SampleNormal`/`Sa
 **Kept deliberately:** built-in Unity packages/modules (removal risks breakage; compile-time gains are small), the
 `Mobile_*` pipeline assets (still referenced by `QualitySettings`), and `VertexColorUnlit.shader` (unreferenced but
 still in Always Included Shaders). `S1`-`S3.asset` still contain a stale `highlightStyle` key until Unity next rewrites them.
+
+## Reward feedback: gamified popups, score/timer plates, synthesized audio
+
+**Decision:** harvesting gets stronger feedback while the numeric reward stays the primary signal. Popups (pop-in with
+overshoot, outline, pale gold), count-up score with flash, plates behind score/timer, a per-fruit particle burst, and a synthesized pick blip with pitch following reward plus an exhaustion chime.
+All tunables are `SessionConfig` fields under "Feedback (HUD and audio)".
+
+**Why/constraints:** feedback must not confound the attribute channels. Colors are pale/neutral (no red/green, nothing in
+the blue-to-orange fruit hue family); the burst reuses the fruit's own material, so it adds no new hue. Size and pitch
+scaling with reward is optional (`rewardSizeScaling`, `pitchSemitoneRange`): it adds a graded cue to the number and may speed
+learning, so it is a parameter to choose per study, not a fixed style.
+
+**Details:** HUD plates and the timer bar are built at runtime (`HudWidgets`) so the scene needs no authored objects. Sounds are
+synthesized at startup (`FeedbackAudio`, no audio assets); add cues by extending its `Cue` enum. The player's own clock-driven
+animations use scaled time, the score count-up uses unscaled time. Per-fruit sound is triggered by `HarvestManager.OnFruitCollected`,
+the chime by the new `OnBushExhausted` event. Skipped on purpose: a timer bar and low-time warning color/pulse, in-world camera/FOV kicks, bout-total banners,
+streaks/combos.

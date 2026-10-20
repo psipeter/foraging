@@ -298,6 +298,8 @@ MonoBehaviour:
   cameraController: {fileID: 581266119}
   dataLogger: {fileID: 718741463}
   sessionTimerUI: {fileID: 1153043574}
+  harvestUI: {fileID: 1498921805}
+  feedbackAudio: {fileID: 440847461}
 --- !u!4 &205307911
 Transform:
   m_ObjectHideFlags: 0
@@ -822,6 +824,51 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &440847459
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 440847460}
+  - component: {fileID: 440847461}
+  m_Layer: 0
+  m_Name: FeedbackAudio
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &440847460
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 440847459}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &440847461
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 440847459}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cdc42a64ebb919603880c9917f52d8c6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FeedbackAudio
+  sessionConfig: {fileID: 0}
 --- !u!1 &528505459
 GameObject:
   m_ObjectHideFlags: 0
@@ -1271,7 +1318,6 @@ MonoBehaviour:
   playerController: {fileID: 581266112}
   harvestManager: {fileID: 528505460}
   mainCamera: {fileID: 330585545}
-  terrainManager: {fileID: 1847944418}
   movementSampleInterval: 0.1
   maxVisibilityDistance: 80
   terrainOcclusionMask:
@@ -1729,6 +1775,11 @@ MonoBehaviour:
   finalScoreText: {fileID: 301916361}
   sessionCompleteText: {fileID: 544481332}
   nextSessionPromptText: {fileID: 1515080717}
+  timerFontSize: 32
+  timerPosition: {x: 150, y: -52}
+  timerPlateSize: {x: 230, y: 74}
+  timerBarSize: {x: 190, y: 6}
+  plateColor: {r: 0, g: 0, b: 0, a: 0.38}
 --- !u!4 &1153043575
 Transform:
   m_ObjectHideFlags: 0
@@ -1853,15 +1904,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 16f7222b16a0d1a9bbcff2693d4afe5e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HarvestUI
+  sessionConfig: {fileID: 0}
   canvas: {fileID: 1498921808}
   floatingTextPrefab: {fileID: 4158271494800982572, guid: 9cf2dec41a6b03063b16d15ab528b864, type: 3}
   totalScoreText: {fileID: 151448832}
   hintText: {fileID: 1682906087}
-  fruitTextDuration: 0.7
-  fruitTextRise: 60
+  fruitTextDuration: 0.8
+  fruitTextRise: 80
   popupOffset: {x: 0, y: 90}
   scorePunchScale: 1.25
   scorePunchDuration: 0.2
+  scoreFontSize: 36
+  scorePosition: {x: -150, y: -44}
+  scorePlateSize: {x: 250, y: 60}
+  plateColor: {r: 0, g: 0, b: 0, a: 0.38}
+  scoreCountUpSeconds: 0.2
+  scoreFlashSeconds: 0.4
 --- !u!114 &1498921806
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2006,7 +2064,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Press Space to continue
+  m_text: Press Enter to continue
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -2554,3 +2612,4 @@ SceneRoots:
   - {fileID: 1153043575}
   - {fileID: 718741464}
   - {fileID: 269841568}
+  - {fileID: 440847460}

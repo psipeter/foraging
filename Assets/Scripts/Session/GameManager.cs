@@ -14,6 +14,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] private CameraController cameraController;
     [SerializeField] private DataLogger dataLogger;
     [SerializeField] private SessionTimerUI sessionTimerUI;
+    [SerializeField] private HarvestUI harvestUI;
+    [SerializeField] private FeedbackAudio feedbackAudio;
 
     public static GameManager Instance { get; private set; }
 
@@ -107,6 +109,16 @@ public class GameManager : MonoBehaviour
         if (sessionTimerUI != null)
         {
             sessionTimerUI.sessionConfig = activeConfig;
+        }
+
+        if (harvestUI != null)
+        {
+            harvestUI.sessionConfig = activeConfig;
+        }
+
+        if (feedbackAudio != null)
+        {
+            feedbackAudio.sessionConfig = activeConfig;
         }
 
         FruitMaterialManager.SetSessionConfig(activeConfig);

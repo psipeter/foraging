@@ -138,7 +138,7 @@ ignored). Instead play a **standalone build on a private virtual display**:
    that appears in your own command line kills your shell).
 
 Facts learned: harvest starts within ~3.7 units of a tree's center (wide
-canopies block the player earlier); Space on the last session's end screen
+canopies block the player earlier); Enter on the last session's end screen
 quits the app.
 
 ---
@@ -163,7 +163,8 @@ Assets/
     Session/   SessionConfig (ScriptableObject — ALL parameters),
                GameManager, HarvestManager, SunController, QuitHandler,
                RewardFunction / RewardComponent / BasisFunctionType
-    UI/        HarvestUI, SessionTimerUI, InstructionsPanel
+    UI/        HarvestUI (+X popups, score), SessionTimerUI (timer, bar, end screen), InstructionsPanel,
+               FeedbackAudio (synthesized sound cues), HudWidgets (runtime plates/bars)
     Data/      DataLogger
   ScriptableObjects/SessionConfig/   S1, S2, S3 (the experiment's sessions)
   StreamingAssets/instructions.txt   instructions text (read at runtime)

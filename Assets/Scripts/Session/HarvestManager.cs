@@ -52,6 +52,7 @@ public class HarvestManager : MonoBehaviour
     public static event Action<float> OnScoreChanged;
     public static event Action<HarvestBout> OnHarvestBoutEnded;
     public static event Action<HarvestHint> OnHintChanged;
+    public static event Action OnBushExhausted;
 
     public bool IsHarvesting => _harvesting;
     public int FocusTreeId { get; private set; } = -1;
@@ -286,6 +287,7 @@ public class HarvestManager : MonoBehaviour
         _target.isHarvested = true;
         _target.PartialProgress = 0f;
         _target.MarkSpent();
+        OnBushExhausted?.Invoke();
         EndBout();
     }
 

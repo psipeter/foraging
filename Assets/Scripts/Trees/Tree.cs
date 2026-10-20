@@ -468,7 +468,73 @@ public class Tree : MonoBehaviour
         GameObject fruit = _fruits[index];
         if (fruit != null)
         {
+            SpawnBurst(fruit);
             StartCoroutine(PopFruit(fruit, popDuration));
+        }
+    }
+
+    // A few small spheres in the fruit's own (unlit) material fly outward and shrink away.
+    private void SpawnBurst(GameObject fruit)
+    {
+        int count = sessionConfig != null ? sessionConfig.BurstCount : 0;
+        MeshRenderer source = fruit.GetComponent<MeshRenderer>();
+        if (count <= 0 || source == null || _sphereMesh == null)
+        {
+            return;
+        }
+
+        float size = sessionConfig.BurstSize;
+        Vector3 origin = fruit.transform.position;
+        var pieces = new Transform[count];
+        var velocities = new Vector3[count];
+        for (int i = 0; i < count; i++)
+        {
+            var piece = new GameObject("FruitBurst");
+            piece.transform.position = origin;
+            piece.transform.localScale = Vector3.one * size;
+            piece.AddComponent<MeshFilter>().sharedMesh = _sphereMesh;
+            MeshRenderer r = piece.AddComponent<MeshRenderer>();
+            r.sharedMaterial = source.sharedMaterial;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            pieces[i] = piece.transform;
+            Vector3 dir = UnityEngine.Random.onUnitSphere;
+            dir.y = Mathf.Abs(dir.y) * 0.6f + 0.3f;
+            velocities[i] = dir.normalized * sessionConfig.BurstSpeed * UnityEngine.Random.Range(0.6f, 1.2f);
+        }
+
+        StartCoroutine(RunBurst(pieces, velocities, size, sessionConfig.BurstDuration));
+    }
+
+    private System.Collections.IEnumerator RunBurst(Transform[] pieces, Vector3[] velocities, float size, float duration)
+    {
+        float elapsed = 0f;
+        duration = Mathf.Max(duration, 0.0001f);
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                if (pieces[i] == null)
+                {
+                    continue;
+                }
+
+                velocities[i].y -= 6f * Time.deltaTime;
+                pieces[i].position += velocities[i] * Time.deltaTime;
+                pieces[i].localScale = Vector3.one * size * (1f - t * t);
+            }
+
+            yield return null;
+        }
+
+        for (int i = 0; i < pieces.Length; i++)
+        {
+            if (pieces[i] != null)
+            {
+                Destroy(pieces[i].gameObject);
+            }
         }
     }
 

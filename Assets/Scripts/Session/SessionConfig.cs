@@ -60,6 +60,28 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float fruitPopDuration = 0.15f;
     [SerializeField] private bool showHarvestHint = true;
 
+    [Header("Feedback (HUD and audio)")]
+    [Tooltip("Per-fruit reward at which popup size/brightness and sound pitch reach their maximum (about the top of the per-fruit reward range).")]
+    [SerializeField] private float rewardFeedbackMax = 6f;
+    [Tooltip("How strongly the +X popup's size and brightness follow the reward: 0 = every fruit gets an identical popup, 1 = full scaling. The number itself is always shown.")]
+    [SerializeField] [Range(0f, 1f)] private float rewardSizeScaling = 1f;
+    [Tooltip("+X popup size multiplier (relative to the prefab) at zero reward.")]
+    [SerializeField] private float popupScale = 1.7f;
+    [Tooltip("Extra popup size multiplier at rewardFeedbackMax (times rewardSizeScaling).")]
+    [SerializeField] private float popupExtraScale = 0.9f;
+    [Tooltip("Popup and score-flash color. Keep it pale and near-neutral: fruit hue runs blue to orange, and red/green are not used.")]
+    [SerializeField] private Color popupColor = new Color(1f, 0.95f, 0.78f);
+    [Tooltip("Pitch range of the fruit-pick sound, in semitones from zero reward to rewardFeedbackMax. 0 = the same pitch for every reward.")]
+    [SerializeField] private float pitchSemitoneRange = 7f;
+    [Tooltip("Master volume of feedback sounds (0-1).")]
+    [SerializeField] [Range(0f, 1f)] private float sfxVolume = 0.5f;
+    [Tooltip("Small spheres in the fruit's color that burst out when a fruit is picked. 0 disables.")]
+    [SerializeField] private int burstCount = 7;
+    [SerializeField] private float burstSpeed = 3.5f;
+    [SerializeField] private float burstDuration = 0.35f;
+    [Tooltip("Burst particle diameter (world units).")]
+    [SerializeField] private float burstSize = 0.12f;
+
     [Header("Trees")]
     [Tooltip("Bush placement: a hexagonal lattice with this nearest-neighbour distance (world units) sets bush density (about 2/(sqrt(3)*spacing^2) per square unit); the bush count follows from the valley area. Walk time between neighbouring bushes is roughly spacing / playerMoveSpeed.")]
     [SerializeField] private float treeSpacing = 23f;
@@ -121,6 +143,17 @@ public class SessionConfig : ScriptableObject
     public RewardFunction RewardFunction => rewardFunction;
     public float SessionDuration => sessionDuration;
     public int WorldSeed => worldSeed;
+    public float RewardFeedbackMax => rewardFeedbackMax;
+    public float RewardSizeScaling => rewardSizeScaling;
+    public float PopupScale => popupScale;
+    public float PopupExtraScale => popupExtraScale;
+    public Color PopupColor => popupColor;
+    public float PitchSemitoneRange => pitchSemitoneRange;
+    public float SfxVolume => sfxVolume;
+    public int BurstCount => burstCount;
+    public float BurstSpeed => burstSpeed;
+    public float BurstDuration => burstDuration;
+    public float BurstSize => burstSize;
     public float TreeSpacing => treeSpacing;
     public float PlacementJitter => placementJitter;
     public float StartClearingRadius => startClearingRadius;
