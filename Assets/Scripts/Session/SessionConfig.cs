@@ -95,6 +95,19 @@ public class SessionConfig : ScriptableObject
     [Tooltip("Burst particle diameter (world units).")]
     [SerializeField] private float burstSize = 0.12f;
 
+    [Header("Ambient Audio")]
+    [Tooltip("Volume (0-1) of footsteps while walking. 0 disables. Ambient audio is purely passive: it never depends on bush attributes, rewards, terrain or time of day.")]
+    [SerializeField] [Range(0f, 1f)] private float footstepVolume = 0.06f;
+    [Tooltip("Distance walked (world units) between footsteps. At the default speed 7.5 this is about 2 steps per second.")]
+    [SerializeField] private float footstepStride = 3.6f;
+    [Tooltip("Volume (0-1) of the quiet constant background bed (cicadas). 0 disables.")]
+    [SerializeField] [Range(0f, 1f)] private float bedVolume = 0.0165f;
+    [Tooltip("Volume (0-1) of occasional birdsong. 0 disables.")]
+    [SerializeField] [Range(0f, 1f)] private float birdVolume = 0.03f;
+    [Tooltip("Shortest and longest gap (seconds) between bird calls; each gap is drawn at random.")]
+    [SerializeField] private float birdIntervalMin = 5f;
+    [SerializeField] private float birdIntervalMax = 14f;
+
     [Header("Trees")]
     [Tooltip("Bush placement: a hexagonal lattice with this nearest-neighbour distance (world units) sets bush density (about 2/(sqrt(3)*spacing^2) per square unit); the bush count follows from the valley area. Walk time between neighbouring bushes is roughly spacing / playerMoveSpeed.")]
     [SerializeField] private float treeSpacing = 23f;
@@ -174,6 +187,12 @@ public class SessionConfig : ScriptableObject
     public Color PopupColor => popupColor;
     public float PitchSemitoneRange => pitchSemitoneRange;
     public float SfxVolume => sfxVolume;
+    public float FootstepVolume => footstepVolume;
+    public float FootstepStride => footstepStride;
+    public float BedVolume => bedVolume;
+    public float BirdVolume => birdVolume;
+    public float BirdIntervalMin => birdIntervalMin;
+    public float BirdIntervalMax => birdIntervalMax;
     public int BurstCount => burstCount;
     public float BurstSpeed => burstSpeed;
     public float BurstDuration => burstDuration;

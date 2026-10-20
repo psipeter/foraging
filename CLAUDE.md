@@ -164,9 +164,11 @@ Assets/
                GameManager, HarvestManager, SunController, QuitHandler,
                RewardFunction / RewardComponent / BasisFunctionType
     UI/        HarvestUI (+X popups, score), SessionTimerUI (timer, bar, end screen), InstructionsPanel,
-               FeedbackAudio (synthesized sound cues), HudWidgets (runtime plates/bars)
+               FeedbackAudio (synthesized sound cues), AmbientAudio (footsteps, cicada bed, birds), HudWidgets (runtime plates/bars)
     Data/      DataLogger
   ScriptableObjects/SessionConfig/   P (practice), S1-S4 (the experiment's sessions)
+  Audio/Ambient/                     CC0 recordings: Footsteps/ (Kenney Impact Sounds grass steps), Cicadas/ (BigSoundBank
+                                     loop); each folder has licence/source notes
   StreamingAssets/instructions*.txt  instructions text read at runtime (practice: instructions.txt;
                                      S1-S4: instructions_S<n>.txt; {session}/{total} placeholders;
                                      file chosen per session by SessionConfig.instructionsFile)

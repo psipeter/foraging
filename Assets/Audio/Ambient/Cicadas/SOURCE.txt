@@ -1,0 +1,8 @@
+Background cicada bed: cicadas_loop.ogg
+Source:  "Cicadas" (sound ID 3002) by Clarisse, BigSoundBank
+         https://bigsoundbank.com/cicadas-s3002.html   (UCS ANMLInsc; 48.5 s, stereo, 48 kHz / 24-bit original)
+Licence: CC0 (public domain), "Free and royalty-free" per https://bigsoundbank.com/licenses.html
+         (no attribution required; credited here anyway).
+Changes: resampled to 44.1 kHz; the last 3.0 s was equal-power crossfaded into the start so the loop has no seam
+         (length 45.5 s); normalized to a 0.7 peak; encoded as Ogg Vorbis (quality 2). The full-size WAV is not kept
+         in the repository (the original is on the BigSoundBank page).

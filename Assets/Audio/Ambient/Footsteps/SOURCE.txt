@@ -1,0 +1,5 @@
+Footstep recordings: footstep_grass_000..004.ogg
+Pack:    "Impact Sounds" (v1.0) by Kenney (www.kenney.nl), 19-12-2019
+Licence: Creative Commons Zero (CC0 1.0), see License_Kenney_ImpactSounds.txt
+Source:  https://kenney.nl/assets/impact-sounds  (kenney_impact-sounds.zip, Audio/footstep_grass_*.ogg)
+Files are unmodified copies of the originals.

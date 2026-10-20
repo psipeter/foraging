@@ -302,6 +302,7 @@ MonoBehaviour:
   sessionTimerUI: {fileID: 1153043574}
   harvestUI: {fileID: 1498921805}
   feedbackAudio: {fileID: 440847461}
+  ambientAudio: {fileID: 1968310339}
   instructionsPanel: {fileID: 269841567}
 --- !u!4 &205307911
 Transform:
@@ -2518,6 +2519,59 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1945773329}
   m_CullTransparentMesh: 1
+--- !u!1 &1968310337
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1968310338}
+  - component: {fileID: 1968310339}
+  m_Layer: 0
+  m_Name: AmbientAudio
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1968310338
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1968310337}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1968310339
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1968310337}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 28e6e22abcfedf651b21ee906506b688, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AmbientAudio
+  sessionConfig: {fileID: 0}
+  player: {fileID: 581266112}
+  footstepClips:
+  - {fileID: 8300000, guid: a30b3c3f077721098aabac1f178e20fe, type: 3}
+  - {fileID: 8300000, guid: bc7dea1097984020ba86bb6ad2d520e5, type: 3}
+  - {fileID: 8300000, guid: 9a9c5692db2cc0f078f0d827ecfda2e3, type: 3}
+  - {fileID: 8300000, guid: 3217509349545705aa98e9a481bf2222, type: 3}
+  - {fileID: 8300000, guid: 61a1cb03070af1ac087b6747d6879b14, type: 3}
+  bedClip: {fileID: 8300000, guid: 1c6848aba70cd6875913070af179e63a, type: 3}
 --- !u!1 &1977193271
 GameObject:
   m_ObjectHideFlags: 0
@@ -2616,3 +2670,4 @@ SceneRoots:
   - {fileID: 718741464}
   - {fileID: 269841568}
   - {fileID: 440847460}
+  - {fileID: 1968310338}

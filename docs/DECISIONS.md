@@ -669,3 +669,35 @@ feature in the session that introduces it. S4 is unchanged (colour 3, moisture 1
 **Why:** to make learning the terrain feature clearer when it first matters; the plateaus then account for about twice the reward
 variance of colour in S3 (spread 0.89 vs 0.43). S3's world was regenerated (per-fruit rewards depend on the weights); agent baselines
 are stale and were not re-run.
+
+---
+
+## Ambient audio: synthesized in code, strictly uninformative
+
+**Decision:** footsteps, a wind bed and occasional birds are generated at startup in `AmbientAudio` (same approach as `FeedbackAudio`),
+identical across sessions, with volumes/timing in `SessionConfig`.
+
+**Why:** a research tool should not carry licensing or provenance questions for its stimuli, and the project already synthesizes its
+cues. Ambient sound is passive atmosphere, so it must not become an extra channel about reward or location.
+
+**Rules and rejected alternatives:**
+- *No dependence on terrain, moisture, elevation, nearby bushes or time of day* (e.g. footstep timbre per ground type, wind that
+  strengthens in valleys, birds that call near bushes would all leak information); constant timbre and random bird timing/pan.
+- *Not using `UnityEngine.Random`:* the reward noise is drawn from that global stream, so the audio uses its own `System.Random`.
+- *All-synthesized ambience:* tried first. The birds were fine, but the synthesized footsteps sounded like drums and the wind like waves.
+  Footsteps now use recorded CC0 grass steps (Kenney "Impact Sounds"; chosen over Fantozzi's CC0 footsteps on OpenGameArt, 12 clips of
+  grass/sand/stone, because the pack was checked to ship five grass files with a CC0 licence file). Not used: "footsteps on different
+  surfaces" (CC-BY, needs attribution) and paid marketplace packs.
+- *Wind bed:* synthesized, then dropped: no CC0 library wind found was a plain gentle breeze (the OpenGameArt CC0 candidates are dungeon-cave
+  wind), the synthesized version still sounded awkward, and in a valley where nothing visibly moves wind has no visible cause. A constant
+  background that needs no visual referent was wanted instead. Considered and rejected: distant water (nothing visible), a low drone/pad
+  (reads as music or machinery).
+- *Cricket bed (night):* tried first as the replacement (CC0 "Crickets Ambient Noise – loopable", Wolfgang_ on OpenGameArt, 10 s loop); judged better as a
+  daytime sound because sessions run through the sunlit part of the day. Removed from the project.
+- *Cicada bed (chosen):* BigSoundBank "Cicadas" (ID 3002, Clarisse, CC0). Chosen over BigSoundBank's single-cicada recordings (s2397/s2399,
+  mono, 75–78 s) because a chorus is diffuse and steady, over the field cricket (s1020, one voice), and over "Countryside" (s0097: wind noise in
+  the mic and birds). Others not used: sinny's cricket loop (CC-BY-SA), Tim Mortimer's chirp loop (CC-BY), paid libraries. BigSoundBank blocks
+  scripted downloads with a bot challenge, so the file was downloaded by hand; only a 579 KB Ogg loop is committed, not the 14 MB WAV.
+- *Loop repetition:* the loop is 45.5 s, and two copies at different pitch and offset play together so the pattern does not realign audibly.
+  Dense 4-12 kHz insect sound can be fatiguing over long sessions: keep `bedVolume` very low or 0.
+- *Steps tied to a timer instead of distance:* distance-based steps stop when walking is blocked by mountains or locked for harvesting.

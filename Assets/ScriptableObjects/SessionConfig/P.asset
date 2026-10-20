@@ -75,6 +75,12 @@ MonoBehaviour:
   burstSpeed: 3.5
   burstDuration: 0.35
   burstSize: 0.12
+  footstepVolume: 0.06
+  footstepStride: 3.6
+  bedVolume: 0.0165
+  birdVolume: 0.03
+  birdIntervalMin: 5
+  birdIntervalMax: 14
   treeSpacing: 23
   placementJitter: 0.5
   startClearingRadius: 31

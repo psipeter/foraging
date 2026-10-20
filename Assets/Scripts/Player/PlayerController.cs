@@ -107,21 +107,7 @@ public class PlayerController : MonoBehaviour
         v.z = desiredVelocity.z;
         playerRigidbody.linearVelocity = v;
 
-        float targetY = currentPos.y;
-        if (terrainManager != null)
-        {
-            Vector3 rayOrigin = new Vector3(currentPos.x, currentPos.y + 5f, currentPos.z);
-            int mask = terrainManager.GroundObject != null ? (1 << terrainManager.GroundObject.layer) : -1;
-
-            if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, 100f, mask, QueryTriggerInteraction.Ignore))
-            {
-                targetY = hit.point.y + groundOffset;
-            }
-            else
-            {
-                targetY = terrainManager.SampleElevation(currentPos.x, currentPos.z) + groundOffset;
-            }
-        }
+        float targetY = GroundTargetY(currentPos);
 
         float yDiff = Mathf.Abs(playerRigidbody.position.y - targetY);
         // Tight threshold: the camera sits at eye level, so larger height steps would read as jitter.
@@ -135,6 +121,61 @@ public class PlayerController : MonoBehaviour
             v.y = 0f;
             playerRigidbody.linearVelocity = v;
         }
+    }
+
+    // Terrain following is a raycast in FixedUpdate, which does not run while the game is paused (instruction
+    // screens set Time.timeScale to 0). Snap to the ground at startup and keep snapping while paused, so the
+    // camera never shows a frame below (or above) the new world's terrain before the first step.
+    private void Start()
+    {
+        SnapToTerrain();
+    }
+
+    private void Update()
+    {
+        if (Time.timeScale <= 0f)
+        {
+            SnapToTerrain();
+        }
+    }
+
+    private void SnapToTerrain()
+    {
+        if (terrainManager == null || playerRigidbody == null)
+        {
+            return;
+        }
+
+        Vector3 pos = playerRigidbody.position;
+        float targetY = GroundTargetY(pos);
+        if (Mathf.Abs(pos.y - targetY) <= 0.001f)
+        {
+            return;
+        }
+
+        pos.y = targetY;
+        playerRigidbody.position = pos;
+        transform.position = pos;   // a paused physics step would not move the transform (interpolation)
+    }
+
+    // Height the player should stand at over `pos`: the terrain surface (collider raycast, falling back to the
+    // terrain grid before the collider exists) plus the ground offset.
+    private float GroundTargetY(Vector3 pos)
+    {
+        if (terrainManager == null)
+        {
+            return pos.y;
+        }
+
+        Vector3 rayOrigin = new Vector3(pos.x, pos.y + 5f, pos.z);
+        int mask = terrainManager.GroundObject != null ? (1 << terrainManager.GroundObject.layer) : -1;
+
+        if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, 100f, mask, QueryTriggerInteraction.Ignore))
+        {
+            return hit.point.y + groundOffset;
+        }
+
+        return terrainManager.SampleElevation(pos.x, pos.z) + groundOffset;
     }
 
     public void OnMove(InputAction.CallbackContext context)

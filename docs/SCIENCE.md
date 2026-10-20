@@ -218,6 +218,35 @@ to 0 (and the pitch range to 0) for identical feedback on every fruit. Feedback 
 so they do not read as part of the fruit hue axis. Defaults (full scaling, 7 semitones) are untuned starting
 values; record the values used when collecting data (they live in `SessionConfig`).
 
+### Ambient audio
+
+Passive, always on, and identical in every session: footsteps while walking (one step per
+`footstepStride` world units actually walked, so none when blocked or while harvesting; five recorded grass
+steps chosen at random with small pitch/volume jitter), a very quiet constant cicada bed, and occasional
+birdsong (three synthesized whistle/trill patterns at random gaps and stereo pan). Volumes and timing are
+`SessionConfig` fields (`footstepVolume` 0.06, `bedVolume` 0.0165, `birdVolume` 0.03, `footstepStride`,
+`birdIntervalMin/Max`; 0 disables a layer). History: the first version was too loud (all cut 70%, then birds a
+further 50% and footsteps 25%), a synthesized wind bed was dropped (it sounded awkward, and wind with nothing
+visibly moving felt disembodied), and a night-cricket loop was replaced by daytime cicadas.
+
+**Sources.** Both recorded layers are CC0 (public domain); the licence text and a source note are kept beside the
+files in `Assets/Audio/Ambient/`.
+- Footsteps: the five `footstep_grass_000–004.ogg` recordings from Kenney's **Impact Sounds** pack
+  (https://kenney.nl/assets/impact-sounds), unmodified. If no clips are assigned, synthesized steps are used.
+- Cicada bed: **"Cicadas" (ID 3002)** by Clarisse on BigSoundBank
+  (https://bigsoundbank.com/cicadas-s3002.html, CC0 / public domain, "free and royalty-free"). Changes: resampled to
+  44.1 kHz, the last 3 s crossfaded into the start for a seamless loop (45.5 s), normalized to a 0.7 peak, encoded as
+  Ogg Vorbis (579 KB; the 14 MB source WAV is deliberately not in the repository). Two copies play at once (pitch 1.0
+  and 0.965, offset by half a loop). Measured: energy 4–12 kHz (peak ~7 kHz), stationary level (±15%), uncorrelated
+  left/right channels. That is above the reward blip (660–1980 Hz) and the birds' band (2.6–4.2 kHz), so it should not
+  mask either; it is, however, tonal-hissy and potentially fatiguing, and laptop speakers reproduce 8–12 kHz poorly.
+- Birds are synthesized in code at startup (`AmbientAudio`) and use no external files.
+
+Ambient sound must stay **uninformative about reward**: it does not vary with bush attributes, moisture,
+elevation, terrain, proximity to bushes or time of day, and the bird positions are random. The cicadas are constant
+and played in every session regardless of the sun's position. All ambient volumes sit below the reward cues
+(`sfxVolume`).
+
 ### Attributes and their visual channels
 
 Each tree has three attributes in [0, 1], each on its own visual channel:

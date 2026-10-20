@@ -16,6 +16,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private SessionTimerUI sessionTimerUI;
     [SerializeField] private HarvestUI harvestUI;
     [SerializeField] private FeedbackAudio feedbackAudio;
+    [SerializeField] private AmbientAudio ambientAudio;
     [SerializeField] private InstructionsPanel instructionsPanel;
 
     public static GameManager Instance { get; private set; }
@@ -150,6 +151,11 @@ public class GameManager : MonoBehaviour
         if (feedbackAudio != null)
         {
             feedbackAudio.sessionConfig = activeConfig;
+        }
+
+        if (ambientAudio != null)
+        {
+            ambientAudio.sessionConfig = activeConfig;
         }
 
         if (instructionsPanel != null)
