@@ -287,9 +287,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   sessionConfigs:
+  - {fileID: 11400000, guid: 70757be5aa5814143bb8323f2b1317b8, type: 2}
   - {fileID: 11400000, guid: a2c1af91c6840f167b2e2427d351cbd4, type: 2}
   - {fileID: 11400000, guid: 45f20c00f9a142cb28d96fa60cf9fac4, type: 2}
   - {fileID: 11400000, guid: 70d0a86c90c759779a1bbd61114eb02d, type: 2}
+  - {fileID: 11400000, guid: 1798e31453c98d8d2ac732c983af1112, type: 2}
   sunController: {fileID: 419207779}
   harvestManager: {fileID: 528505460}
   terrainManager: {fileID: 1847944418}
@@ -300,6 +302,7 @@ MonoBehaviour:
   sessionTimerUI: {fileID: 1153043574}
   harvestUI: {fileID: 1498921805}
   feedbackAudio: {fileID: 440847461}
+  instructionsPanel: {fileID: 269841567}
 --- !u!4 &205307911
 Transform:
   m_ObjectHideFlags: 0
@@ -359,6 +362,7 @@ MonoBehaviour:
   panel: {fileID: 1483531329}
   bodyText: {fileID: 1945773331}
   sessionLabel: {fileID: 831246711}
+  sessionConfig: {fileID: 0}
 --- !u!4 &269841568
 Transform:
   m_ObjectHideFlags: 0
@@ -1778,7 +1782,6 @@ MonoBehaviour:
   timerFontSize: 32
   timerPosition: {x: 150, y: -52}
   timerPlateSize: {x: 230, y: 74}
-  timerBarSize: {x: 190, y: 6}
   plateColor: {r: 0, g: 0, b: 0, a: 0.38}
 --- !u!4 &1153043575
 Transform:

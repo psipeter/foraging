@@ -18,7 +18,8 @@ def test_lattice_rules():
         assert d.min() >= p.tree_spacing * (1 - p.placement_jitter) - 1e-9   # guaranteed by disc jitter
         assert np.hypot(*w.pos.T).min() >= p.start_clearing_radius
         assert np.abs(w.pos).max() <= p.world_half_extent - p.tree_edge_margin
-        assert 120 < w.n < 170
+        valley = (2 * (p.world_half_extent - p.mountain_band_width)) ** 2   # tree count scales with valley area
+        assert 0.9 < w.n * 0.866 * p.tree_spacing ** 2 / valley < 1.5
 
 
 def test_overrides_change_density():
@@ -26,19 +27,24 @@ def test_overrides_change_density():
 
 
 def test_attributes_and_rewards():
-    w = make_world("S1", 1)   # S1: value = 3 * shape
-    assert np.allclose(w.value, 3 * w.shape)
+    w = make_world("S1", 1)   # S1: value = 3 * color
+    assert np.allclose(w.value, 3 * w.color)
     assert ((0 <= w.moisture) & (w.moisture <= 1)).all()
     assert w.canopy_radius.min() >= 0.5 - 1e-9 and w.canopy_radius.max() <= 3 + 1e-9
     assert w.fruit_reward.min() >= 0 and w.fruit_reward.shape == (w.n, 10)
     assert abs(w.fruit_reward.mean() - w.value.mean()) < 0.1   # rounding + clipping at 0 barely bias a 0.3 sd
 
 
-def test_s3_gaussian_color_component():
-    w = make_world("S3", 1)
-    # color peak 0.5, width 0.2, weight 3: bushes with color near 0.5 get the full 3
-    i = np.argmin(np.abs(w.color - 0.5))
-    assert abs(w.value[i] - (w.shape[i] + 3 * np.exp(-((w.color[i] - 0.5) ** 2) / (2 * 0.2 ** 2)) + w.moisture[i])) < 1e-9
+def test_s2_gaussian_shape_component():
+    w = make_world("S2", 1)
+    # shape peak 0.65, width 0.2, weight 3; color and moisture irrelevant
+    i = np.argmin(np.abs(w.shape - 0.65))
+    assert abs(w.value[i] - 3 * np.exp(-((w.shape[i] - 0.65) ** 2) / (2 * 0.2 ** 2))) < 1e-9
+
+
+def test_s4_all_features_additive():
+    w = make_world("S4", 1)   # inverted-linear shape w2, linear color w3, linear moisture w1.5
+    assert np.allclose(w.value, 2 * (1 - w.shape) + 3 * w.color + 1.5 * w.moisture)
 
 
 def test_noise_range_and_smoothness():

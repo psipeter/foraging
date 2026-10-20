@@ -17,6 +17,46 @@ public class InstructionsPanel : MonoBehaviour
     [SerializeField] private TextMeshProUGUI bodyText;
     [SerializeField] private TextMeshProUGUI sessionLabel;
 
+    private const string ContinuePrompt = "\n\n<i>Press Enter to continue.</i>";
+
+    public SessionConfig sessionConfig;
+
+    private bool _firstHarvestShown;
+    private bool _sessionEnded;
+
+    private void OnEnable()
+    {
+        HarvestManager.OnHarvestBoutEnded += HandleHarvestBoutEnded;
+        SunController.OnSessionEnd += HandleSessionEnd;
+    }
+
+    private void OnDisable()
+    {
+        HarvestManager.OnHarvestBoutEnded -= HandleHarvestBoutEnded;
+        SunController.OnSessionEnd -= HandleSessionEnd;
+    }
+
+    private void HandleSessionEnd()
+    {
+        _sessionEnded = true;
+    }
+
+    // One-time message after the first harvest that actually collected fruit (e.g. in practice).
+    private void HandleHarvestBoutEnded(HarvestBout bout)
+    {
+        if (_firstHarvestShown || _sessionEnded || sessionConfig == null ||
+            string.IsNullOrEmpty(sessionConfig.FirstHarvestMessage) ||
+            bout.fruitRewards.Count == 0 || panel == null || bodyText == null)
+        {
+            return;
+        }
+
+        _firstHarvestShown = true;
+        bodyText.text = sessionConfig.FirstHarvestMessage.Replace("{points}", bout.boutTotal.ToString("0")) + ContinuePrompt;
+        panel.SetActive(true);
+        Time.timeScale = 0f;
+    }
+
     private void Start()
     {
         if (sessionLabel != null)
@@ -24,45 +64,70 @@ public class InstructionsPanel : MonoBehaviour
             sessionLabel.gameObject.SetActive(false);
         }
 
-        if (GameManager.CurrentSessionIndex == 0)
+        if (bodyText != null)
         {
-            if (bodyText != null)
-            {
-                bodyText.gameObject.SetActive(true);
-                bodyText.richText = true;
-                string path = Path.Combine(Application.streamingAssetsPath, "instructions.txt");
-                string text = FallbackInstructions;
-                try
-                {
-                    if (File.Exists(path))
-                    {
-                        text = File.ReadAllText(path);
-                    }
-                }
-                catch (IOException)
-                {
-                    text = FallbackInstructions;
-                }
-
-                bodyText.text = text;
-            }
-
-            if (panel != null)
-            {
-                panel.SetActive(true);
-            }
-
-            Time.timeScale = 0f;
+            bodyText.gameObject.SetActive(true);
+            bodyText.richText = true;
+            bodyText.text = LoadInstructions();
         }
-        else
+
+        if (panel != null)
         {
-            if (panel != null)
-            {
-                panel.SetActive(false);
-            }
-
-            Time.timeScale = 1f;
+            panel.SetActive(true);
         }
+
+        Time.timeScale = 0f;
+
+        CreateControlsReminder();
+    }
+
+    private string LoadInstructions()
+    {
+        string file = sessionConfig != null ? sessionConfig.InstructionsFile : "instructions.txt";
+        string path = Path.Combine(Application.streamingAssetsPath, file);
+        string text = FallbackInstructions;
+        try
+        {
+            if (File.Exists(path))
+            {
+                text = File.ReadAllText(path);
+            }
+        }
+        catch (IOException)
+        {
+            text = FallbackInstructions;
+        }
+
+        int number = GameManager.ExperimentSessionNumber(GameManager.CurrentSessionIndex);
+        return text
+            .Replace("{session}", number.ToString())
+            .Replace("{total}", GameManager.ExperimentSessionCount.ToString());
+    }
+
+    // A faint controls hint kept on screen for the whole session (sessions that set one in their config).
+    private void CreateControlsReminder()
+    {
+        if (sessionConfig == null || string.IsNullOrEmpty(sessionConfig.ControlsReminder) ||
+            panel == null || bodyText == null)
+        {
+            return;
+        }
+
+        GameObject go = new GameObject("ControlsReminder", typeof(RectTransform));
+        go.transform.SetParent(panel.transform.parent, false);
+        RectTransform rect = go.GetComponent<RectTransform>();
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0f);
+        rect.pivot = new Vector2(0.5f, 0f);
+        rect.anchoredPosition = new Vector2(0f, 24f);
+        rect.sizeDelta = new Vector2(900f, 40f);
+
+        TextMeshProUGUI text = go.AddComponent<TextMeshProUGUI>();
+        text.font = bodyText.font;
+        text.fontSize = 22f;
+        text.alignment = TextAlignmentOptions.Center;
+        text.color = new Color(1f, 1f, 1f, sessionConfig.ControlsReminderOpacity);
+        text.raycastTarget = false;
+        text.text = sessionConfig.ControlsReminder;
     }
 
     private void Update()

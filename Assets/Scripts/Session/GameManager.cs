@@ -16,6 +16,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private SessionTimerUI sessionTimerUI;
     [SerializeField] private HarvestUI harvestUI;
     [SerializeField] private FeedbackAudio feedbackAudio;
+    [SerializeField] private InstructionsPanel instructionsPanel;
 
     public static GameManager Instance { get; private set; }
 
@@ -26,6 +27,36 @@ public class GameManager : MonoBehaviour
 
     public static int TotalSessions => AllSessionConfigs?.Count ?? 0;
     public static bool IsLastSession => TotalSessions == 0 || CurrentSessionIndex >= TotalSessions - 1;
+
+    // Practice sessions are excluded from the "Session x/N" numbering.
+    public static int ExperimentSessionCount
+    {
+        get
+        {
+            int count = 0;
+            if (AllSessionConfigs != null)
+            {
+                foreach (SessionConfig config in AllSessionConfigs)
+                {
+                    if (config != null && !config.IsPractice) count++;
+                }
+            }
+            return count;
+        }
+    }
+
+    // 1-based number of the config at `index` among non-practice sessions; 0 for a practice session.
+    public static int ExperimentSessionNumber(int index)
+    {
+        if (AllSessionConfigs == null || index < 0 || index >= AllSessionConfigs.Count) return 0;
+        if (AllSessionConfigs[index] != null && AllSessionConfigs[index].IsPractice) return 0;
+        int number = 0;
+        for (int i = 0; i <= index; i++)
+        {
+            if (AllSessionConfigs[i] != null && !AllSessionConfigs[i].IsPractice) number++;
+        }
+        return number;
+    }
 
     private void Awake()
     {
@@ -119,6 +150,11 @@ public class GameManager : MonoBehaviour
         if (feedbackAudio != null)
         {
             feedbackAudio.sessionConfig = activeConfig;
+        }
+
+        if (instructionsPanel != null)
+        {
+            instructionsPanel.sessionConfig = activeConfig;
         }
 
         FruitMaterialManager.SetSessionConfig(activeConfig);

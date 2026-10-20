@@ -142,7 +142,9 @@ public class SessionTimerUI : MonoBehaviour
 
         if (sessionCompleteText != null)
         {
-            sessionCompleteText.text = isLast ? "Experiment Complete" : "Session Complete";
+            sessionCompleteText.text = isLast ? "Experiment Complete"
+                : sessionConfig != null && sessionConfig.IsPractice ? "Practice Complete"
+                : "Session Complete";
         }
 
         if (nextSessionPromptText != null)
@@ -150,7 +152,7 @@ public class SessionTimerUI : MonoBehaviour
             nextSessionPromptText.gameObject.SetActive(true);
             nextSessionPromptText.text = isLast
                 ? "Press Enter to exit"
-                : $"Press Enter to continue to Session {GameManager.CurrentSessionIndex + 2}/{GameManager.TotalSessions}";
+                : $"Press Enter to continue to Session {GameManager.ExperimentSessionNumber(GameManager.CurrentSessionIndex + 1)}/{GameManager.ExperimentSessionCount}";
         }
 
         if (finalScoreText != null)

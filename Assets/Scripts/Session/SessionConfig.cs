@@ -8,6 +8,19 @@ public class SessionConfig : ScriptableObject
     [Header("Session")]
     [SerializeField] private float sessionDuration = 120f;
     [SerializeField] private int worldSeed;
+    [Tooltip("Practice sessions are not part of the analyzed experiment: the end screen says 'Practice complete' and they are not counted in 'Session x/N'.")]
+    [SerializeField] private bool isPractice;
+
+    [Header("Instructions")]
+    [Tooltip("File in StreamingAssets shown before this session. '{session}' and '{total}' are replaced by this session's number and the count of non-practice sessions.")]
+    [SerializeField] private string instructionsFile = "instructions.txt";
+    [Tooltip("Optional text kept on screen during the session (empty = none).")]
+    [SerializeField] private string controlsReminder = "";
+    [Tooltip("Optional message shown once, after the first harvest of the session ('{points}' = points earned in that harvest). The game pauses until Enter. Empty = none.")]
+    [TextArea(2, 5)]
+    [SerializeField] private string firstHarvestMessage = "";
+    [Tooltip("Opacity (0-1) of the controls reminder.")]
+    [SerializeField] [Range(0f, 1f)] private float controlsReminderOpacity = 0.35f;
 
     [Header("Reward")]
     [SerializeField] private RewardFunction rewardFunction = new RewardFunction();
@@ -143,6 +156,11 @@ public class SessionConfig : ScriptableObject
     public RewardFunction RewardFunction => rewardFunction;
     public float SessionDuration => sessionDuration;
     public int WorldSeed => worldSeed;
+    public bool IsPractice => isPractice;
+    public string InstructionsFile => instructionsFile;
+    public string ControlsReminder => controlsReminder;
+    public string FirstHarvestMessage => firstHarvestMessage;
+    public float ControlsReminderOpacity => controlsReminderOpacity;
     public float RewardFeedbackMax => rewardFeedbackMax;
     public float RewardSizeScaling => rewardSizeScaling;
     public float PopupScale => popupScale;

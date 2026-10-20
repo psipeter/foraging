@@ -7,7 +7,7 @@ import itertools
 
 from agents import REGISTRY, Agent, GreedyAgent, NearestAgent, PlannerAgent
 from sim import run_episode, run_n
-from world import World, make_world
+from world import World, load_session, make_world
 
 
 def tiny_world(pos, rewards, duration=60.0, speed=5.0, fd=0.5, radius=1.0, gap=7.0):
@@ -88,7 +88,7 @@ def test_real_world_runs_and_is_paired_reproducible():
     b = run_n(Nearest, "S1", seeds=range(5))
     assert np.array_equal(a.totals, b.totals) and a.mean > 0
     r = a.results[0]
-    assert r.walk_time + r.harvest_time + r.idle_time == pytest.approx(60.0)
+    assert r.walk_time + r.harvest_time + r.idle_time == pytest.approx(load_session("S1").session_duration)
 
 
 def test_nearest_agent_visits_by_walking_time_and_exhausts():

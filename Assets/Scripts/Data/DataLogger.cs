@@ -299,7 +299,9 @@ public class DataLogger : MonoBehaviour
             }
             sb.AppendLine();
         }
-        sb.AppendLine("  ]");
+        sb.AppendLine("  ],");
+        sb.AppendLine($"  \"sessionName\": \"{sessionConfig.name}\",");
+        sb.AppendLine($"  \"isPractice\": {(sessionConfig.IsPractice ? "true" : "false")}");
         sb.AppendLine("}");
 
         File.WriteAllText(path, sb.ToString());

@@ -166,8 +166,10 @@ Assets/
     UI/        HarvestUI (+X popups, score), SessionTimerUI (timer, bar, end screen), InstructionsPanel,
                FeedbackAudio (synthesized sound cues), HudWidgets (runtime plates/bars)
     Data/      DataLogger
-  ScriptableObjects/SessionConfig/   S1, S2, S3 (the experiment's sessions)
-  StreamingAssets/instructions.txt   instructions text (read at runtime)
+  ScriptableObjects/SessionConfig/   P (practice), S1-S4 (the experiment's sessions)
+  StreamingAssets/instructions*.txt  instructions text read at runtime (practice: instructions.txt;
+                                     S1-S4: instructions_S<n>.txt; {session}/{total} placeholders;
+                                     file chosen per session by SessionConfig.instructionsFile)
   StreamingAssets/Worlds/            generated <session>_seed<N>.world files (written by scripts/world.py)
   Scenes/SampleScene.unity           the single scene
   Shaders/   VertexColor (terrain: moisture textures + mountain rock/snow; ignores
@@ -209,7 +211,7 @@ Keep this tree in sync when files are added, moved, or retired.
   one seed; Unity loads the result (`WorldData`) and only renders/plays it. After
   changing any world-shaping SessionConfig value (spacing, jitter, clearing, terrain,
   mountains, reward weights/std, fruit count) re-run
-  `./venv/bin/python scripts/world.py S1 S2 S3 --unity`; `GameManager` warns at
+  `./venv/bin/python scripts/world.py P S1 S2 S3 S4 --unity`; `GameManager` warns at
   startup when a file is stale. Never hand-edit `.world` files. Fruits are
   runtime-instantiated, never prefab children (their on-bush layout is still seeded
   in C# from `fruitSeed`; it is visual only).

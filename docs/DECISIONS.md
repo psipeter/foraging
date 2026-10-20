@@ -556,3 +556,80 @@ synthesized at startup (`FeedbackAudio`, no audio assets); add cues by extending
 animations use scaled time, the score count-up uses unscaled time. Per-fruit sound is triggered by `HarvestManager.OnFruitCollected`,
 the chime by the new `OnBushExhausted` event. Skipped on purpose: a timer bar and low-time warning color/pulse, in-world camera/FOV kicks, bout-total banners,
 streaks/combos.
+
+---
+
+## Session progression: P, S1–S5, one new concept per step (planned)
+
+**Decision:** the planned sequence is practice → S1 (one linear feature, two
+distractors) → S2 (one Gaussian peak) → S3 (two linear features) → S4 (all three
+features non-zero, additive, monotonic, at least one inverted) → S5 (an
+interacting pair plus one additive feature; details TODO). Sessions lengthen
+(≈90 s → 240 s) so that learning takes ~35–50% of the stops. Full table and
+numbers: `docs/SCIENCE.md`, "Planned session progression".
+
+**Why:** the 60 s sessions give ~7 stops, too few to learn and then exploit.
+Each visited bush is ≈ one clean data point (`rewardStd` 0.3 over 10 fruits), so
+session length is set by the number of stops needed, and each session adds a
+single concept so a change in learning speed can be attributed to it.
+
+**Rejected / alternatives considered:**
+- *S4 as a peak + linear mix, S5 as full complexity.* Not a real stepping stone:
+  S4 already combined a new function shape with multi-feature integration. S4 is
+  now the first all-three-relevant session and deliberately simple.
+- *Two-linear before Gaussian (S2/S3 swapped).* Plausible, but it puts the
+  all-linear S4 right after a nonlinear session and splits the build in feature
+  count. Gaussian first also tests carry-over of the linear prior from S1.
+  Counterbalancing S2/S3 across participants remains an open option.
+- *S5 as a fully arbitrary 3D function with interactions.* Probably unlearnable
+  in ~25 stops, and a null result could not distinguish "participants failed" from
+  "task too hard". Provisional plan is one interacting pair plus one additive
+  feature, to be fixed after S4 pilots.
+- *Mid-session reward reversal* (non-stationarity) was discussed and not
+  adopted; it would need a new reward-switch mechanism.
+
+---
+
+## P–S4 implemented: practice flag, per-session instruction files, feature rotation
+
+**Decision:** the progression above is built as assets `P`, `S1`–`S4` (values in
+`docs/SCIENCE.md`). Practice is a `SessionConfig.isPractice` flag (not a special
+scene): it changes only the end-screen wording and the "Session x/N" numbering
+(N counts non-practice sessions). The instructions shown before a session are a
+per-session file (`instructionsFile`, with `{session}`/`{total}` placeholders), and
+a session can keep a faint controls reminder on screen (`controlsReminder`,
+`controlsReminderOpacity`) and show a one-time pausing message after the first harvest
+(`firstHarvestMessage`); P uses both. `session_metadata.json` gained `sessionName`
+and `isPractice` at the end (the world file name already encoded the session).
+
+**Why:** the relevant feature rotates (P shape, S1 color, S2 shape peak, S3
+color+moisture, S4 all three) so participants cannot carry a feature-specific
+rule between sessions; the S2 peak is off-centre (0.65) so it is not just "avoid
+extremes". Instruction text lives in files and the config, not code, so it can be
+changed per session without recompiling.
+
+**Known concern, not fixed:** with summed weights the blind `nearest` agent
+reaches 76% (S3) and 81% (S4) of the `plan_beam` ceiling, so the payoff for
+learning the mapping is smallest where learning is hardest. Left as is until
+pilots show whether it matters.
+
+---
+
+## Faster play (speed 7.5, 0.25 s per fruit) and a much larger map (`worldHalfExtent` 350)
+
+**Decision:** player speed 5 → 7.5, `fruitHarvestDuration` 0.5 → 0.25 s, and `worldHalfExtent`
+200 → 350 (with `terrainMeshResolution` 257 → 449 so vertex density is unchanged), in all of
+P, S1–S4. The valley goes from ~264 to ~580 units across and the tree count from ~140 to ~690.
+
+**Why:** the faster pace felt better in play, but with the original ~264-unit valley it was too
+easy to walk to one side, hit the mountains, and have to turn back through exhausted bushes;
+longer sessions make that worse. A full-harvest stop is now ~5 s, so the longest session covers
+roughly 450–570 units of travel; the larger valley lets a participant keep moving through
+unharvested ground and keeps the harvested fraction small.
+
+**Notes:** terrain noise is defined per world unit, so the moisture/elevation gradients (and
+their spatial autocorrelation) keep the same scale on the bigger map. The mountain band width is
+unchanged, so the valley area grew faster (~6×) than the half-extent squared. Performance with
+~690 bushes (6,900 runtime fruits) is untested; 350 is a compromise (400 gives ~960 bushes) and is one
+config value to change. Agent baselines were not re-run after this change (stale; see SCIENCE).
+Session durations have not been retuned to the new stop rate.

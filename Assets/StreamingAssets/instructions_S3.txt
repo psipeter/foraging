@@ -1,0 +1,7 @@
+<size=28><b>Session {session} of {total}</b></size>
+
+This is a new world.
+The features that determine reward are now even more complicated.
+Continue to explore and collect as many points as you can.
+
+<i>Press Enter to begin.</i>

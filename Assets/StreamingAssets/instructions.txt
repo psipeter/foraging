@@ -1,9 +1,7 @@
-<size=28><b>Welcome to the Foraging Task</b></size>
+<size=28><b>Practice round</b></size>
 
-Your goal is to collect as many points as you can before time runs out.
-
-Move the mouse to look around.
-Press W to walk forward and S to walk backward.
-Hold Space to harvest.
+Collect as many points as you can before time runs out.
+Different bushes give different points.
+Walk next to a bush and hold SPACE to harvest.
 
 <i>Press Enter to begin.</i>
