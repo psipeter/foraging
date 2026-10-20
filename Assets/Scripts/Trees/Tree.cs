@@ -31,6 +31,8 @@ public class Tree : MonoBehaviour
     [SerializeField] public int fruitCount = 10;
     [SerializeField] public float fruitRadius = 0.15f;
     [SerializeField] public int fruitSeed;
+    // Reward of the k-th fruit taken from this bush (from the world file); null falls back to a fresh draw.
+    public int[] fruitRewards;
 
     private MeshRenderer _canopyRenderer;
     private Material _canopyMaterial;
@@ -500,6 +502,13 @@ public class Tree : MonoBehaviour
         }
 
         canopy.SetActive(false);
+    }
+
+    // Pre-drawn reward for the next fruit to be taken, or -1 when none is stored for it.
+    public int NextFruitReward()
+    {
+        int taken = FruitCount - FruitsRemaining;
+        return fruitRewards != null && taken >= 0 && taken < fruitRewards.Length ? fruitRewards[taken] : -1;
     }
 
     public float Evaluate(RewardFunction rf)

@@ -251,9 +251,18 @@ public class HarvestManager : MonoBehaviour
             return;
         }
 
-        float bushReward = _target.Evaluate(sessionConfig.RewardFunction);
-        float noise = GaussianNoise() * sessionConfig.RewardStd;
-        float fruitReward = Mathf.Max(0f, Mathf.RoundToInt(bushReward + noise));
+        // Per-fruit rewards are pre-drawn in the world file (independent per fruit; reproducible from the seed).
+        int storedReward = _target.NextFruitReward();
+        float fruitReward;
+        if (storedReward >= 0)
+        {
+            fruitReward = storedReward;
+        }
+        else
+        {
+            float bushReward = _target.Evaluate(sessionConfig.RewardFunction);
+            fruitReward = Mathf.Max(0f, Mathf.RoundToInt(bushReward + GaussianNoise() * sessionConfig.RewardStd));
+        }
 
         Vector3 worldPos = _target.GetFruitWorldPosition(index);
         _target.CollectFruit(index, sessionConfig.FruitPopDuration);

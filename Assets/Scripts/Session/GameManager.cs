@@ -67,14 +67,25 @@ public class GameManager : MonoBehaviour
             harvestManager.sessionConfig = activeConfig;
         }
 
+        WorldData world = WorldData.Load(activeConfig);
+        if (world != null)
+        {
+            foreach (string name in world.FindMismatches(activeConfig))
+            {
+                Debug.LogWarning($"World file {world.Path} was generated with a different '{name}' than {activeConfig.name} now has; re-run scripts/world.py.");
+            }
+        }
+
         if (terrainManager != null)
         {
             terrainManager.sessionConfig = activeConfig;
+            terrainManager.world = world;
         }
 
         if (treeGenerator != null)
         {
             treeGenerator.sessionConfig = activeConfig;
+            treeGenerator.world = world;
         }
 
         if (playerController != null)

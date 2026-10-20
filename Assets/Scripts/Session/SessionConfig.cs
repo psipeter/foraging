@@ -8,7 +8,6 @@ public class SessionConfig : ScriptableObject
     [Header("Session")]
     [SerializeField] private float sessionDuration = 120f;
     [SerializeField] private int worldSeed;
-    [SerializeField] private int treeCount = 50;
 
     [Header("Reward")]
     [SerializeField] private RewardFunction rewardFunction = new RewardFunction();
@@ -60,6 +59,12 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private bool showHarvestHint = true;
 
     [Header("Trees")]
+    [Tooltip("Bush placement: a hexagonal lattice with this nearest-neighbour distance (world units) sets bush density (about 2/(sqrt(3)*spacing^2) per square unit); the bush count follows from the valley area. Walk time between neighbouring bushes is roughly spacing / playerMoveSpeed.")]
+    [SerializeField] private float treeSpacing = 23f;
+    [Tooltip("Random displacement of each bush from its lattice site, as a fraction of treeSpacing (0 = strict lattice). Each bush moves within a disc of radius jitter * spacing / 2, so any two bushes stay at least spacing * (1 - jitter) apart. ~0.5 looks natural with no clusters; above ~0.7 near-pairs begin to form.")]
+    [SerializeField] [Range(0f, 1f)] private float placementJitter = 0.5f;
+    [Tooltip("No bushes within this distance (world units) of the player's start (the map center). The lattice is anchored so a site sits at the start, so the clearing removes whole hex rings: the first ring (6 sites at ~spacing, up to spacing * (1 + jitter / 2)) needs > 29 at spacing 23 / jitter 0.5; the second ring (at ~1.7x spacing, at least 1.73 * spacing - jitter * spacing / 2) must stay outside it. 12 clears only the center site, 31 clears the first ring too.")]
+    [SerializeField] private float startClearingRadius = 31f;
     [SerializeField] private int fruitCount = 10;
     [SerializeField] private float fruitRadius = 0.15f;
     [SerializeField] private Color fruitColorLow = new Color(0.2f, 0.4f, 1.0f);
@@ -114,7 +119,9 @@ public class SessionConfig : ScriptableObject
     public RewardFunction RewardFunction => rewardFunction;
     public float SessionDuration => sessionDuration;
     public int WorldSeed => worldSeed;
-    public int TreeCount => treeCount;
+    public float TreeSpacing => treeSpacing;
+    public float PlacementJitter => placementJitter;
+    public float StartClearingRadius => startClearingRadius;
     public int FruitCount => fruitCount;
     public float FruitRadius => fruitRadius;
     public float PlayerMoveSpeed => playerMoveSpeed;

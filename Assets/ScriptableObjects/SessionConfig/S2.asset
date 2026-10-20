@@ -14,7 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
   sessionDuration: 60
   worldSeed: 2
-  treeCount: 147
   rewardFunction:
     shapeComponent:
       basisFunctionType: 0
@@ -47,6 +46,9 @@ MonoBehaviour:
   harvestLookResistance: 0
   fruitPopDuration: 0.15
   showHarvestHint: 1
+  treeSpacing: 23
+  placementJitter: 0.5
+  startClearingRadius: 31
   fruitCount: 10
   fruitRadius: 0.6
   fruitColorLow: {r: 0, g: 0.2, b: 1, a: 1}

@@ -239,7 +239,11 @@ public class DataLogger : MonoBehaviour
         sb.AppendLine($"  \"timestamp\": \"{DateTime.UtcNow:O}\",");
         sb.AppendLine($"  \"sessionDuration\": {sessionConfig.SessionDuration.ToString(CultureInfo.InvariantCulture)},");
         sb.AppendLine($"  \"worldSeed\": {sessionConfig.WorldSeed},");
-        sb.AppendLine($"  \"treeCount\": {sessionConfig.TreeCount},");
+        sb.AppendLine($"  \"worldFile\": \"{System.IO.Path.GetFileName(WorldData.PathFor(sessionConfig))}\",");
+        sb.AppendLine($"  \"treeCount\": {FindObjectsByType<Tree>(FindObjectsSortMode.None).Length},");
+        sb.AppendLine($"  \"treeSpacing\": {sessionConfig.TreeSpacing.ToString(CultureInfo.InvariantCulture)},");
+        sb.AppendLine($"  \"placementJitter\": {sessionConfig.PlacementJitter.ToString(CultureInfo.InvariantCulture)},");
+        sb.AppendLine($"  \"startClearingRadius\": {sessionConfig.StartClearingRadius.ToString(CultureInfo.InvariantCulture)},");
         sb.AppendLine($"  \"fruitCount\": {sessionConfig.FruitCount},");
         sb.AppendLine($"  \"fruitHarvestDuration\": {sessionConfig.FruitHarvestDuration.ToString(CultureInfo.InvariantCulture)},");
         sb.AppendLine($"  \"rewardStd\": {sessionConfig.RewardStd.ToString(CultureInfo.InvariantCulture)},");

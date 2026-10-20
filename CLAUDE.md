@@ -156,9 +156,10 @@ Assets/
                canopy-emission highlight), TreeAttributes (shape/color/
                moisture, floats 0-1), FruitMaterialManager (static unlit
                fruit material cache)
-    World/     TerrainManager (Perlin valley + mountain-band elevation mesh;
-               moisture textures, rock/snow weights, walkable/tree-site
-               masks), TreeGenerator (seeded placement, valley only)
+    World/     WorldData (loads StreamingAssets/Worlds/<session>_seed<N>.world:
+               bush table + terrain grids + per-fruit rewards), TerrainManager (builds the
+               valley + mountain-band mesh from the world's grids; sampling, walkable mask),
+               TreeGenerator (instantiates bushes from the world file)
     Session/   SessionConfig (ScriptableObject — ALL parameters),
                GameManager, HarvestManager, SunController, QuitHandler,
                RewardFunction / RewardComponent / BasisFunctionType
@@ -166,12 +167,17 @@ Assets/
     Data/      DataLogger
   ScriptableObjects/SessionConfig/   S1, S2, S3 (the experiment's sessions)
   StreamingAssets/instructions.txt   instructions text (read at runtime)
+  StreamingAssets/Worlds/            generated <session>_seed<N>.world files (written by scripts/world.py)
   Scenes/SampleScene.unity           the single scene
   Shaders/   VertexColor (terrain: moisture textures + mountain rock/snow; ignores
              mesh vertex colors), VertexColorUnlit, FruitUnlit, CanopyRim (additive
              fresnel highlight overlay), HarvestRing (clock-style progress ring), RingUnlit
   Materials/ Prefabs/ Resources/Textures
 docs/        SCIENCE.md, DECISIONS.md
+scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
+             world.py (reads SessionConfig .asset YAML; generates worlds from one seed — mirrors the
+             C# placement/attribute/reward rules; exports .npz), sim.py (fast session engine + run_n /
+             compare), agents.py (all agents + registry), test_*.py (pytest, run from scripts/)
 ```
 
 Keep this tree in sync when files are added, moved, or retired.
@@ -197,8 +203,15 @@ Keep this tree in sync when files are added, moved, or retired.
 - Game events are C# `Action`s, not UnityEvents.
 - No `FindObjectOfType`; use direct references (`FindObjectsByType` is
   acceptable for infrequent calls).
-- Procedural content derives from `WorldSeed` for reproducibility. Fruits
-  are runtime-instantiated, never prefab children.
+- **Worlds are generated in Python, not Unity.** `scripts/world.py` is the source
+  of truth for placement, attributes, terrain fields and per-fruit rewards, all from
+  one seed; Unity loads the result (`WorldData`) and only renders/plays it. After
+  changing any world-shaping SessionConfig value (spacing, jitter, clearing, terrain,
+  mountains, reward weights/std, fruit count) re-run
+  `./venv/bin/python scripts/world.py S1 S2 S3 --unity`; `GameManager` warns at
+  startup when a file is stale. Never hand-edit `.world` files. Fruits are
+  runtime-instantiated, never prefab children (their on-bush layout is still seeded
+  in C# from `fruitSeed`; it is visual only).
 - The reward function is modular and defined entirely in `SessionConfig`
   (per-attribute basis function + weight/peak/width), never hardcoded.
 - Layers: `Default` (misc), `Terrain` (ground), `Tree`, `Player`. Collision
@@ -210,7 +223,8 @@ Keep this tree in sync when files are added, moved, or retired.
 ### Reward system (do not "fix")
 `R_bush = w1·f1(shape) + w2·f2(color) + w3·f3(moisture)`, **no
 normalization**. Per-fruit reward = `max(0, round(Gaussian(R_bush,
-rewardStd)))`, sampled independently per fruit; harvest total is the sum.
+rewardStd)))`, sampled independently per fruit and pre-drawn in the world file
+(the k-th fruit taken from a bush pays `fruit_reward[bush][k]`); harvest total is the sum.
 Basis functions: Linear, InvertedLinear, GaussianPeak, InvertedGaussian,
 Constant.
 

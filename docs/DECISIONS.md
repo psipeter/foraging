@@ -446,3 +446,70 @@ apparent size (`harvestRingSizeDeg`) so it reads at 7 and 20 units and ports to 
   orange end of the fruit hue axis.
 - Ring shown for every in-range bush (distance + bearing), not just the selected one; selected is only marked by the rim.
 
+## Bush placement: jittered hex lattice (replaces random + minimum distance)
+
+**Decision:** Bushes sit on a hexagonal lattice (`treeSpacing` = nearest-neighbour distance) with a seeded rotation and
+offset, each displaced uniformly within a disc of radius `placementJitter * spacing / 2` (default 0.5). Density is set by
+spacing; `treeCount` and the hardcoded 5-unit minimum distance were removed, and the count now follows from the valley area.
+
+**Why:** with random placement, clusters of nearby bushes make "harvest whatever is nearest" competitive with walking to
+good bushes, which erodes the learning component, and cluster presence varied by seed. A hex lattice gives six equidistant
+neighbours (most uniform coverage); jitter removes the artificial look. Simulated (147 pts, 264x264 valley): random NN
+distance mean 11, CV 0.57; hex jitter 0.3 / 0.5 / 0.7 -> mean 20 / 18 / 16, CV 0.09 / 0.17 / 0.26, closest pair 16 / 11.5 / 7.
+Disc jitter guarantees a minimum separation of `spacing * (1 - jitter)` with no rejection sampling, so it replaces the
+separate minimum-distance constant. Jitter above ~0.7 lets near-pairs (clusters) return.
+
+**Rejected:** Poisson-disk (blue noise) - more natural but irregular spacing statistics and no direct density control;
+strict square grid - visible alignment and unequal neighbour distances (4 near, 4 far); keeping random placement as a
+selectable mode (not needed; jitter 1.0 approximates it).
+
+**Consequences:** all worlds changed relative to earlier debugging runs (no collected data existed). `session_metadata.json`
+`treeCount` is now the number actually placed; `treeSpacing` and `placementJitter` were added after it.
+
+## Python world generation and strategy simulator (scripts/)
+
+**Decision:** `scripts/world.py` generates worlds in Python from `SessionConfig` .asset parameters and one world seed;
+`scripts/sim.py` simulates sessions on them without 3D or real-time walking. Unity does not yet load these worlds (stage 3:
+a loader replacing TreeGenerator/TerrainManager generation); until then the Python world and the Unity world for the same
+seed are statistically equivalent, not identical. (Stage 3 is now done: see the loader entry below.)
+
+**Why:** a seed -> world function that runs without the Editor, in a language the researcher reads, lets many seeds and
+parameter settings (spacing, speed, session length, reward weights) be evaluated quickly. A bit-exact port of Unity's
+`Random`/`Mathf.PerlinNoise` was rejected as fragile; making Python the source of truth avoids two diverging copies.
+
+**Details / consequences:**
+- One seed drives everything through fixed named child streams (moisture noise, boundary noise, placement, attributes,
+  per-fruit reward noise). Per-fruit rewards are pre-drawn per (bush, fruit index) - a scientific change from the
+  unseeded `HarvestManager.GaussianNoise`: independent per fruit as before, but reproducible and identical across agents.
+- Noise: classic gradient noise with `PERLIN_GAIN` 1.23, calibrated so the moisture field's std over the valley matches
+  Unity's (0.166 over 8 seeds in Play mode vs 0.135 uncalibrated). Placement statistics match Unity (NN mean 18.4,
+  CV 0.13, nearest to start 36).
+- Engine assumptions (verified in code): no regrowth (`isHarvested` is one-way), horizontal speed unaffected by slope.
+  Ignored for now: collisions with canopies, facing time, partial-fruit progress, walkable-boundary detours. Agents decide
+  only at fruit boundaries; a fruit unfinished when the clock runs out is not collected.
+- Distance to a bush is measured to the edge of its harvest range (`canopy radius + harvestRangeGapBase + perRadius*R`)
+  and the simulated player's position is tracked, so each stop leaves it at the range edge, not the bush center.
+- Not yet generated in Python (rendering only, needed for stage 3): mountain elevation/ridges/snow weights, terrain mesh.
+
+## Unity loads Python-generated worlds (stage 3)
+
+**Decision:** `TerrainManager` and `TreeGenerator` no longer generate anything. `GameManager.Awake` loads
+`StreamingAssets/Worlds/<session>_seed<worldSeed>.world` (`WorldData`) and gives it to both. The C# Perlin/ridge/rock/snow
+code, tree-site mask and lattice placement were deleted, not kept as a fallback (two generators would silently produce
+different worlds). A missing file logs an error with the export command; `GameManager` also logs a warning per
+generation parameter whose SessionConfig value differs from the one the file was generated with.
+
+**Format (v1):** `FWLD`, version, header length, JSON header (bushes as flat arrays, per-fruit rewards, parameter echo),
+then float32 grids (moisture, elevation, rock, snow, mountain ramp) at the mesh resolution, flattened `i*res + j`.
+Terrain is the same linear-interpolated mesh as before, now with vertices read from the grids instead of computed;
+`SampleElevation/Moisture/Mountain` are bilinear samples of the same grids. ~1.3 MB per world, committed with the
+project so the exact worlds participants play are on record.
+
+**Consequences:**
+- A bush's attributes and moisture come from the file (the continuous field at its position), not from sampling the
+  mesh grid; they agree to within 0.001.
+- `HarvestManager` pays the pre-drawn reward for the k-th fruit taken from a bush (falls back to a fresh draw only if a
+  bush has no stored rewards). Leaving and returning continues at fruit index k, so rewards cannot be re-rolled.
+- Worlds for the same seed differ from earlier Unity-generated ones (different noise implementation); no real data
+  existed. `session_metadata.json` gained `worldFile` (before `treeCount`).
+- Changing any world-shaping SessionConfig value requires re-exporting; this is the cost of a single source of truth.
