@@ -27,12 +27,12 @@ MonoBehaviour:
       width: 0
     colorComponent:
       basisFunctionType: 0
-      weight: 3
+      weight: 1.5
       peak: 0
       width: 0
     moistureComponent:
       basisFunctionType: 0
-      weight: 1.5
+      weight: 3
       peak: 0
       width: 0
   rewardStd: 0.3
@@ -85,9 +85,12 @@ MonoBehaviour:
   harvestRangeGapBase: 7
   harvestRangeGapPerRadius: 0
   fruitColorPreservation: 0.5
-  terrainNoiseFrequency: 2
+  terrainNoiseFrequency: 0.6
   terrainNoiseOctaves: 1
   terrainMaxElevation: 20
+  moistureTerraceLevels: 4
+  moistureTerraceSharpness: 0.3
+  moistureTerraceResidual: 0.1
   terrainMeshResolution: 449
   worldHalfExtent: 350
   dayStartFraction: 0.3

@@ -87,7 +87,10 @@ MonoBehaviour:
   fruitColorPreservation: 0.5
   terrainNoiseFrequency: 2
   terrainNoiseOctaves: 1
-  terrainMaxElevation: 20
+  terrainMaxElevation: 12
+  moistureTerraceLevels: 0
+  moistureTerraceSharpness: 0.5
+  moistureTerraceResidual: 0
   terrainMeshResolution: 449
   worldHalfExtent: 350
   dayStartFraction: 0.3
@@ -104,7 +107,7 @@ MonoBehaviour:
   mountainNoiseScale: 60
   mountainBlockThreshold: 0.15
   treeEdgeMargin: 8
-  snowLineFraction: 0.45
+  snowLineFraction: 0.564
   mountainFogStrength: 0.3
   mountainRockColor: {r: 0.42, g: 0.4, b: 0.38, a: 1}
   mountainSnowColor: {r: 0.93, g: 0.95, b: 0.98, a: 1}

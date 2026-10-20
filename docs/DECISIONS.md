@@ -633,3 +633,39 @@ unchanged, so the valley area grew faster (~6×) than the half-extent squared. P
 ~690 bushes (6,900 runtime fruits) is untested; 350 is a compromise (400 gives ~960 bushes) and is one
 config value to change. Agent baselines were not re-run after this change (stale; see SCIENCE).
 Session durations have not been retuned to the new stop rate.
+
+---
+
+## Terraced moisture in S3/S4; near-flat terrain in P/S1/S2
+
+**Decision:** in the sessions where moisture is rewarded (S3, S4) the moisture field is terraced: rank-normalised over the
+valley, snapped to 4 levels with gentle ramps (`moistureTerraceSharpness` 0.3) and a ±0.1 undulation on plateau tops,
+at wavelength ~165 units (`terrainNoiseFrequency` 0.6) and `terrainMaxElevation` 20. In P/S1/S2, where moisture earns nothing, the
+valley has little relief (`terrainMaxElevation` initially 3, later raised to 6, then 12, to bring relief back; snow line preserved with `snowLineFraction` 0.693, then 0.65, then 0.564). The terracing lives in
+`scripts/world.py` (defaults off) with three new `SessionConfig` fields that are also in the stale-world check.
+
+**Why:** terrain is irrelevant to reward early on, so relief there is just noise for navigation and view; once moisture matters,
+large plateaus and valleys holding many bushes make it a learnable regional feature rather than a continuum of small hills.
+
+**Rejected / considered:**
+- *Only lowering the noise frequency or raising elevation:* still a smooth continuum, no distinct regions.
+- *Steeper ramps (sharpness 0.8–0.5):* previews gave 70° near-cliffs (p99 55°) and the eye height jumped ~6 units in a few
+  steps; 0.3 matches the old terrain's steepness (p99 31° vs 27°). Elevation 14 was also previewed and is the fallback.
+- *Fully flat plateaus (no residual):* kept a small residual so plateau tops are not perfectly uniform.
+- *Clipping the residual at 0/1:* produced spikes of bushes at moisture 0 and 1; levels are inset by the residual amplitude instead.
+- *Applying it to S3 only:* both S3 and S4 reward moisture, so both use the same terrain style, changing only reward complexity.
+
+**Consequences / not yet settled:** moisture std over bushes roughly doubles (0.16 → 0.30), the layout is strongly regional
+(see SCIENCE "Terrain by session"), and the moisture→height coupling may be adjusted after play-testing (TODO in SCIENCE).
+Agent baselines are not re-run (stale).
+
+---
+
+## S3: moisture (terrain) is the highest-weighted feature
+
+**Decision:** S3's weights are swapped to colour 1.5, moisture 3 (was colour 3, moisture 1.5), so the terraced terrain is the dominant
+feature in the session that introduces it. S4 is unchanged (colour 3, moisture 1.5, shape inverted 2).
+
+**Why:** to make learning the terrain feature clearer when it first matters; the plateaus then account for about twice the reward
+variance of colour in S3 (spread 0.89 vs 0.43). S3's world was regenerated (per-fruit rewards depend on the weights); agent baselines
+are stale and were not re-run.

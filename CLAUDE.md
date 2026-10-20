@@ -210,7 +210,7 @@ Keep this tree in sync when files are added, moved, or retired.
   of truth for placement, attributes, terrain fields and per-fruit rewards, all from
   one seed; Unity loads the result (`WorldData`) and only renders/plays it. After
   changing any world-shaping SessionConfig value (spacing, jitter, clearing, terrain,
-  mountains, reward weights/std, fruit count) re-run
+  moisture terracing, mountains, reward weights/std, fruit count) re-run
   `./venv/bin/python scripts/world.py P S1 S2 S3 S4 --unity`; `GameManager` warns at
   startup when a file is stale. Never hand-edit `.world` files. Fruits are
   runtime-instantiated, never prefab children (their on-bush layout is still seeded

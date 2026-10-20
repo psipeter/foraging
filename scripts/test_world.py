@@ -1,6 +1,6 @@
 import numpy as np
 
-from world import Perlin, World, generate_world, load_session, make_world
+from world import Perlin, Terrain, World, generate_world, load_session, make_world
 
 
 def test_deterministic_and_seed_dependent():
@@ -90,3 +90,32 @@ def test_terrain_grids_match_rules():
     i = np.abs(x[:, None] - w.pos[:, 0]).argmin(0)
     j = np.abs(x[:, None] - w.pos[:, 1]).argmin(0)
     assert np.abs(g["moisture"][i, j] - w.moisture).max() < 0.03
+
+
+def test_terrace_off_for_early_sessions():
+    # S1 has no terracing: moisture is the plain continuous field and the valley has little relief (elev 12)
+    p = load_session("S1")
+    assert int(p.moisture_terrace_levels) == 0 and p.terrain_max_elevation <= 14
+    t = Terrain.from_seed(p, 1)
+    g = np.linspace(-100, 100, 50)
+    x, z = np.meshgrid(g, g)
+    assert np.array_equal(t.moisture(x, z), t._raw_moisture(x, z))
+
+
+def test_terrace_levels_balanced_and_in_range():
+    for name, seed in [("S3", 3), ("S4", 4)]:
+        p = load_session(name)
+        n, amp = int(p.moisture_terrace_levels), p.moisture_terrace_residual
+        assert n == 4
+        w = generate_world(p, seed)
+        assert 0 <= w.moisture.min() and w.moisture.max() <= 1
+        lvl = np.clip(np.round((w.moisture - amp) / (1 - 2 * amp) * (n - 1)), 0, n - 1).astype(int)
+        counts = np.bincount(lvl, minlength=n)
+        assert counts.min() > 0.7 * counts.mean() and counts.max() < 1.3 * counts.mean()   # rank-normalised
+
+
+def test_terrace_snaps_to_levels_when_sharp_and_no_residual():
+    w = make_world("S3", 3, moisture_terrace_sharpness=1.0, moisture_terrace_residual=0.0)
+    levels = np.array([0, 1 / 3, 2 / 3, 1])
+    nearest = np.abs(w.moisture[:, None] - levels[None]).min(axis=1)
+    assert (nearest < 0.02).mean() > 0.9

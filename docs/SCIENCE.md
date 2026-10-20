@@ -232,7 +232,10 @@ Each tree has three attributes in [0, 1], each on its own visual channel:
 - `moisture` is **not** drawn per tree: it is sampled from the terrain's
   moisture field at the tree's position (so it is spatially autocorrelated,
   and trees in wetter areas sit on lower ground — elevation is
-  `(1 − moisture) × maxElevation`).
+  `(1 − moisture) × terrainMaxElevation`). The field's character depends on
+  the session (see "Terrain by session"): a smooth continuum with ~50-unit
+  hills and almost no relief in P/S1/S2, where moisture earns nothing; terraced
+  plateaus and valleys in S3/S4, where it does.
 - **Prior management:** fruit count is constant across bushes (no count-based
   prior); fruit color uses an abstract blue→orange axis (avoids red/green
   ripeness associations). Fruits are unlit so hue is always readable;
@@ -261,7 +264,7 @@ All five: `rewardStd` 0.3, 10 fruit/tree, speed 7.5, `fruitHarvestDuration` 0.25
 | P (practice) | 100 | 60 s | Linear, w=3 | w=0 | w=0 | one feature, linear (mechanics) |
 | S1 | 1 | 90 s | w=0 | Linear, w=3 | w=0 | one relevant feature of three |
 | S2 | 2 | 120 s | GaussianPeak, w=3, peak 0.65, width 0.2 | w=0 | w=0 | one feature, non-monotonic |
-| S3 | 3 | 120 s | w=0 | Linear, w=3 | Linear, w=1.5 | two features, linear |
+| S3 | 3 | 120 s | w=0 | Linear, w=1.5 | Linear, w=3 | two features, linear; moisture (terrain) dominant |
 | S4 | 4 | 150 s | InvertedLinear, w=2 | Linear, w=3 | Linear, w=1.5 | all three, additive, monotonic, one inverted |
 
 (Read from `Assets/ScriptableObjects/SessionConfig/*.asset`; the assets are the source of
@@ -269,6 +272,27 @@ truth and may have moved on — re-check before citing.) The relevant feature ro
 across sessions so a "it's always shape" rule can't carry over. The S2 peak is off-centre
 (0.65) so it is not just "avoid the extremes". Earlier designs explored five configs, then
 a 60 s S1–S3 (one linear; three linear; mixed), replaced by this progression; see DECISIONS.
+
+### Terrain by session
+
+Terrain only matters for reward in S3 (moisture weight 3, the dominant feature) and S4 (weight 1.5), so it is deliberately
+different there. All values are `SessionConfig` fields; the field is built in `scripts/world.py`.
+
+| Sessions | `terrainMaxElevation` | Moisture field |
+|---|---|---|
+| P, S1, S2 (moisture irrelevant) | 12 (snow line kept by `snowLineFraction` 0.564) | continuous, wavelength ~50 units (`terrainNoiseFrequency` 2), range up to ≈ 12 units of relief (bushes span about 0–12) |
+| S3, S4 (moisture rewarded) | 20 | **terraced**: `moistureTerraceLevels` 4, `moistureTerraceSharpness` 0.3, `moistureTerraceResidual` 0.1, `terrainNoiseFrequency` 0.6 (wavelength ~165 units) |
+
+Terracing: the continuous field is rank-normalised over the valley (so each level covers about the
+same area), snapped to 4 evenly spaced moisture levels with ramps between plateaus, and given a small
+undulation (±0.1) on plateau tops; levels are inset by that amplitude so the full 0–1 range is used
+without clipping. Elevation and ground colour follow moisture, so there are 4 ground colours and
+4 height tiers. On the seeds used (S3, S4): ~165–180 bushes per level, ~6–7 large patches holding
+~80% of bushes (median ~65 bushes per patch), p99 slope ≈ 31° (the old terrain: 27°), bush moisture
+std ≈ 0.30 (old continuum: 0.16, so moisture's reward spread is ≈ 0.44 at weight 1.5 (S4) and ≈ 0.89 at weight 3 (S3), vs 0.24 at 1.5 on the old terrain; in S3 colour's spread is 0.43, so moisture contributes about twice as much).
+In the S3 world the start region has few of the wettest (level 3) bushes nearby (16 within 160
+units against 72 of level 0), so reaching them takes travel. The moisture–height coupling is
+likely to be revisited (TODO below). Design decision and alternatives: DECISIONS ("Terraced moisture").
 
 ### Session progression (P–S4 implemented; S5 is a TODO)
 
@@ -443,9 +467,16 @@ sound, font polish.
   unaffected, but a replay or simulation can't reproduce a participant's
   exact draws. Whether noise should come from a dedicated seeded RNG is an
   open design question.
+- **TODO(PI): revisit how moisture maps to height** (and ground colour) after seeing the
+  terraced terrain in play, to get good visual and reward variance: the current linear
+  `(1 − moisture) × elevation` coupling, the 4 levels, the ramp and residual settings, and
+  moisture's now larger reward spread (std 0.16 → 0.30) may all need adjusting.
 - **Moisture is spatially structured**, so moisture-based reward creates
   location-dependent reward gradients (foraging by region, not just by
-  inspection) — possibly a feature, possibly a confound for S2/S3. Likewise
+  inspection) — possibly a feature, possibly a confound for S3/S4. In the terraced sessions
+  this is much stronger: neighbouring bushes share a moisture level, so moisture is largely a
+  regional choice (find a good plateau and stay), raising the exploit share and lowering
+  planning demand, and it is strongly confounded with position. Likewise
   shape and color are independent of position, moisture is not.
 - **Weak-to-moderate prior on moisture** (ground color) — acknowledged in the
   attribute table; no mitigation.

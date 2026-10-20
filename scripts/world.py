@@ -183,14 +183,15 @@ class Terrain:
         self._ridge_noise = ridge_noise
         self._rock_noise = rock_noise
         self._snow_noise = snow_noise
+        self._valley_cdf = None
 
     @staticmethod
     def from_seed(params, seed):
         rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(8)]
         return Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]))
 
-    def moisture(self, x, z):
-        """TerrainManager.ComputeMoisture: octave sum of noise at frequency * 0.01."""
+    def _raw_moisture(self, x, z):
+        """Octave sum of noise at frequency * 0.01 (the continuous moisture field, before any terracing)."""
         p = self.p
         octaves = max(1, int(p.terrain_noise_octaves))
         freq = p.terrain_noise_frequency * 0.01
@@ -205,6 +206,44 @@ class Terrain:
             amplitude *= 0.5
             freq *= 2.0
         return np.clip(value / total, 0.0, 1.0)
+
+    def _valley_quantiles(self):
+        """Sorted raw moisture over the valley, used to rank-normalise the field so each terrace level
+        covers about the same area."""
+        if self._valley_cdf is None:
+            half = self.p.world_half_extent - self.p.mountain_band_width
+            axis = np.linspace(-half, half, 257)
+            gx, gz = np.meshgrid(axis, axis, indexing="ij")
+            self._valley_cdf = np.sort(self._raw_moisture(gx, gz).ravel())
+        return self._valley_cdf
+
+    def moisture(self, x, z):
+        """The moisture field. With `moisture_terrace_levels` >= 2 the field is rank-normalised over the valley
+        and snapped to that many evenly spaced levels (0 .. 1), with ramps between plateaus whose width is set by
+        `moisture_terrace_sharpness` (1 = narrow ramps, 0 = ramps spanning the whole cell) and a small
+        within-plateau undulation of amplitude `moisture_terrace_residual` (moisture units, +-; the levels are
+        inset by that amount so the whole range 0..1 is still used without clipping). With
+        levels < 2 (default) it is the plain continuous field."""
+        p = self.p
+        raw = self._raw_moisture(x, z)
+        n = int(getattr(p, "moisture_terrace_levels", 0))
+        if n < 2:
+            return raw
+        cdf = self._valley_quantiles()
+        t = np.interp(raw, cdf, np.linspace(0.0, 1.0, cdf.size))
+        width = max(0.02, 1.0 - float(np.clip(getattr(p, "moisture_terrace_sharpness", 0.8), 0.0, 1.0)))
+        g = np.clip(t * n - 0.5, 0.0, n - 1 - 1e-9)
+        j = np.floor(g)
+        ramp = self._smoothstep((g - j - (1.0 - width) / 2.0) / width)
+        amp = float(np.clip(getattr(p, "moisture_terrace_residual", 0.0), 0.0, 0.45))
+        # levels are inset by `amp` so the undulation is not clipped at moisture 0 and 1
+        level = amp + (1.0 - 2.0 * amp) * (j + ramp) / (n - 1)
+        if amp > 0.0:
+            fx = 2.0 * 0.01     # same ~50-unit scale as the old continuous field
+            x = np.asarray(x, dtype=float)
+            z = np.asarray(z, dtype=float)
+            level = level + amp * 2.0 * (self._moisture_noise(x * fx + 101.3, z * fx + 57.1) - 0.5)
+        return np.clip(level, 0.0, 1.0)
 
     def mountain_ramp(self, x, z, inset=0.0):
         """0 across the valley, rising to 1 at the map edge; the foot of the ramp is irregular."""
@@ -370,7 +409,8 @@ class World:
 # Parameters that shape a world. Written into Unity world files so the game can warn when SessionConfig has
 # changed since the file was generated. Names are the SessionConfig field names (camelCase).
 CHECK_KEYS = ["worldHalfExtent", "terrainMeshResolution", "terrainNoiseFrequency", "terrainNoiseOctaves",
-              "terrainMaxElevation", "mountainBandWidth", "mountainBoundaryJitter", "mountainHeight",
+              "terrainMaxElevation", "moistureTerraceLevels", "moistureTerraceSharpness", "moistureTerraceResidual",
+              "mountainBandWidth", "mountainBoundaryJitter", "mountainHeight",
               "mountainNoiseScale", "snowLineFraction", "treeSpacing", "placementJitter", "startClearingRadius",
               "treeEdgeMargin", "fruitCount", "rewardStd"]
 REWARD_PARTS = ["shape", "color", "moisture"]
@@ -381,7 +421,7 @@ GRID_NAMES = ["moisture", "elevation", "rock", "snow", "ramp"]
 
 def check_values(params):
     """{name: value} of the parameters a world depends on (see CHECK_KEYS)."""
-    out = {k: float(getattr(params, _snake(k))) for k in CHECK_KEYS}
+    out = {k: float(getattr(params, _snake(k), 0.0)) for k in CHECK_KEYS}
     for part in REWARD_PARTS:
         comp = params.reward_function[part + "Component"]
         for field in ("basisFunctionType", "weight", "peak", "width"):

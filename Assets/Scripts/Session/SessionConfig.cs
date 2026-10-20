@@ -118,6 +118,12 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float terrainNoiseFrequency = 4f;
     [SerializeField] private int terrainNoiseOctaves = 1;
     [SerializeField] private float terrainMaxElevation = 3f;
+    [Tooltip("Number of plateau levels the moisture field is snapped to (0 = smooth continuum). World-shaping: re-run scripts/world.py after changing.")]
+    [SerializeField] private int moistureTerraceLevels = 0;
+    [Tooltip("Ramp steepness between plateaus: 0 = gentle ramps across the whole cell, 1 = narrow ramps. Only used when moistureTerraceLevels >= 2.")]
+    [SerializeField] [Range(0f, 1f)] private float moistureTerraceSharpness = 0.5f;
+    [Tooltip("Amplitude (moisture units, +-) of the undulation on plateau tops. Only used when moistureTerraceLevels >= 2.")]
+    [SerializeField] [Range(0f, 0.45f)] private float moistureTerraceResidual = 0f;
     [SerializeField] private int terrainMeshResolution = 64;
     [SerializeField] private float worldHalfExtent = 50f;
 
@@ -208,6 +214,9 @@ public class SessionConfig : ScriptableObject
     public float TerrainNoiseFrequency => terrainNoiseFrequency;
     public int TerrainNoiseOctaves => terrainNoiseOctaves;
     public float TerrainMaxElevation => terrainMaxElevation;
+    public int MoistureTerraceLevels => moistureTerraceLevels;
+    public float MoistureTerraceSharpness => moistureTerraceSharpness;
+    public float MoistureTerraceResidual => moistureTerraceResidual;
     public int TerrainMeshResolution => terrainMeshResolution;
     public float WorldHalfExtent => worldHalfExtent;
     public float MountainBandWidth => mountainBandWidth;
