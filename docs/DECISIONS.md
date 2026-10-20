@@ -426,12 +426,23 @@ Intensities and exponents are `SessionConfig` fields (`rim*`), live-tunable in P
 
 ---
 
-## Harvest progress ring, selected rim color, exhausted bushes vanish
+## Harvest progress ring, selected rim color, exhausted bushes stay as "spent" landmarks
 
 **Decision:** (1) the selected bush's rim blends to `rimSelectedColor` (slightly warmer pale gold); (2) a
 camera-facing clock-style ring above every in-range bush shows the remaining fraction (bright arc erased
-clockwise from 12 o'clock over a faint track), `HarvestRing.shader`/`.mat`; (3) an exhausted bush shrinks
-(same linear shrink as a collected fruit, `treeShrinkDuration`), then disappears and stops blocking.
+clockwise from 12 o'clock over a faint track), `HarvestRing.shader`/`.mat`; (3) an exhausted bush STAYS in
+place, still blocking, and eases (`spentTransitionDuration`) into a spent look: uniform scale `spentScale`
+(0.7; uniform so the canopy aspect ratio, the shape channel, is preserved) and a drab canopy tint `spentTint`
+multiplied onto the base color; the blocking collider shrinks to match.
+
+**Bush fate: stay vs. vanish (considered and decided).** First built as shrink-and-disappear (same linear
+shrink as a collected fruit). Rejected: vanishing makes the remaining bushes an external record of what is
+left, removing the memory demand for visited locations from the task, and sparsens landmarks over the session.
+Staying is also closer to real plants, keeps spatial landmarks, and leaves navigation constraints unchanged.
+The spent look exists because fruits are small and an emptied bush otherwise looks like a fresh one from afar.
+Alternatives not built: sink into the terrain, eased/delayed shrink, dissolve (needs a canopy shader change),
+wither (changes aspect ratio mid-animation), leaf-puff. Depleted bushes never glow or show a ring (skipped by
+`HarvestManager`).
 
 **Why:** fruits on the far side of a bush are not visible, so the ring is the continuous "still harvesting" signal and a record of
 what is left on return; it is also a second, non-hue indicator of being in range. The ring is world-space at a constant
@@ -441,10 +452,12 @@ apparent size (`harvestRingSizeDeg`) so it reads at 7 and 20 units and ports to 
 - The progress through the fruit in hand is stored on the bush (`Tree.PartialProgress`) so releasing Space mid-fruit
   and resuming continues the same fruit and the ring does not jump back up. This slightly changes harvest timing: held
   time is never wasted.
-- `visible_tree_ids` in `movement.csv` now excludes exhausted bushes (they are gone, not just fruitless).
+- `visible_tree_ids` in `movement.csv` still includes exhausted bushes (they remain visible); `harvests.csv`
+  `tree_exhausted` marks when a bush was emptied.
 - Rim color shift is a hue-adjacent change: `rimSelectedColor` should stay pale and near-neutral, not toward the
   orange end of the fruit hue axis.
 - Ring shown for every in-range bush (distance + bearing), not just the selected one; selected is only marked by the rim.
+
 
 ## Bush placement: jittered hex lattice (replaces random + minimum distance)
 
@@ -513,3 +526,16 @@ project so the exact worlds participants play are on record.
 - Worlds for the same seed differ from earlier Unity-generated ones (different noise implementation); no real data
   existed. `session_metadata.json` gained `worldFile` (before `treeCount`).
 - Changing any world-shaping SessionConfig value requires re-exporting; this is the cost of a single source of truth.
+
+## Cleanup: single highlight style, ground-ring shader and template leftovers removed
+
+**Decision:** the rim-light highlight is the only highlight. Removed `EmissionWash` (`Tree.UpdateEmissionWash`, the
+`HighlightStyle` enum, `SessionConfig.highlightStyle`, the four emission Inspector fields on `Tree`), `RingUnlit.shader`
+(the terrain-projected ring, also dropped from Always Included Shaders), the Unity template `TutorialInfo/` and
+`Readme.asset`, and two unreferenced volume profiles. Unused code from the move to a first-person view and Python-owned
+worlds was also removed (write-only terrain normal on `Tree`, `SampleNormal`/`SampleMoisture`, `HarvestDuration`,
+`SessionProgress`).
+
+**Kept deliberately:** built-in Unity packages/modules (removal risks breakage; compile-time gains are small), the
+`Mobile_*` pipeline assets (still referenced by `QualitySettings`), and `VertexColorUnlit.shader` (unreferenced but
+still in Always Included Shaders). `S1`-`S3.asset` still contain a stale `highlightStyle` key until Unity next rewrites them.

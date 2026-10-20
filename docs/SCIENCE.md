@@ -161,12 +161,11 @@ an oversight.
   apparent size, camera-facing): a faint full track with the bright arc erased clockwise
   from 12 o'clock as fruits are collected, so you can see how much is left even if
   the fruits are on the far side, or on returning to a bush; progress through the fruit
-  in hand is kept on the bush. An exhausted bush shrinks away and disappears (it no longer
-  blocks movement, and is dropped from `visible_tree_ids`).
-  Looks (`highlightStyle`): *RimLight* — a soft glow on the bush's edge that grows
-  as you approach, plus a thin crisp edge line on the selected bush, in a slightly different rim color once
-  selected; or
-  *EmissionWash* — whole-canopy glow, pulsing when selected. Holding Space collects one fruit every `fruitHarvestDuration` (the fruit
+  in hand is kept on the bush. An exhausted bush stays as a landmark and obstacle but
+  eases into a "spent" look (uniformly shrunk to 70%, drab canopy tint), so depleted bushes are
+  distinguishable from afar; there is no external record of which bushes are left beyond that.
+  Highlight: a soft glow on the bush's edge that grows as you approach, plus a thin crisp edge line on the
+  selected bush, in a slightly different rim color once selected. Holding Space collects one fruit every `fruitHarvestDuration` (the fruit
   nearest the camera first); walking is locked while Space is held, looking stays free.
   Looking more than 35° away pauses the harvest (hint: look back); releasing Space
   ends the bout, and a fresh press starts the next one. +X popups appear at a fixed

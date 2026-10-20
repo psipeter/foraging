@@ -27,7 +27,6 @@ public class SunController : MonoBehaviour
     private float SessionDuration =>
         sessionConfig != null ? sessionConfig.SessionDuration : 120f;
 
-    public float SessionProgress => Mathf.Clamp01(sessionTime / Mathf.Max(SessionDuration, 0.0001f));
     public bool SessionComplete => sessionTime >= SessionDuration;
     public Color CurrentAmbientColor => RenderSettings.ambientLight;
 

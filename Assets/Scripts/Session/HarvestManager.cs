@@ -280,12 +280,12 @@ public class HarvestManager : MonoBehaviour
         }
     }
 
-    // All fruit gone: the bush shrinks away and the bout ends.
+    // All fruit gone: the bush stays but eases into its spent look, and the bout ends.
     private void ExhaustTarget()
     {
         _target.isHarvested = true;
         _target.PartialProgress = 0f;
-        _target.Vanish(sessionConfig.TreeShrinkDuration);
+        _target.MarkSpent();
         EndBout();
     }
 

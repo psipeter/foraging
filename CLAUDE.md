@@ -138,7 +138,7 @@ ignored). Instead play a **standalone build on a private virtual display**:
    that appears in your own command line kills your shell).
 
 Facts learned: harvest starts within ~3.7 units of a tree's center (wide
-canopies block the avatar earlier); Space on the last session's end screen
+canopies block the player earlier); Space on the last session's end screen
 quits the app.
 
 ---
@@ -153,7 +153,7 @@ Assets/
                detection), CameraController (first-person yaw/pitch, eye
                height, FOV), ILookInput + MouseLookInput (look input source)
     Trees/     Tree (applies attributes, generates fruits/colliders,
-               canopy-emission highlight), TreeAttributes (shape/color/
+               rim-light highlight + progress ring), TreeAttributes (shape/color/
                moisture, floats 0-1), FruitMaterialManager (static unlit
                fruit material cache)
     World/     WorldData (loads StreamingAssets/Worlds/<session>_seed<N>.world:
@@ -171,7 +171,7 @@ Assets/
   Scenes/SampleScene.unity           the single scene
   Shaders/   VertexColor (terrain: moisture textures + mountain rock/snow; ignores
              mesh vertex colors), VertexColorUnlit, FruitUnlit, CanopyRim (additive
-             fresnel highlight overlay), HarvestRing (clock-style progress ring), RingUnlit
+             fresnel highlight overlay) and HarvestRing (clock-style progress ring)
   Materials/ Prefabs/ Resources/Textures
 docs/        SCIENCE.md, DECISIONS.md
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
@@ -263,7 +263,7 @@ already-collected data.** Add columns only at the end, and say so.
   `GameManager` has assigned its config (existing pattern, e.g.
   `sessionConfig != null ? ... : default`).
 - No diagnostic `Debug.Log` left in committed code (a cleanup pass already
-  removed them; `TerrainManager.Start` still has one — remove if touched).
+  removed them).
 
 ---
 
@@ -302,9 +302,9 @@ design choice future-us might be tempted to "fix". Keep the README minimal.
 - Do not assign `SessionConfig` directly on components in the Inspector.
 - Do not use `FindObjectOfType` or UnityEvents for game events.
 - Do not switch fruits to a lit material or the canopy to single-sided.
-- Do not reintroduce the terrain-projected highlight disc — replaced by
-  canopy emission pulsing (see `docs/DECISIONS.md`); `RingUnlit.shader`
-  is now unreferenced.
+- Do not reintroduce the terrain-projected highlight disc or the whole-canopy
+  emission-pulse highlight — the highlight is the CanopyRim rim light (see
+  `docs/DECISIONS.md`).
 - Do not reintroduce hemisphere meshes, border objects, or border walls —
   trees are half-buried spheres and the border is the mountain band built into
   the terrain geometry (see `docs/DECISIONS.md`).

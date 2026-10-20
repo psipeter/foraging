@@ -14,7 +14,6 @@ public class DataLogger : MonoBehaviour
     [SerializeField] private PlayerController playerController;
     [SerializeField] private HarvestManager harvestManager;
     [SerializeField] private Camera mainCamera;
-    [SerializeField] private TerrainManager terrainManager;
     [SerializeField] private float movementSampleInterval = 0.1f;
     [SerializeField] private float maxVisibilityDistance = 80f;
     [SerializeField] private LayerMask terrainOcclusionMask;
@@ -115,7 +114,7 @@ public class DataLogger : MonoBehaviour
 
         foreach (Tree tree in _allTrees)
         {
-            if (tree == null || tree.isHarvested) continue;   // exhausted bushes have vanished
+            if (tree == null) continue;
 
             Vector3 center = tree.GetWorldCenter();
             float dist = Vector3.Distance(cPos, center);

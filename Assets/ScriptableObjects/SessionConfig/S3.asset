@@ -44,6 +44,17 @@ MonoBehaviour:
   highlightFadeAngle: 45
   harvestMaxAngle: 35
   harvestLookResistance: 0
+  highlightStyle: 1
+  rimColor: {r: 1, g: 0.96, b: 0.82, a: 1}
+  rimSelectedColor: {r: 1, g: 0.9, b: 0.6, a: 1}
+  rimApproachIntensity: 1.5
+  rimApproachPower: 2.5
+  rimSelectedIntensity: 2.5
+  rimSelectedPower: 8
+  harvestRingSizeDeg: 7
+  spentTransitionDuration: 0.6
+  spentScale: 0.7
+  spentTint: {r: 0.55, g: 0.5, b: 0.42, a: 1}
   fruitPopDuration: 0.15
   showHarvestHint: 1
   treeSpacing: 23

@@ -854,7 +854,7 @@ MonoBehaviour:
   sessionConfig: {fileID: 0}
   playerController: {fileID: 581266112}
   cameraController: {fileID: 581266119}
-  sunController: {fileID: 0}
+  sunController: {fileID: 419207779}
 --- !u!4 &528505461
 Transform:
   m_ObjectHideFlags: 0

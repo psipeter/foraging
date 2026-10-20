@@ -40,8 +40,6 @@ public class SessionConfig : ScriptableObject
     [Tooltip("0 = off. 1 = while harvesting, mouse yaw slows to zero as you turn away from the bush between the full and fade angles (turning back is unaffected). Flat-screen only; changes effective sensitivity, so keep it off unless studying it.")]
     [Range(0f, 1f)]
     [SerializeField] private float harvestLookResistance = 0f;
-    [Tooltip("How approachable/selected bushes are indicated. EmissionWash = whole canopy glows (steady, then pulsing when selected). RimLight = soft edge glow while approaching, plus a thin crisp edge line on the selected bush.")]
-    [SerializeField] private HighlightStyle highlightStyle = HighlightStyle.RimLight;
     [SerializeField] private Color rimColor = new Color(1f, 0.96f, 0.82f);
     [Tooltip("Rim color on the selected (harvestable) bush, blended in from rimColor. A small shift from rimColor; also the harvest ring's color. Keep it pale and near-neutral so it does not read as a fruit hue.")]
     [SerializeField] private Color rimSelectedColor = new Color(1f, 0.9f, 0.6f);
@@ -53,8 +51,12 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float rimSelectedPower = 8f;
     [Tooltip("Apparent size of the harvest progress ring above a bush, in degrees of view (constant regardless of distance).")]
     [SerializeField] private float harvestRingSizeDeg = 7f;
-    [Tooltip("An exhausted bush shrinks to nothing over this long (same linear shrink as a collected fruit), then disappears and stops blocking.")]
-    [SerializeField] private float treeShrinkDuration = 0.3f;
+    [Tooltip("An exhausted bush stays as a landmark and obstacle, easing into its 'spent' look over this long.")]
+    [SerializeField] private float spentTransitionDuration = 0.6f;
+    [Tooltip("Spent bush: uniform scale multiplier (uniform, so canopy aspect ratio - the shape channel - is preserved). The blocking collider shrinks to match.")]
+    [SerializeField] private float spentScale = 0.7f;
+    [Tooltip("Spent bush: color multiplied onto the canopy. A drab warm gray reads as dormant; keep it subtle.")]
+    [SerializeField] private Color spentTint = new Color(0.55f, 0.5f, 0.42f);
     [SerializeField] private float fruitPopDuration = 0.15f;
     [SerializeField] private bool showHarvestHint = true;
 
@@ -126,7 +128,6 @@ public class SessionConfig : ScriptableObject
     public float FruitRadius => fruitRadius;
     public float PlayerMoveSpeed => playerMoveSpeed;
     public float FruitHarvestDuration => fruitHarvestDuration;
-    public float HarvestDuration => fruitHarvestDuration * Mathf.Max(1, fruitCount);
     public float RewardStd => rewardStd;
     public Vector2 ShapeRange => shapeRange;
     public Vector2 CanopyWidthRange => canopyWidthRange;
@@ -136,11 +137,12 @@ public class SessionConfig : ScriptableObject
     public float HighlightFadeAngle => highlightFadeAngle;
     public float HarvestMaxAngle => harvestMaxAngle;
     public float HarvestLookResistance => harvestLookResistance;
-    public HighlightStyle HighlightStyle => highlightStyle;
     public Color RimColor => rimColor;
     public Color RimSelectedColor => rimSelectedColor;
     public float HarvestRingSizeDeg => harvestRingSizeDeg;
-    public float TreeShrinkDuration => treeShrinkDuration;
+    public float SpentTransitionDuration => spentTransitionDuration;
+    public float SpentScale => spentScale;
+    public Color SpentTint => spentTint;
     public float RimApproachIntensity => rimApproachIntensity;
     public float RimApproachPower => rimApproachPower;
     public float RimSelectedIntensity => rimSelectedIntensity;

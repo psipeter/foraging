@@ -8,9 +8,9 @@ Tree Prefab Setup (local space under this `Tree` object):
 Canopy:
   - Sphere GameObject (mesh replaced at runtime with Unity default sphere)
   - Code sets: position (0, 0, 0), local rotation identity
-  - No colliders on prefab children; Tree adds a canopy trigger collider via code
-  - MeshRenderer material instance; the highlight (set each frame by HarvestManager) is canopy emission:
-    graded while approaching and distinct when selected; look depends on SessionConfig.highlightStyle
+  - No colliders on prefab children; harvest availability comes from HarvestManager (distance + bearing)
+  - MeshRenderer material instance; the highlight is a fresnel rim overlay (CanopyRim shader) set each frame by
+    HarvestManager: soft glow while approaching, plus a crisp edge line on the selected bush
 
 Fruits:
   - Fruits are fully runtime-generated in `ApplyAttributes()` (no fruit children required in the prefab).
@@ -36,12 +36,6 @@ public class Tree : MonoBehaviour
 
     private MeshRenderer _canopyRenderer;
     private Material _canopyMaterial;
-    [SerializeField] private Color highlightEmissionColor = new Color(1f, 0.95f, 0.7f);
-    [SerializeField] private float highlightPulseSpeed = 1.5f;
-    [Tooltip("Emission at glow level 1 while the bush is not yet harvestable (steady, no pulse).")]
-    [SerializeField] private float highlightSteadyMaxIntensity = 0.45f;
-    [Tooltip("Peak emission of the harvestable pulse. The pulse never drops below 1.25x the steady maximum, so it is always brighter than any approach glow.")]
-    [SerializeField] private float highlightMaxIntensity = 1.3f;
 
     private float _highlightLevel;
     private bool _highlightSelected;
@@ -50,9 +44,9 @@ public class Tree : MonoBehaviour
     private float _softCurrent;
     private float _crispCurrent;
     private bool _rimActive;
-    private bool _emissionCleared = true;
     private float _selectedBlend;
-    private bool _vanishing;
+    private bool _spent;
+    private Color _canopyBaseColor = Color.white;
     private GameObject _ringObject;
     private Material _ringInstance;
     private static Mesh _quadMesh;
@@ -66,8 +60,6 @@ public class Tree : MonoBehaviour
     private static Mesh _sphereMesh;
 
     public bool isHarvested = false;
-
-    private Vector3 _terrainNormal = Vector3.up;
 
     public int FruitCount => _fruits.Count;
     public float CanopyRadius { get; private set; }
@@ -93,12 +85,6 @@ public class Tree : MonoBehaviour
         }
     }
 
-    public TerrainManager TerrainManager
-    {
-        get => terrainManager;
-        set => terrainManager = value;
-    }
-
     private void Awake()
     {
         gameObject.tag = "Interactable";
@@ -110,39 +96,26 @@ public class Tree : MonoBehaviour
             {
                 _canopyMaterial = new Material(_canopyRenderer.sharedMaterial);
                 _canopyRenderer.material = _canopyMaterial;
-                _canopyMaterial.EnableKeyword("_EMISSION");
-                _canopyMaterial.SetColor("_EmissionColor", Color.black);
+                if (_canopyMaterial.HasProperty("_BaseColor"))
+                {
+                    _canopyBaseColor = _canopyMaterial.GetColor("_BaseColor");
+                }
             }
         }
     }
 
     private void Update()
     {
-        if (_vanishing)
-        {
-            return;
-        }
-
-        if (_rimInstance != null && sessionConfig != null && sessionConfig.HighlightStyle == HighlightStyle.RimLight)
+        if (_rimInstance != null && sessionConfig != null)
         {
             UpdateRim();
         }
-        else
-        {
-            UpdateEmissionWash();
-        }
     }
 
-    // RimLight style: soft edge glow scaled by the glow level; a thin crisp edge line only on the selected bush.
+    // Soft edge glow scaled by the glow level; a thin crisp edge line only on the selected bush.
     // Both ease toward their targets so the cues fade in and out instead of popping.
     private void UpdateRim()
     {
-        if (_canopyMaterial != null && !_emissionCleared)
-        {
-            _canopyMaterial.SetColor("_EmissionColor", Color.black);
-            _emissionCleared = true;
-        }
-
         float softTarget = _highlightLevel * sessionConfig.RimApproachIntensity;
         float crispTarget = _highlightSelected ? sessionConfig.RimSelectedIntensity : 0f;
         float ease = 1f - Mathf.Exp(-12f * Time.deltaTime);
@@ -168,46 +141,6 @@ public class Tree : MonoBehaviour
         _rimInstance.SetFloat("_SoftPower", sessionConfig.RimApproachPower);
         _rimInstance.SetFloat("_CrispIntensity", _crispCurrent);
         _rimInstance.SetFloat("_CrispPower", sessionConfig.RimSelectedPower);
-    }
-
-    // EmissionWash style: whole-canopy emission, steady and graded while approaching, pulsing when selected.
-    private void UpdateEmissionWash()
-    {
-        if (_rimActive && _rimObject != null)
-        {
-            _rimActive = false;
-            _rimObject.SetActive(false);
-        }
-
-        if (_canopyMaterial == null || (_highlightLevel <= 0f && !_highlightSelected))
-        {
-            if (_canopyMaterial != null && _emissionCleared == false)
-            {
-                _canopyMaterial.SetColor("_EmissionColor", Color.black);
-                _emissionCleared = true;
-            }
-
-            return;
-        }
-
-        _emissionCleared = false;
-        float intensity;
-        if (_highlightSelected)
-        {
-            float t = (Mathf.Sin(Time.time * highlightPulseSpeed * Mathf.PI * 2f) + 1f) * 0.5f;
-            intensity = Mathf.Lerp(highlightSteadyMaxIntensity * 1.25f, highlightMaxIntensity, t);
-        }
-        else
-        {
-            intensity = _highlightLevel * highlightSteadyMaxIntensity;
-        }
-
-        _canopyMaterial.SetColor("_EmissionColor", highlightEmissionColor * intensity);
-    }
-
-    public void SetTerrainNormal(Vector3 normal)
-    {
-        _terrainNormal = normal.sqrMagnitude > 1e-8f ? normal.normalized : Vector3.up;
     }
 
     public void ApplyAttributes()
@@ -409,7 +342,7 @@ public class Tree : MonoBehaviour
     // fill = remaining fraction of the bush (1 untouched, 0 empty).
     public void SetRing(bool visible, float fill, Transform cameraTransform)
     {
-        if (!visible || _vanishing || ringMaterial == null || canopy == null || cameraTransform == null || sessionConfig == null)
+        if (!visible || ringMaterial == null || canopy == null || cameraTransform == null || sessionConfig == null)
         {
             if (_ringObject != null && _ringObject.activeSelf)
             {
@@ -463,45 +396,52 @@ public class Tree : MonoBehaviour
         _ringObject.SetActive(false);
     }
 
-    // Exhausted bush: shrinks to nothing (same linear shrink as a collected fruit), then disappears and stops
-    // blocking the player.
-    public void Vanish(float duration)
+    // Exhausted bush: stays as a landmark and obstacle, easing into a spent look (uniformly shrunk, drab tint).
+    // The blocking collider is resized to match the smaller canopy.
+    public void MarkSpent()
     {
-        if (_vanishing)
+        if (_spent)
         {
             return;
         }
 
-        _vanishing = true;
+        _spent = true;
         isHarvested = true;
         SetRing(false, 0f, null);
-        if (_rimObject != null)
-        {
-            _rimObject.SetActive(false);
-        }
-
-        CapsuleCollider blocker = GetComponent<CapsuleCollider>();
-        if (blocker != null)
-        {
-            blocker.enabled = false;
-        }
-
-        StartCoroutine(ShrinkAndHide(duration));
+        StartCoroutine(EaseToSpent());
     }
 
-    private System.Collections.IEnumerator ShrinkAndHide(float duration)
+    private System.Collections.IEnumerator EaseToSpent()
     {
         Transform canopyTransform = canopy.transform;
         Vector3 startScale = canopyTransform.localScale;
+        Vector3 endScale = startScale * sessionConfig.SpentScale;
+        Color endColor = _canopyBaseColor * sessionConfig.SpentTint;
+        float duration = Mathf.Max(sessionConfig.SpentTransitionDuration, 0.0001f);
+
+        CapsuleCollider blocker = GetComponent<CapsuleCollider>();
+        float startRadius = blocker != null ? blocker.radius : 0f;
+        float startHeight = blocker != null ? blocker.height : 0f;
+
         float elapsed = 0f;
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
-            canopyTransform.localScale = startScale * (1f - Mathf.Clamp01(elapsed / Mathf.Max(duration, 0.0001f)));
+            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
+            canopyTransform.localScale = Vector3.Lerp(startScale, endScale, t);
+            if (_canopyMaterial != null)
+            {
+                _canopyMaterial.SetColor("_BaseColor", Color.Lerp(_canopyBaseColor, endColor, t));
+            }
+
+            if (blocker != null)
+            {
+                blocker.radius = Mathf.Lerp(startRadius, startRadius * sessionConfig.SpentScale, t);
+                blocker.height = Mathf.Lerp(startHeight, startHeight * sessionConfig.SpentScale, t);
+            }
+
             yield return null;
         }
-
-        canopy.SetActive(false);
     }
 
     // Pre-drawn reward for the next fruit to be taken, or -1 when none is stored for it.
@@ -514,25 +454,6 @@ public class Tree : MonoBehaviour
     public float Evaluate(RewardFunction rf)
     {
         return rf.Evaluate(attributes);
-    }
-
-    public void SetHarvested(bool harvested)
-    {
-        if (_collected != null)
-        {
-            for (int i = 0; i < _collected.Length; i++)
-            {
-                _collected[i] = harvested;
-            }
-        }
-
-        foreach (GameObject fruit in _fruits)
-        {
-            if (fruit != null)
-            {
-                fruit.SetActive(!harvested);
-            }
-        }
     }
 
     // Marks the fruit collected and plays a short shrink-out before hiding it.
