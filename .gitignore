@@ -99,3 +99,9 @@ InitTestScene*.unity*
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
 *.slnx
 ForagingData/
+
+# Python tooling
+/venv/
+/worlds/
+__pycache__/
+.pytest_cache/

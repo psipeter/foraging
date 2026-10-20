@@ -1,0 +1,86 @@
+import numpy as np
+
+from world import Perlin, World, generate_world, load_session, make_world
+
+
+def test_deterministic_and_seed_dependent():
+    a, b, c = make_world("S1", 3), make_world("S1", 3), make_world("S1", 4)
+    assert np.array_equal(a.pos, b.pos) and np.array_equal(a.fruit_reward, b.fruit_reward)
+    assert not (a.n == c.n and np.array_equal(a.pos, c.pos))
+
+
+def test_lattice_rules():
+    p = load_session("S1")
+    for seed in range(5):
+        w = generate_world(p, seed)
+        d = np.hypot(*(w.pos[:, None] - w.pos[None]).transpose(2, 0, 1))
+        np.fill_diagonal(d, np.inf)
+        assert d.min() >= p.tree_spacing * (1 - p.placement_jitter) - 1e-9   # guaranteed by disc jitter
+        assert np.hypot(*w.pos.T).min() >= p.start_clearing_radius
+        assert np.abs(w.pos).max() <= p.world_half_extent - p.tree_edge_margin
+        assert 120 < w.n < 170
+
+
+def test_overrides_change_density():
+    assert make_world("S1", 1, tree_spacing=40).n < make_world("S1", 1).n * 0.5
+
+
+def test_attributes_and_rewards():
+    w = make_world("S1", 1)   # S1: value = 3 * shape
+    assert np.allclose(w.value, 3 * w.shape)
+    assert ((0 <= w.moisture) & (w.moisture <= 1)).all()
+    assert w.canopy_radius.min() >= 0.5 - 1e-9 and w.canopy_radius.max() <= 3 + 1e-9
+    assert w.fruit_reward.min() >= 0 and w.fruit_reward.shape == (w.n, 10)
+    assert abs(w.fruit_reward.mean() - w.value.mean()) < 0.1   # rounding + clipping at 0 barely bias a 0.3 sd
+
+
+def test_s3_gaussian_color_component():
+    w = make_world("S3", 1)
+    # color peak 0.5, width 0.2, weight 3: bushes with color near 0.5 get the full 3
+    i = np.argmin(np.abs(w.color - 0.5))
+    assert abs(w.value[i] - (w.shape[i] + 3 * np.exp(-((w.color[i] - 0.5) ** 2) / (2 * 0.2 ** 2)) + w.moisture[i])) < 1e-9
+
+
+def test_noise_range_and_smoothness():
+    f = Perlin(np.random.default_rng(0))
+    g = np.linspace(0, 20, 400)
+    X, Z = np.meshgrid(g, g)
+    n = f(X, Z)
+    assert 0 <= n.min() and n.max() <= 1 and 0.3 < n.mean() < 0.7
+    assert np.abs(np.diff(n, axis=1)).max() < 0.1   # continuous
+
+
+def test_save_load_roundtrip(tmp_path):
+    w = make_world("S2", 5)
+    w.save(tmp_path / "w.npz")
+    r = World.load(tmp_path / "w.npz")
+    assert r.seed == 5 and np.array_equal(r.pos, w.pos) and np.array_equal(r.fruit_reward, w.fruit_reward)
+    assert r.params.tree_spacing == w.params.tree_spacing and r.params.reward_function == w.params.reward_function
+
+
+def test_unity_export_roundtrip(tmp_path):
+    from world import export_unity, read_unity_world
+    w = make_world("S1", 1)
+    export_unity(w, tmp_path / "w.world")
+    h, g = read_unity_world(tmp_path / "w.world")
+    res = int(w.params.terrain_mesh_resolution)
+    assert h["treeCount"] == w.n and h["res"] == res and set(g) == {"moisture", "elevation", "rock", "snow", "ramp"}
+    assert np.allclose(np.array(h["treePos"]).reshape(-1, 2), w.pos)
+    assert np.array_equal(np.array(h["fruitRewards"]).reshape(w.n, -1), w.fruit_reward)
+    assert dict(zip(h["checkNames"], h["checkValues"]))["treeSpacing"] == 23.0
+    for a in g.values():
+        assert a.shape == (res, res) and np.isfinite(a).all()
+
+
+def test_terrain_grids_match_rules():
+    w = make_world("S1", 1)
+    g = w.terrain.grids()
+    half, res = w.params.world_half_extent, g["ramp"].shape[0]
+    assert g["ramp"][res // 2, res // 2] == 0 and g["elevation"][res // 2, res // 2] < w.params.terrain_max_elevation + 1e-3
+    assert g["ramp"][0, 0] == 1 and g["elevation"][0, 0] > 0.5 * w.params.mountain_height   # crest at the mesh edge
+    assert (g["rock"][g["ramp"] == 0] == 0).all() and (g["snow"] <= g["rock"] + 1e-6).all()
+    # bush moisture is the continuous field at the bush position, close to the grid there
+    x = np.linspace(-half, half, res)
+    i = np.abs(x[:, None] - w.pos[:, 0]).argmin(0)
+    j = np.abs(x[:, None] - w.pos[:, 1]).argmin(0)
+    assert np.abs(g["moisture"][i, j] - w.moisture).max() < 0.03
