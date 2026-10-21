@@ -11,6 +11,7 @@ public class SessionTimerUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI timerText;
     [SerializeField] private SunController sunController;
     public SessionConfig sessionConfig;
+    public InterludeManager interludeManager;
     [SerializeField] private GameObject sessionEndPanel;
     [SerializeField] private TextMeshProUGUI finalScoreText;
     [SerializeField] private TextMeshProUGUI sessionCompleteText;
@@ -97,6 +98,13 @@ public class SessionTimerUI : MonoBehaviour
             return;
         }
 
+        // An Interlude shows the per-trial countdown here instead of the session clock.
+        if (sessionConfig.IsInterlude && interludeManager != null && interludeManager.Active)
+        {
+            timerText.text = interludeManager.TimerLabel;
+            return;
+        }
+
         float remaining = sunController.SessionTimeRemaining;
         remaining = Mathf.Max(0f, remaining);
 
@@ -133,6 +141,13 @@ public class SessionTimerUI : MonoBehaviour
 
         GameManager.LastSessionScore = _lastTotalScore;
 
+        bool isInterlude = sessionConfig != null && sessionConfig.IsInterlude;
+        bool isPractice = sessionConfig != null && sessionConfig.IsPractice;
+        if (!isInterlude && !isPractice)
+        {
+            GameManager.SessionScoreTotal += _lastTotalScore;
+        }
+
         bool isLast = GameManager.IsLastSession;
 
         if (sessionEndPanel != null)
@@ -143,7 +158,8 @@ public class SessionTimerUI : MonoBehaviour
         if (sessionCompleteText != null)
         {
             sessionCompleteText.text = isLast ? "Experiment Complete"
-                : sessionConfig != null && sessionConfig.IsPractice ? "Practice Complete"
+                : isInterlude ? "Interlude Complete"
+                : isPractice ? "Practice Complete"
                 : "Session Complete";
         }
 
@@ -152,12 +168,28 @@ public class SessionTimerUI : MonoBehaviour
             nextSessionPromptText.gameObject.SetActive(true);
             nextSessionPromptText.text = isLast
                 ? "Press Enter to exit"
-                : $"Press Enter to continue to Session {GameManager.ExperimentSessionNumber(GameManager.CurrentSessionIndex + 1)}/{GameManager.ExperimentSessionCount}";
+                : $"Press Enter to continue to {GameManager.NextStageLabel()}";
         }
 
         if (finalScoreText != null)
         {
-            finalScoreText.text = $"Final Score: {_lastTotalScore:F1}";
+            // An Interlude shows only its own count correct and bonus (never which trials, nor the reward
+            // function); the practice Interlude shows nothing. The final screen adds the totals.
+            finalScoreText.gameObject.SetActive(isLast || !isInterlude || !sessionConfig.IsPractice);
+            if (isInterlude && !isLast)
+            {
+                finalScoreText.text = $"{GameManager.ThisInterludeCorrect} / {GameManager.ThisInterludeTrials} correct\nBonus: +{GameManager.ThisInterludeBonus:F0}";
+            }
+            else if (isLast)
+            {
+                float total = GameManager.SessionScoreTotal + GameManager.InterludeBonus;
+                string thisInterlude = isInterlude ? $"This Interlude: {GameManager.ThisInterludeCorrect} / {GameManager.ThisInterludeTrials} correct, +{GameManager.ThisInterludeBonus:F0}\n" : "";
+                finalScoreText.text = $"{thisInterlude}Total Score: {total:F0}\nSessions {GameManager.SessionScoreTotal:F0}  +  Interlude bonus {GameManager.InterludeBonus:F0} ({GameManager.InterludeCorrectCount}/{GameManager.InterludeTrialsScored} correct)";
+            }
+            else
+            {
+                finalScoreText.text = $"Final Score: {_lastTotalScore:F1}";
+            }
         }
     }
 }

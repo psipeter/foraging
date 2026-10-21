@@ -178,6 +178,20 @@ public class PlayerController : MonoBehaviour
         return terrainManager.SampleElevation(pos.x, pos.z) + groundOffset;
     }
 
+    // Moves the player to (x, z) standing on the terrain (the Interlude teleports between trial stages).
+    public void TeleportTo(float x, float z)
+    {
+        float y = terrainManager != null ? terrainManager.SampleElevation(x, z) + groundOffset : transform.position.y;
+        Vector3 pos = new Vector3(x, y, z);
+        if (playerRigidbody != null)
+        {
+            playerRigidbody.position = pos;
+            playerRigidbody.linearVelocity = Vector3.zero;
+        }
+
+        transform.position = pos;
+    }
+
     public void OnMove(InputAction.CallbackContext context)
     {
 

@@ -12,9 +12,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: S3
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
-  sessionDuration: 120
+  sessionDuration: 15
   worldSeed: 3
   isPractice: 0
+  isInterlude: 0
+  interludeFor: 
+  interludeTrialCount: 10
+  interludeTrialSeconds: 7
+  interludeHarvestFruits: 10
+  interludeBonusPerCorrect: 5
+  freezeSun: 0
+  interludeBushDistance: 24.4
+  interludeBushBearing: 31.5
   instructionsFile: instructions_S3.txt
   controlsReminder: 
   firstHarvestMessage: 
@@ -37,7 +46,7 @@ MonoBehaviour:
       width: 0
   rewardStd: 0.3
   playerMoveSpeed: 7.5
-  fruitHarvestDuration: 0.25
+  fruitHarvestDuration: 0.2
   eyeHeight: 5.1
   cameraFieldOfView: 75
   cameraNearClip: 0.3

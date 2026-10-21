@@ -60,9 +60,59 @@ public class WorldData
     private string[] _checkNames;
     private float[] _checkValues;
 
+    // The world file supplying the terrain. An Interlude uses the terrain of the session it probes.
     public static string PathFor(SessionConfig config)
     {
-        return System.IO.Path.Combine(Application.streamingAssetsPath, "Worlds", $"{config.name}_seed{config.WorldSeed}.world");
+        string owner = config.IsInterlude ? config.InterludeFor : config.name;
+        return System.IO.Path.Combine(Application.streamingAssetsPath, "Worlds", $"{owner}_seed{config.WorldSeed}.world");
+    }
+
+    // An Interlude's bush table and trial list (written by scripts/interlude.py).
+    public static string InterludePathFor(SessionConfig config)
+    {
+        return System.IO.Path.Combine(Application.streamingAssetsPath, "Worlds", $"{config.name}_seed{config.WorldSeed}.interlude.json");
+    }
+
+    [Serializable]
+    private class InterludeBushes
+    {
+        public int fruitCount;
+        public float[] treePos;
+        public float[] shape;
+        public float[] color;
+        public float[] moisture;
+        public float[] canopyRadius;
+        public float[] value;
+        public int[] fruitRewards;
+    }
+
+    // Replaces this world's bushes with an Interlude's (the terrain stays the session's own).
+    private bool ApplyInterludeBushes(SessionConfig config)
+    {
+        string path = InterludePathFor(config);
+        if (!File.Exists(path))
+        {
+            Debug.LogError($"Interlude file not found: {path}. Generate it with: ./venv/bin/python scripts/interlude.py {config.name}");
+            return false;
+        }
+
+        InterludeBushes b = JsonUtility.FromJson<InterludeBushes>(File.ReadAllText(path));
+        if (b == null || b.treePos == null || b.treePos.Length == 0)
+        {
+            Debug.LogError($"Interlude file has no bush table: {path}");
+            return false;
+        }
+
+        TreeCount = b.treePos.Length / 2;
+        FruitCount = b.fruitCount;
+        TreePos = b.treePos;
+        Shape = b.shape;
+        Color = b.color;
+        Moisture = b.moisture;
+        CanopyRadius = b.canopyRadius;
+        Value = b.value;
+        FruitRewards = b.fruitRewards;
+        return true;
     }
 
     // Returns null (after logging why) when the file is missing or unreadable.
@@ -135,6 +185,11 @@ public class WorldData
                 || world.SnowGrid == null || world.RampGrid == null)
             {
                 Debug.LogError($"World file {path} is missing a terrain grid.");
+                return null;
+            }
+
+            if (config.IsInterlude && !world.ApplyInterludeBushes(config))
+            {
                 return null;
             }
 

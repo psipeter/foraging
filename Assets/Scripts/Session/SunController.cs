@@ -34,6 +34,12 @@ public class SunController : MonoBehaviour
 
     public float SessionTimeRemaining => Mathf.Max(0f, SessionDuration - sessionTime);
 
+    // Ends the session now (the Interlude ends when its trials are done, not at a fixed time).
+    public void EndSession()
+    {
+        sessionTime = SessionDuration;
+    }
+
     private void Start()
     {
         if (mainCamera != null)
@@ -57,7 +63,9 @@ public class SunController : MonoBehaviour
         sessionTime += Time.deltaTime;
         // Day position: starts dayStartFraction of the way through the day and reaches sunset (1) at session end.
         float dayStart = sessionConfig != null ? Mathf.Clamp01(sessionConfig.DayStartFraction) : 0f;
-        float t = Mathf.Lerp(dayStart, 1f, Mathf.Clamp01(sessionTime / Mathf.Max(SessionDuration, 0.0001f)));
+        float t = sessionConfig != null && sessionConfig.FreezeSun
+            ? dayStart
+            : Mathf.Lerp(dayStart, 1f, Mathf.Clamp01(sessionTime / Mathf.Max(SessionDuration, 0.0001f)));
 
         UpdateSunTransform(t);
         UpdateSunColorAndIntensity(t);

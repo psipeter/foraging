@@ -1,0 +1,8 @@
+<size=28><b>Interlude {interlude} of {total}</b></size>
+
+Two trees will appear.
+Choose the one you think pays more, based on what you learned in the last session.
+You have {trial_seconds} seconds for each choice.
+No points are shown here, but good choices earn a bonus.
+
+<i>Press Enter to begin.</i>

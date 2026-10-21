@@ -26,6 +26,9 @@ public class DataLogger : MonoBehaviour
 
     private int _harvestIndex;
 
+    // Folder of this session's files (set in Start); the Interlude writes interlude.csv next to them.
+    public string SessionDataPath => _sessionDataPath;
+
     private void OnEnable()
     {
         HarvestManager.OnHarvestBoutEnded += HandleHarvestBoutEnded;
@@ -114,7 +117,7 @@ public class DataLogger : MonoBehaviour
 
         foreach (Tree tree in _allTrees)
         {
-            if (tree == null) continue;
+            if (tree == null || !tree.gameObject.activeInHierarchy) continue;
 
             Vector3 center = tree.GetWorldCenter();
             float dist = Vector3.Distance(cPos, center);
@@ -301,7 +304,8 @@ public class DataLogger : MonoBehaviour
         }
         sb.AppendLine("  ],");
         sb.AppendLine($"  \"sessionName\": \"{sessionConfig.name}\",");
-        sb.AppendLine($"  \"isPractice\": {(sessionConfig.IsPractice ? "true" : "false")}");
+        sb.AppendLine($"  \"isPractice\": {(sessionConfig.IsPractice ? "true" : "false")},");
+        sb.AppendLine($"  \"isInterlude\": {(sessionConfig.IsInterlude ? "true" : "false")}");
         sb.AppendLine("}");
 
         File.WriteAllText(path, sb.ToString());

@@ -701,3 +701,140 @@ cues. Ambient sound is passive atmosphere, so it must not become an extra channe
 - *Loop repetition:* the loop is 45.5 s, and two copies at different pitch and offset play together so the pattern does not realign audibly.
   Dense 4-12 kHz insect sound can be fatiguing over long sessions: keep `bedVolume` very low or 0.
 - *Steps tied to a timer instead of distance:* distance-based steps stop when walking is blocked by mountains or locked for harvesting.
+
+---
+
+## Interlude: a forced-choice block after each session, in the session's own world (choice mode first)
+
+**Decision:** after every session (including practice) a short forced-choice block reads out the learned reward mapping on controlled
+stimuli: two bushes, choose the one that pays more, by turning toward it, walking to it and harvesting it. Each Interlude runs in the probed
+session's own world (same terrain, mountains, sun) with only the two trial bushes present. Details, stimulus mix and scoring are in
+docs/SCIENCE.md ("Interlude"). It is an ordinary session kind (`SessionConfig.isInterlude`) driven by `InterludeManager`; stimuli and bush
+placements come from `scripts/interlude.py`.
+
+**Why:** in the main task performance mixes value learning with exploration and planning, and a participant may know a good rule without
+having sampled enough bushes to show it. Fixed, equidistant, single-decision trials remove planning and give many controlled comparisons,
+and keeping the world as it was keeps the stimuli as similar to the main sessions as possible.
+
+**Terrain: reuse the session's, place the bushes on it (no Interlude-specific terrain logic).** A bush's moisture and elevation are those of the
+terrain where it stands, so the generator searches the session's real terrain (500k random spawn/heading placements) for positions whose moisture
+relation fits each trial (same / one plateau level apart / two or more levels apart), then chooses shape and colour freely. The Interlude config
+reuses the session's world file by reference (its `worldSeed` equals the session's) and Unity swaps in a small bush table (3-9 KB).
+- *Rejected: a purpose-built stage world (one cell per trial, flat plateaus under each bush).* That was built first. It gave full control of moisture,
+  but it needed new terrain code (pad plateaus and ramps in Python), looked unlike the sessions (no mountains, a bare plain), and duplicated terrain
+  in ~270 KB files; Interludes were meant to look like the session.
+- *Rejected: terrain edited at runtime, a purpose-made terrain from the generator (sharper ramps, shorter wavelength), a second world seed.*
+  The first needs new C# terrain code; the second makes the terrain differ from the session and adds a ~4 MB file per Interlude; a new seed would
+  avoid spatial memory of the session's layout but costs the same storage. The same terrain was chosen; the harvested bushes are gone and the
+  pairs straddle elevation boundaries, so familiarity with regions should matter little (a possible confound to keep in mind).
+- *Rejected: bushes with a moisture value that disagrees with the ground.* It would break the channel participants learn.
+- *Rejected: showing the two bushes one after the other.* It would turn the choice into a memory task.
+- *Consequence:* moisture differences are limited by the terrain. Plateau levels change one step at a time, so with bushes 28 apart a two-level difference
+  (about 0.5, about 10 units of height) is available at about 0.5% of placements and the extremes (0.8) essentially never; the moisture contrast
+  uses the largest available difference and trade-off pairs use one or two levels.
+- *Wider bush separation (bushes about 28 apart; was 21 apart):* chosen to make two-level pairs available (0.5% of placements versus 0.04-0.2%). It lengthens
+  the walk to about 2 s (the time limit and per-fruit speed are the knobs if this is too slow); offset 17 would raise availability again at the cost of a
+  longer turn and bushes near the edge of the view.
+
+**Other design choices:**
+- *Session kind in the same scene, not a second scene:* the sun, terrain, bushes, harvesting, instruction/end screens, logging and flow
+  already work per session; only the trial logic is new.
+- *Lateral offset ≥ harvest range + largest canopy radius:* with a smaller offset a wide canopy comes into range just by walking straight,
+  so the harvest selection (smallest bearing) would default to the widest bush and bias choice by shape.
+- *Choice by harvesting the whole bush at the main task's per-fruit speed and animation:* same controls and a built-in cost to changing one's
+  mind; the choice is the first bush whose last fruit is taken (`interludeHarvestFruits` can be lowered). A shorter earlier version (4 fruits, about
+  1 s) was dropped when the Interludes were made to match the sessions; if the 7 s limit is too tight the per-fruit speed can be raised in the
+  Interlude assets. Left/right keys were the alternative.
+- *Sound in an Interlude:* the exhaustion chime stays on, but each fruit makes a different, neutral pick sound (very short, soft, low, falling pitch)
+  instead of the main blip. The main blip's pitch rises with the reward, so even a fixed-pitch version would pair the harvest with the
+  low-versus-high-reward cue (an earlier version did exactly that, and was replaced). Popups and the score are hidden. HarvestManager fires its events
+  in every session kind and each consumer (HarvestUI, FeedbackAudio, InstructionsPanel) decides what an Interlude shows; suppressing the events at the
+  source (the first version) also silenced the sounds. A practice Interlude inherited the practice session's first-harvest message because it is a copy of
+  that asset, so the message is blanked in the Interlude assets and also ignored in code.
+- *10 s limit with a timeout (was 7 s):* trials never stall; a timeout earns nothing and is logged as choice none. The instruction text reads the number of seconds from `interludeTrialSeconds`.
+- *Stimulus types:* of those discussed, contrasts, graded pairs and extrapolation (extreme-valued trade-offs) were kept; matched-reward pairs
+  and peak-straddling pairs were dropped for now for time. Extrapolation is a trade-off pair when several features matter, and at most one
+  pair when only one does (it would just repeat the contrasts). Contrasts always include one irrelevant feature as an ignored-feature check.
+- *Hidden bonus:* +5 per correct choice (ties count, timeouts and practice do not), shown only on the final screen to give feedback on
+  performance without teaching. 3 trials in the practice Interlude and 10 in the others keeps the extra time to a few minutes.
+- *Prediction mode, analysis and a simulated learner* are deferred.
+
+**Known concerns:** the trial count, the 5-point bonus and the timing (about 2 s walk + 2.5 s harvest in a 7 s window) are untuned; the on-screen
+"7 seconds" is not tied to the config; the practice Interlude's terrain is nearly flat; a trial's spawn can be on a plateau ramp.
+
+---
+
+## Per-fruit harvest time: 0.2 s in sessions, 0.05 s in Interludes
+
+**Decision:** `fruitHarvestDuration` is 0.2 s in P and S1-S4 (was 0.25 s) and 0.05 s in the Interludes. A whole bush now takes 2 s in a session and 0.5 s in an
+Interlude, and the harvest progress ring, which is computed from this value each frame, follows without code changes. The fruit-pop and burst animations keep their
+own durations (0.15 s, 0.35 s), so at 0.05 s per fruit several overlap.
+
+**Why:** a faster harvest makes sessions and Interludes less slow, and the Interlude's 7 s window was tight with a 2.5 s harvest (about 2 s walk + 2.5 s harvest).
+The agent baselines in docs/SCIENCE.md were already stale and were not re-run.
+
+**Equidistance check (Interlude), and the fix:** the two bush centres were exactly equidistant from the spawn point (difference 0.0000; `placementJitter` is only used
+when the main world's lattice is generated), but the harvest rules use the canopy edge and canopy radius depends on shape, so the edge distances differed by about 0.7-1.4
+units on average (up to 2.2, up to 0.3 s of walking), the wide canopy looked closer and the tall narrow one further, and elevation changed the 3D distance by up to about
+4 units. The geometry is now radius-aware: each bush is placed so its canopy edge is `interludeBushDistance` (22.6) from the spawn point and its inner edge is
+`interludeBushBearing` (31.5 degrees) off the heading on opposite sides, so the heading bisects the pair and the turn and the walk to start harvesting either bush are
+identical by the game's own range and cone rules. The config field `interludeBushOffset` was replaced by `interludeBushBearing`. Rejected: keeping symmetric centres (the
+original); shifting only the player (it changes both distances equally). Residual asymmetries that cannot be removed: apparent size, 3D distance on slopes, and a small
+change in the moisture at each bush's final position, which the design re-checks (the 'same moisture' relation must still hold at the final positions).
+
+---
+
+## Interlude: terrain must not hide the bushes; 10 s trials; 15 s sessions for testing
+
+**Decision:** (1) `interludeTrialSeconds` is 10 s (was 7 s); the instruction text takes the number from the config (`{trial_seconds}`). (2) The placement search now
+rejects any spawn/bush pair where the terrain hides the bush: the ground may not rise and then fall (by more than 0.5 units) on the way from the spawn point to either
+bush (`has_hump`, an interior elevation peak above both ends), and the eye line must clear the ground to a point 1 unit above the bush's base (was 3 units). A steady climb or descent,
+or a dip, is allowed. In the generated files the worst rise-then-fall is 0.4 units and the smallest eye-line clearance 0.65. (3) TEMPORARY: `sessionDuration` is 15 s on P and S1-S4 so the whole
+flow can be tested quickly (design values 60/90/120/120/150; see docs/SCIENCE.md), and the Interlude session caps are 150 s (60 s for the practice one) so ten 10 s trials fit.
+
+**Why:** a hill between the player and a bush hides part of it and makes the two bushes look unequal, on top of the radius effect fixed earlier.
+
+---
+
+## Reward popups: fixed cycle of free slots in a central row
+
+**Decision:** with 0.2 s per fruit about 4 "+X" popups are alive at once, so they now cycle through `popupSlotCount` (5) horizontal slots `popupSlotSpacing` (120 px) apart,
+centred on `popupOffset` (order centre, right, left, farther right, farther left). Slots in use are tracked and skipped, so non-overlap does not depend on cadence;
+if every slot is busy the next one in the cycle is reused. Tunables are `HarvestUI` Inspector fields (like `popupOffset`), not SessionConfig.
+
+**Why / rejected:** position must carry no information, so the choice is a deterministic cycle, never reward- or bush-dependent. Rejected: random positions (can overlap, and
+adds noise); reward-dependent height or side (a new information channel); vertical stacking (leaves the central view and collides with the rise); placing popups at the bush's
+screen position (unreadable when the bush is at the edge, the reason for the fixed slot). Assumes slot spacing exceeds the widest popup; raise it if reward scaling grows the text.
+
+
+## Interlude: per-Interlude score screen (correct x/n and bonus), no per-trial feedback
+
+Decision (user): after each non-practice Interlude the end panel shows "x / n correct" and "Bonus: +y" for that Interlude;
+the final screen adds the totals. Timeouts and running totals are not shown. Rejected: final-screen-only (the earlier lean,
+for zero feedback between sessions). The leak risk is judged small because every session has a different reward function and
+only counts are shown, not which trials were right. The practice Interlude shows no score (it earns nothing).
+
+
+## Interlude instruction text: terse, no controls or time limit in the text
+
+**Decision:** the Interlude instructions are short lines in the style of the main sessions' text. The practice Interlude (`instructions_interlude_P.txt`) says only: two trees will
+appear; choose the one you think pays more, based on what you learned in the last session; no points are shown here, but good choices earn a bonus. The later Interludes
+(`instructions_interlude.txt`, numbered with `{interlude}`/`{total}`) say the same minus the practice framing. The controls and the time limit are deliberately not in the text.
+
+**Why:** the controls are the main task's, and the on-screen countdown (upper left) and progress counter (upper right) carry the timing; a longer text was the previous
+draft and the user cut it. The number of seconds, if a variant mentions it, comes from `interludeTrialSeconds` through `{trial_seconds}` (so it cannot drift from the config).
+The text never describes the reward structure, and mentions the bonus only in general terms.
+
+---
+
+## Python tests: cached Interlude generation and changed-file selection
+
+**Decision:** the full Python suite took 127 s, 123 s of it in the Interlude tests, because each of ~15 tests regenerated the five Interludes (a 500k-placement search, a few seconds each).
+The tests now generate each Interlude once per run (a module-level cache), the determinism test uses a smaller search (120k placements, since the property does not depend on its size),
+and the export test reuses a cached result (`write_sidecar` was split out of `export`). One redundant test was removed (offsets growing with radius, covered by the equal-edge-and-bearing test).
+The suite takes ~22 s. `scripts/run_tests.py` goes further: it compares the working tree with a git ref and runs only the test files the changed files can affect (C#, docs, the scene and
+generated world/JSON files affect none; `interlude.py` or an `*_Interlude.asset` affect the Interlude tests; `world.py` or a session asset affect all three), with `--all` before committing.
+
+**Why / not done:** the tests import and call the real generators (`interlude.py`, `world.py`) in memory and write nothing into the project; the generators themselves are manual steps run
+when the design or configs change. The tests do not check that the committed generated files are current (see the open question in docs/SCIENCE.md). Rejected: a `slow` marker as the
+primary mechanism (the changed-file selection and caching cover it), and Unity-side tests (there are none; see CLAUDE.md).

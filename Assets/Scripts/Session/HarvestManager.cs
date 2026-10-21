@@ -53,6 +53,8 @@ public class HarvestManager : MonoBehaviour
     public static event Action<HarvestBout> OnHarvestBoutEnded;
     public static event Action<HarvestHint> OnHintChanged;
     public static event Action OnBushExhausted;
+    // Raised for every fruit taken, in every session kind (the Interlude counts fruits to register a choice).
+    public static event Action<Tree> OnFruitTaken;
 
     public bool IsHarvesting => _harvesting;
     public int FocusTreeId { get; private set; } = -1;
@@ -272,6 +274,10 @@ public class HarvestManager : MonoBehaviour
         _bout.fruitRewards.Add(fruitReward);
         _bout.boutTotal += fruitReward;
 
+        OnFruitTaken?.Invoke(_target);
+
+        // Events fire in every session kind. In an Interlude the consumers hide the outcome (no +X popup or score; the
+        // pick sound plays at a fixed pitch, see HarvestUI and FeedbackAudio).
         OnFruitCollected?.Invoke(fruitReward, worldPos);
         OnScoreChanged?.Invoke(_runningTotal);
 
@@ -316,6 +322,18 @@ public class HarvestManager : MonoBehaviour
         _target = null;
         _fruitTimer = 0f;
         OnHarvestBoutEnded?.Invoke(finished);
+    }
+
+    // The Interlude swaps which bushes are active between trials: stop any harvest first, then call this so the
+    // next Update re-finds the active trees.
+    public void RefreshTrees()
+    {
+        _trees = null;
+    }
+
+    public void CancelBout()
+    {
+        EndBout();
     }
 
     // Signed yaw offset (degrees, + = bush to the right of the view) of the bush being harvested, with its

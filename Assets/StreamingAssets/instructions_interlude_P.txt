@@ -1,0 +1,7 @@
+<size=28><b>Practice Interlude</b></size>
+
+Two trees will appear.
+Choose the one you think pays more, based on what you learned in the last session.
+No points are shown here, but good choices earn a bonus.
+
+<i>Press Enter to begin.</i>

@@ -11,6 +11,26 @@ public class SessionConfig : ScriptableObject
     [Tooltip("Practice sessions are not part of the analyzed experiment: the end screen says 'Practice complete' and they are not counted in 'Session x/N'.")]
     [SerializeField] private bool isPractice;
 
+    [Header("Interlude")]
+    [Tooltip("An Interlude is a short forced-choice block run after a session, in that session's own world (terrain, mountains, sun) with only two bushes present: the player harvests the one they think pays more. Outcomes are never shown. Its reward function and terrain parameters must match the session in interludeFor, and its worldSeed must equal that session's (scripts/interlude.py checks).")]
+    [SerializeField] private bool isInterlude;
+    [Tooltip("Name of the session asset this Interlude probes (e.g. S1); its world file supplies the terrain.")]
+    [SerializeField] private string interludeFor = "";
+    [Tooltip("Number of choice trials.")]
+    [SerializeField] private int interludeTrialCount = 10;
+    [Tooltip("Seconds allowed per trial; the trial moves on when it runs out.")]
+    [SerializeField] private float interludeTrialSeconds = 7f;
+    [Tooltip("Fruits that must be harvested from a bush to register it as the choice (times fruitHarvestDuration = harvest time). Equal to fruitCount = the whole bush.")]
+    [SerializeField] private int interludeHarvestFruits = 10;
+    [Tooltip("Hidden bonus points per correct choice, shown only on the final screen. Practice Interludes award none.")]
+    [SerializeField] private float interludeBonusPerCorrect = 5f;
+    [Tooltip("Hold the sun still at dayStartFraction (the Interlude is not a day).")]
+    [SerializeField] private bool freezeSun;
+    [Tooltip("Distance from the spawn point to the nearest point of each bush's canopy (world units). Both bushes are placed so this is equal, whatever their canopy radius (which depends on shape). Placement is searched by scripts/interlude.py: re-run it after changing.")]
+    [SerializeField] private float interludeBushDistance = 22.6f;
+    [Tooltip("Bearing (degrees from the heading) of each canopy's inner edge, on opposite sides, so the heading bisects the pair and turning to either is the same. Keep it large enough that neither canopy can come into harvest range by walking straight ahead (scripts/interlude.py checks).")]
+    [SerializeField] private float interludeBushBearing = 31.5f;
+
     [Header("Instructions")]
     [Tooltip("File in StreamingAssets shown before this session. '{session}' and '{total}' are replaced by this session's number and the count of non-practice sessions.")]
     [SerializeField] private string instructionsFile = "instructions.txt";
@@ -176,6 +196,15 @@ public class SessionConfig : ScriptableObject
     public float SessionDuration => sessionDuration;
     public int WorldSeed => worldSeed;
     public bool IsPractice => isPractice;
+    public bool IsInterlude => isInterlude;
+    public string InterludeFor => interludeFor;
+    public int InterludeTrialCount => interludeTrialCount;
+    public float InterludeTrialSeconds => interludeTrialSeconds;
+    public int InterludeHarvestFruits => interludeHarvestFruits;
+    public float InterludeBonusPerCorrect => interludeBonusPerCorrect;
+    public bool FreezeSun => freezeSun;
+    public float InterludeBushDistance => interludeBushDistance;
+    public float InterludeBushBearing => interludeBushBearing;
     public string InstructionsFile => instructionsFile;
     public string ControlsReminder => controlsReminder;
     public string FirstHarvestMessage => firstHarvestMessage;

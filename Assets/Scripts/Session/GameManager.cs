@@ -18,6 +18,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private FeedbackAudio feedbackAudio;
     [SerializeField] private AmbientAudio ambientAudio;
     [SerializeField] private InstructionsPanel instructionsPanel;
+    [SerializeField] private InterludeManager interludeManager;
 
     public static GameManager Instance { get; private set; }
 
@@ -26,10 +27,47 @@ public class GameManager : MonoBehaviour
 
     public static float LastSessionScore = 0f;
 
+    // Running totals for the final screen. Practice sessions and practice Interludes are excluded.
+    public static float SessionScoreTotal = 0f;
+    public static int InterludeTrialsScored = 0;
+    public static int InterludeCorrectCount = 0;
+    public static float InterludeBonus = 0f;
+
+    // Tally for the Interlude currently being played (shown on its end screen); reset when it starts.
+    public static int ThisInterludeTrials = 0;
+    public static int ThisInterludeCorrect = 0;
+    public static float ThisInterludeBonus = 0f;
+
+    public static void BeginInterludeTally()
+    {
+        ThisInterludeTrials = 0;
+        ThisInterludeCorrect = 0;
+        ThisInterludeBonus = 0f;
+    }
+
+    public static void RecordInterludeTrial(bool correct, float bonus)
+    {
+        InterludeTrialsScored++;
+        ThisInterludeTrials++;
+        if (correct)
+        {
+            InterludeCorrectCount++;
+            ThisInterludeCorrect++;
+        }
+
+        InterludeBonus += bonus;
+        ThisInterludeBonus += bonus;
+    }
+
     public static int TotalSessions => AllSessionConfigs?.Count ?? 0;
     public static bool IsLastSession => TotalSessions == 0 || CurrentSessionIndex >= TotalSessions - 1;
 
-    // Practice sessions are excluded from the "Session x/N" numbering.
+    // Practice sessions and Interludes are excluded from the "Session x/N" numbering.
+    private static bool IsAnalyzedSession(SessionConfig config)
+    {
+        return config != null && !config.IsPractice && !config.IsInterlude;
+    }
+
     public static int ExperimentSessionCount
     {
         get
@@ -39,24 +77,54 @@ public class GameManager : MonoBehaviour
             {
                 foreach (SessionConfig config in AllSessionConfigs)
                 {
-                    if (config != null && !config.IsPractice) count++;
+                    if (IsAnalyzedSession(config)) count++;
                 }
             }
             return count;
         }
     }
 
-    // 1-based number of the config at `index` among non-practice sessions; 0 for a practice session.
+    // 1-based number of the config at `index` among analyzed sessions; 0 for a practice session or an Interlude.
     public static int ExperimentSessionNumber(int index)
     {
         if (AllSessionConfigs == null || index < 0 || index >= AllSessionConfigs.Count) return 0;
-        if (AllSessionConfigs[index] != null && AllSessionConfigs[index].IsPractice) return 0;
+        if (!IsAnalyzedSession(AllSessionConfigs[index])) return 0;
         int number = 0;
         for (int i = 0; i <= index; i++)
         {
-            if (AllSessionConfigs[i] != null && !AllSessionConfigs[i].IsPractice) number++;
+            if (IsAnalyzedSession(AllSessionConfigs[i])) number++;
         }
         return number;
+    }
+
+    // Number of an Interlude: how many analyzed sessions come before it (so the Interlude after S1 is 1).
+    public static int InterludeNumber(int index)
+    {
+        if (AllSessionConfigs == null || index < 0 || index >= AllSessionConfigs.Count) return 0;
+        int number = 0;
+        for (int i = 0; i < index; i++)
+        {
+            if (IsAnalyzedSession(AllSessionConfigs[i])) number++;
+        }
+        return number;
+    }
+
+    // Name of the stage after the current one, for the end-screen prompt ("Session 2/4", "Interlude 1/4").
+    public static string NextStageLabel()
+    {
+        int next = CurrentSessionIndex + 1;
+        if (AllSessionConfigs == null || next < 0 || next >= AllSessionConfigs.Count || AllSessionConfigs[next] == null)
+        {
+            return "the next stage";
+        }
+
+        SessionConfig config = AllSessionConfigs[next];
+        if (config.IsInterlude)
+        {
+            return config.IsPractice ? "the Interlude" : $"Interlude {InterludeNumber(next)}/{ExperimentSessionCount}";
+        }
+
+        return config.IsPractice ? "the practice session" : $"Session {ExperimentSessionNumber(next)}/{ExperimentSessionCount}";
     }
 
     private void Awake()
@@ -141,6 +209,7 @@ public class GameManager : MonoBehaviour
         if (sessionTimerUI != null)
         {
             sessionTimerUI.sessionConfig = activeConfig;
+            sessionTimerUI.interludeManager = interludeManager;
         }
 
         if (harvestUI != null)
@@ -161,6 +230,13 @@ public class GameManager : MonoBehaviour
         if (instructionsPanel != null)
         {
             instructionsPanel.sessionConfig = activeConfig;
+        }
+
+        if (interludeManager != null)
+        {
+            interludeManager.sessionConfig = activeConfig;
+            interludeManager.harvestUI = harvestUI;
+            interludeManager.dataLogger = dataLogger;
         }
 
         FruitMaterialManager.SetSessionConfig(activeConfig);

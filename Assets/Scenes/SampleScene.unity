@@ -288,10 +288,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   sessionConfigs:
   - {fileID: 11400000, guid: 70757be5aa5814143bb8323f2b1317b8, type: 2}
+  - {fileID: 11400000, guid: 000b4fc98bdc66bc5adb176e59bf30d3, type: 2}
   - {fileID: 11400000, guid: a2c1af91c6840f167b2e2427d351cbd4, type: 2}
+  - {fileID: 11400000, guid: 91b2738dc6972c82ba4b215b4588941e, type: 2}
   - {fileID: 11400000, guid: 45f20c00f9a142cb28d96fa60cf9fac4, type: 2}
+  - {fileID: 11400000, guid: 8cffaec0ecb2d456fa1f274dc00fca94, type: 2}
   - {fileID: 11400000, guid: 70d0a86c90c759779a1bbd61114eb02d, type: 2}
+  - {fileID: 11400000, guid: 5d3d4f3f37d1ecd39a86a0305e7302fd, type: 2}
   - {fileID: 11400000, guid: 1798e31453c98d8d2ac732c983af1112, type: 2}
+  - {fileID: 11400000, guid: 3df5e1233a52378fc95e9ca49c17c6f5, type: 2}
   sunController: {fileID: 419207779}
   harvestManager: {fileID: 528505460}
   terrainManager: {fileID: 1847944418}
@@ -304,6 +309,7 @@ MonoBehaviour:
   feedbackAudio: {fileID: 440847461}
   ambientAudio: {fileID: 1968310339}
   instructionsPanel: {fileID: 269841567}
+  interludeManager: {fileID: 2081684507}
 --- !u!4 &205307911
 Transform:
   m_ObjectHideFlags: 0
@@ -1776,6 +1782,7 @@ MonoBehaviour:
   timerText: {fileID: 1016130530}
   sunController: {fileID: 419207779}
   sessionConfig: {fileID: 0}
+  interludeManager: {fileID: 0}
   sessionEndPanel: {fileID: 1050203413}
   finalScoreText: {fileID: 301916361}
   sessionCompleteText: {fileID: 544481332}
@@ -2651,6 +2658,59 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2081684505
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2081684506}
+  - component: {fileID: 2081684507}
+  m_Layer: 0
+  m_Name: InterludeManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2081684506
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2081684505}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2081684507
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2081684505}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2555d999ac8dab12a92169c2e2181b61, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InterludeManager
+  sessionConfig: {fileID: 0}
+  harvestUI: {fileID: 0}
+  dataLogger: {fileID: 0}
+  player: {fileID: 581266112}
+  cameraController: {fileID: 581266119}
+  harvestManager: {fileID: 528505460}
+  sunController: {fileID: 419207779}
+  fadeSeconds: 0.25
+  blackHoldSeconds: 0.2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -2671,3 +2731,4 @@ SceneRoots:
   - {fileID: 269841568}
   - {fileID: 440847460}
   - {fileID: 1968310338}
+  - {fileID: 2081684506}

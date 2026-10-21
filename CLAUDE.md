@@ -28,6 +28,9 @@ human-facing description only. Read this file fully before making changes.
   git. Once real collection starts, treat it as read-only participant data.
 - Ignore `Library/`, `Builds/`, `Logs/`, `diagnostic.log`, and the
   generated `*.csproj`/`*.slnx` files when searching.
+- **Check `docs/SCIENCE.md` for TEMPORARY test settings** (currently
+  `sessionDuration` is 15 s on P and S1–S4; the design values are in the
+  session table) before committing configs or running a pilot.
 
 ---
 
@@ -161,18 +164,20 @@ Assets/
                valley + mountain-band mesh from the world's grids; sampling, walkable mask),
                TreeGenerator (instantiates bushes from the world file)
     Session/   SessionConfig (ScriptableObject — ALL parameters),
-               GameManager, HarvestManager, SunController, QuitHandler,
+               GameManager, InterludeManager (between-session forced-choice trials), HarvestManager, SunController, QuitHandler,
                RewardFunction / RewardComponent / BasisFunctionType
     UI/        HarvestUI (+X popups, score), SessionTimerUI (timer, bar, end screen), InstructionsPanel,
                FeedbackAudio (synthesized sound cues), AmbientAudio (footsteps, cicada bed, birds), HudWidgets (runtime plates/bars)
     Data/      DataLogger
-  ScriptableObjects/SessionConfig/   P (practice), S1-S4 (the experiment's sessions)
+  ScriptableObjects/SessionConfig/   P (practice), S1-S4 (the experiment's sessions), and P/S1-S4_Interlude (their forced-choice Interludes)
   Audio/Ambient/                     CC0 recordings: Footsteps/ (Kenney Impact Sounds grass steps), Cicadas/ (BigSoundBank
                                      loop); each folder has licence/source notes
   StreamingAssets/instructions*.txt  instructions text read at runtime (practice: instructions.txt;
-                                     S1-S4: instructions_S<n>.txt; {session}/{total} placeholders;
-                                     file chosen per session by SessionConfig.instructionsFile)
-  StreamingAssets/Worlds/            generated <session>_seed<N>.world files (written by scripts/world.py)
+                                     S1-S4: instructions_S<n>.txt; Interludes: instructions_interlude_P.txt and
+                                     instructions_interlude.txt; placeholders {session} {total} {interlude}
+                                     {trial_seconds}; file chosen per session by SessionConfig.instructionsFile)
+  StreamingAssets/Worlds/            generated <session>_seed<N>.world files (written by scripts/world.py) and
+                                     <name>_Interlude_seed<N>.interlude.json (bush table + trials, scripts/interlude.py)
   Scenes/SampleScene.unity           the single scene
   Shaders/   VertexColor (terrain: moisture textures + mountain rock/snow; ignores
              mesh vertex colors), VertexColorUnlit, FruitUnlit, CanopyRim (additive
@@ -180,9 +185,10 @@ Assets/
   Materials/ Prefabs/ Resources/Textures
 docs/        SCIENCE.md, DECISIONS.md
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
-             world.py (reads SessionConfig .asset YAML; generates worlds from one seed — mirrors the
+             interlude.py (Interlude stimulus design + bush placement on the session's terrain), world.py (reads SessionConfig .asset YAML; generates worlds from one seed — mirrors the
              C# placement/attribute/reward rules; exports .npz), sim.py (fast session engine + run_n /
-             compare), agents.py (all agents + registry), test_*.py (pytest, run from scripts/)
+             compare), agents.py (all agents + registry), test_*.py (pytest; run them with `scripts/run_tests.py`, which
+             runs only the test files the changed files can affect, or `--all` before committing)
 ```
 
 Keep this tree in sync when files are added, moved, or retired.
@@ -217,6 +223,17 @@ Keep this tree in sync when files are added, moved, or retired.
   startup when a file is stale. Never hand-edit `.world` files. Fruits are
   runtime-instantiated, never prefab children (their on-bush layout is still seeded
   in C# from `fruitSeed`; it is visual only).
+- **An Interlude is a session kind** (`SessionConfig.isInterlude`), not a
+  separate scene: it runs in its session's own world (the `WorldData` terrain is
+  loaded from the probed session's world file, `worldSeed` equal to the session's)
+  with the bush table replaced by the small `*_Interlude_seed<N>.interlude.json`
+  from `scripts/interlude.py`, and `InterludeManager` drives the trials. There is
+  no Interlude-specific terrain logic: bush moisture/elevation are the terrain's
+  at the position chosen by the placement search. An Interlude asset is a copy of
+  its session's asset (reward function and terrain parameters must match; the
+  script checks). Outcomes are hidden by the consumers of `HarvestManager`'s
+  events (`HarvestUI`, `FeedbackAudio`, `InstructionsPanel`), not by suppressing
+  the events. See `docs/SCIENCE.md` ("Interlude").
 - The reward function is modular and defined entirely in `SessionConfig`
   (per-attribute basis function + weight/peak/width), never hardcoded.
 - Layers: `Default` (misc), `Terrain` (ground), `Tree`, `Player`. Collision
@@ -238,7 +255,8 @@ Constant.
 `movement.csv` (0.1 s samples: pose, camera, visible trees + distances),
 `harvests.csv` (one row per harvest bout, press to release or exhaustion: tree, attributes, true reward, per-fruit
 rewards, running total), `session_metadata.json` (config, reward function,
-camera, full tree registry). **The path and the column semantics are
+camera, full tree registry). An Interlude session writes the same three files plus
+`interlude.csv` (one row per forced-choice trial; see `docs/SCIENCE.md`). **The path and the column semantics are
 fixed — changing either breaks downstream analysis and comparability with
 already-collected data.** Add columns only at the end, and say so.
 
@@ -292,6 +310,26 @@ primary home for that narrative (`git log --grep`, `git log --follow`).
 Reserve `docs/DECISIONS.md` for what git can't hold: rejected alternatives,
 design rationale, conclusions reached before code existed. Commit before
 starting a large Claude task so the diff is reviewable.
+
+### What to regenerate after a change
+The generated files are manual steps (nothing runs them at build time):
+- **Session world** (terrain, seed, spacing, jitter, mountains, reward weights/std,
+  fruit count, moisture terracing): `./venv/bin/python scripts/world.py <sessions> --unity`.
+  Unity warns at startup when a session world is stale.
+- **Interlude** (its session's terrain, seed or reward function; or
+  `interludeTrialCount`, `interludeBushDistance`, `interludeBushBearing`): copy the
+  changed values onto the `*_Interlude` asset, then
+  `./venv/bin/python scripts/interlude.py <names>_Interlude`. Unity does **not** warn
+  when an Interlude file is stale.
+- **No regeneration needed:** `sessionDuration`, `fruitHarvestDuration`, `playerMoveSpeed`,
+  `interludeTrialSeconds`, `interludeHarvestFruits`, `interludeBonusPerCorrect`,
+  audio volumes, instruction text.
+
+### Testing
+`./venv/bin/python scripts/run_tests.py` runs only the Python test files the changed
+files can affect (`--all` before committing; `--dry-run` shows the decision). The
+tests call the real generators in memory and write nothing into the project. There
+are no Unity-side tests.
 
 ### Docs upkeep
 Update `docs/SCIENCE.md` when the task design, session configs, or findings

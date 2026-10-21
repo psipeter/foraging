@@ -15,6 +15,10 @@ public class HarvestUI : MonoBehaviour
     [SerializeField] private float fruitTextRise = 80f;
     [Tooltip("Where +X popups appear, in canvas pixels from screen center. Fixed so a reward is always readable regardless of where the bush is on screen.")]
     [SerializeField] private Vector2 popupOffset = new Vector2(0f, 90f);
+    [Tooltip("Number of side-by-side popup slots. Successive popups cycle through free slots so concurrent ones never overlap.")]
+    [SerializeField] private int popupSlotCount = 5;
+    [Tooltip("Horizontal gap between popup slots, in canvas pixels. Slots fan out left/right of popupOffset.")]
+    [SerializeField] private float popupSlotSpacing = 120f;
     [SerializeField] private float scorePunchScale = 1.3f;
     [SerializeField] private float scorePunchDuration = 0.2f;
 
@@ -27,10 +31,13 @@ public class HarvestUI : MonoBehaviour
     [SerializeField] private float scoreCountUpSeconds = 0.2f;
     [SerializeField] private float scoreFlashSeconds = 0.4f;
 
+    private string _progressText;
     private Coroutine _punch;
     private float _scoreTarget;
     private float _scoreShown;
     private float _flash;
+    private bool[] _slotBusy;
+    private int _nextSlot;
 
     private void OnEnable()
     {
@@ -88,14 +95,25 @@ public class HarvestUI : MonoBehaviour
         }
     }
 
+    // The Interlude shows trial progress ("3/10") in the score slot instead of a score.
+    public void SetProgressText(string text)
+    {
+        _progressText = text;
+        if (totalScoreText != null)
+        {
+            ShowScore();
+        }
+    }
+
     private void ShowScore()
     {
-        totalScoreText.text = $"Score: {Mathf.RoundToInt(_scoreShown)}";
+        totalScoreText.text = _progressText ?? $"Score: {Mathf.RoundToInt(_scoreShown)}";
     }
 
     private void HandleFruitCollected(float amount, Vector3 worldPos)
     {
-        if (canvas == null || floatingTextPrefab == null)
+        // An Interlude never shows outcomes: no +X popup.
+        if (canvas == null || floatingTextPrefab == null || (sessionConfig != null && sessionConfig.IsInterlude))
         {
             return;
         }
@@ -117,7 +135,8 @@ public class HarvestUI : MonoBehaviour
         instance.anchorMin = instance.anchorMax = new Vector2(0.5f, 0.5f);
         instance.pivot = new Vector2(0.5f, 0.5f);
         instance.localScale = Vector3.one;
-        instance.anchoredPosition = popupOffset;
+        int slot = ClaimSlot();
+        instance.anchoredPosition = popupOffset + Vector2.right * SlotOffsetX(slot);
 
         TextMeshProUGUI tmp = instance.GetComponentInChildren<TextMeshProUGUI>();
         if (tmp != null)
@@ -129,11 +148,50 @@ public class HarvestUI : MonoBehaviour
             tmp.outlineColor = new Color32(0, 0, 0, 215);
         }
 
-        StartCoroutine(AnimatePopup(instance, sizeMultiplier, fruitTextDuration, fruitTextRise));
+        StartCoroutine(AnimatePopup(instance, sizeMultiplier, fruitTextDuration, fruitTextRise, slot));
+    }
+
+    // Slot order is a fixed cycle (centre, right, left, farther right, ...), never derived from the reward or the
+    // bush, so position carries no information. Busy slots are skipped, so non-overlap holds for any cadence.
+    private float SlotOffsetX(int slot)
+    {
+        int rank = (slot + 1) / 2;
+        return (slot % 2 == 1 ? rank : -rank) * popupSlotSpacing;
+    }
+
+    private int ClaimSlot()
+    {
+        int count = Mathf.Max(popupSlotCount, 1);
+        if (_slotBusy == null || _slotBusy.Length != count)
+        {
+            _slotBusy = new bool[count];
+            _nextSlot = 0;
+        }
+
+        // All busy (popups outlast the slot pool): reuse the next slot in the cycle anyway.
+        int slot = _nextSlot;
+        for (int i = 0; i < count; i++)
+        {
+            int candidate = (_nextSlot + i) % count;
+            if (!_slotBusy[candidate])
+            {
+                slot = candidate;
+                break;
+            }
+        }
+
+        _slotBusy[slot] = true;
+        _nextSlot = (slot + 1) % count;
+        return slot;
     }
 
     private void HandleScoreChanged(float runningTotal)
     {
+        if (sessionConfig != null && sessionConfig.IsInterlude)
+        {
+            return;     // the score slot shows trial progress instead
+        }
+
         _scoreTarget = runningTotal;
         _flash = 1f;
 
@@ -199,7 +257,7 @@ public class HarvestUI : MonoBehaviour
 
     // Pop in with an overshoot and a small wobble while rising, linger, then fade out. The whole popup (text and
     // outline) fades through a CanvasGroup.
-    private IEnumerator AnimatePopup(RectTransform rect, float sizeMultiplier, float duration, float risePixels)
+    private IEnumerator AnimatePopup(RectTransform rect, float sizeMultiplier, float duration, float risePixels, int slot)
     {
         var group = rect.gameObject.AddComponent<CanvasGroup>();
         group.alpha = 0f;
@@ -223,6 +281,11 @@ public class HarvestUI : MonoBehaviour
 
             group.alpha = t < 0.7f ? Mathf.Clamp01(t / 0.1f) : 1f - (t - 0.7f) / 0.3f;
             yield return null;
+        }
+
+        if (_slotBusy != null && slot < _slotBusy.Length)
+        {
+            _slotBusy[slot] = false;
         }
 
         Destroy(rect.gameObject);

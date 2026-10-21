@@ -30,6 +30,17 @@ public class CameraController : MonoBehaviour
         ApplyCameraSettings();
     }
 
+    // Sets the heading and pitch directly (the Interlude faces the player toward the bushes at each trial start).
+    public void SetView(float yaw, float pitch)
+    {
+        _yaw = yaw;
+        _pitch = pitch;
+        if (playerCamera != null)
+        {
+            ApplyRotation();
+        }
+    }
+
     public void ApplyCameraSettings()
     {
         if (playerCamera == null || sessionConfig == null)
