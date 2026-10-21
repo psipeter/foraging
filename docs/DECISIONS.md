@@ -838,3 +838,95 @@ generated world/JSON files affect none; `interlude.py` or an `*_Interlude.asset`
 **Why / not done:** the tests import and call the real generators (`interlude.py`, `world.py`) in memory and write nothing into the project; the generators themselves are manual steps run
 when the design or configs change. The tests do not check that the committed generated files are current (see the open question in docs/SCIENCE.md). Rejected: a `slow` marker as the
 primary mechanism (the changed-file selection and caching cover it), and Unity-side tests (there are none; see CLAUDE.md).
+
+
+---
+
+## Sun and sky: the same arc every session; the sky is driven on a runtime material copy
+
+**Decision:** every session plays the same sun/sky arc, from mid-morning (`dayStartFraction` 0.3, sun about 73 degrees) to dusk (low sun, warm sky, dim light at the end), mapped onto the
+session's length, so a shorter session simply plays the arc faster and the lighting changes faster (with the temporary 15 s sessions the whole arc takes 15 s). Interludes hold the sun still
+(`freezeSun`, at their own `dayStartFraction`) because lighting changes between trials would add noise to visual judgments of canopy shape and ground colour. `SunController` now drives the sky on a
+runtime copy of `SkyboxMaterial` (`RenderSettings.skybox` is pointed at it and restored on destroy) instead of writing to the shared asset.
+
+**Why:** in the Editor, edits made to a shared material during Play are saved into the asset, so `SkyboxMaterial.mat` showed a diff after every play (its `_SkyTint` and `_AtmosphereThickness`
+ended at whatever the last frame was). It was the only runtime writer to a shared asset: bush canopies, rims, rings and the terrain use per-object material instances, and `RenderSettings`
+values are scene state that Unity discards when Play ends. The sky tint and thickness are still computed from the `SessionConfig` palette (`skyColorDawn`, `skyColorNoon`, `sunIntensityDawn/Noon`,
+the sun path parameters), so the schedule stays configurable.
+
+**Rejected / not done:** extending the arc into darkness (a night end would reduce the visibility of the moisture and shape channels and conflicts with the earlier decision to start later in the day for
+brighter, more neutral light; superseded by the next entry, which ends at 10 degrees); a fixed wall-clock sun speed independent of session length (sessions would end at different times of day);
+one day across the whole experiment (P in the morning to S4 at night). The SkyboxMaterial asset itself is left at its last committed values; it no longer changes.
+
+
+---
+
+## Sun trajectory: a real solar arc from mid-morning to 10 degrees at dusk
+
+**Decision:** the sun now follows a standard solar path instead of `elevation = sin(t*pi) * sunArcHeight` with a 25 degree floor. New `SessionConfig` fields: `sunLatitude` (40), `sunDeclination` (+12),
+`sunEndElevation` (10), `sunAzimuthOffset` (0). `dayStartFraction` still places the start (0.3 = mid-morning, 45 degrees); elevation and azimuth come from the usual formulas, with the day mapped onto hour angle so the sun
+is at the horizon at sunrise/sunset, peaks about 62 degrees, rises in the east-south-east and sets in the west-north-west, moving fastest near the horizon. The session runs from the start hour angle to
+the one at which the elevation equals `sunEndElevation`, mapped onto the session's length. `sunArcHeight` was removed; `minSunElevation` stays as an optional floor, now 0 (off). Interludes still freeze the sun
+(at their `dayStartFraction`, 0.5 = noon, sun from the south). The sky palette, light intensity and ambient light keep their old formulas (dawn-to-noon blend of `sin(pi * t)`) and, after a correction, their old clock: `t` runs from `dayStartFraction` to 1 over
+the session independently of where the sun is (a first version tied `t` to the new sun's hour angle, 0.3 to 0.93, which changed the colour and intensity timeline; the user preferred the old look, so
+direction and light are decoupled). Shadow and ambient behaviour were deliberately **not** changed. Consequence: sky colour, intensity and ambient are identical to the old arc at every point, but the sun is lower
+(45 degrees at the start, 10 at the end instead of 73 and 25), so the direct light on level ground is lower: about 20% less overall at the start and near the end (total 1.32 vs 1.65 at the start, 0.43 vs 0.56 at the end,
+arbitrary units). If the overall brightness should match the old arc, raise `sunIntensityNoon`/`sunIntensityDawn`; if the end should be darker, the levers are `sunEndElevation`, `sunIntensityDawn` and the
+(hardcoded x0.7) ambient factor, which barely changes through the day (ambient is about 75% of the light at dusk).
+
+**Why:** the old arc passed directly overhead (90 degrees, a tropical-only path), started at 73 degrees, and sat pinned at 25 degrees for the last 12% of every session while its direction swept sideways, so it never
+approached the horizon or the mountains. Seen from the valley the skyline is 3-22 degrees (median 9, measured on the real terrain), so ending at 10 degrees is just above the ridge from most places.
+
+**Not decided / risks:** the 25 degree floor existed to hide shadow-bias artifacts at low sun and terrain does not self-shadow, so the last part of each session may show artifacts; whether the dusk scene is still readable
+for ground colour and canopy shape is for the playtest to judge (options if not: raise `minSunElevation`, fade shadows and intensity near the horizon, keep an ambient floor, or end higher). Rejected earlier: extending the
+path into darkness, a fixed wall-clock sun speed, one day across the whole experiment.
+
+
+---
+
+## Lighting: physics for hue, curves of elevation for brightness, an exposure ramp (SolarHybrid)
+
+**Decision:** a new `SessionConfig.sunLightingModel` (`LegacyClock` | `SolarHybrid`, default SolarHybrid) controls how the sun's colour, intensity, sky and ambient follow the day; the sun's *direction* (the real solar path) is the same in both.
+SolarHybrid: (1) **hue from physics**: the sun's colour is its transmittance through the atmosphere, `exp(-tau * airmass)` per channel (Kasten-Young air mass, `sunExtinction` = zenith optical depth (0.10, 0.16, 0.30)),
+normalised so only chroma changes and blended with the old warm white by `sunHueStrength` (0.8) as a guard on hue readability; the Unity procedural sky is left to do its own Rayleigh scattering from the sun's direction (neutral
+`skyTintNeutral`, constant `skyAtmosphereThickness`) instead of our hand-made orange-to-blue blend; (2) **brightness from curves of the sun's elevation** in `SessionConfig`: `sunIntensityByElevation`, `ambientIntensityByElevation`
+(the scene's ambient source is Skybox, and the ambient probe is now rebuilt from the sky every 0.5 s with `DynamicGI.UpdateEnvironment`), `skyExposureByElevation`; (3) **an exposure ramp**: `postExposureByElevation` drives the URP
+Color Adjustments post-exposure (stops) on a runtime copy of the Global Volume profile (never the asset), 0 at noon down to -0.6 EV at 10 degrees. Defaults are uncalibrated starting values (curves are piecewise-linear and editable in the Inspector).
+
+**Research findings that shaped it:** engines use the sun as one driver of a chain, not the only one: older ones (Frostbite before 2016, many Unreal projects) authored per-time-of-day keyframes for sun colour, sky, fog and ambient and blended them
+(laborious to keep consistent); newer ones derive sun colour and sky from an atmosphere model and capture the sky for ambient light, with artist scales on top (Frostbite/Hillaire, Unreal Sky Atmosphere + Sky Light); brightness is handled with
+exposure/eye adaptation and colour with grading LUTs blended by time (BeamNG, CryEngine, Factorio docs). Unity's procedural skybox shader computes sunset reddening from the main light's direction (the light's colour only tints the sun disc), so overriding
+its tint and thickness per frame (the old blend) double-counted the sunset colour. Sources are in the conversation record; the Frostbite and Hillaire PDFs were only read through search summaries.
+
+**Discovered while building it (affects earlier analysis):** the scene's ambient source is Skybox, so the old script's `RenderSettings.ambientLight` writes (flat colour) had no effect, and the ambient probe was a fixed bluish value that nothing refreshed. The terrain shader
+(`VertexColor.shader`) lights with `0.15 + 0.85 * shadow * N.L` using only the sun's direction (no colour, no intensity) plus `unity_AmbientSky`, which is black in Skybox mode; the fruit shader uses an ambient floor of 0.35 and specular with the light colour; only the canopy
+(URP Lit) responds to the sun's colour and intensity. So the earlier "ambient is 75% of the light at dusk" estimates described the script's intent, not the rendered scene, and the hue and intensity curves act on the canopy, sky and ambient probe only. The terrain stays white-lit (good for ground-hue
+readability), and its dusk darkness comes from `N.L` (the sun's direction) and the exposure ramp.
+
+**Caveats:** post-exposure also darkens the fruit (a data channel): hue is unchanged but luminance drops, so keep the end value modest. Not done, left as options: making the terrain shader use the sun's colour and intensity (a visual-channel change), fading direct light behind the ridge,
+and an authored colour-grading LUT per time of day. (The `LegacyClock` model was later removed; see the cleanup entry at the end of this section.)
+
+
+---
+
+## Lighting performance: ambient rebuilds in steps, terrain tint uploaded only on change
+
+**Symptom:** a frame-rate drop after the SolarHybrid lighting model. **Suspects found by reading the code (not measured):** (1) `DynamicGI.UpdateEnvironment()` (re-renders the sky into the environment cubemap, with a GPU readback) was called every 0.5 s and
+`RenderSettings.ambientMode`/`ambientIntensity` were assigned every frame, which can mark the environment dirty; (2) `TerrainManager.UpdateTerrainLighting` re-uploaded the mesh's vertex colours every frame (reading `mesh.colors` allocates a copy; the mesh is now 201,601
+vertices, 3x the size when it was last measured at ~210 fps), although the terrain shader ignores vertex colours. **Changes:** the ambient probe is rebuilt only when `ambientUpdateInterval` (1.5 s) has passed and the sun has moved `ambientUpdateMinDegrees` (2) (and once at the
+start; interval 0 = only once; frozen-sun Interludes rebuild once), the ambient mode is set only when it differs, post-exposure is written only when it changes, the terrain tint upload is skipped unless the ambient colour changed by more than 0.002, and a profiler sample
+(`SunController.ApplyHybridLighting`) marks the per-frame work. If frames are still low: set `ambientUpdateInterval` to 0, compare with `LegacyClock`, and look at the profiler. The step in ambient intensity between rebuilds is at most about 0.05, which should not be visible.
+
+---
+
+## Lighting cleanup: the LegacyClock model and the terrain vertex tint were removed
+
+Once the SolarHybrid lighting was confirmed good (and the frame rate recovered), the old path was deleted rather than kept for A/B: the `SunLightingModel` enum and `sunLightingModel` field, the dawn/noon palette (`sunIntensityDawn/Noon`, `skyColorDawn/Noon`), `SunController.UpdateSunColorAndIntensity/UpdateSkyAndAmbient/CurrentAmbientColor`, and `TerrainManager.UpdateTerrainLighting` with its wiring (the terrain shader never used vertex colours, so it only cost time).
+`SunController.ApplyHybridLighting`/`EvaluateHybrid` were renamed `ApplyLighting`/`EvaluateLighting`. All four lighting assets (SkyboxMaterial, the scene's Global Volume profile, DefaultVolumeProfile, SampleSceneProfile) are still referenced, so none were deleted. `minSunElevation` is kept as an optional floor on the light's elevation (default 0). The earlier entries above stay as history; to recover the old palette use git.
+
+---
+
+## Sun start and end are both elevations
+
+`dayStartFraction` (fraction of the daylight elapsed) was replaced by `sunStartElevation` (30), so the start and the end (`sunEndElevation`) use the same calculation: the hour angle at which the sun reaches that elevation, morning side for the start and afternoon side for the end. Earlier entries mentioning `dayStartFraction` are history. Interludes freeze the sun at solar noon (hour angle 0), independent of both.
+

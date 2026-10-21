@@ -239,6 +239,15 @@ Keep this tree in sync when files are added, moved, or retired.
 - Layers: `Default` (misc), `Terrain` (ground), `Tree`, `Player`. Collision
   matrix: Player↔Terrain off, Player↔Tree on. Terrain following is a
   downward raycast each `FixedUpdate`, not gravity.
+- **What responds to the sun:** the sun's *direction* drives the terrain (`VertexColor.shader`
+  lights with `0.15 + 0.85 * shadow * N.L`, ignoring the light's colour and intensity) and the
+  fruit shaders; only the canopy (URP Lit), the sky and the ambient probe respond to its colour and
+  intensity, and post-exposure affects everything. The scene's ambient source is Skybox, so
+  `RenderSettings.ambientLight` has no effect. See `docs/DECISIONS.md` ("Lighting").
+- **Never write to a shared material or other asset at runtime** (`sharedMaterial`,
+  a material referenced from the scene): in the Editor the change is saved into the
+  file after Play and shows up as churn in every commit. Use `new Material(...)` /
+  `renderer.material` instances (as `SunController` does for the sky).
 - Custom shaders must be in Project Settings → Graphics → Always Included
   Shaders, or `Shader.Find()` returns null in standalone builds.
 

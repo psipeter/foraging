@@ -7,15 +7,12 @@ public class TerrainManager : MonoBehaviour
     public WorldData world;
     [SerializeField] private GameObject groundObject;
     [SerializeField] private Material terrainMaterial;
-    [SerializeField] private SunController sunController;
 
     private static readonly Color Arid = new Color(0.76f, 0.65f, 0.42f);
     private static readonly Color Grassland = new Color(0.44f, 0.56f, 0.24f);
     private static readonly Color Swampy = new Color(0.22f, 0.29f, 0.18f);
 
     public GameObject GroundObject => groundObject;
-
-    private Color[] _baseColors;
 
     private void Start()
     {
@@ -143,9 +140,6 @@ public class TerrainManager : MonoBehaviour
         }
         meshCollider.sharedMesh = mesh;
 
-        _baseColors = colors;
-
-        UpdateTerrainLighting();
     }
 
     // Terrain fields are bilinear samples of the world file's mesh grids (the mesh interpolates the same way).
@@ -174,38 +168,6 @@ public class TerrainManager : MonoBehaviour
         return SampleMountain(worldX, worldZ) < threshold;
     }
 
-    public void UpdateTerrainLighting()
-    {
-        if (groundObject == null)
-        {
-            return;
-        }
-
-        Color ambient = sunController != null ? sunController.CurrentAmbientColor : RenderSettings.ambientLight;
-
-        MeshFilter meshFilter = groundObject.GetComponent<MeshFilter>();
-        if (meshFilter == null || meshFilter.sharedMesh == null || _baseColors == null)
-        {
-            return;
-        }
-
-        Mesh mesh = meshFilter.sharedMesh;
-        Color[] tintedColors = mesh.colors;
-        if (tintedColors == null || tintedColors.Length != _baseColors.Length)
-        {
-            tintedColors = new Color[_baseColors.Length];
-        }
-
-        Color ambientScaled = ambient * 2f;
-
-        for (int i = 0; i < _baseColors.Length; i++)
-        {
-            tintedColors[i] = _baseColors[i] * ambientScaled;
-        }
-
-        mesh.colors = tintedColors;
-        mesh.UploadMeshData(false);
-    }
 
     private Color MoistureToColor(float moisture)
     {

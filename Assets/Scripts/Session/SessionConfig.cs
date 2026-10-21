@@ -24,7 +24,7 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private int interludeHarvestFruits = 10;
     [Tooltip("Hidden bonus points per correct choice, shown only on the final screen. Practice Interludes award none.")]
     [SerializeField] private float interludeBonusPerCorrect = 5f;
-    [Tooltip("Hold the sun still at dayStartFraction (the Interlude is not a day).")]
+    [Tooltip("Hold the sun still at solar noon (the Interlude is not a day).")]
     [SerializeField] private bool freezeSun;
     [Tooltip("Distance from the spawn point to the nearest point of each bush's canopy (world units). Both bushes are placed so this is equal, whatever their canopy radius (which depends on shape). Placement is searched by scripts/interlude.py: re-run it after changing.")]
     [SerializeField] private float interludeBushDistance = 22.6f;
@@ -161,16 +161,40 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float worldHalfExtent = 50f;
 
     [Header("Lighting")]
-    [Tooltip("Fraction (0-1) of the sunrise-to-sunset day already elapsed when the session starts. 0 = dawn; 0.5 = noon; the session still ends at sunset.")]
-    [SerializeField] private float dayStartFraction = 0.3f;
+    [Tooltip("Elevation (degrees above the horizon) of the sun when the session starts, on the morning side of noon (about 30 is mid-morning). The session then plays the sun's path from there to sunEndElevation on the afternoon side.")]
+    [SerializeField] private float sunStartElevation = 30f;
+    [Tooltip("Latitude (degrees) of the simulated sun. With the declination it sets the path: noon elevation = 90 - |latitude - declination|, and the sun rises and sets toward the east and west (more northerly in summer).")]
+    [SerializeField] private float sunLatitude = 40f;
+    [Tooltip("Solar declination (degrees; about +23 midsummer, 0 equinox, -23 midwinter): the time of year.")]
+    [SerializeField] private float sunDeclination = 12f;
+    [Tooltip("Elevation (degrees above the horizon) the sun has reached when the session ends. Seen from the valley the mountain skyline is about 3-22 degrees (median 9), so about 10 puts the sun just above the mountains at dusk; lower sinks it behind them.")]
+    [SerializeField] private float sunEndElevation = 10f;
+    [Tooltip("Rotates the whole sun path about the vertical axis (degrees). 0 = the sun sits at compass azimuth measured from world +Z toward +X (south at noon in the northern hemisphere = world -Z).")]
+    [SerializeField] private float sunAzimuthOffset = 0f;
     [Tooltip("Distance fog on or off. Distances and color are the scene's Lighting > Fog settings (linear). Off by default: fog limits how far bushes can be seen.")]
     [SerializeField] private bool fogEnabled = false;
-    [SerializeField] private float sunArcHeight = 60f;
-    [SerializeField] private float minSunElevation = 5f;
-    [SerializeField] private float sunIntensityDawn = 0.4f;
-    [SerializeField] private float sunIntensityNoon = 1.2f;
-    [SerializeField] private Color skyColorDawn = new Color(0.8f, 0.4f, 0.2f);
-    [SerializeField] private Color skyColorNoon = new Color(0.3f, 0.6f, 1.0f);
+    [Tooltip("optical depth of the atmosphere at the zenith for red, green and blue. The sun's colour is exp(-depth * air mass), which turns it from warm white at noon to orange near the horizon (blue is removed fastest).")]
+    [SerializeField] private Vector3 sunExtinction = new Vector3(0.10f, 0.16f, 0.30f);
+    [Tooltip("how much of the physical colour shift is applied (0 = constant warm white, 1 = fully physical). Lower it to keep ground and canopy hues easier to judge at dusk.")]
+    [SerializeField] [Range(0f, 1f)] private float sunHueStrength = 0.8f;
+    [Tooltip("constant Sky Tint of the procedural sky (grey = Unity's neutral); the sunset colours then come from the shader's scattering as the sun lowers.")]
+    [SerializeField] private Color skyTintNeutral = new Color(0.5f, 0.5f, 0.5f);
+    [Tooltip("constant Atmosphere Thickness of the procedural sky.")]
+    [SerializeField] private float skyAtmosphereThickness = 1f;
+    [Tooltip("x = sun elevation in degrees, y = directional light intensity. Acts on the canopy (standard lit shader) and fruit highlights; the terrain and fruit shaders ignore it.")]
+    [SerializeField] private AnimationCurve sunIntensityByElevation = ElevationCurve(0f, 0.1f, 5f, 0.25f, 10f, 0.45f, 20f, 0.8f, 34f, 1.15f, 45f, 1.35f, 62f, 1.5f, 90f, 1.5f);
+    [Tooltip("x = sun elevation in degrees, y = ambient intensity multiplier (Lighting > Environment > Intensity Multiplier). The ambient probe is rebuilt from the sky a few times a second, so it also reddens and dims with the sun.")]
+    [SerializeField] private AnimationCurve ambientIntensityByElevation = ElevationCurve(0f, 0.2f, 10f, 0.35f, 20f, 0.6f, 34f, 0.85f, 45f, 1f, 90f, 1f);
+    [Tooltip("minimum seconds between rebuilds of the ambient probe from the sky (DynamicGI.UpdateEnvironment re-renders the environment cubemap and can cause a frame spike). 0 = build it once at the start only.")]
+    [SerializeField] private float ambientUpdateInterval = 1.5f;
+    [Tooltip("the sun must also have moved at least this many degrees since the last rebuild of the ambient probe.")]
+    [SerializeField] private float ambientUpdateMinDegrees = 2f;
+    [Tooltip("x = sun elevation in degrees, y = the procedural sky's Exposure.")]
+    [SerializeField] private AnimationCurve skyExposureByElevation = ElevationCurve(0f, 1f, 10f, 1.1f, 20f, 1.25f, 34f, 1.3f, 90f, 1.3f);
+    [Tooltip("x = sun elevation in degrees, y = post-exposure in stops (EV) of the URP Color Adjustments override. 0 = unchanged; negative darkens everything on screen, including the fruit (hue unchanged, luminance lower).")]
+    [SerializeField] private AnimationCurve postExposureByElevation = ElevationCurve(0f, -1f, 10f, -0.6f, 20f, -0.3f, 34f, 0f, 90f, 0f);
+    [Tooltip("Optional floor (degrees) on the light's elevation. 0 = off (the sun follows the real path). Raise it if low-sun shadow artifacts appear; the earlier fixed arc used 25.")]
+    [SerializeField] private float minSunElevation = 0f;
 
     [Header("Mountains (map border)")]
     [Tooltip("Width of the unclimbable mountain band at the map edge (world units). 0 disables mountains.")]
@@ -191,6 +215,24 @@ public class SessionConfig : ScriptableObject
     [SerializeField] [Range(0f, 1f)] private float mountainFogStrength = 0.3f;
     [SerializeField] private Color mountainRockColor = new Color(0.42f, 0.40f, 0.38f);
     [SerializeField] private Color mountainSnowColor = new Color(0.93f, 0.95f, 0.98f);
+
+    // Piecewise-linear default curve from (x0, y0, x1, y1, ...) pairs, with tangents matching the segment slopes.
+    private static AnimationCurve ElevationCurve(params float[] xy)
+    {
+        int n = xy.Length / 2;
+        var keys = new Keyframe[n];
+        for (int i = 0; i < n; i++)
+        {
+            float x = xy[2 * i], y = xy[2 * i + 1];
+            float inSlope = i > 0 ? (y - xy[2 * i - 1]) / (x - xy[2 * i - 2]) : 0f;
+            float outSlope = i < n - 1 ? (xy[2 * i + 3] - y) / (xy[2 * i + 2] - x) : 0f;
+            if (i == 0) inSlope = outSlope;
+            if (i == n - 1) outSlope = inSlope;
+            keys[i] = new Keyframe(x, y, inSlope, outSlope);
+        }
+
+        return new AnimationCurve(keys);
+    }
 
     public RewardFunction RewardFunction => rewardFunction;
     public float SessionDuration => sessionDuration;
@@ -278,13 +320,22 @@ public class SessionConfig : ScriptableObject
     public Color MountainRockColor => mountainRockColor;
     public Color MountainSnowColor => mountainSnowColor;
     public bool FogEnabled => fogEnabled;
-    public float DayStartFraction => dayStartFraction;
-    public float SunArcHeight => sunArcHeight;
+    public float SunStartElevation => sunStartElevation;
+    public float AmbientUpdateInterval => ambientUpdateInterval;
+    public float AmbientUpdateMinDegrees => ambientUpdateMinDegrees;
+    public Vector3 SunExtinction => sunExtinction;
+    public float SunHueStrength => sunHueStrength;
+    public Color SkyTintNeutral => skyTintNeutral;
+    public float SkyAtmosphereThickness => skyAtmosphereThickness;
+    public AnimationCurve SunIntensityByElevation => sunIntensityByElevation;
+    public AnimationCurve AmbientIntensityByElevation => ambientIntensityByElevation;
+    public AnimationCurve SkyExposureByElevation => skyExposureByElevation;
+    public AnimationCurve PostExposureByElevation => postExposureByElevation;
+    public float SunLatitude => sunLatitude;
+    public float SunDeclination => sunDeclination;
+    public float SunEndElevation => sunEndElevation;
+    public float SunAzimuthOffset => sunAzimuthOffset;
     public float MinSunElevation => minSunElevation;
-    public float SunIntensityDawn => sunIntensityDawn;
-    public float SunIntensityNoon => sunIntensityNoon;
-    public Color SkyColorDawn => skyColorDawn;
-    public Color SkyColorNoon => skyColorNoon;
     public float EyeHeight => eyeHeight;
     public float CameraFieldOfView => cameraFieldOfView;
     public float CameraNearClip => cameraNearClip;

@@ -108,14 +108,259 @@ MonoBehaviour:
   moistureTerraceResidual: 0
   terrainMeshResolution: 449
   worldHalfExtent: 350
-  dayStartFraction: 0.3
+  sunStartElevation: 30
+  sunLatitude: 40
+  sunDeclination: 12
+  sunEndElevation: 10
+  sunAzimuthOffset: 0
   fogEnabled: 0
-  sunArcHeight: 90
-  minSunElevation: 25
-  sunIntensityDawn: 0.5
-  sunIntensityNoon: 1.5
-  skyColorDawn: {r: 0.8700711, g: 0.4351538, b: 0, a: 1}
-  skyColorNoon: {r: 0, g: 0.72206545, b: 1, a: 1}
+  sunExtinction: {x: 0.1, y: 0.16, z: 0.3}
+  sunHueStrength: 0.8
+  skyTintNeutral: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  skyAtmosphereThickness: 1
+  sunIntensityByElevation:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0.1
+      inSlope: 0.03
+      outSlope: 0.03
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 5
+      value: 0.25
+      inSlope: 0.03
+      outSlope: 0.04
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 10
+      value: 0.45
+      inSlope: 0.04
+      outSlope: 0.035000004
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 20
+      value: 0.8
+      inSlope: 0.035000004
+      outSlope: 0.024999997
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 34
+      value: 1.15
+      inSlope: 0.024999997
+      outSlope: 0.018181823
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 45
+      value: 1.35
+      inSlope: 0.018181823
+      outSlope: 0.008823528
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 62
+      value: 1.5
+      inSlope: 0.008823528
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 90
+      value: 1.5
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  ambientIntensityByElevation:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0.2
+      inSlope: 0.014999999
+      outSlope: 0.014999999
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 10
+      value: 0.35
+      inSlope: 0.014999999
+      outSlope: 0.025000002
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 20
+      value: 0.6
+      inSlope: 0.025000002
+      outSlope: 0.017857144
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 34
+      value: 0.85
+      inSlope: 0.017857144
+      outSlope: 0.013636362
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 45
+      value: 1
+      inSlope: 0.013636362
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 90
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  ambientUpdateInterval: 1.5
+  ambientUpdateMinDegrees: 2
+  skyExposureByElevation:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0.010000003
+      outSlope: 0.010000003
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 10
+      value: 1.1
+      inSlope: 0.010000003
+      outSlope: 0.014999998
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 20
+      value: 1.25
+      inSlope: 0.014999998
+      outSlope: 0.003571425
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 34
+      value: 1.3
+      inSlope: 0.003571425
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 90
+      value: 1.3
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  postExposureByElevation:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: -1
+      inSlope: 0.04
+      outSlope: 0.04
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 10
+      value: -0.6
+      inSlope: 0.04
+      outSlope: 0.030000001
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 20
+      value: -0.3
+      inSlope: 0.030000001
+      outSlope: 0.021428572
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 34
+      value: 0
+      inSlope: 0.021428572
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 90
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  minSunElevation: 0
   mountainBandWidth: 60
   mountainBoundaryJitter: 15
   mountainHeight: 70

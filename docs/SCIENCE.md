@@ -147,8 +147,20 @@ an oversight.
 
 - **Session:** fixed duration per session (design values P 60 s, S1 90 s, S2/S3 120 s, S4 150 s; **temporarily 15 s for
   testing**, see "Session configurations"), the
-  second part of a day cycle: the session starts `dayStartFraction` (0.3) of the way from
-  sunrise to sunset and ends at sunset. Movement costs time (fixed player speed); harvesting costs
+  second part of a day cycle: the session starts when the sun is `sunStartElevation` (30°) above the horizon on the morning
+  side and ends at dusk, when it is `sunEndElevation` (10°) on the afternoon side (same calculation for both; the mountain
+  skyline is about 3–22° from the valley, median 9°; the 30°/10° pair is a tuned-by-eye trial, since equal values did not look symmetric). The sun follows a real solar path (`sunLatitude` 40°,
+  `sunDeclination` +12°: a start at 30° elevation, a peak of about 62°, rising toward the east-south-east and
+  setting toward the west-north-west, moving faster near the horizon; `sunAzimuthOffset` rotates the path). Every session
+  plays this same path, mapped onto its length, so a shorter session plays it faster; Interludes hold the sun still
+  (at noon, from the south). Light and sky take hue from
+  physics (the sun's colour is its transmittance through the atmosphere, warm white at noon and orange near the horizon; the procedural
+  sky reddens from the sun's direction with a constant neutral tint) and brightness from curves of the sun's elevation (light intensity,
+  ambient-probe multiplier, sky exposure), plus an exposure ramp (post-exposure, in stops) that darkens everything on screen toward
+  dusk. Important:
+  the terrain and fruit shaders ignore the sun's colour and intensity (terrain lighting is `0.15 + 0.85 * shadow * N.L`, with white light
+  and a black ambient term; fruit has an ambient floor), so the hue and intensity curves act on the canopy, the sky and the ambient
+  probe, and the terrain darkens through the sun's direction plus the exposure ramp. Movement costs time (fixed player speed); harvesting costs
   `fruitHarvestDuration` seconds per fruit (0.2 s in sessions, so 10 fruits = 2 s per bush; 0.05 s in Interludes,
   0.5 s per bush); player speed 7.5. The progress ring is computed from this value, so it adapts.
   Goal: maximize total reward.
@@ -610,8 +622,10 @@ its generated files; a participant-ID screen; and writing the hypotheses down.
   shape and color are independent of position, moisture is not.
 - **Weak-to-moderate prior on moisture** (ground color) — acknowledged in the
   attribute table; no mitigation.
-- Terrain doesn't self-shadow (URP limitation at landscape scale); shadow
-  bias artifacts at low sun angles are mitigated by `minSunElevation`.
+- Terrain doesn't self-shadow (URP limitation at landscape scale). Shadow bias artifacts at low sun angles used to be
+  hidden by flooring the light at 25° (`minSunElevation`); with the real sun path the light now ends at 10°, so the last
+  stretch of each session is **untested** for artifacts and for readability (the shadow and ambient behaviour were deliberately not
+  changed). If problems appear, raise `minSunElevation`, fade shadows/intensity near the horizon, or end the path higher.
 - Player capsule/model may visually overlap wide canopies slightly.
 - `FruitMaterialManager`'s cache persists across Play-mode sessions in the
   Editor (intentional).
