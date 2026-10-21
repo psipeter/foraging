@@ -980,3 +980,15 @@ rates). Reason: the per-frame trajectory log scales with frame rate (an uncapped
 (the on-screen countdown shows it; the placeholder is still supported). Consequence of the shorter block (`trial_mix`): S1-S2 get 2 contrasts (relevant feature + ignored-feature
 check), 2 graded, 1 extrapolation; S3-S4 get 2 contrasts, 1 graded, 2 extrapolation. S3 loses its ignored-shape check and S4 (three relevant features) has no moisture contrast, so
 moisture is probed only through the extrapolation trade-offs. The mix function was deliberately not changed; revisit it if direct moisture or ignored-feature coverage is wanted back.
+
+
+---
+
+## Start clearing 31 -> 8; Interlude trials aim the camera at the pair vertically
+
+`startClearingRadius` is 8 on P, S1-S4 and their Interludes (the Interlude assets must match, `scripts/interlude.py` checks it; worlds and Interlude files regenerated). With `treeSpacing` 23 the nearest lattice ring sits
+17-23 from the spawn, and 31 removed that whole ring (nearest bush ~36 away); 8 = 31 - 23, one spacing less, brings the ring back (nearest bush 17-23 away, ~1-2 s from harvest range). Any value up to ~17 gives identical worlds, so 8 is
+not a tuned number, only "no clearing beyond the spawn point". All worlds changed (bush counts and the attribute/reward draws shift because the lattice has more sites); nothing had been collected on the old ones.
+
+Interlude trials used pitch 0, which showed a lot of sky. `InterludeManager.PitchTowardsPair` sets the pitch at each teleport so the average of the two bushes' `Tree.GetVisibleCenter()` (canopy base + a quarter of its height, the middle of
+the visible half-buried ellipsoid) is on the centre line. Rejected: aiming at bush bases (`GetWorldCenter`, the ground-level canopy centre) which would put the visible bushes in the upper half of the view; aiming at the crowns. The yaw is still from the trial file.

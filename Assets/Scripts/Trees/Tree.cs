@@ -583,6 +583,14 @@ public class Tree : MonoBehaviour
         return canopy != null ? canopy.transform.position : transform.position;
     }
 
+    // Middle of the visible part of the bush: the canopy is a half-buried ellipsoid, so its center is at ground level
+    // and the visible part reaches up one half-height; its middle is a quarter of the full height above the center.
+    public Vector3 GetVisibleCenter()
+    {
+        Vector3 center = GetWorldCenter();
+        return canopy != null ? center + Vector3.up * (canopy.transform.lossyScale.y * 0.25f) : center;
+    }
+
     public Vector3 GetFruitWorldPosition(int index)
     {
         if (index < 0 || index >= _fruits.Count || _fruits[index] == null)

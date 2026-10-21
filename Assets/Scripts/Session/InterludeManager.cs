@@ -194,10 +194,11 @@ public class InterludeManager : MonoBehaviour
 
         harvestManager.RefreshTrees();
         player.TeleportTo(_trial.start[0], _trial.start[1]);
-        cameraController.SetView(_trial.yaw, 0f);
+        float pitch = PitchTowardsPair();
+        cameraController.SetView(_trial.yaw, pitch);
         if (dataLogger != null)
         {
-            dataLogger.LogEvent("teleport", note: $"x={F(_trial.start[0])};z={F(_trial.start[1])};yaw={F(_trial.yaw)};pitch=0");
+            dataLogger.LogEvent("teleport", note: $"x={F(_trial.start[0])};z={F(_trial.start[1])};yaw={F(_trial.yaw)};pitch={F(pitch)}");
             dataLogger.LogEvent("trial_start", note: $"order={position};trial={_trial.index};left={_trial.left.id};right={_trial.right.id}");
         }
 
@@ -211,6 +212,25 @@ public class InterludeManager : MonoBehaviour
         {
             harvestUI.SetProgressText($"{position + 1}/{_order.Length}");
         }
+    }
+
+    // Pitch (degrees, + = looking down) that puts the middle of the two bushes' visible canopies on the view's horizontal
+    // centre line, from the eye position at the stage spawn. The yaw (from the trial file) already faces their midpoint.
+    private float PitchTowardsPair()
+    {
+        Camera cam = cameraController.PlayerCamera;
+        Tree left = _trial.left.id >= 0 && _trial.left.id < _treesById.Length ? _treesById[_trial.left.id] : null;
+        Tree right = _trial.right.id >= 0 && _trial.right.id < _treesById.Length ? _treesById[_trial.right.id] : null;
+        if (cam == null || left == null || right == null)
+        {
+            return 0f;
+        }
+
+        Vector3 eye = cam.transform.position;
+        Vector3 mid = (left.GetVisibleCenter() + right.GetVisibleCenter()) * 0.5f;
+        float horizontal = Mathf.Sqrt((mid.x - eye.x) * (mid.x - eye.x) + (mid.z - eye.z) * (mid.z - eye.z));
+        float pitch = Mathf.Atan2(eye.y - mid.y, Mathf.Max(horizontal, 0.01f)) * Mathf.Rad2Deg;
+        return Mathf.Clamp(pitch, -sessionConfig.LookPitchLimit, sessionConfig.LookPitchLimit);
     }
 
     private void Update()

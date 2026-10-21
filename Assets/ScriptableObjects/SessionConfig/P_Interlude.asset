@@ -45,6 +45,7 @@ MonoBehaviour:
       peak: 0
       width: 0
   rewardStd: 0.3
+  targetFrameRate: 120
   playerMoveSpeed: 7.5
   fruitHarvestDuration: 0.05
   eyeHeight: 5.1
@@ -89,7 +90,7 @@ MonoBehaviour:
   birdIntervalMax: 14
   treeSpacing: 23
   placementJitter: 0.5
-  startClearingRadius: 31
+  startClearingRadius: 8
   fruitCount: 10
   fruitRadius: 0.6
   fruitColorLow: {r: 0, g: 0.2, b: 1, a: 1}
