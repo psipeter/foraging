@@ -45,9 +45,9 @@ picks which of two bushes pays more (no outcomes shown; correct choices earn a h
 
 ## Data
 
-Each session (and each Interlude) writes `movement.csv`, `harvests.csv`, and
-`session_metadata.json` to `ForagingData/<sessionId>/` in the project root; an Interlude also writes
-`interlude.csv` (one row per choice).
+Each session (and each Interlude) writes `trajectory.csv`, `events.csv`, `harvests.csv` and `manifest.json`
+to `ForagingData/<sessionId>/` in the project root (world files are archived once in `ForagingData/_worlds/`);
+an Interlude also writes `interlude.csv` (one row per choice). `scripts/replay.py` reloads a folder and replays it.
 This folder is gitignored (not backed up by git). It currently contains only
 debugging output; once real data collection starts, back it up separately.
 

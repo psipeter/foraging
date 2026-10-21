@@ -131,12 +131,11 @@ ignored). Instead play a **standalone build on a private virtual display**:
 3. Drive it with `DISPLAY=:99 xdotool` (window id via `xdotool search --class
    foraging`; `windowfocus` it; `keydown`/`keyup` with a short hold rather than
    a bare `key`). Screenshot with `DISPLAY=:99 import -window root x.png`.
-4. Navigate closed-loop from the game's own logs: `movement.csv` (position,
-   heading, remaining time) and `session_metadata.json` (every tree's position
-   and true reward). Calibrate mouse-turn gain first (heading degrees per px);
+4. Navigate closed-loop from the game's own logs: `trajectory.csv` (position,
+   yaw, session time) and the world file (`scripts/replay.py` loads the bush table). Calibrate mouse-turn gain first (heading degrees per px);
    un-calibrated turning oscillates and burns the 60 s session. Session time
    ticks in real time, so keep per-step latency low.
-5. Verify with `harvests.csv` (per-fruit rewards) against screenshots.
+5. Verify with `events.csv` (`fruit` rows) or `harvests.csv` against screenshots, and run `scripts/replay.py <folder>`.
 6. Clean up: kill the player and `Xvfb :99` by PID (`pkill -f` with a pattern
    that appears in your own command line kills your shell).
 
@@ -168,7 +167,7 @@ Assets/
                RewardFunction / RewardComponent / BasisFunctionType
     UI/        HarvestUI (+X popups, score), SessionTimerUI (timer, bar, end screen), InstructionsPanel,
                FeedbackAudio (synthesized sound cues), AmbientAudio (footsteps, cicada bed, birds), HudWidgets (runtime plates/bars)
-    Data/      DataLogger
+    Data/      DataLogger (trajectory, events, harvests, manifest; see "Data logging")
   ScriptableObjects/SessionConfig/   P (practice), S1-S4 (the experiment's sessions), and P/S1-S4_Interlude (their forced-choice Interludes)
   Audio/Ambient/                     CC0 recordings: Footsteps/ (Kenney Impact Sounds grass steps), Cicadas/ (BigSoundBank
                                      loop); each folder has licence/source notes
@@ -179,6 +178,7 @@ Assets/
   StreamingAssets/Worlds/            generated <session>_seed<N>.world files (written by scripts/world.py) and
                                      <name>_Interlude_seed<N>.interlude.json (bush table + trials, scripts/interlude.py)
   Scenes/SampleScene.unity           the single scene
+  Editor/    BuildInfoWriter (writes the gitignored StreamingAssets/build_info.json: git commit + dirty flag)
   Shaders/   VertexColor (terrain: moisture textures + mountain rock/snow; ignores
              mesh vertex colors), VertexColorUnlit, FruitUnlit, CanopyRim (additive
              fresnel highlight overlay) and HarvestRing (clock-style progress ring)
@@ -187,7 +187,7 @@ docs/        SCIENCE.md, DECISIONS.md
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
              interlude.py (Interlude stimulus design + bush placement on the session's terrain), world.py (reads SessionConfig .asset YAML; generates worlds from one seed — mirrors the
              C# placement/attribute/reward rules; exports .npz), sim.py (fast session engine + run_n /
-             compare), agents.py (all agents + registry), test_*.py (pytest; run them with `scripts/run_tests.py`, which
+             compare), agents.py (all agents + registry), replay.py (loads a logged session, replays its harvests, resamples for agents), test_*.py (pytest; run them with `scripts/run_tests.py`, which
              runs only the test files the changed files can affect, or `--all` before committing)
 ```
 
@@ -260,14 +260,20 @@ Basis functions: Linear, InvertedLinear, GaussianPeak, InvertedGaussian,
 Constant.
 
 ### Data logging
-`DataLogger` writes one folder per session under `<project root>/ForagingData/<sessionId>/`:
-`movement.csv` (0.1 s samples: pose, camera, visible trees + distances),
-`harvests.csv` (one row per harvest bout, press to release or exhaustion: tree, attributes, true reward, per-fruit
-rewards, running total), `session_metadata.json` (config, reward function,
-camera, full tree registry). An Interlude session writes the same three files plus
-`interlude.csv` (one row per forced-choice trial; see `docs/SCIENCE.md`). **The path and the column semantics are
-fixed — changing either breaks downstream analysis and comparability with
-already-collected data.** Add columns only at the end, and say so.
+`DataLogger` writes one folder per session under `<project root>/ForagingData/<sessionId>/`, so that a participant's
+actions can be replayed exactly in their world (and shown to agents):
+`trajectory.csv` (one row per rendered frame: `t, x, z, yaw, pitch, keys`; the same state `HarvestManager` reads that
+frame), `events.csv` (`t, real, type, tree_id, k, reward, running_total, note`: pause/resume, harvest press/release/
+pause/resume, every fruit, teleports, Interlude trials, focus changes, session start/end), `harvests.csv` (one row per
+harvest bout: a summary of the events plus the bush's attributes) and `manifest.json` (the full `SessionConfig`
+serialized, the world file's name and sha256, build commit, display, frame statistics, `participantId` placeholder).
+An Interlude writes the same plus `interlude.csv` (one row per forced-choice trial; see `docs/SCIENCE.md`).
+World files are archived once by hash in `ForagingData/_worlds/`. `scripts/replay.py` loads a folder, re-derives the
+harvests from the trajectory (mirroring `HarvestManager`) and checks them against the log: **change `HarvestManager`'s
+range/bearing/timer rules and `replay.py` together.** The clock `t` is unpaused session seconds (stands still under an
+instruction screen). **The path and the column semantics are fixed once real data exists — changing them breaks
+downstream analysis and comparability.** Add columns only at the end, and say so. `Assets/Editor/BuildInfoWriter.cs`
+writes the gitignored `StreamingAssets/build_info.json` (git commit, dirty flag) that the manifest reads.
 
 ---
 
@@ -330,7 +336,7 @@ The generated files are manual steps (nothing runs them at build time):
   changed values onto the `*_Interlude` asset, then
   `./venv/bin/python scripts/interlude.py <names>_Interlude`. Unity does **not** warn
   when an Interlude file is stale.
-- **No regeneration needed:** `sessionDuration`, `fruitHarvestDuration`, `playerMoveSpeed`,
+- **No regeneration needed:** `targetFrameRate`, `sessionDuration`, `fruitHarvestDuration`, `playerMoveSpeed`,
   `interludeTrialSeconds`, `interludeHarvestFruits`, `interludeBonusPerCorrect`,
   audio volumes, instruction text.
 

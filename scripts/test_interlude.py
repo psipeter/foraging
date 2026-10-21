@@ -49,7 +49,7 @@ def test_trial_counts_and_mix(built):
     if bool(params.is_practice):
         assert n == 3 and "extrapolation" not in kinds and kinds.count("graded") == 1
     else:
-        assert n == 10 and kinds.count("contrast") == 3
+        assert n == 5 and kinds.count("contrast") == 2
 
 
 def test_bush_table_matches_trials_and_reward_function(built):
@@ -134,8 +134,12 @@ def test_contrasts_cover_relevant_features_and_one_irrelevant():
         rf = params.reward_function
         relevant = {f for f in FEATURES if rf[f + "Component"]["weight"] != 0}
         varied = [t["varied"] for t in sidecar["trials"] if t["type"] == "contrast"]
-        assert relevant <= set(varied)
-        if relevant != set(FEATURES):
+        # With fewer contrasts than relevant features (5 trials in S4: 2 contrasts for 3 features) coverage is partial.
+        if len(varied) >= len(relevant):
+            assert relevant <= set(varied)
+        else:
+            assert set(varied) <= relevant
+        if relevant != set(FEATURES) and len(varied) > len(relevant):
             assert set(varied) - relevant        # an ignored-feature check
 
 
@@ -143,7 +147,9 @@ def test_moisture_contrasts_use_the_largest_available_difference():
     for name in ["S3_Interlude", "S4_Interlude"]:
         sidecar, params, _ = get(name)
         mc = [t for t in sidecar["trials"] if t["varied"] == "moisture"]
-        assert len(mc) == 1
+        assert len(mc) <= 1
+        if not mc:        # S4 at 5 trials: the contrasts go to shape and color
+            continue
         assert abs(mc[0]["left"]["moisture"] - mc[0]["right"]["moisture"]) >= TWO_LEVELS_MIN
         assert abs(mc[0]["deltaValue"]) > 0.3                           # a clear true-reward difference
 
@@ -153,7 +159,7 @@ def test_extrapolation_pairs_are_tradeoffs_when_several_features_matter():
         sidecar, params, _ = get(name)
         rf = params.reward_function
         extras = [t for t in sidecar["trials"] if t["type"] == "extrapolation"]
-        assert len(extras) == 3
+        assert len(extras) == trial_mix(len(sidecar["trials"]), False, 3)["extrapolation"]
         for t in extras:
             assert abs(t["deltaValue"]) >= 0.25            # clear difference
             ca = {f: float(_basis(rf[f + "Component"], t["left"][f])) for f in FEATURES}
@@ -198,7 +204,7 @@ def test_export_writes_only_the_sidecar(tmp_path):
     assert path == sidecar_path("S3_Interlude", 3, tmp_path)
     assert path.name == "S3_Interlude_seed3.interlude.json"
     assert list(tmp_path.glob("*.world")) == []                      # the terrain is the session's own world file
-    assert json.load(open(path))["n"] == 10
+    assert json.load(open(path))["n"] == 5
     assert path.stat().st_size < 50_000
 
 
@@ -206,6 +212,8 @@ def test_trial_mix_rules():
     assert trial_mix(3, True) == {"contrast": 2, "graded": 1, "extrapolation": 0}
     assert trial_mix(10, False) == {"contrast": 3, "graded": 4, "extrapolation": 3}
     assert trial_mix(10, False, n_relevant=1) == {"contrast": 3, "graded": 6, "extrapolation": 1}
+    assert trial_mix(5, False) == {"contrast": 2, "graded": 1, "extrapolation": 2}
+    assert trial_mix(5, False, n_relevant=1) == {"contrast": 2, "graded": 2, "extrapolation": 1}
 
 
 def test_no_hill_between_the_spawn_and_either_bush(built):

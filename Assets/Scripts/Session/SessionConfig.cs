@@ -46,6 +46,10 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private RewardFunction rewardFunction = new RewardFunction();
     [SerializeField] private float rewardStd = 1.0f;
 
+    [Header("Display")]
+    [Tooltip("Frame rate cap (vsync is turned off so the cap applies). 120 matches common VR headset refresh rates and bounds the size of the per-frame trajectory log.")]
+    [SerializeField] private int targetFrameRate = 120;
+
     [Header("Player")]
     [SerializeField] private float playerMoveSpeed = 5f;
     [SerializeField] private float fruitHarvestDuration = 0.8f;
@@ -273,6 +277,7 @@ public class SessionConfig : ScriptableObject
     public float StartClearingRadius => startClearingRadius;
     public int FruitCount => fruitCount;
     public float FruitRadius => fruitRadius;
+    public int TargetFrameRate => targetFrameRate;
     public float PlayerMoveSpeed => playerMoveSpeed;
     public float FruitHarvestDuration => fruitHarvestDuration;
     public float RewardStd => rewardStd;

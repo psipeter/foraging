@@ -17,7 +17,7 @@ MonoBehaviour:
   isPractice: 0
   isInterlude: 1
   interludeFor: S2
-  interludeTrialCount: 10
+  interludeTrialCount: 5
   interludeTrialSeconds: 10
   interludeHarvestFruits: 10
   interludeBonusPerCorrect: 5
@@ -45,6 +45,7 @@ MonoBehaviour:
       peak: 0
       width: 0
   rewardStd: 0.3
+  targetFrameRate: 120
   playerMoveSpeed: 7.5
   fruitHarvestDuration: 0.05
   eyeHeight: 5.1

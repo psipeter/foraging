@@ -158,6 +158,8 @@ public class GameManager : MonoBehaviour
         }
 
         RenderSettings.fog = activeConfig.FogEnabled;
+        QualitySettings.vSyncCount = 0;
+        Application.targetFrameRate = activeConfig.TargetFrameRate;
 
         if (sunController != null)
         {

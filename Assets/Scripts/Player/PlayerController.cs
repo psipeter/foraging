@@ -22,6 +22,8 @@ public class PlayerController : MonoBehaviour
     public bool IsFrozen => _frozen;
     public float GroundOffset => groundOffset;
     public bool HarvestHeld => _harvestHeld;
+    // Raw W/S/A/D input (the DataLogger records which keys are held).
+    public Vector2 MoveInput => moveInput;
 
     private void Awake()
     {

@@ -195,6 +195,11 @@ public class InterludeManager : MonoBehaviour
         harvestManager.RefreshTrees();
         player.TeleportTo(_trial.start[0], _trial.start[1]);
         cameraController.SetView(_trial.yaw, 0f);
+        if (dataLogger != null)
+        {
+            dataLogger.LogEvent("teleport", note: $"x={F(_trial.start[0])};z={F(_trial.start[1])};yaw={F(_trial.yaw)};pitch=0");
+            dataLogger.LogEvent("trial_start", note: $"order={position};trial={_trial.index};left={_trial.left.id};right={_trial.right.id}");
+        }
 
         _fruits[0] = _fruits[1] = 0;
         _choice = -1;
@@ -283,6 +288,11 @@ public class InterludeManager : MonoBehaviour
         }
 
         WriteRow(timedOut, correct, bonus);
+        if (dataLogger != null)
+        {
+            string side = _choice == 0 ? "left" : (_choice == 1 ? "right" : "none");
+            dataLogger.LogEvent("trial_end", note: $"choice={side};correct={(correct ? 1 : 0)};timed_out={(timedOut ? 1 : 0)}");
+        }
 
         _state = State.Transition;
         StartCoroutine(_position + 1 < _order.Length ? TransitionTo(_position + 1) : Complete());

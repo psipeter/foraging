@@ -55,6 +55,11 @@ public class HarvestManager : MonoBehaviour
     public static event Action OnBushExhausted;
     // Raised for every fruit taken, in every session kind (the Interlude counts fruits to register a choice).
     public static event Action<Tree> OnFruitTaken;
+    // For the DataLogger: a bout started on a tree; a fruit with its index k on that tree (0-based, in the order taken),
+    // reward and the session total after it; the target entered (true) or left (false) the harvest range/cone mid-bout.
+    public static event Action<Tree> OnHarvestBoutStarted;
+    public static event Action<Tree, int, float, float> OnFruitRewarded;
+    public static event Action<Tree, bool> OnHarvestConeChanged;
 
     public bool IsHarvesting => _harvesting;
     public int FocusTreeId { get; private set; } = -1;
@@ -219,14 +224,20 @@ public class HarvestManager : MonoBehaviour
             timeStart = SessionTimeRemaining()
         };
         playerController.SetMovementLocked(true);
+        OnHarvestBoutStarted?.Invoke(tree);
     }
 
     private void AdvanceHarvest(Vector3 pos, float yaw)
     {
         Measure(_target, pos, yaw, out float edge, out float bearing, out float signedBearing);
         float harvestGap = sessionConfig.HarvestRangeGap(_target.CanopyRadius);
+        bool wasInCone = _targetInCone;
         _targetInCone = edge <= harvestGap && bearing <= sessionConfig.HarvestMaxAngle;
         _targetSignedOffAngle = signedBearing;
+        if (_targetInCone != wasInCone)
+        {
+            OnHarvestConeChanged?.Invoke(_target, _targetInCone);
+        }
 
         if (!_targetInCone)
         {
@@ -268,9 +279,11 @@ public class HarvestManager : MonoBehaviour
         }
 
         Vector3 worldPos = _target.GetFruitWorldPosition(index);
+        int fruitOrder = _target.FruitCount - _target.FruitsRemaining;
         _target.CollectFruit(index, sessionConfig.FruitPopDuration);
 
         _runningTotal += fruitReward;
+        OnFruitRewarded?.Invoke(_target, fruitOrder, fruitReward, _runningTotal);
         _bout.fruitRewards.Add(fruitReward);
         _bout.boutTotal += fruitReward;
 

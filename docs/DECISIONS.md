@@ -930,3 +930,53 @@ Once the SolarHybrid lighting was confirmed good (and the frame rate recovered),
 
 `dayStartFraction` (fraction of the daylight elapsed) was replaced by `sunStartElevation` (30), so the start and the end (`sunEndElevation`) use the same calculation: the hour angle at which the sun reaches that elevation, morning side for the start and afternoon side for the end. Earlier entries mentioning `dayStartFraction` are history. Interludes freeze the sun at solar noon (hour angle 0), independent of both.
 
+
+
+---
+
+## Logging redesigned for exact replay: per-frame trajectory, event log, manifest (replaces `movement.csv` / `session_metadata.json`)
+
+**Decision:** `DataLogger` now writes `trajectory.csv` (every rendered frame: `t, x, z, yaw, pitch, keys`), `events.csv` (sparse discrete
+events, including every fruit with its index `k`), `harvests.csv` (derived bout summary) and `manifest.json` (full `SessionConfig` via
+`JsonUtility.ToJson`, world file sha256, build commit, display and frame statistics, a null `participantId`). No version label: nothing
+had been collected in the old schema, so it was replaced outright (`movement.csv`'s `harvesting`/`focus_tree_id` and the per-tree
+registry in the metadata are gone; the registry lives in the world file, which is archived by hash in `ForagingData/_worlds/`).
+
+**Why per frame, and state rather than inputs.** `HarvestManager` decides range, bearing cone and fruit timing every rendered frame from
+`transform.position` and the camera yaw. A 10 Hz trace cannot reproduce when the cone was entered or left, hence the fruit times.
+Logging the state `HarvestManager` reads, in `Update` after it (the logger runs at order 20), makes the outcome a deterministic function
+of (trajectory, world), checked by `scripts/replay.py`. Replaying inputs through Unity's physics (sliding along mountains, variable
+`dt`) would not be deterministic. The cost is about 350 KB for 150 s at 60 fps, the same as the old 10 Hz file with its visibility lists.
+
+**Rejected:** (a) keeping `visible_tree_ids/distances`: derived (pose + terrain occlusion), bulky, recomputable offline; (b) a fixed
+20-30 Hz log: simpler for agents but cannot reproduce harvest gating exactly (agents resample with `replay.steps` instead); (c) copying the
+4 MB world into every session folder (hash + one archive instead); (d) Parquet (CSV is readable and a session is ~350 KB); (e) a
+hand-enumerated config block in the metadata (it had silently omitted look sensitivity, sun and harvest-timing parameters; the serialized
+asset cannot omit anything).
+
+**Details future-us might "fix":** `t` is a double accumulated from `Time.deltaTime` by the logger itself (it stands still while an
+instruction screen sets `timeScale` 0), not `SunController`'s clock, so events and rows share one clock exactly; `harvest_release` events
+for bouts the Interlude cancels or the session end closes are not explained by the keys, so the replay takes them from the log and marks
+them `forced`; events on a session's last frame may differ by one frame from the replay (it depends on whether the sun clock or the harvest
+update ran first), so `verify` ignores that frame. Removing `maxVisibilityDistance`, `movementSampleInterval` and `terrainOcclusionMask`
+from `DataLogger` leaves stale serialized values in the scene until it is next saved.
+
+
+---
+
+## Frame rate capped at 120 (`SessionConfig.targetFrameRate`), vsync off
+
+`GameManager.Awake` sets `QualitySettings.vSyncCount = 0` and `Application.targetFrameRate` from the config (default 120, matching common VR refresh
+rates). Reason: the per-frame trajectory log scales with frame rate (an uncapped Interlude ran at ~530 fps, ~24 KB/s). Rejected: vsync alone
+(follows each participant's monitor, so 144/240 Hz machines would log more and pacing would differ between participants; Unity also ignores
+`targetFrameRate` while vsync is on). Cost: possible tearing on 60 Hz monitors. Game logic uses `deltaTime`, so behaviour does not depend on the rate.
+
+
+---
+
+## Interludes cut to 5 trials; the time limit removed from the instructions
+
+`interludeTrialCount` is 5 on S1-S4_Interlude (practice stays 3; was 10), and `instructions_interlude.txt` no longer says "You have {trial_seconds} seconds for each choice"
+(the on-screen countdown shows it; the placeholder is still supported). Consequence of the shorter block (`trial_mix`): S1-S2 get 2 contrasts (relevant feature + ignored-feature
+check), 2 graded, 1 extrapolation; S3-S4 get 2 contrasts, 1 graded, 2 extrapolation. S3 loses its ignored-shape check and S4 (three relevant features) has no moisture contrast, so
+moisture is probed only through the extrapolation trade-offs. The mix function was deliberately not changed; revisit it if direct moisture or ignored-feature coverage is wanted back.

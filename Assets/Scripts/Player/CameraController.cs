@@ -15,6 +15,7 @@ public class CameraController : MonoBehaviour
 
     // Heading (degrees about Y) that forward/back movement is relative to.
     public float Yaw => _yaw;
+    public float Pitch => _pitch;
     public Camera PlayerCamera => playerCamera;
 
     private void Awake()
