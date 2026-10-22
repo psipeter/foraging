@@ -568,18 +568,24 @@ the simulated agent baselines below (code in `scripts/`).
 Runs are recorded in `results/results.sqlite` (gitignored; conventions in CLAUDE.md, "Results database") and queried with
 `scripts/analysis.py`. They supersede the stale table below as it is re-run.
 
-**`first-s1-90s`** (S1 at its design 90 s, motor costs on, 100 world seeds, default view cone, engine `a616b4372978`, run on a dirty
-tree, so provisional): total reward, mean ± se, paired difference to `nearest` ± se.
+**`s1-90s-learning`** (first 100-seed run on a clean tree: commit `f3f5606`, engine `282a3fe3d692`; S1 at its design 90 s, motor costs on,
+default view cone, seeds 0-99; random Interlude with 50 trials and 20 samples per trial; Interlude scored on copies of each agent at
+0, 10, 20, 30, 45, 60, 75 and 90 s). Total reward, mean ± se, paired difference to `nearest` ± se, and Interlude accuracy at the end of the session:
 
-| Agent | Total | vs nearest | Interlude accuracy (all / contrast / graded / extrapolation) |
+| Agent | Total | vs nearest | Interlude accuracy at 90 s |
 |---|---|---|---|
-| `nearest` | 289.6 ± 3.7 | , | 0.58 / 0.75 / 0.44 / 0.55 |
-| `delta_rate_10` (delta-rule critic, additive RBF features, neutral prior, full memory) | 335.2 ± 3.4 | +45.6 ± 4.1 | 0.94 / 1.00 / 0.85 / 1.00 |
-| `greedy_rate_10` (oracle) | 399.8 ± 2.3 | +110.2 ± 3.9 | 1.00 / 1.00 / 1.00 / 1.00 |
+| `nearest` | 289.6 ± 3.7 | , | 0.50 |
+| `delta_rate_10` (delta-rule critic, additive RBF features, neutral prior, full memory) | 335.2 ± 3.4 | +45.6 ± 4.1 | 0.91 |
+| `greedy_rate_10` (oracle) | 399.8 ± 2.3 | +110.2 ± 3.9 | 1.00 |
 
-The learner closes 0.39 ± 0.04 of the nearest-to-oracle gap per seed in the session. In the Interlude it is close to the oracle (only the
-graded trials separate them), so with one relevant feature (S1) the Interlude is nearly saturated for any learner: the ordering
-nearest < learner < oracle holds, but a stronger learner could not be told from this one. No exploring actor exists yet.
+Learning curve (Interlude accuracy of the learner against training time; the 95% interval is about ±0.01 to ±0.03): 0.50 at 0 s, 0.62 at 10 s,
+0.76 at 20 s, 0.82 at 30 s, 0.86 at 45 s, 0.89 at 60 s, 0.90 at 75 s, 0.91 at 90 s; `nearest` stays at chance and the oracle at 1.00 throughout.
+The learner closes 0.39 ± 0.04 of the nearest-to-oracle gap per seed in total reward. Its reward lead over `nearest` (cumulative-reward advantage)
+is about zero until roughly 28 s and then grows at close to the oracle's slope, so the Interlude shows it knowing the value function (0.76 at 20 s)
+before the reward shows it. Figures:
+`results/s1-90s-learning_{learning,cumulative,advantage}.png` (gitignored). With one relevant feature (S1) a good learner
+should reach the oracle's accuracy, so 0.91 leaves room for stronger critics. The earlier 10-seed and dirty-tree trials (`first-s1-90s`,
+`rate-trial`, `learning-trial`) are superseded by this run.
 
 ### Simulated agent baselines (preliminary, STALE)
 

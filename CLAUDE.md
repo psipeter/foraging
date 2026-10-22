@@ -187,7 +187,7 @@ docs/        SCIENCE.md, DECISIONS.md
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
              interlude.py (Interlude stimulus design + bush placement on the session's terrain), world.py (reads SessionConfig .asset YAML; generates worlds from one seed — mirrors the
              C# placement/attribute/reward rules; exports .npz), sim.py (fast session engine: actions, cone percept, Interlude
-             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent), costs.py (turning and key-press time costs and the `approach` arithmetic shared by the engine and the actors; provisional values fitted to debug logs), conftest.py (tests run with motor costs off unless marked `motor_costs`), agents.py (agent components memory / critic / actor, ComposedAgent, registry), plots.py (matplotlib/seaborn figures for the results database, PNG into `results/`), analysis.py (queries over the results database: `select`, `table`, `paired`, `gap_closed`, `component_effect`, `reward_rate_curve`, command line), results.py (the results database: schema, `Store`, `record_run`, `lookup`, `delete_run`), fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag), specs.py (agent specs: `Component` base that records constructor arguments, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), test_*.py (pytest; run them with `scripts/run_tests.py`, which
+             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent), costs.py (turning and key-press time costs and the `approach` arithmetic shared by the engine and the actors; provisional values fitted to debug logs), conftest.py (tests run with motor costs off unless marked `motor_costs`), agents.py (agent components memory / critic / actor, ComposedAgent, registry), plots.py (matplotlib/seaborn figures for the results database, PNG into `results/`), analysis.py (queries over the results database: `select`, `table`, `paired`, `gap_closed`, `component_effect`, `cumulative_curve`, `checkpoint_curve`, command line), results.py (the results database: schema, `Store`, `record_run`, `lookup`, `delete_run`), fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag), specs.py (agent specs: `Component` base that records constructor arguments, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), test_*.py (pytest; run them with `scripts/run_tests.py`, which
              runs only the test files the changed files can affect, or `--all` before committing; `--fast` skips `slow`-marked tests)
 ```
 
@@ -340,6 +340,13 @@ The generated files are manual steps (nothing runs them at build time):
   `interludeTrialSeconds`, `interludeHarvestFruits`, `interludeBonusPerCorrect`,
   audio volumes, instruction text.
 
+### Long-running commands (experiments, regeneration, builds)
+Run the real command once with `run_in_background: true` and its output redirected to a log (`... > "$SCRATCH/x.log" 2>&1`); the harness
+notifies when that process exits, and only then do you read the log and report. Do not wrap it in `nohup ... &` (the wrapper exits at once
+and its "completed" notification is about the wrapper) and do not write watcher loops with `pgrep -f '<pattern>'` (the watcher's own
+command line matches the pattern, so it never ends). To see progress, read the log or run `analysis.py runs --tag T`. `sim.py` prints its
+results table as its last output, which is the completion marker. This went wrong twice in one session; see the memory note.
+
 ### Testing
 `./venv/bin/python scripts/run_tests.py` runs only the Python test files the changed
 files can affect (`--all` before committing; `--dry-run` shows the decision). `--fast`
@@ -417,13 +424,8 @@ random stream comes from the world seed, so a result is reproducible from its ke
 - `cumulative_curve(store, sel, step=1, baseline=None)`: reward collected so far against session time (ends at the episode's total; the
   default of `analysis.py curve`), mean and 95% t-interval across seeds. With a `baseline` (`curve --baseline nearest`) each agent's curve is
   the paired difference to the baseline's cumulative reward in the same worlds (the baseline is left out): flat at zero until an agent
-  starts beating it, then rising. Use these rather than the reward rate to read a learning trajectory: the rate is noisy and wiggles with the
-  world's layout (`curve --quantity rate` still gives it).
-- `reward_rate_curve(store, sel, smoothing="bin"|"lowpass", bin_seconds=5, sigma=5)`: reward per second against session time from the
-  stored fruit events, one curve per agent: the mean over seeds and a 95% t-interval (NaN with one seed). `bin` divides each bin's
-  reward by its length; `lowpass` smooths the fruit impulse train with a zero-phase Gaussian (`sigma` seconds) renormalized at the edges
-  (the interval widens a little at the very ends, where fewer fruits fall under the window). `analysis.py curve --tag T [--smoothing
-  lowpass --sigma 4] [--out path.png]` saves the figure (default `results/<tag>_rate_<smoothing>.png`), drawn by `plots.plot_reward_rate`.
+  starts beating it, then rising. (A reward-rate curve with binning or low-pass smoothing was built and removed: too hard to read, flat and
+  wiggly with the world's layout; see DECISIONS.)
 - `checkpoint_curve(store, sel, metric="interlude_accuracy")`: Interlude score against training time from a checkpointed run, mean and 95%
   t-interval across seeds per agent; `analysis.py learning --tag T --kind interlude [--out path.png]` saves the figure
   (`plots.plot_learning_curve`, default `results/<tag>_learning.png`). Record it with
