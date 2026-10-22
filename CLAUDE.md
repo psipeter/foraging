@@ -133,14 +133,14 @@ ignored). Instead play a **standalone build on a private virtual display**:
    a bare `key`). Screenshot with `DISPLAY=:99 import -window root x.png`.
 4. Navigate closed-loop from the game's own logs: `trajectory.csv` (position,
    yaw, session time) and the world file (`scripts/replay.py` loads the bush table). Calibrate mouse-turn gain first (heading degrees per px);
-   un-calibrated turning oscillates and burns the 60 s session. Session time
+   un-calibrated turning oscillates and burns the session (60-150 s by design, 15 s while the temporary durations are set). Session time
    ticks in real time, so keep per-step latency low.
 5. Verify with `events.csv` (`fruit` rows) or `harvests.csv` against screenshots, and run `scripts/replay.py <folder>`.
 6. Clean up: kill the player and `Xvfb :99` by PID (`pkill -f` with a pattern
    that appears in your own command line kills your shell).
 
-Facts learned: harvest starts within ~3.7 units of a tree's center (wide
-canopies block the player earlier); Enter on the last session's end screen
+Facts learned: harvest starts within `harvestRangeGapBase` (7) of the canopy edge, i.e. 7 + the canopy
+radius from the tree's center (wide canopies block the player earlier); Enter on the last session's end screen
 quits the app.
 
 ---
@@ -218,7 +218,7 @@ Keep this tree in sync when files are added, moved, or retired.
   of truth for placement, attributes, terrain fields and per-fruit rewards, all from
   one seed; Unity loads the result (`WorldData`) and only renders/plays it. After
   changing any world-shaping SessionConfig value (spacing, jitter, clearing, terrain,
-  moisture terracing, mountains, reward weights/std, fruit count) re-run
+  moisture terracing, mountains, canopy width/shape ranges, reward weights/std, fruit count) re-run
   `./venv/bin/python scripts/world.py P S1 S2 S3 S4 --unity`; `GameManager` warns at
   startup when a file is stale. Never hand-edit `.world` files. Fruits are
   runtime-instantiated, never prefab children (their on-bush layout is still seeded
@@ -328,8 +328,8 @@ starting a large Claude task so the diff is reviewable.
 
 ### What to regenerate after a change
 The generated files are manual steps (nothing runs them at build time):
-- **Session world** (terrain, seed, spacing, jitter, mountains, reward weights/std,
-  fruit count, moisture terracing): `./venv/bin/python scripts/world.py <sessions> --unity`.
+- **Session world** (terrain, seed, spacing, jitter, mountains, canopy width/shape ranges,
+  reward weights/std, fruit count, moisture terracing): `./venv/bin/python scripts/world.py <sessions> --unity`.
   Unity warns at startup when a session world is stale.
 - **Interlude** (its session's terrain, seed or reward function; or
   `interludeTrialCount`, `interludeBushDistance`, `interludeBushBearing`): copy the

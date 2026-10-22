@@ -2,6 +2,8 @@ using UnityEngine;
 
 // First-person camera. Yaw and pitch live on the camera transform itself: the player Rigidbody is
 // interpolated, which would overwrite any rotation applied to the player root every frame.
+// Runs before HarvestManager (order 0), so the yaw it reads, and the DataLogger logs, is this frame's: replay re-derives harvests from it.
+[DefaultExecutionOrder(-5)]
 public class CameraController : MonoBehaviour
 {
     public SessionConfig sessionConfig;

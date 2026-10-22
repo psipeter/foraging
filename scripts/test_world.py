@@ -1,6 +1,8 @@
+from types import SimpleNamespace
+
 import numpy as np
 
-from world import Perlin, Terrain, World, generate_world, load_session, make_world
+from world import PROJECT_ROOT, Perlin, Terrain, World, check_values, generate_world, load_session, make_world
 
 
 def test_deterministic_and_seed_dependent():
@@ -119,3 +121,70 @@ def test_terrace_snaps_to_levels_when_sharp_and_no_residual():
     levels = np.array([0, 1 / 3, 2 / 3, 1])
     nearest = np.abs(w.moisture[:, None] - levels[None]).min(axis=1)
     assert (nearest < 0.02).mean() > 0.9
+
+
+def test_canopy_ranges_are_staleness_checked_and_mirrored_in_unity():
+    # Unity recomputes the canopy radius from these ranges; the file stores the radius, so a changed range must make
+    # the file stale. Every checked name must also be compared by WorldData.FindMismatches (a name Unity does not know
+    # is always reported stale).
+    params = load_session("S1")
+    base = check_values(params)
+    wide = SimpleNamespace(**{**vars(params), "canopy_width_range": (params.canopy_width_range[0], params.canopy_width_range[1] + 1)})
+    shaped = SimpleNamespace(**{**vars(params), "shape_range": (0.0, params.shape_range[1] + 0.5)})
+    assert check_values(wide) != base and check_values(shaped) != base
+    src = (PROJECT_ROOT / "Assets" / "Scripts" / "World" / "WorldData.cs").read_text()
+    for name in base:
+        if not name.startswith("reward."):
+            assert f'"{name}"' in src, name
+
+
+def test_canopy_radius_runs_from_wide_for_squat_to_narrow_for_tall():
+    # Tree.ApplyAttributes: width = lerp(widthRange.max, widthRange.min, shape), radius = width / 2 (S1: width 2..5).
+    p = load_session("S1")
+    w = generate_world(p, 1)
+    lo, hi = p.canopy_width_range
+    assert np.corrcoef(w.shape, w.canopy_radius)[0, 1] < -0.999
+    i, j = int(np.argmin(w.shape)), int(np.argmax(w.shape))
+    assert abs(w.canopy_radius[i] - hi / 2) < 0.02 * (hi - lo) and abs(w.canopy_radius[j] - lo / 2) < 0.02 * (hi - lo)
+    mid = int(np.argmin(np.abs(w.shape - 0.5)))
+    assert abs(w.canopy_radius[mid] - (lo + hi) / 4) < 0.05
+
+
+def test_exported_grids_hold_the_terrains_values_under_their_names(tmp_path):
+    from world import export_unity, read_unity_world
+    w = make_world("S1", 1)
+    export_unity(w, tmp_path / "w.world")
+    h, g = read_unity_world(tmp_path / "w.world")
+    expected = w.terrain.grids()
+    for name in expected:
+        assert np.array_equal(g[name], expected[name]), name          # right values under the right name, not just shapes
+    # elevation is the valley's moisture coupling (dry = high) plus the mountains: the game renders and the tools sample it
+    res = expected["elevation"].shape[0]
+    axis = np.linspace(-w.params.world_half_extent, w.params.world_half_extent, res)
+    x, z = np.meshgrid(axis[::25], axis[::25], indexing="ij")
+    assert np.allclose(w.terrain.elevation(x, z), expected["elevation"][::25, ::25], atol=1e-3)
+    inside = expected["ramp"] == 0
+    assert np.corrcoef(expected["moisture"][inside], expected["elevation"][inside])[0, 1] < -0.5
+    assert (expected["snow"] < expected["rock"] - 1e-3).any() and expected["snow"].max() > 0
+
+
+def test_checked_parameters_cover_the_world_shaping_ones():
+    names = set(check_values(load_session("S3")))
+    assert {"rewardStd", "fruitCount", "treeSpacing", "mountainHeight", "terrainMaxElevation",
+            "canopyWidthRange.min", "shapeRange.max", "reward.shape.weight"} <= names
+
+
+def test_committed_world_files_are_fresh(tmp_path):
+    """The generated .world files are what the game plays and what replay loads. Regenerating from the current
+    SessionConfig assets must reproduce them exactly (this also pins the RNG streams and draw order); Unity warns at
+    startup about stale parameters, but not about a changed generator."""
+    from world import export_unity, unity_world_path
+    for name in ("P", "S1", "S2", "S3", "S4"):
+        p = load_session(name)
+        seed = int(p.world_seed)
+        committed = unity_world_path(name, seed)
+        assert committed.exists(), f"{committed} is missing: run scripts/world.py {name} --unity"
+        fresh = tmp_path / committed.name
+        export_unity(generate_world(p, seed), fresh)
+        assert fresh.read_bytes() == committed.read_bytes(), (
+            f"{committed.name} is stale: re-run ./venv/bin/python scripts/world.py {name} --unity")

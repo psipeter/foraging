@@ -946,18 +946,21 @@ registry in the metadata are gone; the registry lives in the world file, which i
 `transform.position` and the camera yaw. A 10 Hz trace cannot reproduce when the cone was entered or left, hence the fruit times.
 Logging the state `HarvestManager` reads, in `Update` after it (the logger runs at order 20), makes the outcome a deterministic function
 of (trajectory, world), checked by `scripts/replay.py`. Replaying inputs through Unity's physics (sliding along mountains, variable
-`dt`) would not be deterministic. The cost is about 350 KB for 150 s at 60 fps, the same as the old 10 Hz file with its visibility lists.
+`dt`) would not be deterministic. The cost is about 750 KB for 150 s at the 120 fps cap (about 375 KB at 60 fps, the size of the old 10 Hz file with its visibility lists).
 
 **Rejected:** (a) keeping `visible_tree_ids/distances`: derived (pose + terrain occlusion), bulky, recomputable offline; (b) a fixed
 20-30 Hz log: simpler for agents but cannot reproduce harvest gating exactly (agents resample with `replay.steps` instead); (c) copying the
-4 MB world into every session folder (hash + one archive instead); (d) Parquet (CSV is readable and a session is ~350 KB); (e) a
+4 MB world into every session folder (hash + one archive instead); (d) Parquet (CSV is readable and a session is under 1 MB); (e) a
 hand-enumerated config block in the metadata (it had silently omitted look sensitivity, sun and harvest-timing parameters; the serialized
 asset cannot omit anything).
 
 **Details future-us might "fix":** `t` is a double accumulated from `Time.deltaTime` by the logger itself (it stands still while an
 instruction screen sets `timeScale` 0), not `SunController`'s clock, so events and rows share one clock exactly; `harvest_release` events
 for bouts the Interlude cancels or the session end closes are not explained by the keys, so the replay takes them from the log and marks
-them `forced`; events on a session's last frame may differ by one frame from the replay (it depends on whether the sun clock or the harvest
+them `forced` (only a release at a `trial_end`'s time or on the session's last frames; any other logged release must be reproduced by the key
+rules, or `verify` flags it); a frame gets a trajectory row iff `Time.deltaTime > 0` (not by the current `timeScale`, which an instruction
+screen flips mid-frame), `HarvestManager` does nothing on a zero-time frame, and `CameraController` runs at order -5 so the yaw
+`HarvestManager` reads is the frame's own; events on a session's last frame may differ by one frame from the replay (it depends on whether the sun clock or the harvest
 update ran first), so `verify` ignores that frame. Removing `maxVisibilityDistance`, `movementSampleInterval` and `terrainOcclusionMask`
 from `DataLogger` leaves stale serialized values in the scene until it is next saved.
 
@@ -1037,3 +1040,32 @@ person regenerates by script anyway); the session `.world` files keep Unity's ex
 **Why:** perception models the participant's body and screen (field of view, how far attributes can be resolved, occlusion), which are the same for every agent in a session; agents then differ only in memory, critic and actor, so comparisons are fair by construction and there is one place to tune the constraints as they are calibrated against participants' logged visible sets (`visibility.py`). Resolvability numbers are simulation knobs, not game config, so they are not SessionConfig fields. The per-agent override and per-run argument stay for sensitivity sweeps and deliberately different observers. Rejected: a percept attribute required on every agent (what v1 had: `None` meant "sees nothing", which silently made limited-memory agents blind).
 
 **Detail:** during a harvest walk the engine looks every 5 units from the walk's start but ends at exactly `start + direction * walk`, so oracle agents' results do not depend on the sensor (they are bit-identical to the pre-refactor engine with the default cone, a narrow cone or none; a test and a 40-run comparison against the captured pre-refactor results guard this).
+
+
+---
+
+## Agent boundaries tightened: a narrow `Body`, explicit grants of world knowledge, the Interlude through the agent
+
+**Decision:** three interface changes so that "the agent only knows what it was told or has seen" is enforced by the interfaces, not by habit.
+- **`Body`.** The engine hands an actor a snapshot (`State.body()`: position copy, heading, time left, total reward), not its `State` (which carries the world, the true spent flags and `fruits_taken`). `act(body)`, `keep_harvesting(body, ...)`, `View.body`.
+- **Explicit grants.** `begin(task)` replaces `begin(world)` for memory and critic; `Task` gains `n_bushes` (a capacity, no positions). Components that start with the world's own knowledge (`FullKnowledge`, `OracleCritic`) are flagged `omniscient = True` and are the only ones `ComposedAgent` calls `grant(WorldKnowledge)` on (bush table, true values, reward function). The agent keeps no `world` attribute, and base classes store none. A learning critic or limited memory is never handed it. Zero-argument agent factories still work because the grant happens at `begin_session`. The `ids` argument of `Critic.value` stays: a bush id is what a participant also has (it can tell the bushes it has seen apart); the leak was the oracle reading `world.value` implicitly, and that is now a visible grant.
+- **Interlude through the agent.** `ComposedAgent.begin_interlude(knowledge)` freezes the critic (carried over), starts a fresh memory for the Interlude's own bushes (the session's bush ids mean nothing there; the session memory is left as it was) and grants omniscient components the Interlude's table. At each trial the evaluator shows the agent both bushes as an observation, at the spawn pose, whatever its sensor, then calls `agent.choose_between(body, ids, rng)`. This removes the `memory.world_ids` flag, `_PairWorld` and the fake state.
+
+**Why both bushes are always shown (the PI's call):** the trials are built so both are in view, and the Interlude is meant to test what was learned, not perception. Rejected: applying the percept in the Interlude with an unseen-bush rule (a narrow-cone agent would fail trials a participant could not).
+
+**Unchanged on purpose:** `keep_harvesting` stays a callback during a `Harvest` (a second actor-to-engine channel besides the returned action); an agent-level percept override stays an explicit exception to "the sensor belongs to the environment". `begin_interlude` ends the session for that agent (an oracle's granted table is replaced).
+
+**Verification:** the 40 fast-agent runs and a `plan_beam` world from the pre-refactor capture are bit-identical, and the Interlude scores (oracle and `nearest`, including per-type accuracies) are unchanged. New tests cover the `Body` snapshot, that only flagged components are granted knowledge, that components begin with a `Task` and the agent keeps no world, that every agent sees the pair whatever its sensor, the fresh Interlude memory leaving the session's untouched, the carried-over frozen critic, and an oracle granted the Interlude's table.
+
+
+---
+
+## Interlude commitment: the first bush harvested is the choice, and the other bush is hidden
+
+**Problem:** the Interlude registered a choice only when a bush reached its full fruit count, so a participant could harvest part of one bush, release Space and switch to the other, which muddies the forced-choice measure.
+
+**Decision:** unless `interludeSwitchPolicy` is Allow, starting a harvest (`HarvestManager.OnHarvestBoutStarted`) commits that bush as the choice and takes the other away; the default policy is **Hide** (the other bush shrinks away over `hideSeconds` = 0.4 s and is deactivated). The participant still holds Space until the chosen bush is finished, and the trial ends then (or on the time limit; a committed trial that times out still counts as that choice, a trial with no commitment still counts as none). `isHarvested` is set on the other bush at once, which `HarvestManager` already skips (no target, highlight or ring), so it cannot be switched to during the fade; no `RefreshTrees` is needed mid-bout.
+
+**Rejected:** Allow-and-log (does not prevent switching; kept as a policy for comparison); Exhaust (reuses the spent look, but in the sessions "spent" means "you emptied it", so an unharvested bush looking spent could read as "that one was empty" and colour later trials; available as a policy); Lock (a visible but dead bush with no explanation, so Space seems to do nothing; available as a policy); committing on the first fruit (the PI chose the start of harvesting); an extra sentence in the Interlude instructions (the PI chose not to announce the rule). The policy is a `SessionConfig` field (order Allow 0, Lock 1, Exhaust 2, Hide 3, stored as a number in the manifest) so it can be compared in a pilot without code changes; it needs no regeneration.
+
+**Data and tooling:** `choice_lock` event (note: `committed`, `locked`, `policy`); `interlude.csv` gains a trailing `locked_at` column. `scripts/replay.py` makes the locked bush unharvestable from the frame after the press that caused the lock (the lock is logged on the press frame), and `scripts/visibility.py` removes the locked bush `HIDE_SECONDS` after the event under Hide (it stays visible under Exhaust and Lock). `HIDE_SECONDS` mirrors the `InterludeManager.hideSeconds` default; change them together. The simulator is unaffected (agents pick between the pair directly).

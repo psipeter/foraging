@@ -30,7 +30,7 @@ class FixedActor(Actor):
         return Harvest(self.order.pop(0)) if self.order else None
 
     def keep_harvesting(self, view, bush, reward):
-        return self.take is None or view.state.fruits_taken[bush] < self.take
+        return self.take is None or view.memory.taken[bush] < self.take
 
 
 def Fixed(order, take=None):
@@ -181,3 +181,20 @@ def test_planner_not_worse_than_greedy_on_real_world():
     greedy_trace = run_episode(GreedyAgent(15, "rate"), w).trace
     greedy_expected = sum(w.value[j] * n for j, n, _ in greedy_trace)   # expected reward of greedy's own route
     assert plan.plan_value >= greedy_expected - 1e-9
+
+
+def test_a_fruit_that_exactly_fits_the_remaining_time_is_taken():
+    # walk 8 s (bush 48 away, reach 8, speed 5) then two 0.5 s fruits: a 9.0 s session fits both to the last instant.
+    w = tiny_world([[48, 0]], [[1, 2, 3, 4]], duration=9.0)
+    r = run_episode(Fixed([0]), w)
+    assert r.n_fruits == 2 and r.total == 3 and r.idle_time == pytest.approx(0.0) and r.harvest_time == pytest.approx(1.0)
+    r = run_episode(Fixed([0]), tiny_world([[48, 0]], [[1, 2, 3, 4]], duration=8.99))
+    assert r.n_fruits == 1                                    # the second fruit would end after the clock
+
+
+def test_a_walk_that_exactly_fits_arrives_but_one_that_does_not_stops_short():
+    w = tiny_world([[48, 0]], [[1, 2, 3, 4]], duration=8.0)
+    r = run_episode(Fixed([0]), w)
+    assert r.walk_time == pytest.approx(8.0) and r.n_fruits == 0 and r.trace and r.trace[0][0] == 0     # arrived, no time left
+    r = run_episode(Fixed([0]), tiny_world([[48, 0]], [[1, 2, 3, 4]], duration=7.9))
+    assert r.walk_time == pytest.approx(7.9) and r.n_fruits == 0 and not r.trace                         # ran out on the way

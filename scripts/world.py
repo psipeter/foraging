@@ -422,6 +422,11 @@ GRID_NAMES = ["moisture", "elevation", "rock", "snow", "ramp"]
 def check_values(params):
     """{name: value} of the parameters a world depends on (see CHECK_KEYS)."""
     out = {k: float(getattr(params, _snake(k), 0.0)) for k in CHECK_KEYS}
+    # Unity recomputes each bush's canopy radius from these (Tree.ApplyAttributes) while the tools read the radius
+    # stored in the file, so a changed range makes replay's harvest range and the simulator's reach wrong.
+    for name, key in (("canopyWidthRange", "canopy_width_range"), ("shapeRange", "shape_range")):
+        lo, hi = getattr(params, key)
+        out[f"{name}.min"], out[f"{name}.max"] = float(lo), float(hi)
     for part in REWARD_PARTS:
         comp = params.reward_function[part + "Component"]
         for field in ("basisFunctionType", "weight", "peak", "width"):

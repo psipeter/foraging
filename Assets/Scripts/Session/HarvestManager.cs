@@ -20,6 +20,8 @@ public class HarvestBout
     public float runningTotal;
     public int fruitsRemaining;
     public bool exhausted;
+    // Cut off because the session clock ran out (OnSessionEnd fires a frame later, so listeners can't tell otherwise).
+    public bool endedBySession;
 }
 
 // Owns targeting, the graded highlight, and the hold-Space harvest. Each frame, for every tree:
@@ -46,6 +48,7 @@ public class HarvestManager : MonoBehaviour
     private bool _highlightsCleared;
     private HarvestHint _hint = HarvestHint.None;
     private bool _targetInCone;
+    private bool _blocked;
     private float _targetSignedOffAngle;
 
     public static event Action<float, Vector3> OnFruitCollected;
@@ -62,6 +65,13 @@ public class HarvestManager : MonoBehaviour
     public static event Action<Tree, bool> OnHarvestConeChanged;
 
     public bool IsHarvesting => _harvesting;
+
+    // While blocked no bout can start and Space presses are discarded (the Interlude's gap between trials). The caller
+    // ends any open bout first; replay mirrors the window with the trial_end / trial_go events.
+    public void SetBlocked(bool blocked)
+    {
+        _blocked = blocked;
+    }
     public int FocusTreeId { get; private set; } = -1;
 
     private void OnEnable()
@@ -85,12 +95,20 @@ public class HarvestManager : MonoBehaviour
         {
             if (_harvesting)
             {
-                EndBout();
+                EndBout(true);
             }
 
             ClearHighlights();
             FocusTreeId = -1;
             SetHint(HarvestHint.None);
+            return;
+        }
+
+        // A frame with no time (an instruction screen was up when it began) gets no trajectory row from the DataLogger,
+        // so nothing may happen in it: replay re-derives harvests from the rows. A press made meanwhile stays latched
+        // and is consumed on the first frame with time, which is also where replay sees its key edge.
+        if (Time.deltaTime <= 0f)
+        {
             return;
         }
 
@@ -154,7 +172,7 @@ public class HarvestManager : MonoBehaviour
 
         if (!_harvesting)
         {
-            if (pressed && playerController.HarvestHeld && focusIndex >= 0)
+            if (pressed && !_blocked && playerController.HarvestHeld && focusIndex >= 0)
             {
                 StartBout(_trees[focusIndex]);
                 targetIndex = focusIndex;
@@ -310,7 +328,7 @@ public class HarvestManager : MonoBehaviour
         EndBout();
     }
 
-    private void EndBout()
+    private void EndBout(bool bySession = false)
     {
         if (!_harvesting)
         {
@@ -329,6 +347,7 @@ public class HarvestManager : MonoBehaviour
         _bout.runningTotal = _runningTotal;
         _bout.fruitsRemaining = _target != null ? _target.FruitsRemaining : 0;
         _bout.exhausted = _target != null && _target.isHarvested;
+        _bout.endedBySession = bySession;
         HarvestBout finished = _bout;
 
         _bout = null;

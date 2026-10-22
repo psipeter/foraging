@@ -20,8 +20,9 @@ the sensor) and an agent may carry its own override; NullPercept sees nothing an
 Per-fruit rewards are pre-drawn in the World (fruit_reward[bush, k]: the k-th fruit taken from that bush),
 so every agent faces identical rewards on a given seed, and comparisons between agents are paired.
 
-An Interlude is evaluated after a session with the critic frozen (evaluate_interlude): the actor's choice rule picks between
-each trial's two bushes, on the very trials the game shows (interlude.generate_interlude for the same world seed).
+An Interlude is evaluated after a session (evaluate_interlude): the critic is frozen and carried over, the agent starts a fresh
+memory for the Interlude's own bushes, both bushes of each trial are shown to it as observed (whatever its sensor), and the actor's
+choice rule picks between them, on the very trials the game shows (interlude.generate_interlude for the same world seed).
 
 Usage as a library:
     from sim import run_n, compare, get_worlds
@@ -36,11 +37,10 @@ import argparse
 import functools
 import math
 from dataclasses import dataclass, field
-from types import SimpleNamespace
 
 import numpy as np
 
-from agents import Explore, Harvest, Look, Stop
+from agents import Body, Explore, Harvest, Look, Stop, WorldKnowledge
 from perception import ConePercept, NullPercept, Observation, percept_for  # noqa: F401  (re-exported)
 from world import generate_world, load_session, _parse_seeds
 
@@ -74,6 +74,10 @@ class State:
         self.fruits_taken = np.zeros(world.n, dtype=np.int64)
         self.total = 0.0
         self.history = []      # (bush id, [per-fruit rewards]) for each completed visit
+
+    def body(self):
+        """The part of the state an agent may read: a snapshot (the position is copied)."""
+        return Body(self.pos.copy(), self.heading, self.time_left, self.total)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -203,7 +207,7 @@ def _harvest(agent, world, s, res, j, percept):
             s.depleted[j] = True
             agent.mark_depleted(j)
             break
-        if not agent.keep_harvesting(s, j, r):
+        if not agent.keep_harvesting(s.body(), j, r):
             break
     if s.fruits_taken[j] >= F:
         s.depleted[j] = True
@@ -226,7 +230,7 @@ def run_episode(agent, world, agent_rng=None, percept=None):
     _look(agent, world, s, percept)
 
     while s.time_left > 0:
-        action = agent.act(s)
+        action = agent.act(s.body())
         if action is None or isinstance(action, Stop):
             break
         if isinstance(action, Harvest):
@@ -279,26 +283,21 @@ def get_interlude(session, seed, **overrides):
 
 
 def evaluate_interlude(agent, sidecar, bonus_per_correct=5.0, practice=False, n_samples=200, rng=None):
-    """Score an agent on an Interlude with its critic frozen. Both bushes of each trial are in view by construction (the
-    spawn point faces their midpoint), so the pair is put in a fresh memory, the actor picks one with its own utility and
-    choice rule (`n_samples` times, from `rng`), and a pick is correct when it is the higher-reward bush (or the pair is a tie).
-    No outcome is shown or learned from."""
-    from agents import FullKnowledge, View
+    """Score an agent on an Interlude, after its session. The critic is frozen and the agent starts a fresh memory for the
+    Interlude's own bushes (`ComposedAgent.begin_interlude`; an omniscient component is granted that table). At each trial the
+    agent stands at the spawn point facing the pair and is shown both bushes as observed, whatever its sensor (the trials are
+    built so both are in view); the actor then picks one with its own utility and choice rule, `n_samples` times from `rng`, and
+    a pick is correct when it is the higher-reward bush (or the pair is a tie). No outcome is shown or learned from."""
     if rng is None:
         rng = np.random.default_rng(np.random.SeedSequence([int(sidecar["seed"]), AGENT_STREAM, 1]))
-    agent.critic.freeze()
-    n_bush = len(sidecar["canopyRadius"])
-    pair_world = _PairWorld(sidecar, agent.task)
-    memory = FullKnowledge()
-    memory.begin(pair_world)
-    memory.world_ids = False
+    knowledge = WorldKnowledge.from_sidecar(sidecar)
+    agent.begin_interlude(knowledge)
     hits, by_type, p_left = [], {}, []
     for t in sidecar["trials"]:
-        ids = [t["left"]["id"], t["right"]["id"]]
-        state = SimpleNamespace(pos=np.array(t["start"], dtype=float), heading=t["yaw"], time_left=agent.task.session_duration)
-        view = View(state, memory, agent.critic, agent.task)
-        # Utilities are evaluated from the spawn point over the whole table (all in memory); only the pair competes.
-        picks = np.array([agent.actor.choose_between(view, ids, rng) for _ in range(n_samples)])
+        ids = np.array([t["left"]["id"], t["right"]["id"]])
+        agent.observe(Observation(ids, knowledge.pos[ids], knowledge.radius[ids], knowledge.attrs[ids], np.zeros(2, dtype=bool)))
+        body = Body(np.array(t["start"], dtype=float), t["yaw"], agent.task.session_duration, 0.0)
+        picks = np.array([agent.choose_between(body, ids, rng) for _ in range(n_samples)])
         p_left.append(float((picks == 0).mean()))
         right = {"left": picks == 0, "right": picks == 1, "either": np.ones(n_samples, dtype=bool)}[t["correct"]]
         hits.append(right.mean())
@@ -306,19 +305,6 @@ def evaluate_interlude(agent, sidecar, bonus_per_correct=5.0, practice=False, n_
     acc = float(np.mean(hits)) if hits else float("nan")
     bonus = 0.0 if practice else acc * len(hits) * bonus_per_correct
     return InterludeScore(len(hits), n_samples, acc, {k: float(np.mean(v)) for k, v in by_type.items()}, p_left, bonus)
-
-
-class _PairWorld:
-    """The Interlude's bush table shaped like a World, for building a memory."""
-
-    def __init__(self, sidecar, task):
-        n = len(sidecar["canopyRadius"])
-        self.pos = np.asarray(sidecar["treePos"], dtype=float).reshape(n, 2)
-        self.canopy_radius = np.asarray(sidecar["canopyRadius"], dtype=float)
-        self.shape = np.asarray(sidecar["shape"], dtype=float)
-        self.color = np.asarray(sidecar["color"], dtype=float)
-        self.moisture = np.asarray(sidecar["moisture"], dtype=float)
-        self.fruit_count = int(sidecar["fruitCount"])
 
 
 # --------------------------------------------------------------------------------------------------

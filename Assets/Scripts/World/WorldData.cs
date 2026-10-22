@@ -241,7 +241,11 @@ public class WorldData
             { "startClearingRadius", config.StartClearingRadius },
             { "treeEdgeMargin", config.TreeEdgeMargin },
             { "fruitCount", config.FruitCount },
-            { "rewardStd", config.RewardStd }
+            { "rewardStd", config.RewardStd },
+            { "canopyWidthRange.min", config.CanopyWidthRange.x },
+            { "canopyWidthRange.max", config.CanopyWidthRange.y },
+            { "shapeRange.min", config.ShapeRange.x },
+            { "shapeRange.max", config.ShapeRange.y }
         };
         AddReward(current, "shape", config.RewardFunction.ShapeComponent);
         AddReward(current, "color", config.RewardFunction.ColorComponent);

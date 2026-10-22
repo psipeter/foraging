@@ -19,6 +19,7 @@ logs are a faithful, replayable record. `steps` resamples the trajectory onto a 
 import argparse
 import csv
 import hashlib
+import io
 import json
 import math
 from dataclasses import dataclass, field
@@ -54,6 +55,7 @@ class SessionLog:
     bushes: Bushes
     grids: dict = field(default_factory=dict)   # terrain grids: moisture, elevation, rock, snow, ramp; (res, res) [x, z]
     half_extent: float = 0.0                    # the grids span [-half_extent, half_extent] in x and z
+    truncated: list = field(default_factory=list)   # files whose last line was cut short (a crash) and dropped on load
 
     @property
     def config(self):
@@ -77,19 +79,61 @@ def find_world_file(name, sha):
     raise FileNotFoundError(f"no file named {name} with sha256 {sha[:12]}... in {DATA_DIR / '_worlds'} or {WORLD_DIR}")
 
 
+def _parse_event(row):
+    return {
+        "t": float(row["t"]), "real": float(row["real"]), "type": row["type"],
+        "tree_id": int(row["tree_id"]) if row["tree_id"] else -1,
+        "k": int(row["k"]) if row["k"] else -1,
+        "reward": float(row["reward"]) if row["reward"] else math.nan,
+        "running_total": float(row["running_total"]) if row["running_total"] else math.nan,
+        "note": row["note"],
+    }
+
+
 def _read_events(path):
-    events = []
+    """Events from events.csv. A crash can cut the last line short: only that line is dropped (and reported by returning
+    truncated=True); a bad line anywhere else is an error."""
     with open(path, newline="") as f:
-        for row in csv.DictReader(f):
-            events.append({
-                "t": float(row["t"]), "real": float(row["real"]), "type": row["type"],
-                "tree_id": int(row["tree_id"]) if row["tree_id"] else -1,
-                "k": int(row["k"]) if row["k"] else -1,
-                "reward": float(row["reward"]) if row["reward"] else math.nan,
-                "running_total": float(row["running_total"]) if row["running_total"] else math.nan,
-                "note": row["note"],
-            })
-    return events
+        text = f.read()
+    # The logger ends every line with a newline, so a file that does not has a last line that was cut (maybe mid-number).
+    cut = bool(text) and not text.endswith("\n")
+    if cut:
+        text = text[:text.rfind("\n") + 1]
+    rows = list(csv.DictReader(io.StringIO(text, newline="")))
+    events, truncated = [], cut
+    for i, row in enumerate(rows):
+        try:
+            if None in row.values() or None in row:
+                raise ValueError("short or long row")
+            events.append(_parse_event(row))
+        except (ValueError, TypeError, KeyError):
+            if i != len(rows) - 1:
+                raise
+            truncated = True
+    return events, truncated
+
+
+def _read_trajectory(path):
+    """(frames, truncated): trajectory.csv as an (n, 6) array. A last line cut short by a crash (fewer than six numeric
+    fields) is dropped and reported; a bad line anywhere else is an error."""
+    with open(path) as f:
+        text = f.read()
+    cut = bool(text) and not text.endswith("\n")
+    if cut:
+        text = text[:text.rfind("\n") + 1]
+    lines = text.splitlines()[1:]
+    rows, truncated = [], cut
+    for i, line in enumerate(lines):
+        try:
+            values = [float(v) for v in line.split(",")]
+            if len(values) != 6:
+                raise ValueError("wrong number of fields")
+            rows.append(values)
+        except ValueError:
+            if i != len(lines) - 1:
+                raise
+            truncated = True
+    return np.array(rows, dtype=float).reshape(-1, 6), truncated
 
 
 def parse_note(note):
@@ -100,11 +144,14 @@ def parse_note(note):
 def load_session_log(folder):
     """Load a session folder (a path, or a session id under ForagingData/) and its world."""
     folder = Path(folder)
-    if not folder.exists():
+    if not folder.exists() and not folder.is_absolute() and (PROJECT_ROOT / folder).exists():
+        folder = PROJECT_ROOT / folder        # a path relative to the project root, from any working directory
+    elif not folder.exists():
         folder = DATA_DIR / str(folder)
     manifest = json.loads((folder / "manifest.json").read_text())
-    traj = np.loadtxt(folder / "trajectory.csv", delimiter=",", skiprows=1, ndmin=2)
-    events = _read_events(folder / "events.csv")
+    traj, traj_cut = _read_trajectory(folder / "trajectory.csv")
+    events, events_cut = _read_events(folder / "events.csv")
+    truncated = [name for name, cut in (("trajectory.csv", traj_cut), ("events.csv", events_cut)) if cut]
 
     world = manifest["world"]
     header, grids = read_unity_world(find_world_file(world["file"], world["sha256"]))
@@ -118,7 +165,7 @@ def load_session_log(folder):
         canopy_radius=np.asarray(table["canopyRadius"], dtype=float),
         fruit_reward=np.asarray(table["fruitRewards"], dtype=int).reshape(n, fruits),
         value=np.asarray(table["value"], dtype=float), shape=np.asarray(table["shape"], dtype=float))
-    return SessionLog(folder, manifest, traj, events, bushes, grids, float(header["halfExtent"]))
+    return SessionLog(folder, manifest, traj, events, bushes, grids, float(header["halfExtent"]), truncated)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -155,8 +202,27 @@ def replay_harvests(log):
     gaps = gap_base + gap_per * b.canopy_radius
 
     ev = log.events
-    forced_times = [e for e in ev if e["type"] == "harvest_release"]
+    # Releases the keys cannot explain are honoured only where the game itself ends a bout: the Interlude's trial end
+    # and the session's last frames. Any other logged release must come from the replayed key rules, or verify flags it.
+    frame_dt = float(np.median(np.diff(log.traj[:, 0]))) if len(log.traj) > 2 else 0.0
+    t_final = float(log.traj[-1, 0]) if len(log.traj) else 0.0
+    cut_times = [e["t"] for e in ev if e["type"] == "trial_end"]
+    forced_times = [e for e in ev if e["type"] == "harvest_release"
+                    and (e["t"] >= t_final - 1.5 * frame_dt or any(abs(e["t"] - c) < 1e-5 for c in cut_times))]
     trials = [e for e in ev if e["type"] == "trial_start"]
+    # An Interlude commitment: from the frame after the press that started the chosen bush, the other bush can no longer be
+    # harvested (hidden, spent or locked; the policy only changes how it looks).
+    locks = [e for e in ev if e["type"] == "choice_lock"]
+    next_lock = 0
+    # HarvestManager discards presses between an Interlude trial's end and the following trial_go (rows after the
+    # trial_end up to and including the trial_go frame). Logs from before the block have no trial_go and no window.
+    go_times = [e["t"] for e in ev if e["type"] == "trial_go"]
+    blocks = []
+    if go_times:
+        for e in ev:
+            if e["type"] == "trial_end":
+                later = [g for g in go_times if g > e["t"] - 1e-9]
+                blocks.append((e["t"], min(later) if later else np.inf))
     active = np.ones(n, dtype=bool)
     if trials:
         active[:] = False
@@ -184,12 +250,18 @@ def replay_harvests(log):
         held = bool(int(keys) & KEY_HARVEST)
         pressed = held and not held_prev
         held_prev = held
+        if any(a + 1e-9 < t <= b + 1e-9 for a, b in blocks):
+            pressed = False
 
         while next_trial < len(trials) and trials[next_trial]["t"] <= t + 1e-4:
             note = parse_note(trials[next_trial]["note"])
             active[:] = False
             active[[int(note["left"]), int(note["right"])]] = True
             next_trial += 1
+
+        while next_lock < len(locks) and locks[next_lock]["t"] < t - 1e-9:
+            active[int(parse_note(locks[next_lock]["note"])["locked"])] = False
+            next_lock += 1
 
         if target < 0:
             idx = np.flatnonzero(active & ~exhausted)
@@ -237,7 +309,8 @@ def verify(log):
     """Compare the replayed harvest events with the logged ones. Returns a list of mismatch descriptions (empty = the
     log is reproduced exactly) and the replayed events."""
     replayed = replay_harvests(log)
-    problems = []
+    problems = [f"{name} ended mid-line (the session did not finish writing): its last line was dropped"
+                for name in log.truncated]
     t_end = float(log.traj[-1, 0]) if len(log.traj) else 0.0
     frame_dt = float(np.median(np.diff(log.traj[:, 0]))) if len(log.traj) > 2 else 0.0
     for kind in ("harvest_press", "harvest_pause", "harvest_resume", "fruit", "harvest_release"):
@@ -285,7 +358,10 @@ def steps(log, dt=0.1):
     pose = {name: np.interp(t, tr[:, 0], tr[:, col]) for name, col in (("x", 1), ("z", 2), ("yaw", 3), ("pitch", 4))}
     for e in log.events:
         if e["type"] == "teleport":
-            hold = (t >= tr[max(np.searchsorted(tr[:, 0], e["t"]) - 1, 0), 0]) & (t < e["t"] + 1e-9)
+            # The jump happens after the logger wrote the row at e["t"], so that row still has the old pose: hold it
+            # until the next row, which is the first with the new one.
+            nxt = np.searchsorted(tr[:, 0], e["t"], side="right")
+            hold = (t >= e["t"] - 1e-9) & (t < (tr[nxt, 0] if nxt < len(tr) else np.inf))
             for name in ("x", "z", "yaw", "pitch"):
                 pose[name] = np.where(hold, tr[frame, {"x": 1, "z": 2, "yaw": 3, "pitch": 4}[name]], pose[name])
     keys = tr[frame, 5].astype(int)

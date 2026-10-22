@@ -3,9 +3,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from agents import (Actor, Argmax, ComposedAgent, Critic, Explore, FullKnowledge, FullMemory, Harvest, Look, OracleCritic,
-                    PlannerActor, Softmax, Stop, UtilityActor, View, oracle_agent, utility_rate)
+from agents import (Actor, Argmax, Body, ComposedAgent, Critic, Explore, FullKnowledge, FullMemory, Harvest, Look, OracleCritic,
+                    PlannerActor, Softmax, Stop, Task, UtilityActor, View, WorldKnowledge, oracle_agent, utility_rate)
 from interlude import generate_interlude
+from world import load_session
 from perception import (ConePercept, NullPercept, Observation, horizontal_fov, percept_for, percept_from_params)
 from sim import State, evaluate_interlude, run_episode, run_n
 from test_sim import tiny_world
@@ -56,20 +57,26 @@ class TableCritic(Critic):
         return self.table[np.asarray(ids)], np.zeros(len(ids))
 
 
+def begin_memory(memory, world):
+    """What ComposedAgent.begin_session does for a memory: begin with the task, and grant omniscient ones the world's knowledge."""
+    memory.begin(Task(world))
+    if memory.omniscient:
+        memory.grant(WorldKnowledge.from_world(world))
+    return memory
+
+
 # --- memory ------------------------------------------------------------------------------------------------
 
 def test_full_knowledge_preloads_the_map_but_no_rewards():
     w = world_with([[10, 0], [0, 20]], attrs=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
-    m = FullKnowledge()
-    m.begin(w)
+    m = begin_memory(FullKnowledge(), w)
     assert m.known.all() and np.array_equal(m.pos, w.pos) and np.allclose(m.attrs, [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
     assert m.map_version == 0 and (m.taken == 0).all() and len(m.experiences()[1]) == 0
 
 
 def test_full_memory_accumulates_what_it_sees_and_gets():
     w = world_with([[10, 0], [0, 20], [30, 30]], attrs=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]])
-    m = FullMemory()
-    m.begin(w)
+    m = begin_memory(FullMemory(), w)
     assert not m.known.any()
     obs = Observation(np.array([2, 0]), w.pos[[2, 0]], w.canopy_radius[[2, 0]],
                       np.array([[0.7, 0.8, 0.9], [0.1, 0.2, 0.3]]), np.array([False, True]))
@@ -261,7 +268,7 @@ def test_rate_utility_is_value_over_walk_plus_harvest_time():
     w = world_with([[20, 0]], rewards=[[3, 3, 3, 3]], speed=5.0, fd=0.5)
     agent = ComposedAgent(UtilityActor("rate"), TableCritic([3.0]), FullKnowledge())
     agent.begin_session(w, np.random.default_rng(0))
-    view = agent.view(State(w))
+    view = agent.view(State(w).body())
     walk = (20 - 8.0) / 5.0
     assert utility_rate(view)[0] == pytest.approx(3.0 * 4 / (walk + 4 * 0.5))
 
@@ -310,9 +317,9 @@ def test_the_oracle_planner_plans_once_and_replans_only_when_the_map_changes():
     agent2 = ComposedAgent(PlannerActor("exact"), OracleCritic(), FullKnowledge())
     agent2.begin_session(w, np.random.default_rng(0))
     state = State(w)
-    agent2.act(state)
+    agent2.act(state.body())
     n1 = agent2.nodes
-    agent2.act(state)
+    agent2.act(state.body())
     assert agent2.nodes == n1
     # a limited-memory planner replans when it learns a new bush, starting from where it is
     mem = FullMemory()
@@ -320,11 +327,11 @@ def test_the_oracle_planner_plans_once_and_replans_only_when_the_map_changes():
     agent3.begin_session(w, np.random.default_rng(0))
     attrs = np.zeros((1, 3))
     agent3.observe(Observation(np.array([0]), w.pos[[0]], w.canopy_radius[[0]], attrs, np.zeros(1, dtype=bool)))
-    first = agent3.act(state)
+    first = agent3.act(state.body())
     assert first == Harvest(0) and agent3.plan == [0]
     agent3.observe(Observation(np.array([2]), w.pos[[2]], w.canopy_radius[[2]], attrs, np.zeros(1, dtype=bool)))
     state.pos = np.array([12.0, 0.0])
-    agent3.act(state)
+    agent3.act(state.body())
     assert set(agent3.plan) == {0, 2} or set(agent3.plan) == {2}         # the new bush is now in the plan
 
 
@@ -400,3 +407,254 @@ def test_seeded_generation_matches_the_assets_own_seed_and_applies_overrides():
     assert a == b                                                         # S3's own seed is 3
     c, _, _ = generate_interlude("S3_Interlude", pool_samples=60_000, seed=4)
     assert c["seed"] == 4 and c["treePos"] != a["treePos"]
+
+
+# --- boundaries: what an agent may know ----------------------------------------------------------------------
+
+def test_state_body_is_a_snapshot_of_what_an_actor_may_read():
+    w = world_with([[20, 0]])
+    s = State(w)
+    s.total = 7.0
+    b = s.body()
+    assert isinstance(b, Body) and b.total == 7.0 and b.time_left == w.session_duration and b.heading == 0.0
+    b.pos[0] = 99.0
+    assert s.pos[0] == 0.0                                              # a copy: the actor cannot move the agent
+    assert not hasattr(b, "world") and not hasattr(b, "depleted")
+
+
+class GrantRecorder:
+    """Mixin for a spy component: records what begin() and grant() were given."""
+    def begin(self, task):
+        self.begun_with = task
+        super().begin(task)
+
+    def grant(self, knowledge):
+        self.granted = knowledge
+
+
+class SpyMemory(GrantRecorder, FullMemory):
+    pass
+
+
+class OmniscientSpyMemory(SpyMemory):
+    omniscient = True
+
+
+class SpyCritic(GrantRecorder, MeanCritic):
+    pass
+
+
+def test_only_omniscient_components_are_granted_the_worlds_knowledge():
+    w = world_with([[20, 0], [0, 20]])
+    plain = ComposedAgent(UtilityActor("value"), SpyCritic(), SpyMemory())
+    plain.begin_session(w, np.random.default_rng(0))
+    assert not hasattr(plain.memory, "granted") and not hasattr(plain.critic, "granted")
+    flagged = ComposedAgent(UtilityActor("value"), OracleCritic(), OmniscientSpyMemory())
+    flagged.begin_session(w, np.random.default_rng(0))
+    assert isinstance(flagged.memory.granted, WorldKnowledge) and flagged.memory.granted.n == 2
+    assert flagged.critic.values is not None
+
+
+def test_components_begin_with_a_task_and_the_agent_keeps_no_world():
+    w = world_with([[20, 0], [0, 20]])
+    agent = ComposedAgent(UtilityActor("value"), SpyCritic(), SpyMemory())
+    agent.begin_session(w, np.random.default_rng(0))
+    task = agent.memory.begun_with
+    assert isinstance(task, Task) and task.n_bushes == 2 and not hasattr(task, "pos")
+    assert not hasattr(agent, "world") and agent.task is agent.memory.begun_with
+
+
+# --- the Interlude through the agent --------------------------------------------------------------------------
+
+def test_interlude_shows_both_bushes_to_every_agent_whatever_its_sensor():
+    for percept in (NullPercept(), ConePercept(5.0, 1.0)):
+        agent = ComposedAgent(UtilityActor("value"), ColorCritic(), FullMemory(), percept)
+        agent.begin_session(world_with([[20, 0]]), np.random.default_rng(0))
+        score = evaluate_interlude(agent, toy_interlude(), n_samples=20)
+        assert score.accuracy == 1.0                                       # blind to the session, still sees the pair
+
+
+def test_interlude_starts_a_fresh_memory_and_leaves_the_sessions_alone():
+    w = world_with([[20, 0]], attrs=[[0.0, 0.1, 0.0]])                    # session bush 0 has color 0.1
+    agent = ComposedAgent(UtilityActor("value"), ColorCritic(), FullMemory())
+    agent.begin_session(w, np.random.default_rng(0))
+    agent.observe(Observation(np.array([0]), w.pos, w.canopy_radius, np.array([[0.0, 0.1, 0.0]]), np.zeros(1, dtype=bool)))
+    session_memory = agent.memory
+    score = evaluate_interlude(agent, toy_interlude(), n_samples=20)      # Interlude bush 0 has color 0.9 (same id)
+    assert score.accuracy == 1.0
+    assert agent.memory is session_memory and agent.memory.attrs[0, 1] == 0.1 and agent.memory.n == 1
+    assert agent.interlude_memory is not agent.memory and agent.interlude_memory.n == 6
+    assert agent.interlude_memory.attrs[0, 1] == 0.9 and agent.active_memory is agent.interlude_memory
+
+
+def test_interlude_freezes_and_carries_over_the_critic():
+    w = world_with([[5, 0]], rewards=[[2, 4]])
+    critic = MeanCritic()
+    agent = ComposedAgent(UtilityActor("value"), critic, FullKnowledge())
+    run_episode(agent, w)
+    seen, version, mean = list(critic.seen), critic.version, critic.mean
+    evaluate_interlude(agent, toy_interlude(), n_samples=10)
+    assert critic.frozen and critic.seen == seen and critic.version == version and critic.mean == mean   # carried, not refit
+
+
+def test_an_oracle_is_granted_the_interludes_table_not_the_sessions():
+    w = world_with([[20, 0]], rewards=[[9, 9]])                           # the session's only bush is worth 9
+    sidecar = toy_interlude()
+    sidecar["value"] = list(sidecar["color"])                             # the Interlude's true values: its colors
+    agent = oracle_agent(UtilityActor("value"))
+    agent.begin_session(w, np.random.default_rng(0))
+    score = evaluate_interlude(agent, sidecar, n_samples=20)
+    assert score.accuracy == 1.0 and agent.critic.values[0] == pytest.approx(0.9)
+
+
+# --- gaps found by mutation testing ----------------------------------------------------------------------------
+
+class ResettingCritic(Critic):
+    """A critic that (re)initialises what it learns in `begin`, as Memory does: weights for color only."""
+    def begin(self, task):
+        self.w = 0.0
+
+    def _fit(self, memory):
+        attrs, rewards, ids = memory.experiences()
+        self.w = float(rewards.mean() / max(attrs[:, 1].mean(), 1e-9)) if len(rewards) else 0.0
+        self.version += 1
+
+    def value(self, attrs, ids=None):
+        return self.w * np.asarray(attrs)[:, 1], np.zeros(len(attrs))
+
+
+def test_a_critic_that_resets_in_begin_keeps_what_it_learned_through_the_interlude():
+    w = world_with([[5, 0]], rewards=[[4, 4]], attrs=[[0.0, 0.5, 0.0]])
+    critic = ResettingCritic()
+    agent = ComposedAgent(UtilityActor("value"), critic, FullKnowledge())
+    run_episode(agent, w)
+    learned = critic.w
+    assert learned > 0
+    score = evaluate_interlude(agent, toy_interlude(), n_samples=10)
+    assert critic.w == learned and score.accuracy == 1.0       # w == 0 would tie every trial: chance, not 1.0
+
+
+def reachable(root, skip=()):
+    """Every object reachable from `root` through attributes, dict values and sequence items (numpy arrays are leaves)."""
+    seen, stack = set(), [root]
+    while stack:
+        o = stack.pop()
+        if id(o) in seen or isinstance(o, (str, bytes, int, float, bool, type(None), np.random.Generator)):
+            continue
+        seen.add(id(o))
+        yield o
+        if isinstance(o, np.ndarray):
+            continue
+        if isinstance(o, dict):
+            stack.extend(o.values())
+        elif isinstance(o, (list, tuple, set)):
+            stack.extend(o)
+        elif hasattr(o, "__dict__") and not isinstance(o, type):
+            stack.extend(vars(o).values())
+
+
+def test_nothing_a_non_omniscient_agent_holds_reaches_the_world():
+    from world import World
+    w = world_with([[10, 0], [0, 20]], rewards=[[3, 3], [5, 5]], attrs=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
+    for actor in (UtilityActor("value"), PlannerActor()):
+        agent = ComposedAgent(actor, MeanCritic(), FullMemory())
+        agent.begin_session(w, np.random.default_rng(0))
+        held = list(reachable(agent))
+        assert not any(isinstance(o, (World, State)) for o in held), "the agent holds the world"
+        secrets = [w.value, w.fruit_reward, w.canopy_radius, w.shape, w.color, w.moisture]
+        for o in held:
+            if isinstance(o, np.ndarray):
+                assert not any(np.shares_memory(o, s) for s in secrets), "the agent holds an array of the world's data"
+    # an omniscient memory is the granted exception: it holds a *copy* of the map, still not the world's own arrays
+    agent = ComposedAgent(UtilityActor("value"), MeanCritic(), FullKnowledge())
+    agent.begin_session(w, np.random.default_rng(0))
+    assert not any(isinstance(o, World) for o in reachable(agent))
+    assert not any(isinstance(o, np.ndarray) and np.shares_memory(o, w.pos) for o in reachable(agent))
+
+
+def test_a_cone_sees_a_canopy_whose_edge_is_inside_it_even_if_its_center_is_not():
+    # 10 away, radius 3: angular radius 17.5 degrees; a 60-degree cone reaches 30 + 17.5 to the bush's center bearing.
+    cone = ConePercept(angle=60.0, distance=100.0)
+    for bearing, expected in ((40.0, True), (46.0, True), (49.0, False), (-46.0, True), (-49.0, False)):
+        a = np.radians(bearing)
+        w = world_with([[10 * np.sin(a), 10 * np.cos(a)]], radius=3.0)
+        assert bool(len(cone.observe(w, np.zeros(2), 0.0, np.zeros(1, dtype=bool)).ids)) is expected, bearing
+
+
+def test_observations_report_which_bushes_look_spent():
+    w = world_with([[0, 20], [0, 30], [0, 40]])
+    obs = ConePercept(90.0, 100.0).observe(w, np.zeros(2), 0.0, np.array([False, True, False]))
+    assert list(obs.ids) == [0, 1, 2] and list(obs.depleted) == [False, True, False]
+
+
+def test_argmax_tie_window_is_tiny():
+    rng = np.random.default_rng(0)
+    assert all(Argmax().pick(np.array([1.0, 1.1]), rng, random_ties=True) == 1 for _ in range(50))
+    assert np.allclose(Argmax().probs(np.array([1.0, 1.1]), random_ties=True), [0, 1])
+    assert {Argmax().pick(np.array([1.0, 1.0 + 1e-14]), rng, random_ties=True) for _ in range(100)} == {0, 1}
+
+
+class ChoiceSpy(Actor):
+    def __init__(self):
+        self.bodies = []
+
+    def choose_between(self, view, candidates, rng):
+        self.bodies.append(view.body)
+        return 0
+
+
+def test_the_interlude_shows_the_actor_a_fresh_body_at_the_trials_spawn():
+    spy = ChoiceSpy()
+    agent = ComposedAgent(spy, ColorCritic(), FullMemory())
+    w = world_with([[20, 0]])
+    agent.begin_session(w, np.random.default_rng(0))
+    sidecar = toy_interlude()
+    sidecar["trials"][1]["start"], sidecar["trials"][1]["yaw"] = [3.0, 4.0], 30.0
+    evaluate_interlude(agent, sidecar, n_samples=1)
+    b = spy.bodies[1]
+    assert b.total == 0.0 and b.time_left == w.session_duration and b.heading == 30.0 and list(b.pos) == [3.0, 4.0]
+
+
+def test_accuracy_averages_over_trials_not_over_trial_types():
+    sidecar = toy_interlude()                   # two contrast trials (right) + one graded trial; make the graded one wrong
+    sidecar["trials"][2]["correct"] = "right"   # ColorCritic picks left for colors 0.5 vs 0.5 at random: 0.5
+    sidecar["color"][4], sidecar["color"][5] = 0.9, 0.1       # now it picks left every time, which is wrong
+    score = evaluate_interlude(session_agent(UtilityActor("value")), sidecar, n_samples=20)
+    assert score.by_type == {"contrast": 1.0, "graded": 0.0}
+    assert score.accuracy == pytest.approx(2 / 3)           # 2 of 3 trials, not the mean of the two types (0.5)
+    assert score.bonus == pytest.approx(2 / 3 * 3 * 5.0)
+
+
+def test_interlude_picks_depend_on_the_sidecars_seed_and_are_reproducible():
+    def p_left(seed, rng=None):
+        sidecar = toy_interlude()
+        sidecar["seed"] = seed
+        agent = session_agent(UtilityActor("value", choice=Softmax(0.5)))
+        return evaluate_interlude(agent, sidecar, n_samples=30, rng=rng).p_left
+    assert p_left(7) == p_left(7)
+    assert p_left(7) != p_left(8)
+    assert p_left(7, np.random.default_rng(1)) == p_left(8, np.random.default_rng(1))      # an explicit rng overrides the seed
+
+
+def test_the_critic_is_never_updated_during_an_interlude():
+    class Counting(ColorCritic):
+        updates = 0
+
+        def update(self, memory):
+            Counting.updates += 1
+            super().update(memory)
+    agent = ComposedAgent(UtilityActor("value"), Counting(), FullKnowledge())
+    agent.begin_session(world_with([[20, 0]]), np.random.default_rng(0))
+    before = Counting.updates
+    evaluate_interlude(agent, toy_interlude(), n_samples=5)
+    assert Counting.updates == before and agent.critic.frozen
+
+
+def test_interlude_overrides_reach_the_cache_and_evaluate_n():
+    from sim import evaluate_n, get_interlude
+    a = get_interlude("S3", 3, pool_samples=60_000, interlude_trial_count=3)[0]
+    b = get_interlude("S3", 3, pool_samples=60_000)[0]
+    assert a["n"] == 3 and b["n"] == int(load_session("S3_Interlude").interlude_trial_count) != 3
+    _, scores = evaluate_n(lambda: oracle_agent(UtilityActor("value")), "S3", seeds=[3], n_samples=5,
+                           interlude_trial_count=3)
+    assert scores[0].n_trials == 3

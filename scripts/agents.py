@@ -3,7 +3,7 @@
 An agent is three components plus a sensor, composed by `ComposedAgent` and run by sim.run_episode:
 
     Memory  what the agent keeps about the bushes it has seen and the rewards it has received. It is the constraint on
-            the other two: the actor may only use `memory` (the map: positions, attributes, spent or not, the fruits
+            the other two (and the only way anything the agent sees reaches them): the actor may only use `memory` (the map: positions, attributes, spent or not, the fruits
             taken), and the critic may only learn from `memory.experiences()` (attributes and reward, one per fruit).
             FullKnowledge is preloaded with the whole map; FullMemory accumulates everything it sees and receives.
     Critic  the value representation and its learning rule: value(attributes) -> (mean reward per fruit, uncertainty),
@@ -19,8 +19,16 @@ An agent is three components plus a sensor, composed by `ComposedAgent` and run 
 `nearest`, `greedy_*` and `plan_*` are actors with the oracle critic and full-knowledge memory. A learning agent swaps
 the critic and memory; the actor code is the same. Agents are built by zero-argument factories in
 REGISTRY (a fresh agent per world).
+
+What an agent may know is explicit. Components learn about the task through `begin(task)` (rules and speeds, no bush
+positions); they see the world only through observations the engine gives them, and the engine's state only through a `Body`
+(position, heading, time left, total reward). Components that start with the world's own knowledge (FullKnowledge,
+OracleCritic) are flagged `omniscient = True` and are the only ones granted a `WorldKnowledge` (`grant`), so a learning
+critic or a limited memory cannot reach it. After a session `ComposedAgent.begin_interlude` gives the agent a fresh memory
+for the Interlude, freezes the critic and carries it over.
 """
 
+import copy
 from dataclasses import dataclass
 from types import SimpleNamespace
 
@@ -60,6 +68,51 @@ class Stop:
 
 
 # --------------------------------------------------------------------------------------------------
+# What crosses the boundary between the engine and the agent
+# --------------------------------------------------------------------------------------------------
+
+@dataclass
+class Body:
+    """What an actor may read of the engine each decision: where the agent stands and faces, the clock and its score so far.
+    A snapshot (the engine hands over a copy of the position)."""
+    pos: np.ndarray
+    heading: float
+    time_left: float
+    total: float
+
+
+@dataclass
+class WorldKnowledge:
+    """What a full-knowledge component is granted: every bush's position, size and attributes, the true mean reward per fruit
+    of each bush (None when unknown) and the reward function (None when unknown). Only components flagged `omniscient`
+    ever receive it."""
+    pos: np.ndarray
+    radius: np.ndarray
+    attrs: np.ndarray
+    values: object = None
+    reward_function: object = None
+
+    @property
+    def n(self):
+        return len(self.pos)
+
+    @classmethod
+    def from_world(cls, world):
+        attrs = np.column_stack([world.shape, world.color, world.moisture])
+        return cls(np.asarray(world.pos, dtype=float), np.asarray(world.canopy_radius, dtype=float), attrs,
+                   getattr(world, "value", None), getattr(world.params, "reward_function", None))
+
+    @classmethod
+    def from_sidecar(cls, sidecar):
+        """The Interlude's bush table (interlude.generate_interlude), whose `value` is each bush's true reward per fruit."""
+        n = len(sidecar["canopyRadius"])
+        attrs = np.column_stack([sidecar["shape"], sidecar["color"], sidecar["moisture"]]).astype(float)
+        values = np.asarray(sidecar["value"], dtype=float) if "value" in sidecar else None
+        return cls(np.asarray(sidecar["treePos"], dtype=float).reshape(n, 2), np.asarray(sidecar["canopyRadius"], dtype=float),
+                   attrs, values, None)
+
+
+# --------------------------------------------------------------------------------------------------
 # Memory
 # --------------------------------------------------------------------------------------------------
 
@@ -73,12 +126,13 @@ class Memory:
     `experiences()`. `map_version` increases whenever a bush is added to the map; `experience_version` whenever a reward
     is recorded (a critic refits when it changes).
     """
-    world_ids = True      # ids index the session world's bush table (False for an Interlude pair, see sim.evaluate_interlude)
+    omniscient = False    # True for memories that are granted the world's own knowledge (see grant)
 
-    def begin(self, world):
-        n = len(world.pos)
+    def begin(self, task):
+        """Start empty. `task` supplies only the capacity (the number of bush ids) and the fruit count per bush."""
+        n = task.n_bushes
         self.n = n
-        self.fruit_count = world.fruit_count
+        self.fruit_count = task.fruit_count
         self.known = np.zeros(n, dtype=bool)
         self.pos = np.zeros((n, 2))
         self.radius = np.zeros(n)
@@ -89,12 +143,9 @@ class Memory:
         self.map_version = 0
         self.experience_version = 0
 
-    def _learn(self, ids, world_like):
-        self.known[ids] = True
-        self.pos[ids] = world_like.pos[ids]
-        self.radius[ids] = world_like.canopy_radius[ids]
-        self.attrs[ids] = np.column_stack([world_like.shape[ids], world_like.color[ids], world_like.moisture[ids]])
-        self.map_version += 1
+    def fresh(self):
+        """A new, empty memory of the same kind (the Interlude starts one). A memory with constructor arguments overrides this."""
+        return type(self)()
 
     def observe(self, obs):
         """Take in an Observation (perception.Observation): the bushes in view this moment, with their attributes and whether each
@@ -130,11 +181,15 @@ class Memory:
 
 
 class FullKnowledge(Memory):
-    """Preloaded with every bush's position, size and attributes (no rewards): what the oracle agents start with."""
+    """Preloaded with every bush's position, size and attributes (no rewards): what the oracle agents start with. It is
+    granted the world's knowledge, so it is flagged omniscient."""
+    omniscient = True
 
-    def begin(self, world):
-        super().begin(world)
-        self._learn(np.arange(self.n), world)
+    def grant(self, knowledge):
+        self.known[:] = True
+        self.pos[:] = knowledge.pos
+        self.radius[:] = knowledge.radius
+        self.attrs[:] = knowledge.attrs
         self.map_version = 0
 
 
@@ -148,13 +203,14 @@ class FullMemory(Memory):
 
 class Critic:
     """Value representation and learning rule. `value(attrs, ids=None) -> (mean, sd)` per bush: expected reward per fruit
-    and the critic's uncertainty about it. `ids` are session-world bush ids when the attributes belong to the session's
-    bushes (an oracle may look them up); learned critics use the attributes only. `version` changes whenever the
-    value function does."""
+    and the critic's uncertainty about it. `ids` identify the bushes (a participant can tell the bushes it has seen apart);
+    learned critics use the attributes only, and an oracle may look the ids up in what it was granted. `version` changes
+    whenever the value function does."""
     version = 0
     frozen = False
+    omniscient = False    # True for critics that are granted the world's own knowledge (see grant)
 
-    def begin(self, world):
+    def begin(self, task):
         pass
 
     def update(self, memory):
@@ -174,17 +230,21 @@ class Critic:
 
 
 class OracleCritic(Critic):
-    """Full knowledge of the reward function: R_bush for any attributes, with no uncertainty."""
+    """Full knowledge of the reward function: R_bush of each bush (looked up by id in what it was granted, else computed from
+    the attributes with the reward function), with no uncertainty. It is granted the world's knowledge, so it is flagged
+    omniscient."""
+    omniscient = True
 
-    def begin(self, world):
-        self.world = world
+    def grant(self, knowledge):
+        self.values = knowledge.values
+        self.reward_function = knowledge.reward_function
 
     def value(self, attrs, ids=None):
         attrs = np.asarray(attrs, dtype=float)
-        if ids is not None and getattr(self.world, "value", None) is not None:
-            mean = np.asarray(self.world.value, dtype=float)[np.asarray(ids)]
+        if ids is not None and self.values is not None:
+            mean = np.asarray(self.values, dtype=float)[np.asarray(ids)]
         else:
-            mean = np.asarray(bush_value(self.world.params.reward_function, attrs[:, 0], attrs[:, 1], attrs[:, 2]), dtype=float)
+            mean = np.asarray(bush_value(self.reward_function, attrs[:, 0], attrs[:, 1], attrs[:, 2]), dtype=float)
         return mean, np.zeros(len(mean))
 
 
@@ -267,6 +327,13 @@ class Task:
         self.session_duration = world.session_duration
         self.gap_base = p.harvest_range_gap_base
         self.gap_per_radius = p.harvest_range_gap_per_radius
+        self.n_bushes = len(world.pos)       # capacity of a memory (how many bush ids exist), not where they are
+
+    def for_bushes(self, n_bushes):
+        """The same task with another number of bush ids (the Interlude has its own bush table)."""
+        other = copy.copy(self)
+        other.n_bushes = n_bushes
+        return other
 
     def reach(self, radius):
         """Center distance within which a bush of this canopy radius can be harvested."""
@@ -274,15 +341,15 @@ class Task:
 
 
 class View:
-    """Read-only view for the actor: the engine's state (time left, position, heading), memory, critic and task. Value
-    and rate utilities are computed from the critic here, so an actor cannot see the true rewards."""
+    """Read-only view for the actor: its body (position, heading, time left, score), memory, critic and task. Value and rate
+    utilities are computed from the critic here, so an actor cannot see the true rewards."""
 
-    def __init__(self, state, memory, critic, task):
-        self.state, self.memory, self.critic, self.task = state, memory, critic, task
+    def __init__(self, body, memory, critic, task):
+        self.body, self.memory, self.critic, self.task = body, memory, critic, task
 
     @property
     def time_elapsed(self):
-        return self.task.session_duration - self.state.time_left
+        return self.task.session_duration - self.body.time_left
 
     def candidates(self):
         """Mask of bushes the agent knows about and has not seen spent."""
@@ -294,7 +361,7 @@ class View:
     def travel_times(self):
         """(n,) seconds of walking from here to harvest range of each bush; inf for bushes not available."""
         m = self.memory
-        d = np.hypot(*(m.pos - self.state.pos).T)
+        d = np.hypot(*(m.pos - self.body.pos).T)
         t = np.maximum(0.0, d - self.reach()) / self.task.speed
         t[~self.candidates()] = float("inf")
         return t
@@ -302,8 +369,7 @@ class View:
     def values(self):
         """(n,) the critic's expected reward per fruit for every bush in memory (and its uncertainty)."""
         m = self.memory
-        ids = np.arange(m.n) if m.world_ids else None
-        return self.critic.value(m.attrs, ids)
+        return self.critic.value(m.attrs, np.arange(m.n))
 
 
 # --------------------------------------------------------------------------------------------------
@@ -453,7 +519,7 @@ class PlannerActor(Actor):
         self.reach = view.reach()[self._ids]
         self.value = mean[self._ids]
         self.speed = task.speed
-        self.start = np.array(view.state.pos, dtype=float)
+        self.start = np.array(view.body.pos, dtype=float)
         self.t0 = view.time_elapsed
         if len(self._ids) == 0:
             self.plan, self.plan_value, self.exact = [], 0.0, True
@@ -600,29 +666,53 @@ class PlannerActor(Actor):
 
 class ComposedAgent:
     """Actor + critic + memory (+ an optional percept override), the protocol sim.run_episode drives. Attributes the agent does not define
-    (for the planner: `plan`, `plan_value`, `exact`, `nodes`) are read from the actor."""
+    (for the planner: `plan`, `plan_value`, `exact`, `nodes`) are read from the actor. The agent never keeps the world: it is
+    given a Task, observations and a Body, and the omniscient components alone are granted the world's knowledge."""
 
     def __init__(self, actor, critic, memory, percept=None):
         self.actor, self.critic, self.memory, self.percept = actor, critic, memory, percept
+        self.interlude_memory = None
 
     def __getattr__(self, name):
         if name in ("actor", "critic", "memory", "percept"):
             raise AttributeError(name)
         return getattr(self.actor, name)
 
+    @property
+    def active_memory(self):
+        """The Interlude's memory once one has begun, else the session's."""
+        return self.interlude_memory if self.interlude_memory is not None else self.memory
+
+    def _start(self, memory, task, knowledge, new_critic=True):
+        memory.begin(task)
+        if new_critic:
+            self.critic.begin(task)
+        for component in (memory, self.critic):
+            if getattr(component, "omniscient", False):
+                component.grant(knowledge)
+
     def begin_session(self, world, rng):
-        self.world, self.rng = world, rng
+        self.rng = rng
+        self.interlude_memory = None
         self.task = Task(world)
-        self.memory.begin(world)
-        self.critic.begin(world)
+        self._start(self.memory, self.task, WorldKnowledge.from_world(world))
         self.actor.begin(self.task, rng)
         self.critic.update(self.memory)
 
-    def view(self, state):
-        return View(state, self.memory, self.critic, self.task)
+    def begin_interlude(self, knowledge):
+        """After the session: freeze the critic (an Interlude shows no outcomes, so nothing is learned there) and start a fresh
+        memory for the Interlude's own bushes (the session's bush ids mean nothing there); `knowledge` is the Interlude's bush
+        table, granted only to omniscient components. The session's memory is left as it was."""
+        self.critic.freeze()
+        self.interlude_memory = self.memory.fresh()
+        # The critic carries over: `begin` would let one that starts empty there forget what it learned in the session.
+        self._start(self.interlude_memory, self.task.for_bushes(knowledge.n), knowledge, new_critic=False)
+
+    def view(self, body):
+        return View(body, self.active_memory, self.critic, self.task)
 
     def observe(self, obs):
-        self.memory.observe(obs)
+        self.active_memory.observe(obs)
 
     def record_reward(self, bush, reward):
         self.memory.record_reward(bush, reward)
@@ -631,11 +721,15 @@ class ComposedAgent:
     def mark_depleted(self, bush):
         self.memory.mark_depleted(bush)
 
-    def act(self, state):
-        return self.actor.act(self.view(state))
+    def act(self, body):
+        return self.actor.act(self.view(body))
 
-    def keep_harvesting(self, state, bush, reward):
-        return self.actor.keep_harvesting(self.view(state), bush, reward)
+    def keep_harvesting(self, body, bush, reward):
+        return self.actor.keep_harvesting(self.view(body), bush, reward)
+
+    def choose_between(self, body, candidates, rng):
+        """Index into `candidates` (bush ids in the active memory) of the bush the actor prefers."""
+        return self.actor.choose_between(self.view(body), candidates, rng)
 
     def end_session(self, result):
         pass

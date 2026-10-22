@@ -151,37 +151,38 @@ public class DataLogger : MonoBehaviour
             return;
         }
 
+        // Whether this frame has a row depends on the time it was given at its start (deltaTime), not on timeScale now:
+        // a screen that opens mid-frame (during HarvestManager.Update) leaves this frame's events stamped at its end, so
+        // its row must still be written, before the pause event; and the frame in which a screen closes has dt 0.
+        float dt = Time.deltaTime;
+        if (dt > 0f && playerController != null && _cameraController != null)
+        {
+            _t += dt;
+            _lastRowFrame = Time.frameCount;
+            _frames++;
+            _dtSum += dt;
+            _dtMax = Mathf.Max(_dtMax, dt);
+
+            Vector3 p = playerController.transform.position;
+            Vector2 move = playerController.MoveInput;
+            int keys = (move.y > 0.01f ? KeyForward : 0) | (move.y < -0.01f ? KeyBack : 0) | (playerController.HarvestHeld ? KeyHarvest : 0);
+
+            _trajectoryWriter.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                "{0:F6},{1:F4},{2:F4},{3:F4},{4:F3},{5}",
+                _t, p.x, p.z, _cameraController.Yaw, _cameraController.Pitch, keys));
+
+            if (Time.realtimeSinceStartup - _lastFlush >= TrajectoryFlushSeconds)
+            {
+                _trajectoryWriter.Flush();
+                _lastFlush = Time.realtimeSinceStartup;
+            }
+        }
+
         bool paused = Time.timeScale <= 0f;
         if (paused != _paused)
         {
             _paused = paused;
             LogEvent(paused ? "pause" : "resume");
-        }
-
-        if (paused || playerController == null || _cameraController == null)
-        {
-            return;
-        }
-
-        float dt = Time.deltaTime;
-        _t += dt;
-        _lastRowFrame = Time.frameCount;
-        _frames++;
-        _dtSum += dt;
-        _dtMax = Mathf.Max(_dtMax, dt);
-
-        Vector3 p = playerController.transform.position;
-        Vector2 move = playerController.MoveInput;
-        int keys = (move.y > 0.01f ? KeyForward : 0) | (move.y < -0.01f ? KeyBack : 0) | (playerController.HarvestHeld ? KeyHarvest : 0);
-
-        _trajectoryWriter.WriteLine(string.Format(CultureInfo.InvariantCulture,
-            "{0:F6},{1:F4},{2:F4},{3:F4},{4:F3},{5}",
-            _t, p.x, p.z, _cameraController.Yaw, _cameraController.Pitch, keys));
-
-        if (Time.realtimeSinceStartup - _lastFlush >= TrajectoryFlushSeconds)
-        {
-            _trajectoryWriter.Flush();
-            _lastFlush = Time.realtimeSinceStartup;
         }
     }
 
@@ -347,17 +348,24 @@ public class DataLogger : MonoBehaviour
             }
 
             byte[] bytes = File.ReadAllBytes(path);
-            string hash;
-            using (SHA256 sha = SHA256.Create())
-            {
-                hash = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
-            }
+            string hash = Sha256Hex(bytes);
 
             Directory.CreateDirectory(archive);
             string copy = Path.Combine(archive, hash.Substring(0, 8) + "_" + Path.GetFileName(path));
-            if (!File.Exists(copy))
+
+            // An archive copy that is missing, or whose content no longer matches its name (a write cut short by a crash),
+            // is replaced. The copy is written under a temporary name and moved into place, so a crash never leaves a
+            // partial file at the final name for a later session to trust.
+            if (!File.Exists(copy) || Sha256Hex(File.ReadAllBytes(copy)) != hash)
             {
-                File.WriteAllBytes(copy, bytes);
+                string temp = copy + "." + Guid.NewGuid().ToString("N").Substring(0, 8) + ".tmp";
+                File.WriteAllBytes(temp, bytes);
+                if (File.Exists(copy))
+                {
+                    File.Delete(copy);
+                }
+
+                File.Move(temp, copy);
             }
 
             return hash;
@@ -366,6 +374,14 @@ public class DataLogger : MonoBehaviour
         {
             Debug.LogError($"DataLogger could not hash/archive {path}: {e}");
             return null;
+        }
+    }
+
+    private static string Sha256Hex(byte[] bytes)
+    {
+        using (SHA256 sha = SHA256.Create())
+        {
+            return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
         }
     }
 

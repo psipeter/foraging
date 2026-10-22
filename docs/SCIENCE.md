@@ -251,7 +251,10 @@ explored and planned. Flow: P → Interlude (practice) → S1 → Interlude 1 �
   (see Geometry): the same distance from the spawn point to each canopy's edge, and the same bearing of each canopy's
   inner edge from the heading. The participant turns toward the bush they think pays more, walks to it and harvests it: same
   fruit-pop animation as the main task but a faster per-fruit speed (0.05 s, versus 0.2 s in sessions), whole bush
-  (10 fruits, `interludeHarvestFruits`), so the harvest takes about 0.5 s on top of a walk of about 2 s. The bush whose last fruit is taken first is the choice.
+  (10 fruits, `interludeHarvestFruits`), so the harvest takes about 0.5 s on top of a walk of about 2 s. **Commitment:** the bush whose harvest the participant starts is the choice from that
+  moment, and the other bush shrinks away (`interludeSwitchPolicy`, default Hide; Exhaust gives it the spent look, Lock leaves it untouched but unharvestable,
+  Allow keeps the old behavior where the bush whose last fruit is taken first is the choice), so there is no switching. The participant still holds Space until the
+  chosen bush is finished and the trial ends then; releasing mid-bush just pauses on that bush. No instruction sentence announces the rule.
   Controls are the main task's. No outcome is shown: no +X popups and no score (the score slot shows trial progress).
   The exhaustion chime still plays. Each fruit makes a different, neutral pick sound (a very short, soft, low falling
   "bloop") instead of the main task's pick blip, whose pitch rises with the reward: reusing that blip, even at a fixed
@@ -308,16 +311,17 @@ explored and planned. Flow: P → Interlude (practice) → S1 → Interlude 1 �
   biasing the choice by shape. The wide separation (bushes about 28 apart, a walk of about 2 s) is what makes two-level
   moisture differences available.
 - **Scoring:** a choice is correct if it is the bush with the higher true reward, or if the true rewards are
-  within 0.05 (either answer). Each correct choice adds a hidden bonus (`interludeBonusPerCorrect`, 5 points); timeouts
-  and practice-Interlude trials earn none. After each (non-practice) Interlude the end panel shows that Interlude's own
+  within 0.05 (either answer). Each correct choice adds a hidden bonus (`interludeBonusPerCorrect`, 5 points); trials with no
+  commitment before the time limit, and practice-Interlude trials, earn none (a committed choice still counts if the limit runs out before the bush is finished). After each (non-practice) Interlude the end panel shows that Interlude's own
   "x / n correct" and "Bonus: +y" (never which trials, nor anything about the reward function; the practice Interlude shows no
   score); the final screen adds the totals ("Total Score" = sessions + Interlude bonus, with n correct). Practice sessions are
   excluded from the total. Instruction text: `instructions_interlude_P.txt` (practice) and `instructions_interlude.txt` (1-4), terse, mentioning that good choices earn a bonus.
 - **Data:** `interlude.csv` in the Interlude's own folder (it also writes trajectory.csv, events.csv, harvests.csv and
-  manifest.json like any session, with `trial_start`/`teleport`/`trial_end` events, with `sessionName` e.g. `S1_Interlude` and `isInterlude`; `worldFile` is the
+  manifest.json like any session, with `trial_start`/`teleport`/`trial_end`/`trial_go` events (`trial_go` ends the harvest block that starts at `trial_end`: no bout can start in between), with `sessionName` e.g. `S1_Interlude` and `isInterlude`; `world.file` in the manifest is the
   session world file whose terrain was used): one row per trial with presented order, the design id, type, varied feature,
   both bushes' attributes and true reward, the correct side, choice (left/right/none), correct, timed_out, response_time
-  (to the last fruit), first_harvest_time and side (first bush started), fruits taken from each bush, and the bonus.
+  (to the last fruit), first_harvest_time and side (first bush started), fruits taken from each bush, the bonus, and `locked_at` (appended: the trial
+  clock when the commitment happened; empty under Allow or with no commitment). The matching `choice_lock` event in `events.csv` names the committed and the locked bush and the policy.
 - **Generating the files:** `./venv/bin/python scripts/interlude.py P_Interlude S1_Interlude S2_Interlude S3_Interlude S4_Interlude`
   writes one small `<name>_seed<N>.interlude.json` each (3–9 KB: the bush table and trial list; no terrain). Each Interlude is a
   `SessionConfig` copy of the session it probes with `isInterlude` on, `interludeFor`, `interludeTrialCount`, a `worldSeed` equal to
@@ -513,9 +517,9 @@ harvest) in the world they played, and fed to mathematical or neural agents as t
 | File | Content |
 |---|---|
 | `trajectory.csv` | One row per rendered frame: `t` (unpaused session seconds), `x, z`, `yaw`, `pitch` (degrees), `keys` (bitfield: 1 W, 2 S, 4 Space held). Height is the terrain's at (x, z); eye height is in the config. The pose is what `HarvestManager` reads that frame (interpolated player position, camera yaw). |
-| `events.csv` | `t, real, type, tree_id, k, reward, running_total, note`. `real` is unscaled seconds (so pauses, such as reading the instructions, have a duration). Types: `session_start` (start pose in `note`), `pause`/`resume`, `focus_lost`/`focus_gained`, `harvest_press`, `harvest_pause`/`harvest_resume` (target left/re-entered the range-and-cone mid-bout, which stops/restarts the fruit timer), `fruit` (one per fruit: bush, `k` = its index among the fruits taken from that bush, reward, running total), `harvest_release` (`note`: fruits, remaining, exhausted), `teleport` (Interlude trial change; new pose in `note`), `trial_start`/`trial_end`, `session_end`. |
+| `events.csv` | `t, real, type, tree_id, k, reward, running_total, note`. `real` is unscaled seconds (so pauses, such as reading the instructions, have a duration). Types: `session_start` (start pose in `note`), `pause`/`resume`, `focus_lost`/`focus_gained`, `harvest_press`, `harvest_pause`/`harvest_resume` (target left/re-entered the range-and-cone mid-bout, which stops/restarts the fruit timer), `fruit` (one per fruit: bush, `k` = its index among the fruits taken from that bush, reward, running total), `harvest_release` (`note`: fruits, remaining, exhausted), `teleport` (Interlude trial change; new pose in `note`), `trial_start`/`trial_end`, `trial_go` (the between-trial harvest block lifts; presses from `trial_end` up to this frame are discarded), `choice_lock` (Interlude commitment: `note` has `committed`, `locked` and `policy`), `session_end`. |
 | `harvests.csv` | One row per harvest bout (summary of the events plus the bush's attributes and true reward); times are `t_start`, `t_end` on the same clock. |
-| `manifest.json` | The full `SessionConfig` (`config`, every serialized field), `world` (file, seed, sha256; for an Interlude also its bush table), `build` (git commit and a `dirty` flag for logic-relevant files), `display`, `frames` (count, mean/max frame ms), `finalScore`, `completed`, and a `participantId` placeholder (null until participant IDs are collected). |
+| `manifest.json` | The full `SessionConfig` (`config`, every serialized field), `world` (file, seed, sha256; for an Interlude also `interludeFile` and `interludeSha256`, the name and hash of its bush-table file), `build` (git commit and a `dirty` flag for logic-relevant files), `display`, `frames` (count, mean/max frame ms), `finalScore`, `completed`, and a `participantId` placeholder (null until participant IDs are collected). |
 | `interlude.csv` | Interlude sessions only (columns in the "Interlude" section). |
 
 **Why this set is sufficient.** Harvest outcomes are a deterministic function of (trajectory, world): the fruit timer,
@@ -638,8 +642,10 @@ with the oracle critic and full-knowledge memory and reproduce their pre-refacto
   `sim.py --percept ANGLE,DISTANCE`) and an agent may carry its own override. Realistic constraints (terrain occlusion, resolvability by angular
   size, attribute noise) become new percept classes, calibrated against participants' logged visible sets. Walking, exploring and looking are actions of the
   actor, with time costs (looking costs angle / turn rate, to be calibrated from participants' yaw rates).
-- **Interludes:** after a session the critic is frozen (no outcomes are shown in an Interlude, so humans do not learn there either) and the actor's
-  choice rule picks between each trial's two bushes, repeated enough times to estimate accuracy; scored by a separate function (correct choices
+- **Interludes:** after a session the critic is frozen and carried over (no outcomes are shown in an Interlude, so humans do not learn there either), the
+  agent starts a fresh memory for the Interlude's own bushes, and both bushes of each trial are shown to it as observed, whatever its sensor (the trials are
+  built so both are in view; the Interlude tests what was learned, not perception). The actor's choice rule then picks between them, repeated enough times to
+  estimate accuracy; scored by a separate function (correct choices
   overall and by trial type, and the hidden bonus). The Interlude an agent faces is generated by `scripts/interlude.py` for the same world seed
   (`generate_interlude(..., seed=)`), with the same search and trials the game uses, so it is what a human sees on that world; if more or different
   trials are needed to separate agents, the change belongs in the human Interludes as well, not in a simulation-only variant.

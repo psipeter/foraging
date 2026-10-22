@@ -9,7 +9,10 @@ using UnityEngine.UI;
 // Runs an Interlude: a short forced-choice block after a session, in that session's own world (terrain, mountains,
 // sun) with only two bushes present at a time. The bush table and the trials come from scripts/interlude.py
 // (WorldData swaps them in for the session's bushes). The player turns toward the bush they think pays more, walks
-// to it and harvests it until interludeHarvestFruits fruits are taken; that bush is the choice. Outcomes are never
+// to it and harvests it until interludeHarvestFruits fruits are taken. Unless interludeSwitchPolicy is Allow, the bush whose
+// harvest the player starts is the choice from that moment (commitment) and the other bush is taken away (Hide, the default),
+// spent (Exhaust) or locked, so the player cannot switch; the trial still ends when the chosen bush has been harvested (or on
+// the time limit). With Allow the first bush to reach the fruit count is the choice. Outcomes are never
 // shown (HarvestManager suppresses reward feedback in an Interlude). A trial ends on a
 // choice or after interludeTrialSeconds, and every choice is logged to interlude.csv. Correct choices add a hidden
 // bonus that is shown only on the final screen.
@@ -73,6 +76,8 @@ public class InterludeManager : MonoBehaviour
     [SerializeField] private float fadeSeconds = 0.25f;
     [Tooltip("Seconds held at black between trials, so the next bushes are in place before the view returns.")]
     [SerializeField] private float blackHoldSeconds = 0.2f;
+    [Tooltip("Seconds the bush that was not chosen takes to shrink away (policy Hide).")]
+    [SerializeField] private float hideSeconds = 0.4f;
 
     private State _state = State.Waiting;
     private Trial[] _order;
@@ -82,6 +87,8 @@ public class InterludeManager : MonoBehaviour
     private float _clock;
     private readonly int[] _fruits = new int[2];
     private int _choice = -1;
+    private bool _completed;
+    private float _lockTime = -1f;
     private float _choiceTime;
     private float _firstHarvestTime = -1f;
     private int _firstHarvestSide = -1;
@@ -104,11 +111,13 @@ public class InterludeManager : MonoBehaviour
     private void OnEnable()
     {
         HarvestManager.OnFruitTaken += HandleFruitTaken;
+        HarvestManager.OnHarvestBoutStarted += HandleBoutStarted;
     }
 
     private void OnDisable()
     {
         HarvestManager.OnFruitTaken -= HandleFruitTaken;
+        HarvestManager.OnHarvestBoutStarted -= HandleBoutStarted;
     }
 
     private void Start()
@@ -204,6 +213,8 @@ public class InterludeManager : MonoBehaviour
 
         _fruits[0] = _fruits[1] = 0;
         _choice = -1;
+        _completed = false;
+        _lockTime = -1f;
         _firstHarvestTime = -1f;
         _firstHarvestSide = -1;
         _clock = 0f;
@@ -259,7 +270,7 @@ public class InterludeManager : MonoBehaviour
                     _firstHarvestSide = harvestManager.FocusTreeId == _trial.left.id ? 0 : 1;
                 }
 
-                if (_choice >= 0)
+                if (_completed)
                 {
                     harvestManager.CancelBout();
                     Finish(false);
@@ -274,7 +285,49 @@ public class InterludeManager : MonoBehaviour
         }
     }
 
-    // A fruit counts toward the bush it came from; the first bush to reach the required count is the choice.
+    // Commitment: starting to harvest a bush chooses it (unless the policy is Allow) and takes the other bush away.
+    private void HandleBoutStarted(Tree tree)
+    {
+        InterludeSwitchPolicy policy = sessionConfig != null ? sessionConfig.InterludeSwitchPolicy : InterludeSwitchPolicy.Allow;
+        if (policy == InterludeSwitchPolicy.Allow || _state != State.Running || tree == null || _trial == null || _choice >= 0)
+        {
+            return;
+        }
+
+        int side = tree.treeId == _trial.left.id ? 0 : (tree.treeId == _trial.right.id ? 1 : -1);
+        if (side < 0)
+        {
+            return;
+        }
+
+        _choice = side;
+        _lockTime = _clock;
+        int otherId = side == 0 ? _trial.right.id : _trial.left.id;
+        Tree other = otherId >= 0 && otherId < _treesById.Length ? _treesById[otherId] : null;
+        if (other != null)
+        {
+            switch (policy)
+            {
+                case InterludeSwitchPolicy.Hide:
+                    other.ShrinkAwayAndHide(hideSeconds);
+                    break;
+                case InterludeSwitchPolicy.Exhaust:
+                    other.MarkSpent();
+                    break;
+                default:
+                    other.isHarvested = true;
+                    break;
+            }
+        }
+
+        if (dataLogger != null)
+        {
+            dataLogger.LogEvent("choice_lock", tree.treeId, note: $"committed={tree.treeId};locked={otherId};policy={policy}");
+        }
+    }
+
+    // A fruit counts toward the bush it came from; the first bush to reach the required count completes the trial (and,
+    // under Allow, is the choice).
     private void HandleFruitTaken(Tree tree)
     {
         if (_state != State.Running || tree == null || _trial == null)
@@ -289,18 +342,23 @@ public class InterludeManager : MonoBehaviour
         }
 
         _fruits[side]++;
-        if (_choice < 0 && _fruits[side] >= sessionConfig.InterludeHarvestFruits)
+        if (!_completed && _fruits[side] >= sessionConfig.InterludeHarvestFruits)
         {
-            _choice = side;
+            _completed = true;
             _choiceTime = _clock;
+            if (_choice < 0)
+            {
+                _choice = side;
+            }
         }
     }
 
     private void Finish(bool timedOut)
     {
-        bool correct = !timedOut && (_trial.correct == "either"
-                                     || (_choice == 0 && _trial.correct == "left")
-                                     || (_choice == 1 && _trial.correct == "right"));
+        // A committed choice counts even when the clock runs out before the bush is finished.
+        bool correct = _choice >= 0 && (_trial.correct == "either"
+                                        || (_choice == 0 && _trial.correct == "left")
+                                        || (_choice == 1 && _trial.correct == "right"));
         float bonus = correct && !sessionConfig.IsPractice ? sessionConfig.InterludeBonusPerCorrect : 0f;
         if (!sessionConfig.IsPractice)
         {
@@ -314,6 +372,9 @@ public class InterludeManager : MonoBehaviour
             dataLogger.LogEvent("trial_end", note: $"choice={side};correct={(correct ? 1 : 0)};timed_out={(timedOut ? 1 : 0)}");
         }
 
+        // No harvest may start between trials (during the fade a press would take fruit outside any trial and the bout
+        // would carry into the next one).
+        harvestManager.SetBlocked(true);
         _state = State.Transition;
         StartCoroutine(_position + 1 < _order.Length ? TransitionTo(_position + 1) : Complete());
     }
@@ -326,6 +387,13 @@ public class InterludeManager : MonoBehaviour
         yield return new WaitForSecondsRealtime(blackHoldSeconds);
         yield return Fade(1f, 0f);
         player.SetFrozen(false);
+        harvestManager.SetBlocked(false);
+        if (dataLogger != null)
+        {
+            // The end of the harvest block: replay ignores presses from the trial's end up to and including this frame.
+            dataLogger.LogEvent("trial_go");
+        }
+
         _state = State.Running;
     }
 
@@ -397,7 +465,7 @@ public class InterludeManager : MonoBehaviour
                     "left_id,left_shape,left_color,left_moisture,left_value," +
                     "right_id,right_shape,right_color,right_moisture,right_value," +
                     "correct_side,choice,choice_correct,timed_out,response_time,first_harvest_time,first_harvest_side," +
-                    "left_fruits,right_fruits,bonus\n", Encoding.UTF8);
+                    "left_fruits,right_fruits,bonus,locked_at\n", Encoding.UTF8);
             }
 
             string choice = _choice == 0 ? "left" : (_choice == 1 ? "right" : "none");
@@ -410,7 +478,7 @@ public class InterludeManager : MonoBehaviour
             AppendBush(sb, _trial.right);
             sb.Append(_trial.correct).Append(',').Append(choice).Append(',').Append(correct ? 1 : 0).Append(',').Append(timedOut ? 1 : 0).Append(',');
             sb.Append(F(response)).Append(',').Append(_firstHarvestTime < 0f ? "" : F(_firstHarvestTime)).Append(',').Append(firstSide).Append(',');
-            sb.Append(_fruits[0]).Append(',').Append(_fruits[1]).Append(',').Append(F(bonus)).Append('\n');
+            sb.Append(_fruits[0]).Append(',').Append(_fruits[1]).Append(',').Append(F(bonus)).Append(',').Append(_lockTime < 0f ? "" : F(_lockTime)).Append('\n');
             File.AppendAllText(_csvPath, sb.ToString(), Encoding.UTF8);
         }
         catch (Exception e)

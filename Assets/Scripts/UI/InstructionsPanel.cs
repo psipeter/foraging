@@ -44,7 +44,7 @@ public class InstructionsPanel : MonoBehaviour
     // One-time message after the first harvest that actually collected fruit (e.g. in practice).
     private void HandleHarvestBoutEnded(HarvestBout bout)
     {
-        if (_firstHarvestShown || _sessionEnded || sessionConfig == null || sessionConfig.IsInterlude ||
+        if (_firstHarvestShown || _sessionEnded || bout.endedBySession || sessionConfig == null || sessionConfig.IsInterlude ||
             string.IsNullOrEmpty(sessionConfig.FirstHarvestMessage) ||
             bout.fruitRewards.Count == 0 || panel == null || bodyText == null)
         {

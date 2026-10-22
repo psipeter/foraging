@@ -1,5 +1,15 @@
 using UnityEngine;
 
+// What happens to the bush that was not chosen in an Interlude trial once the player starts harvesting one. The order is part of the
+// logged format (the manifest stores the number): Allow 0, Lock 1, Exhaust 2, Hide 3.
+public enum InterludeSwitchPolicy
+{
+    Allow,      // nothing: the player may switch bushes; the first bush to reach the required fruit count is the choice
+    Lock,       // the other bush stays as it is but can no longer be harvested
+    Exhaust,    // the other bush takes the spent look and can no longer be harvested
+    Hide        // the other bush shrinks away and is hidden
+}
+
 [CreateAssetMenu(
     fileName = "SessionConfig",
     menuName = "Foraging/Session Config")]
@@ -22,6 +32,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float interludeTrialSeconds = 7f;
     [Tooltip("Fruits that must be harvested from a bush to register it as the choice (times fruitHarvestDuration = harvest time). Equal to fruitCount = the whole bush.")]
     [SerializeField] private int interludeHarvestFruits = 10;
+    [Tooltip("What happens to the other bush when the player starts harvesting one (commitment: that bush is the choice from then on, and the trial still ends when it has been harvested). Allow = no commitment, the first bush to reach interludeHarvestFruits is the choice.")]
+    [SerializeField] private InterludeSwitchPolicy interludeSwitchPolicy = InterludeSwitchPolicy.Hide;
     [Tooltip("Hidden bonus points per correct choice, shown only on the final screen. Practice Interludes award none.")]
     [SerializeField] private float interludeBonusPerCorrect = 5f;
     [Tooltip("Hold the sun still at solar noon (the Interlude is not a day).")]
@@ -247,6 +259,7 @@ public class SessionConfig : ScriptableObject
     public int InterludeTrialCount => interludeTrialCount;
     public float InterludeTrialSeconds => interludeTrialSeconds;
     public int InterludeHarvestFruits => interludeHarvestFruits;
+    public InterludeSwitchPolicy InterludeSwitchPolicy => interludeSwitchPolicy;
     public float InterludeBonusPerCorrect => interludeBonusPerCorrect;
     public bool FreezeSun => freezeSun;
     public float InterludeBushDistance => interludeBushDistance;

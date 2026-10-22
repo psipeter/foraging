@@ -444,6 +444,30 @@ public class Tree : MonoBehaviour
         }
     }
 
+    // Interlude: the bush that was not chosen shrinks away and is hidden. It stops being harvestable at once (isHarvested is what
+    // HarvestManager skips), so it cannot be switched to during the fade.
+    public void ShrinkAwayAndHide(float duration)
+    {
+        isHarvested = true;
+        SetRing(false, 0f, null);
+        StartCoroutine(ShrinkAway(Mathf.Max(duration, 0.0001f)));
+    }
+
+    private System.Collections.IEnumerator ShrinkAway(float duration)
+    {
+        Vector3 start = transform.localScale;
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
+            transform.localScale = Vector3.Lerp(start, start * 0.001f, t);   // not exactly zero: a zero-scale collider logs warnings
+            yield return null;
+        }
+
+        gameObject.SetActive(false);
+    }
+
     // Pre-drawn reward for the next fruit to be taken, or -1 when none is stored for it.
     public int NextFruitReward()
     {
