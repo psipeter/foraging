@@ -187,8 +187,8 @@ docs/        SCIENCE.md, DECISIONS.md
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
              interlude.py (Interlude stimulus design + bush placement on the session's terrain), world.py (reads SessionConfig .asset YAML; generates worlds from one seed — mirrors the
              C# placement/attribute/reward rules; exports .npz), sim.py (fast session engine: actions, cone percept, Interlude
-             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent), costs.py (turning and key-press time costs and the `approach` arithmetic shared by the engine and the actors; provisional values fitted to debug logs), conftest.py (tests run with motor costs off unless marked `motor_costs`), agents.py (agent components memory / critic / actor, ComposedAgent, registry), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), test_*.py (pytest; run them with `scripts/run_tests.py`, which
-             runs only the test files the changed files can affect, or `--all` before committing)
+             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent), costs.py (turning and key-press time costs and the `approach` arithmetic shared by the engine and the actors; provisional values fitted to debug logs), conftest.py (tests run with motor costs off unless marked `motor_costs`), agents.py (agent components memory / critic / actor, ComposedAgent, registry), plots.py (matplotlib/seaborn figures for the results database, PNG into `results/`), analysis.py (queries over the results database: `select`, `table`, `paired`, `gap_closed`, `component_effect`, `reward_rate_curve`, command line), results.py (the results database: schema, `Store`, `record_run`, `lookup`, `delete_run`), fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag), specs.py (agent specs: `Component` base that records constructor arguments, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), test_*.py (pytest; run them with `scripts/run_tests.py`, which
+             runs only the test files the changed files can affect, or `--all` before committing; `--fast` skips `slow`-marked tests)
 ```
 
 Keep this tree in sync when files are added, moved, or retired.
@@ -332,7 +332,7 @@ The generated files are manual steps (nothing runs them at build time):
   reward weights/std, fruit count, moisture terracing): `./venv/bin/python scripts/world.py <sessions> --unity`.
   Unity warns at startup when a session world is stale.
 - **Interlude** (its session's terrain, seed or reward function; or
-  `interludeTrialCount`, `interludeBushDistance`, `interludeBushBearing`): copy the
+  `interludeMode`, `interludeTrialCount`, `interludeBushDistance`, `interludeBushBearing`): copy the
   changed values onto the `*_Interlude` asset, then
   `./venv/bin/python scripts/interlude.py <names>_Interlude`. Unity does **not** warn
   when an Interlude file is stale.
@@ -342,9 +342,126 @@ The generated files are manual steps (nothing runs them at build time):
 
 ### Testing
 `./venv/bin/python scripts/run_tests.py` runs only the Python test files the changed
-files can affect (`--all` before committing; `--dry-run` shows the decision). The
-tests call the real generators in memory and write nothing into the project. There
+files can affect (`--all` before committing; `--dry-run` shows the decision). `--fast`
+additionally skips tests marked `slow` (freshness checks of committed generated files, long
+planner/Interlude searches): ~7 s vs ~15 s for everything, so use it while iterating, but run
+the plain command after touching a session/Interlude asset, `world.py`, `interlude.py` or the
+planner. The tests call the real generators in memory and write nothing into the project. There
 are no Unity-side tests.
+
+### Results database (`results/results.sqlite`, schema v3; specs, fingerprints, recording and query helpers are built)
+A SQLite file of every simulated-agent run, so previous runs can be queried instead of re-run. `results/` is at the repo root,
+flat (no subfolders), gitignored, and separate from `ForagingData/` (participant data). Humans use a separate scheme, not this
+database. Design rationale and rejected alternatives: `docs/DECISIONS.md` ("Results database").
+
+**Identity and names**
+- An agent's identity is the first 12 hex characters of the SHA-256 of its canonical spec JSON (sorted keys, defaults
+  resolved; numbers by value, so `10` and `10.0` agree). Every component derives from `specs.Component` and reports `{"type": ClassName,
+  <parameter>: <value>, ...}` through `spec()` (nested components are nested specs; a class that replaces `None` by a default overrides
+  `params()` to report the effective value); `ComposedAgent.spec()` joins the four and `agents.build_agent(spec)` rebuilds the agent.
+  Only library classes (`agents.py`, `perception.py`) build from a spec by name; a component defined elsewhere is passed in `extra`.
+- **Names are labels, not data.** Never use a name as a key. When reporting, build the label from the spec showing only the fields
+  that differ among the agents in the table (`alpha=0.2` vs `alpha=0.5`; `rbf` vs `ssp`). Old registry names (`nearest`,
+  `greedy_rate_15`) stay as aliases that build the right spec.
+- An experiment is referred to by its `tag` (free text, e.g. `alpha-sweep-1`). In docs, describe an agent in words (components and
+  parameters) plus the tag; a hash appears only where a result must be re-found.
+
+**What is stored** (one row per world seed in `episodes`; no traces; no derived metrics)
+- `agents` (hash, component names, spec JSON) and `agent_params` (one row per component/key/value, to query by parameter).
+- `environments` (`fingerprint.environment`): session, a hash of the resolved session parameters the simulator reads
+  (`fingerprint.SIM_FIELDS`; audio, visuals and the world seed are excluded, so a temporary 15 s duration is visible and an
+  Inspector tweak of a volume is not), overrides,
+  percept, kind (session or Interlude), Interlude `n_samples`, motor-cost constants. `code_versions`: a hash of the engine files
+  (`sim.py`, `costs.py`, `perception.py`, `world.py`, `interlude.py`), a separate hash of `agents.py`, git commit and dirty flag.
+- `episode_checkpoints` (schema v3): for a run recorded with `--checkpoints T1,T2,...` (kind interlude), the Interlude score (trials,
+  accuracy, bonus) of a deep copy of the agent as it was at each session time. The copy is taken just before the first update to the agent
+  after that time, so it equals the agent of a session that really ended there; the episode's own Interlude columns are the score after the whole
+  session, equal to the checkpoint at the session's length. **A shortcut for agents that do not plan for the end of the session:** actors with
+  `deadline_dependent = True` (the planners) are refused, and any new actor whose choices depend on the time left must set it. The checkpoint
+  times are part of the environment hash.
+- `episode_fruits` (schema v2): one row per fruit taken in the session (`t` in session seconds, `bush`, `k`, `reward`, `running_total`),
+  the agent's counterpart of the human `fruit` events in `events.csv`; read with `Store.fruits(episode_id)` or
+  `analysis.fruit_events(store, sel, agent, seed)`. No positions, headings or other actions.
+- `runs` (agent, environment, code version, tag, time) and `episodes` (total, visits, fruits, walk/harvest/idle/look/press
+  time, Interlude accuracy overall and by trial type, bonus). Unique on (agent, environment, code version, seed, kind).
+- A stochastic agent's own seed is part of its record, since results are only reproducible given it.
+
+**Using it**
+```bash
+./venv/bin/python scripts/sim.py S1 --seeds 0-99 --agents nearest,delta_rate_10 --record --tag my-experiment [--note "..."] [--interlude --n-samples 200] [--set session_duration=90] [--db PATH]
+```
+`record_run(agent, session, seeds, tag, kind=, percept=, overrides=, n_samples=, store=)` in `scripts/results.py` does the same from
+Python (`agent` = factory, registry name or spec dict). It looks every seed up by (agent, environment, code version) and
+computes only the missing ones; a cut-short run (Ctrl-C, an exception) keeps what it computed, links it to the run and notes
+`[interrupted]`. `Store(path, readonly=True)` opens the file for analysis (`select(sql, params)` returns dicts). An Interlude
+episode (`kind="interlude"`) is the session played and then the Interlude, so it carries the session columns too. The agent's own
+random stream comes from the world seed, so a result is reproducible from its key; a custom `agent_rng` cannot be recorded.
+
+**Querying with `scripts/analysis.py`** (read-only; open with `Store(path, readonly=True)`)
+```bash
+./venv/bin/python scripts/analysis.py runs [--tag T]
+./venv/bin/python scripts/analysis.py table  --tag T [--baseline nearest] [--metric total|interlude_accuracy|interlude:<type>] [--engine current|any|HASH]
+./venv/bin/python scripts/analysis.py effect --tag T --factor critic.alpha [--reference 0.5]
+```
+- `select(store, tag=, session=, kind=, env_id=, overrides=, agents=, engine=)` returns one comparable set: exactly one environment and
+  one code version per episode, or it raises `SelectionError` saying what to narrow. Only the current engine code is searched by
+  default; an older or mixed selection carries `notes` ("stale", "agents.py changed", "dirty tree") that a report must repeat.
+  `describe`/`format_table` print the header a report needs (session, overrides, sensor, seeds, metric, tag, environment, engine,
+  agents hash, commit, dirty).
+- `table` gives mean, std, se per agent and, against a `baseline` (id, registry name, spec or agent), the paired difference with its
+  standard error and number of pairs (only seeds both agents have). Labels come from `specs.labels`: only the fields that differ.
+- `component_effect(sel, factor)`: `factor` is a path into the spec (`critic.alpha`, `critic.features`, `actor.choice`, `critic`);
+  everything under the path is the factor, agents are matched on every parameter outside it, and each matched group gives paired
+  differences to its reference level; the summary averages over groups (standard error across groups, so it needs two or more).
+  Agents that differ in anything else are never compared by it. Use it instead of eyeballing a table when more than one thing varies.
+- `cumulative_curve(store, sel, step=1, baseline=None)`: reward collected so far against session time (ends at the episode's total; the
+  default of `analysis.py curve`), mean and 95% t-interval across seeds. With a `baseline` (`curve --baseline nearest`) each agent's curve is
+  the paired difference to the baseline's cumulative reward in the same worlds (the baseline is left out): flat at zero until an agent
+  starts beating it, then rising. Use these rather than the reward rate to read a learning trajectory: the rate is noisy and wiggles with the
+  world's layout (`curve --quantity rate` still gives it).
+- `reward_rate_curve(store, sel, smoothing="bin"|"lowpass", bin_seconds=5, sigma=5)`: reward per second against session time from the
+  stored fruit events, one curve per agent: the mean over seeds and a 95% t-interval (NaN with one seed). `bin` divides each bin's
+  reward by its length; `lowpass` smooths the fruit impulse train with a zero-phase Gaussian (`sigma` seconds) renormalized at the edges
+  (the interval widens a little at the very ends, where fewer fruits fall under the window). `analysis.py curve --tag T [--smoothing
+  lowpass --sigma 4] [--out path.png]` saves the figure (default `results/<tag>_rate_<smoothing>.png`), drawn by `plots.plot_reward_rate`.
+- `checkpoint_curve(store, sel, metric="interlude_accuracy")`: Interlude score against training time from a checkpointed run, mean and 95%
+  t-interval across seeds per agent; `analysis.py learning --tag T --kind interlude [--out path.png]` saves the figure
+  (`plots.plot_learning_curve`, default `results/<tag>_learning.png`). Record it with
+  `sim.py S1 --seeds 0-99 --agents ... --set session_duration=90 interlude_trial_count=50 --record --interlude --interlude-mode random --n-samples 20 --checkpoints 0,10,20,30,45,60,75,90 --tag T`.
+- `gap_closed(sel, agent, floor, ceiling)`: per-seed fraction of the floor-to-ceiling gap (not the project's chosen metric, which is a
+  TODO(PI); say which metric a result uses).
+
+**Adding things**
+- *A parameter on a component:* give it a default and include its resolved value in `spec()`. This changes the hash of every agent
+  using the component, so run the re-hash migration (it recomputes ids from the stored spec JSON; nothing is lost). Never edit
+  `spec_json` or `agent_params` rows by hand.
+- *A new kind of component:* a new `type` string. Never reuse a type name for different behavior; if behavior changes under an
+  unchanged spec, the `agents.py` hash will differ, so say so in the commit message and rename the type if old results should not be
+  pooled with new ones.
+- *A new `episodes` column:* add at the end, nullable; old rows stay NULL (not 0). Never change what an existing column means. Prefer
+  a metric computed at query time to a stored one (the performance metric is still a TODO(PI)).
+- *Schema changes:* bump `schema_version`, write the migration in `scripts/results.py`, never drop data, and copy the file before
+  migrating (it is not in git).
+- *Environment changes* (session assets, reward function, terrain) change the environment hash on their own; nothing needs
+  invalidating by hand.
+- *The simulator starts reading another SessionConfig field:* add it to `fingerprint.SIM_FIELDS` (every environment hash then changes).
+  `test_sim_fields_cover_every_session_parameter_the_simulator_reads` traces a run and fails until you do.
+- *Code hashes* are of file bytes (`ENGINE_FILES`: sim, costs, perception, world, interlude; `AGENT_FILES`: agents, specs), so even a
+  comment edit moves them (a false alarm is the safe error); `dirty` means a hashed file differs from HEAD or is untracked.
+
+**Querying**
+- Use the helpers in `scripts/results.py` or parameterized SQL, and open the file read-only for analysis. Never UPDATE or
+  DELETE `episodes` by hand; remove a bad run by `run_id` through the helper and say you did.
+- **Look up before running.** A lookup of an existing (agent, environment, code version, seed) is free. Do not re-run baselines
+  unprompted (see above); run new agents or new conditions when asked.
+- Compare agents on identical environment and seeds and pair on seed: report the paired mean difference with its standard error,
+  not two unpaired means.
+- Default to results from the current engine hash; when citing older ones, say so. Treat a different engine hash as stale, not as
+  wrong.
+- A report states: session and duration (check for temporary overrides), number of seeds, tag, short engine hash, and whether the
+  tree was dirty. Prefer a clean-tree run before a result goes into a doc.
+- Compare components by holding the others fixed (agents that differ in exactly one parameter or component), via `agent_params`.
+- The agent/human performance metric is not decided: store raw scores, compute any metric at query time, and name it in the report.
 
 ### Docs upkeep
 Update `docs/SCIENCE.md` when the task design, session configs, or findings
