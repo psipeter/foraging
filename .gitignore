@@ -109,3 +109,6 @@ __pycache__/
 # Written by Assets/Editor/BuildInfoWriter.cs (git commit of the build, read into each session manifest)
 Assets/StreamingAssets/build_info.json
 Assets/StreamingAssets/build_info.json.meta
+
+# Simulated-agent results database (scripts/results.py)
+/results/

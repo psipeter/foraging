@@ -7,6 +7,7 @@ ref (default HEAD; uncommitted and untracked files count) and runs the test file
     ./venv/bin/python scripts/run_tests.py              # tests affected by changes since HEAD
     ./venv/bin/python scripts/run_tests.py --since main # ... since another ref
     ./venv/bin/python scripts/run_tests.py --all        # everything (do this before committing a release)
+    ./venv/bin/python scripts/run_tests.py --fast       # affected tests, skipping those marked slow (freshness checks, long searches)
     ./venv/bin/python scripts/run_tests.py --dry-run    # show the decision, run nothing
     ./venv/bin/python scripts/run_tests.py --files scripts/world.py docs/SCIENCE.md   # decide for these paths instead
     ./venv/bin/python scripts/run_tests.py -- -k hump   # arguments after -- go to pytest
@@ -57,6 +58,26 @@ DEPENDENCIES = {
                   "scripts/test_sim.py"},
         "match": [_is_session_asset, _is_interlude_asset],
     },
+    "scripts/test_specs.py": {
+        "paths": {"scripts/specs.py", "scripts/agents.py", "scripts/perception.py", "scripts/sim.py", "scripts/world.py",
+                  "scripts/costs.py", "scripts/conftest.py", "scripts/test_agents.py", "scripts/test_sim.py"},
+        "match": [_is_session_asset],
+    },
+    "scripts/test_fingerprint.py": {
+        "paths": {"scripts/fingerprint.py", "scripts/specs.py", "scripts/agents.py", "scripts/perception.py", "scripts/sim.py",
+                  "scripts/world.py", "scripts/interlude.py", "scripts/costs.py", "scripts/conftest.py", "scripts/test_agents.py"},
+        "match": [_is_session_asset, _is_interlude_asset],
+    },
+    "scripts/test_results.py": {
+        "paths": {"scripts/results.py", "scripts/fingerprint.py", "scripts/specs.py", "scripts/agents.py", "scripts/perception.py",
+                  "scripts/sim.py", "scripts/world.py", "scripts/interlude.py", "scripts/costs.py", "scripts/conftest.py"},
+        "match": [_is_session_asset, _is_interlude_asset],
+    },
+    "scripts/test_analysis.py": {
+        "paths": {"scripts/analysis.py", "scripts/plots.py", "scripts/results.py", "scripts/fingerprint.py", "scripts/specs.py", "scripts/agents.py",
+                  "scripts/perception.py", "scripts/sim.py", "scripts/world.py", "scripts/costs.py", "scripts/conftest.py"},
+        "match": [_is_session_asset],
+    },
     "scripts/test_replay.py": {
         "paths": {"scripts/replay.py", "scripts/world.py"},
         "match": [_is_session_asset],
@@ -99,6 +120,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--all", action="store_true", help="run every test file")
     ap.add_argument("--since", default="HEAD", help="git ref to compare the working tree with (default HEAD)")
+    ap.add_argument("--fast", action="store_true", help="skip tests marked slow (freshness checks, long searches); run the full set before committing")
     ap.add_argument("--dry-run", action="store_true", help="show which test files would run, then stop")
     ap.add_argument("--files", nargs="+", help="decide from these repo-relative paths instead of from git")
     args = ap.parse_args(argv)
@@ -119,7 +141,7 @@ def main():
         return 0
     if args.dry_run:
         return 0
-    cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *[str(ROOT / t) for t in selected], *passthrough]
+    cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *[str(ROOT / t) for t in selected], *(["-m", "not slow"] if args.fast else []), *passthrough]
     return subprocess.call(cmd, cwd=ROOT / "scripts")
 
 
