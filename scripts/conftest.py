@@ -17,3 +17,4 @@ def free_motion(request, monkeypatch):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "motor_costs: run with the real turning and key-press costs (costs.py)")
+    config.addinivalue_line("markers", "slow: regeneration/freshness checks and long searches; skipped by run_tests.py --fast")

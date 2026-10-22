@@ -53,6 +53,10 @@ TIE_TOLERANCE = 0.05          # |R_left - R_right| below this: either answer is 
 
 # Placement search (module constants: they shape the stimulus set, not the game)
 POOL_SAMPLES = 500_000        # random (spawn, heading) placements searched for the moisture relations below
+RANDOM_POOL_SAMPLES = 40_000  # placements for the random mode (it needs no particular moisture relation, only valid sites)
+RANDOM_DRAWS = 300            # (shape, colour) pairs tried on a placement before moving to another
+MODES = ("designed", "random")
+MODE_CODES = {0: "designed", 1: "random"}   # SessionConfig.interludeMode (InterludeMode enum order)
 SAME_TOL = 0.02               # |moisture difference| for "the same moisture"
 ONE_LEVEL = (0.20, 0.34)      # |moisture difference| for "one plateau level apart" (levels are ~0.27 apart)
 TWO_LEVELS_MIN = 0.45         # ... and for "two or more levels apart"
@@ -312,6 +316,22 @@ class Designer:
 
         return self.attempt("any", build)
 
+    def random_trial(self, want_left_better):
+        """Random mode: both bushes get independent uniform shape and colour (moisture is the terrain's at the final position, as
+        everywhere). A pair whose true rewards are within the tie tolerance is redrawn, so a trial always has a correct side;
+        `want_left_better` (or None) picks which side that is."""
+        def build(i):
+            for _ in range(RANDOM_DRAWS):
+                lt = self.bush(i, "left", *self.rng.uniform(0, 1, 2))
+                rt = self.bush(i, "right", *self.rng.uniform(0, 1, 2))
+                d = self.value(lt) - self.value(rt)
+                if abs(d) < TIE_TOLERANCE or (want_left_better is not None and (d > 0) != want_left_better):
+                    continue
+                return lt, rt
+            return None
+
+        return self.attempt("any", build)
+
     def _extreme(self, feature):
         if feature not in self.relevant:
             return float(self.rng.uniform(0, 1))
@@ -415,25 +435,54 @@ def build_trials(params, terrain, pool, rng):
             varied = ""
         trials[j] = {"type": k, "varied": varied, "place": i, "left": lt, "right": rt}
 
-    # file order is shuffled once (seeded); Unity shuffles again per participant
-    trials = [trials[j] for j in rng.permutation(n)]
+    return _finish_trials(trials, des, rng), des
+
+
+def build_random_trials(params, terrain, pool, rng):
+    """Random mode: `interludeTrialCount` pairs of bushes with independent random shape and colour (no trial types, no designed
+    contrasts), each with a definite better side, half of them on the left."""
+    n = int(params.interlude_trial_count)
+    des = Designer(params, terrain, pool, rng)
+    n_left = (n + int(rng.integers(0, 2))) // 2
+    wants = [bool(w) for w in rng.permutation([True] * n_left + [False] * (n - n_left))]
+    trials = []
+    for j in range(n):
+        i, lt, rt = des.random_trial(wants[j])
+        trials.append({"type": "random", "varied": "", "place": i, "left": lt, "right": rt})
+    return _finish_trials(trials, des, rng), des
+
+
+def _finish_trials(trials, des, rng):
+    """Shuffle the file order once (seeded; Unity shuffles again per participant) and add each trial's true values and correct side."""
+    trials = [trials[j] for j in rng.permutation(len(trials))]
     for t in trials:
         t["left_value"], t["right_value"] = des.value(t["left"]), des.value(t["right"])
         delta = t["left_value"] - t["right_value"]
         t["correct"] = "either" if abs(delta) < TIE_TOLERANCE else ("left" if delta > 0 else "right")
         t["delta_value"] = delta
-    return trials, des
+    return trials
 
 
 # --------------------------------------------------------------------------------------------------
 # Output
 # --------------------------------------------------------------------------------------------------
 
-def generate_interlude(name, pool_samples=None, seed=None, **overrides):
+def interlude_mode(params, mode=None):
+    """The generation mode: `mode` if given (a name), else the asset's `interludeMode` field (absent = designed)."""
+    if mode is None:
+        mode = getattr(params, "interlude_mode", 0)
+    mode = MODE_CODES.get(mode, mode)
+    if mode not in MODES:
+        raise ValueError(f"unknown Interlude mode '{mode}' (expected one of {MODES})")
+    return mode
+
+
+def generate_interlude(name, pool_samples=None, seed=None, mode=None, **overrides):
     """Build the sidecar dict (bush table + trials) for the Interlude asset `name`; returns (sidecar, params, terrain).
     `pool_samples` overrides POOL_SAMPLES (the tests use a smaller search to run fast). `seed` replaces the world seed of
     the Interlude and of the session it probes, and `overrides` (snake_case SessionConfig fields) apply to both, so the
-    simulator can build, for any world it plays, the very Interlude the game would show for that world."""
+    simulator can build, for any world it plays, the very Interlude the game would show for that world. `mode` is "designed" (the
+    contrast / graded / extrapolation trials) or "random" (random pairs); None reads the asset's `interludeMode`."""
     if seed is not None:
         overrides = {**overrides, "world_seed": int(seed)}
     params = load_session(name, **overrides)
@@ -453,8 +502,13 @@ def generate_interlude(name, pool_samples=None, seed=None, **overrides):
     seed = int(params.world_seed)
     terrain = generate_world(base, seed).terrain
     rngs = [np.random.default_rng(c) for c in np.random.SeedSequence([seed, 913]).spawn(3)]
-    pool = make_pool(params, terrain, rngs[0], pool_samples)
-    trials, des = build_trials(params, terrain, pool, rngs[1])
+    mode = interlude_mode(params, mode)
+    if mode == "random":
+        pool = make_pool(params, terrain, rngs[0], RANDOM_POOL_SAMPLES if pool_samples is None else pool_samples)
+        trials, des = build_random_trials(params, terrain, pool, rngs[1])
+    else:
+        pool = make_pool(params, terrain, rngs[0], pool_samples)
+        trials, des = build_trials(params, terrain, pool, rngs[1])
     n = len(trials)
 
     pos = np.zeros((2 * n, 2))
@@ -500,6 +554,8 @@ def generate_interlude(name, pool_samples=None, seed=None, **overrides):
             "right": {"id": 2 * t["index"] + 1, **{k: float(t["right"][k]) for k in FEATURES}, "value": float(t["right_value"])},
         } for t in trials],
     }
+    if mode != "designed":
+        sidecar["mode"] = mode            # (designed files stay byte-identical to those written before modes existed)
     return sidecar, params, terrain
 
 

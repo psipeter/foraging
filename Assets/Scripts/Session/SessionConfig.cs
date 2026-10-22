@@ -10,6 +10,14 @@ public enum InterludeSwitchPolicy
     Hide        // the other bush shrinks away and is hidden
 }
 
+// Which trials scripts/interlude.py generates for an Interlude asset (the game only plays the generated file). The order is part of the
+// logged format (the manifest stores the number): Designed 0, Random 1.
+public enum InterludeMode
+{
+    Designed,   // contrast / graded / extrapolation trials designed to probe the reward function's features
+    Random      // independent random shape and color for both bushes (a definite better side in every trial)
+}
+
 [CreateAssetMenu(
     fileName = "SessionConfig",
     menuName = "Foraging/Session Config")]
@@ -26,6 +34,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private bool isInterlude;
     [Tooltip("Name of the session asset this Interlude probes (e.g. S1); its world file supplies the terrain.")]
     [SerializeField] private string interludeFor = "";
+    [Tooltip("Which trials scripts/interlude.py generates: Designed (contrast / graded / extrapolation) or Random (random pairs, always a correct side). Read by the generator, not by the game: regenerate the Interlude file after changing it.")]
+    [SerializeField] private InterludeMode interludeMode = InterludeMode.Designed;
     [Tooltip("Number of choice trials.")]
     [SerializeField] private int interludeTrialCount = 10;
     [Tooltip("Seconds allowed per trial; the trial moves on when it runs out.")]
@@ -256,6 +266,7 @@ public class SessionConfig : ScriptableObject
     public bool IsPractice => isPractice;
     public bool IsInterlude => isInterlude;
     public string InterludeFor => interludeFor;
+    public InterludeMode InterludeMode => interludeMode;
     public int InterludeTrialCount => interludeTrialCount;
     public float InterludeTrialSeconds => interludeTrialSeconds;
     public int InterludeHarvestFruits => interludeHarvestFruits;

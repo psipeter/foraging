@@ -17,9 +17,11 @@ MonoBehaviour:
   isPractice: 0
   isInterlude: 1
   interludeFor: S2
+  interludeMode: 1
   interludeTrialCount: 5
   interludeTrialSeconds: 10
   interludeHarvestFruits: 10
+  interludeSwitchPolicy: 3
   interludeBonusPerCorrect: 5
   freezeSun: 1
   interludeBushDistance: 22.6

@@ -15,9 +15,26 @@ _CACHE = {}
 
 
 def get(name):
+    """The designed-mode Interlude of an asset (whatever the asset's own interludeMode is; the designed-stimulus tests are about this)."""
     if name not in _CACHE:
-        _CACHE[name] = generate_interlude(name)
+        _CACHE[name] = generate_interlude(name, mode="designed")
     return _CACHE[name]
+
+
+_ASSET = {}
+
+
+def get_asset(name):
+    """The Interlude as the asset itself says (its own interludeMode): what the game plays."""
+    if name not in _ASSET:
+        _ASSET[name] = generate_interlude(name)
+    return _ASSET[name]
+
+
+@pytest.fixture(scope="module", params=NAMES)
+def built_asset(request):
+    sidecar, params, terrain = get_asset(request.param)
+    return request.param, sidecar, params, terrain
 
 
 @pytest.fixture(scope="module", params=NAMES)
@@ -26,10 +43,35 @@ def built(request):
     return request.param, sidecar, params, terrain
 
 
+RANDOM_NAMES = ["S1_Interlude", "S3_Interlude"]
+_RANDOM = {}
+
+
+def get_random(name, seed=None):
+    if (name, seed) not in _RANDOM:
+        _RANDOM[(name, seed)] = generate_interlude(name, mode="random", interlude_trial_count=50, seed=seed)
+    return _RANDOM[(name, seed)]
+
+
+@pytest.fixture(scope="module", params=RANDOM_NAMES)
+def built_random(request):
+    sidecar, params, terrain = get_random(request.param)
+    return request.param, sidecar, params, terrain
+
+
+@pytest.fixture(scope="module", params=[(n, "designed") for n in NAMES] + [(n, "random") for n in RANDOM_NAMES])
+def built_any(request):
+    """Every kind of generated Interlude: the generic geometry, terrain and view checks hold for each."""
+    name, mode = request.param
+    sidecar, params, terrain = get(name) if mode == "designed" else get_random(name)
+    return name, sidecar, params, terrain
+
+
+@pytest.mark.slow
 def test_deterministic():
     # a smaller search keeps this fast; the property (same inputs, same output) does not depend on its size
-    a, *_ = generate_interlude("S3_Interlude", pool_samples=120_000)
-    b, *_ = generate_interlude("S3_Interlude", pool_samples=120_000)
+    a, *_ = generate_interlude("S3_Interlude", pool_samples=120_000, mode="designed")
+    b, *_ = generate_interlude("S3_Interlude", pool_samples=120_000, mode="designed")
     assert a == b
 
 
@@ -44,10 +86,11 @@ def _same(a, b, tol=1e-6):
     return a == b
 
 
-def test_committed_interlude_file_is_fresh(built):
+@pytest.mark.slow
+def test_committed_interlude_file_is_fresh(built_asset):
     """Unity does not warn when an *.interlude.json is stale. Regenerating from the current assets (the session's terrain,
     seed and reward function, and the Interlude's own geometry and trial count) must give the committed file."""
-    name, sidecar, params, terrain = built
+    name, sidecar, params, terrain = built_asset
     committed = sidecar_path(name, sidecar["seed"])
     assert committed.exists(), f"{committed} is missing: run scripts/interlude.py {name}"
     on_disk = json.load(open(committed))
@@ -74,8 +117,8 @@ def test_trial_counts_and_mix(built):
         assert n == 5 and kinds.count("contrast") == 2
 
 
-def test_bush_table_matches_trials_and_reward_function(built):
-    name, sidecar, params, terrain = built
+def test_bush_table_matches_trials_and_reward_function(built_any):
+    name, sidecar, params, terrain = built_any
     for t in sidecar["trials"]:
         for key, off in (("left", 0), ("right", 1)):
             b = t[key]
@@ -90,19 +133,19 @@ def test_bush_table_matches_trials_and_reward_function(built):
     assert sidecar["fruitCount"] == int(params.fruit_count)
 
 
-def test_bush_moisture_is_the_terrains_moisture_at_its_position(built):
+def test_bush_moisture_is_the_terrains_moisture_at_its_position(built_any):
     """No Interlude-specific terrain: each bush's moisture is what the session's terrain has where it stands."""
-    name, sidecar, params, terrain = built
+    name, sidecar, params, terrain = built_any
     pos = np.array(sidecar["treePos"]).reshape(-1, 2)
     m = terrain.moisture(pos[:, 0], pos[:, 1])
     assert np.allclose(m, sidecar["moisture"], atol=1e-6)
     assert terrain.is_tree_site(pos[:, 0], pos[:, 1]).all()         # all bushes in the valley, away from the mountains
 
 
-def test_bushes_are_equal_in_the_terms_the_harvest_rules_use(built):
+def test_bushes_are_equal_in_the_terms_the_harvest_rules_use(built_any):
     """Equal distance to each canopy's edge and equal inner-edge bearing on opposite sides of the heading, whatever the
     radii (which depend on shape), so turning and walking to either bush is the same."""
-    name, sidecar, params, terrain = built
+    name, sidecar, params, terrain = built_any
     check_geometry(params)
     edge = float(params.interlude_bush_distance)
     bearing = float(params.interlude_bush_bearing)
@@ -197,16 +240,16 @@ def test_non_moisture_contrasts_have_matching_moisture(built):
             assert abs(t["left"]["moisture"] - t["right"]["moisture"]) <= SAME_TOL + 1e-9
 
 
-def test_spawn_points_are_spread_out(built):
-    name, sidecar, params, terrain = built
+def test_spawn_points_are_spread_out(built_any):
+    name, sidecar, params, terrain = built_any
     s = np.array([t["start"] for t in sidecar["trials"]])
     d = np.hypot(*(s[:, None] - s[None]).transpose(2, 0, 1))
     np.fill_diagonal(d, np.inf)
     assert d.min() >= 40
 
 
-def test_bushes_have_a_clear_view_from_the_spawn(built):
-    name, sidecar, params, terrain = built
+def test_bushes_have_a_clear_view_from_the_spawn(built_any):
+    name, sidecar, params, terrain = built_any
     pos = np.array(sidecar["treePos"]).reshape(-1, 2)
     eye = float(params.eye_height)
     for t in sidecar["trials"]:
@@ -238,9 +281,9 @@ def test_trial_mix_rules():
     assert trial_mix(5, False, n_relevant=1) == {"contrast": 2, "graded": 2, "extrapolation": 1}
 
 
-def test_no_hill_between_the_spawn_and_either_bush(built):
+def test_no_hill_between_the_spawn_and_either_bush(built_any):
     """The ground must not rise and then fall on the way to a bush (a hill would hide it)."""
-    name, sidecar, params, terrain = built
+    name, sidecar, params, terrain = built_any
     pos = np.array(sidecar["treePos"]).reshape(-1, 2)
     for t in sidecar["trials"]:
         for k in (0, 1):
@@ -266,3 +309,44 @@ def test_has_hump_detects_a_hill_but_not_a_slope_or_a_dip():
     assert not has_hump(dip, a, b) and not has_hump(flat, a, b)
     small = Ground(lambda x: 0.3 * np.exp(-((x - 10.0) ** 2) / 8.0))
     assert HUMP_TOLERANCE > 0.3 and not has_hump(small, a, b)
+
+
+# --- random mode -----------------------------------------------------------------------------------------------------
+
+def test_random_mode_has_only_random_trials_each_with_a_correct_side(built_random):
+    name, sidecar, params, terrain = built_random
+    assert sidecar["mode"] == "random" and sidecar["n"] == 50 == len(sidecar["trials"])
+    assert {t["type"] for t in sidecar["trials"]} == {"random"} and {t["varied"] for t in sidecar["trials"]} == {""}
+    for t in sidecar["trials"]:
+        d = t["left"]["value"] - t["right"]["value"]
+        assert abs(d) >= TIE_TOLERANCE and t["correct"] == ("left" if d > 0 else "right")      # never an "either" trial
+    sides = [t["correct"] for t in sidecar["trials"]]
+    assert sides.count("left") == sides.count("right") == 25
+
+
+def test_random_mode_draws_shape_and_colour_freely_and_moisture_from_the_terrain(built_random):
+    name, sidecar, params, terrain = built_random
+    shape = np.array(sidecar["shape"])
+    color = np.array(sidecar["color"])
+    assert shape.min() < 0.1 and shape.max() > 0.9 and color.min() < 0.1 and color.max() > 0.9
+    assert abs(np.corrcoef(shape[0::2], shape[1::2])[0, 1]) < 0.5           # the two bushes of a trial are independent
+    dm = np.abs(np.array(sidecar["moisture"])[0::2] - np.array(sidecar["moisture"])[1::2])
+    assert (dm > 0.2).any()                                                  # some trials differ in moisture, as the terrain allows
+
+
+def test_random_mode_is_reproducible_and_depends_on_the_seed():
+    a = generate_interlude("S1_Interlude", mode="random", interlude_trial_count=10, seed=3)[0]
+    b = generate_interlude("S1_Interlude", mode="random", interlude_trial_count=10, seed=3)[0]
+    c = generate_interlude("S1_Interlude", mode="random", interlude_trial_count=10, seed=4)[0]
+    assert a == b and a["trials"] != c["trials"]
+
+
+def test_the_mode_comes_from_the_asset_unless_given_and_designed_files_carry_no_mode_key():
+    from interlude import interlude_mode
+    from types import SimpleNamespace as NS
+    assert interlude_mode(NS(interlude_mode=1)) == "random" and interlude_mode(NS(interlude_mode=0)) == "designed"
+    assert interlude_mode(NS()) == "designed" and interlude_mode(NS(interlude_mode=1), "designed") == "designed"
+    with pytest.raises(ValueError):
+        interlude_mode(NS(), "shuffled")
+    designed = get("S1_Interlude")[0]
+    assert "mode" not in designed and {t["type"] for t in designed["trials"]} <= {"contrast", "graded", "extrapolation"}
