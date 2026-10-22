@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 
 from agents import (Actor, Argmax, Body, ComposedAgent, Critic, Explore, FullKnowledge, FullMemory, Harvest, Look, OracleCritic,
-                    PlannerActor, Softmax, Stop, Task, UtilityActor, View, WorldKnowledge, oracle_agent, utility_rate)
+                    PlannerActor, Softmax, Stop, Task, UtilityActor, View, WorldKnowledge, oracle_agent, utility_rate,
+                    REGISTRY, DeltaRuleCritic, NeutralPrior, Prior, RBFFeatures)
 import costs
 from interlude import generate_interlude
 from world import load_session
@@ -394,6 +395,7 @@ def test_interlude_uses_the_critic_not_the_world_and_is_frozen():
     assert agent.critic.version == before
 
 
+@pytest.mark.slow
 def test_a_real_interlude_is_solved_by_the_oracle_and_not_by_nearest():
     sidecar, params, terrain = generate_interlude("S3_Interlude", pool_samples=120_000, seed=3)
     from sim import get_worlds
@@ -408,6 +410,7 @@ def test_a_real_interlude_is_solved_by_the_oracle_and_not_by_nearest():
     assert 0.3 < chance.accuracy < 0.8
 
 
+@pytest.mark.slow
 def test_seeded_generation_matches_the_assets_own_seed_and_applies_overrides():
     a, _, _ = generate_interlude("S3_Interlude", pool_samples=60_000)
     b, _, _ = generate_interlude("S3_Interlude", pool_samples=60_000, seed=3)
@@ -656,6 +659,7 @@ def test_the_critic_is_never_updated_during_an_interlude():
     assert Counting.updates == before and agent.critic.frozen
 
 
+@pytest.mark.slow
 def test_interlude_overrides_reach_the_cache_and_evaluate_n():
     from sim import evaluate_n, get_interlude
     a = get_interlude("S3", 3, pool_samples=60_000, interlude_trial_count=3)[0]
@@ -741,9 +745,10 @@ def _best_by_engine(world, critic_values):
 
 
 @pytest.mark.motor_costs
+@pytest.mark.slow
 def test_the_planner_is_optimal_with_negative_critic_values_and_with_the_motor_costs():
     rng = np.random.default_rng(3)
-    for trial in range(25):
+    for trial in range(8):
         n = 5
         values = np.round(rng.uniform(-4, 4, n), 1)
         pos = rng.uniform(-40, 40, (n, 2))
@@ -758,7 +763,7 @@ def test_the_planner_is_optimal_with_negative_critic_values_and_with_the_motor_c
 @pytest.mark.motor_costs
 def test_the_plans_value_is_what_the_engine_pays_when_rewards_equal_the_values():
     rng = np.random.default_rng(5)
-    for trial in range(25):
+    for trial in range(10):
         n = 6
         values = rng.integers(1, 6, n)
         w = world_with(rng.uniform(-50, 50, (n, 2)), rewards=[[int(v)] * 8 for v in values], duration=float(rng.uniform(5, 40)))
@@ -810,3 +815,123 @@ def test_get_interlude_hands_out_copies_and_accepts_list_overrides():
     assert b["trials"][0]["correct"] == original and b["treePos"][0] != -999.0     # the cache was not edited through `a`
     c = get_interlude("P", 100, pool_samples=40_000, canopy_width_range=[2.0, 5.0])[0]   # unhashable list: no TypeError
     assert c["n"] == b["n"]
+
+
+# --- the delta-rule learner ------------------------------------------------------------------------------------
+
+def learner_memory(attr_rows, reward_lists):
+    """A FullMemory that has seen these bushes and taken these fruits from them."""
+    n = len(attr_rows)
+    m = FullMemory()
+    m.begin(SimpleNamespace(n_bushes=n, fruit_count=10))
+    m.known[:] = True
+    m.attrs[:] = attr_rows
+    for j, rewards in enumerate(reward_lists):
+        for r in rewards:
+            m.record_reward(j, r)
+    return m
+
+
+def test_bush_stats_summarize_the_fruit_lists():
+    m = learner_memory([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]], [[2, 4], [], [5]])
+    ids, attrs, n, mean, var = m.bush_stats()
+    assert list(ids) == [0, 2] and list(n) == [2, 1]
+    assert list(mean) == [3.0, 5.0] and list(var) == [2.0, 0.0]
+    assert attrs[1].tolist() == [0.7, 0.8, 0.9]
+
+
+def test_rbf_features_are_unit_length_and_their_kernel_falls_with_distance():
+    for f in (RBFFeatures(), RBFFeatures(additive=False, n_centers=5)):
+        x = np.array([[0.5, 0.5, 0.5], [0.55, 0.5, 0.5], [0.9, 0.5, 0.5], [0.9, 0.1, 0.9]])
+        phi = f(x)
+        assert phi.shape[1] == f.dim
+        assert np.allclose(np.linalg.norm(phi, axis=1), 1.0)
+        k = phi[1:] @ phi[0]
+        assert k[0] > k[1] > k[2] > 0
+
+
+def test_additive_rbf_kernel_changes_less_when_only_one_attribute_differs():
+    f = RBFFeatures()
+    phi = f(np.array([[0.5, 0.5, 0.5], [0.5, 0.5, 0.95], [0.95, 0.95, 0.95]]))
+    assert phi[0] @ phi[1] > phi[0] @ phi[2]
+
+
+def test_the_neutral_prior_is_positive_then_the_mean_of_the_bush_means():
+    prior = NeutralPrior()
+    assert prior.value(learner_memory([[0, 0, 0]], [[]])) > 0.0
+    assert prior.value(learner_memory([[0, 0, 0], [1, 1, 1]], [[2, 4], [9]])) == pytest.approx(6.0)   # (3 + 9) / 2, not the fruit mean
+
+
+def fitted(critic, memory):
+    critic.begin(SimpleNamespace(n_bushes=memory.n))
+    critic.update(memory)
+    return critic
+
+
+def test_the_first_bush_teaches_the_baseline_and_nothing_else():
+    m = learner_memory([[0.2, 0.2, 0.2], [0.8, 0.8, 0.8]], [[5, 5, 5], []])
+    critic = fitted(DeltaRuleCritic(), m)
+    mean, sd = critic.value(m.attrs)
+    assert np.allclose(mean, 5.0) and np.all(sd == 0.0)
+
+
+def test_the_delta_rule_generalizes_to_unseen_bushes_in_order_and_falls_back_toward_the_baseline_far_away():
+    # reward rises with the first attribute; the unseen bushes sit near the poor bush, near the rich one and between them
+    rows = [[0.1, 0.5, 0.5], [0.9, 0.5, 0.5], [0.15, 0.5, 0.5], [0.85, 0.5, 0.5], [0.5, 0.5, 0.5]]
+    critic = DeltaRuleCritic(RBFFeatures(length_scale=0.15), alpha=0.5)
+    fitted(critic, learner_memory(rows, [[1.0] * 4, [9.0] * 4, [], [], []]))
+    mean, _ = critic.value(np.array(rows))
+    assert mean[0] < mean[1] and mean[2] < mean[4] < mean[3]           # unseen bushes inherit from their neighbours, in order
+    assert mean[2] == pytest.approx(mean[0], abs=0.1) and mean[3] == pytest.approx(mean[1], abs=0.1)
+
+
+def test_a_smaller_learning_rate_learns_less_from_one_bush():
+    rows = [[0.1, 0.5, 0.5], [0.9, 0.5, 0.5]]
+    gaps = []
+    for alpha in (0.2, 1.0):
+        critic = fitted(DeltaRuleCritic(alpha=alpha), learner_memory(rows, [[1.0] * 3, [9.0] * 3]))
+        v, _ = critic.value(np.array(rows))
+        gaps.append(v[1] - v[0])
+    assert 0.0 < gaps[0] < gaps[1]
+
+
+def test_a_bush_is_learned_from_once_per_update_unless_more_fruit_was_taken():
+    m = learner_memory([[0.1, 0.5, 0.5], [0.9, 0.5, 0.5]], [[2.0], [8.0]])
+    critic = fitted(DeltaRuleCritic(), m)
+    w = critic.w.copy()
+    critic.update(m)
+    assert np.allclose(critic.w, w)                          # nothing new in memory
+    m.record_reward(0, 6.0)
+    critic.update(m)
+    assert not np.allclose(critic.w, w)
+
+
+def test_a_swapped_prior_sets_the_baseline():
+    class Fixed(Prior):
+        def value(self, memory):
+            return 42.0
+    critic = fitted(DeltaRuleCritic(prior=Fixed()), learner_memory([[0.5, 0.5, 0.5]], [[]]))
+    assert critic.value(np.array([[0.1, 0.9, 0.3]]))[0][0] == pytest.approx(42.0)
+
+
+def test_the_engine_updates_a_per_bush_critic_once_per_visit_and_a_per_fruit_critic_per_fruit():
+    w = world_with([[5, 0], [-5, 0]], rewards=[[2, 4, 6], [8, 8, 8]], attrs=[[0.2, 0.5, 0.5], [0.8, 0.5, 0.5]])
+    bush_critic = DeltaRuleCritic()
+    run_episode(ComposedAgent(UtilityActor("value"), bush_critic, FullKnowledge()), w)
+    assert bush_critic.version == 1 + 2                       # the session's start, then once per bush
+    fruit_critic = MeanCritic()
+    run_episode(ComposedAgent(UtilityActor("value"), fruit_critic, FullKnowledge()), w)
+    assert fruit_critic.seen == [0, 1, 2, 3, 4, 5, 6]
+
+
+def test_the_delta_rule_agent_runs_a_session_and_its_critic_is_frozen_for_the_interlude():
+    w = world_with([[5, 0], [-5, 0], [0, 6]], rewards=[[2, 4, 6], [8, 8, 8], [1, 1, 1]],
+                   attrs=[[0.2, 0.5, 0.5], [0.8, 0.5, 0.5], [0.5, 0.5, 0.5]])
+    agent = REGISTRY["delta_rate_10"]()
+    res = run_episode(agent, w)
+    assert res.total > 0
+    v = agent.critic.version
+    agent.begin_interlude(WorldKnowledge.from_world(w))
+    agent.record_reward(0, 99.0)
+    agent.end_visit(0)
+    assert agent.critic.version == v

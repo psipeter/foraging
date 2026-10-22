@@ -35,6 +35,7 @@ from types import SimpleNamespace
 import numpy as np
 
 import costs
+from specs import Component, SpecError, build, spec_hash
 from world import bush_value
 
 REGISTRY = {}   # name -> zero-argument agent factory
@@ -128,7 +129,7 @@ class WorldKnowledge:
 # Memory
 # --------------------------------------------------------------------------------------------------
 
-class Memory:
+class Memory(Component):
     """Dense per-bush records indexed by bush id (arrays of length n; `known` says which are in memory) plus the reward
     list of every fruit taken from each bush. This base class starts empty and does not forget; subclasses set what is
     known at the start or apply limits.
@@ -188,6 +189,15 @@ class Memory:
         rewards = np.array([r for j in range(self.n) for r in self.rewards[j]], dtype=float)
         return self.attrs[ids], rewards, ids
 
+    def bush_stats(self):
+        """(ids, attrs, n, mean, var) for every bush the agent has taken fruit from: fruits taken, their mean reward and the
+        (unbiased) variance within the bush (0 with a single fruit). The statistics a critic learns from at bush level."""
+        ids = np.array([j for j in range(self.n) if self.rewards[j]], dtype=int)
+        n = np.array([len(self.rewards[j]) for j in ids], dtype=int)
+        mean = np.array([np.mean(self.rewards[j]) for j in ids], dtype=float)
+        var = np.array([np.var(self.rewards[j], ddof=1) if len(self.rewards[j]) > 1 else 0.0 for j in ids], dtype=float)
+        return ids, self.attrs[ids], n, mean, var
+
     def fruits_left(self):
         return self.fruit_count - self.taken
 
@@ -213,7 +223,7 @@ class FullMemory(Memory):
 # Critic
 # --------------------------------------------------------------------------------------------------
 
-class Critic:
+class Critic(Component):
     """Value representation and learning rule. `value(attrs, ids=None) -> (mean, sd)` per bush: expected reward per fruit
     and the critic's uncertainty about it. `ids` identify the bushes (a participant can tell the bushes it has seen apart);
     learned critics use the attributes only, and an oracle may look the ids up in what it was granted (in the Interlude only an
@@ -222,6 +232,7 @@ class Critic:
     version = 0
     frozen = False
     omniscient = False    # True for critics that are granted the world's own knowledge (see grant)
+    update_on = "fruit"   # when ComposedAgent calls `update`: after every "fruit", or when a visit to a "bush" ends
 
     def begin(self, task):
         pass
@@ -264,10 +275,115 @@ class OracleCritic(Critic):
 
 
 # --------------------------------------------------------------------------------------------------
+# A learning critic: prediction-error (delta rule) learning on a feature representation of the attributes
+# --------------------------------------------------------------------------------------------------
+
+class Prior(Component):
+    """What a learning critic believes where its features say nothing (before any data, far from every bush it has tried): a
+    baseline `value(memory)`, the same for every bush. Swappable (an optimistic prior would be an exploration mechanism)."""
+
+    def value(self, memory):
+        raise NotImplementedError
+
+
+class NeutralPrior(Prior):
+    """No opinion: `initial` (a small positive number) until a bush has been harvested, then the mean of the bush means so far.
+    The scale of `initial` does not matter for a rate utility (every bush is then worth the same), only that it is positive."""
+
+    def __init__(self, initial=1.0):
+        self.initial = float(initial)
+
+    def value(self, memory):
+        _, _, _, mean, _ = memory.bush_stats()
+        return float(mean.mean()) if len(mean) else self.initial
+
+
+class Features(Component):
+    """A representation of the attributes: `features(attrs (n, 3)) -> (n, dim)`, rows scaled to unit length, so that
+    `phi(x) . phi(x')` is a kernel with k(x, x) = 1 and one delta-rule step of size alpha moves the prediction at x' by
+    alpha * error * k(x, x')."""
+
+    def __call__(self, attrs):
+        phi = np.asarray(self._raw(np.asarray(attrs, dtype=float)), dtype=float)
+        return phi / np.maximum(np.linalg.norm(phi, axis=1, keepdims=True), 1e-12)
+
+    def _raw(self, attrs):
+        raise NotImplementedError
+
+    @property
+    def dim(self):
+        return self(np.zeros((1, 3))).shape[1]
+
+
+class RBFFeatures(Features):
+    """Gaussian bumps of width `length_scale` on a grid of `n_centers` per attribute over [0, 1]. additive=True (default): each
+    attribute has its own bumps and the features are concatenated, so the learned function is a sum of one function per attribute
+    (the structure of the reward function). additive=False: bumps on the joint grid (n_centers ** 3), which can represent
+    interactions but needs far more data."""
+
+    def __init__(self, length_scale=0.3, n_centers=8, additive=True):
+        self.length_scale = float(length_scale)
+        self.centers = np.linspace(0.0, 1.0, int(n_centers))
+        self.additive = additive
+        if not additive:
+            grid = np.meshgrid(*[self.centers] * 3, indexing="ij")
+            self._joint = np.stack([g.ravel() for g in grid], axis=1)
+
+    def _raw(self, attrs):
+        s2 = 2.0 * self.length_scale ** 2
+        if self.additive:
+            d = attrs[:, :, None] - self.centers[None, None, :]
+            return np.exp(-d ** 2 / s2).reshape(len(attrs), -1)
+        d2 = ((attrs[:, None, :] - self._joint[None, :, :]) ** 2).sum(-1)
+        return np.exp(-d2 / s2)
+
+
+class DeltaRuleCritic(Critic):
+    """TD(0) with nothing to bootstrap from (a bush's state does not change while it is harvested), i.e. the Rescorla-Wagner delta
+    rule: value(x) = prior + w . phi(x), and after each bush, w += alpha * (bush mean reward - value(x_bush)) * phi(x_bush).
+    The prior is re-read at every update (NeutralPrior: the mean of the bush means so far), so the features only learn
+    deviations from it, and the first bush harvested teaches the baseline and nothing else. Learns once per bush (a fruit
+    list is summarized by its mean), from the bush's own fruits taken since the last update; a bush that is visited again is
+    learned from again, against its mean over all fruits taken. No uncertainty is reported (sd = 0)."""
+    update_on = "bush"
+
+    def __init__(self, features=None, prior=None, alpha=0.5):
+        self.features = features if features is not None else RBFFeatures()
+        self.prior = prior if prior is not None else NeutralPrior()
+        self.alpha = float(alpha)
+        self.w = np.zeros(self.features.dim)
+        self._baseline = None
+        self._learned = np.zeros(0, dtype=int)
+
+    def params(self):
+        return {"features": self.features, "prior": self.prior, "alpha": self.alpha}
+
+    def begin(self, task):
+        self.w = np.zeros(self.features.dim)
+        self._baseline = None
+        self._learned = np.zeros(task.n_bushes, dtype=int)
+
+    def _fit(self, memory):
+        self._baseline = self.prior.value(memory)
+        ids, attrs, n, mean, _ = memory.bush_stats()
+        for i, j in enumerate(ids):
+            if n[i] > self._learned[j]:
+                phi = self.features(attrs[i:i + 1])[0]
+                error = mean[i] - (self._baseline + self.w @ phi)
+                self.w = self.w + self.alpha * error * phi
+                self._learned[j] = n[i]
+
+    def value(self, attrs, ids=None):
+        attrs = np.asarray(attrs, dtype=float)
+        base = self._baseline if self._baseline is not None else 0.0
+        return base + self.features(attrs) @ self.w, np.zeros(len(attrs))
+
+
+# --------------------------------------------------------------------------------------------------
 # Choice rules (part of the actor)
 # --------------------------------------------------------------------------------------------------
 
-class ChoiceRule:
+class ChoiceRule(Component):
     """Maps a utility vector (-inf = not a candidate) to a pick. `probs` is the distribution the rule samples from, so
     likelihoods of observed choices can be computed later."""
 
@@ -423,12 +539,13 @@ UTILITIES = {"nearest": utility_nearest, "value": utility_value, "rate": utility
 # Actors
 # --------------------------------------------------------------------------------------------------
 
-class Actor:
+class Actor(Component):
     """The policy. `act(view)` returns an action (or None to stop), `keep_harvesting(view, bush, reward)` is asked after
     every fruit but the last, and `choose_between(view, candidates, rng)` picks one of a few bushes (used by the
     Interlude evaluation). The default leaves a bush only when it is empty."""
 
     choice = Argmax()
+    deadline_dependent = False    # True for an actor whose choices depend on how much of the session is left (it plans for the end)
 
     def begin(self, task, rng):
         self.task = task
@@ -458,6 +575,11 @@ class UtilityActor(Actor):
         self.max_walk_time = max_walk_time
         if choice is not None:
             self.choice = choice
+
+    def params(self):
+        if not isinstance(self._ctor["utility"], str):
+            raise SpecError("a UtilityActor built from a function has no spec (use one of UTILITIES by name)")
+        return {"utility": self._ctor["utility"], "max_walk_time": self.max_walk_time, "choice": self.choice}
 
     def act(self, view):
         t = view.travel_times()
@@ -500,6 +622,8 @@ class PlannerActor(Actor):
     After planning: `plan` (bush ids in visiting order), `plan_value` (expected reward), `exact` (proven optimal),
     `nodes` (search nodes expanded, summed over plans).
     """
+
+    deadline_dependent = True      # the plan is made for the whole session, so a session cut short at t is not the first t seconds of it
 
     def __init__(self, method="exact", beam_width=300, max_nodes=2_000_000, incumbent_width=150):
         if method not in ("exact", "beam"):
@@ -706,6 +830,15 @@ class ComposedAgent:
             raise AttributeError(name)
         return getattr(self.actor, name)
 
+    def spec(self):
+        """The agent as data: its four components' specs (percept None = the environment's own sensor). `spec_hash` of it is the
+        agent's identity."""
+        return {"memory": self.memory.spec(), "critic": self.critic.spec(), "actor": self.actor.spec(),
+                "percept": None if self.percept is None else self.percept.spec()}
+
+    def spec_hash(self):
+        return spec_hash(self.spec())
+
     @property
     def active_memory(self):
         """The Interlude's memory once one has begun, else the session's."""
@@ -744,7 +877,13 @@ class ComposedAgent:
 
     def record_reward(self, bush, reward):
         self.memory.record_reward(bush, reward)
-        self.critic.update(self.memory)
+        if self.critic.update_on == "fruit":
+            self.critic.update(self.memory)
+
+    def end_visit(self, bush):
+        """A visit to `bush` is over (it is empty, the actor left, or the clock ran out): a critic that learns per bush learns now."""
+        if self.critic.update_on == "bush":
+            self.critic.update(self.memory)
 
     def mark_depleted(self, bush):
         self.memory.mark_depleted(bush)
@@ -761,6 +900,13 @@ class ComposedAgent:
 
     def end_session(self, result):
         pass
+
+
+def build_agent(spec, extra=None):
+    """The agent a spec describes (`ComposedAgent.spec()` is its inverse). `extra` maps class names to components defined outside
+    the library."""
+    return ComposedAgent(build(spec["actor"], extra), build(spec["critic"], extra), build(spec["memory"], extra),
+                         build(spec["percept"], extra))
 
 
 def oracle_agent(actor, percept=None):
@@ -790,7 +936,16 @@ def PlannerAgent(method="exact", **kwargs):
     return oracle_agent(PlannerActor(method, **kwargs))
 
 
+def DeltaRuleAgent(score="rate", max_walk_time=10.0, features=None, prior=None, alpha=0.5):
+    """The simplest learner: starts with an empty map (what the sensor shows it) and learns a value for the attributes by the delta
+    rule on `features` (default RBFFeatures), then goes to the bush it values best (one-step greedy, as GreedyAgent). It has no
+    exploring actor yet, so it only visits bushes it has seen."""
+    return ComposedAgent(UtilityActor(score, max_walk_time), DeltaRuleCritic(features, prior, alpha), FullMemory())
+
+
 REGISTRY["nearest"] = NearestAgent
+for _score in ("value", "rate"):
+    REGISTRY[f"delta_{_score}_10"] = (lambda s: lambda: DeltaRuleAgent(s, 10.0))(_score)
 for _score in ("value", "rate"):
     for _t in (5, 10, 15, 20, 30):
         REGISTRY[f"greedy_{_score}_{_t}"] = (lambda t, s: lambda: GreedyAgent(t, s))(_t, _score)

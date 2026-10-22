@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from world import PROJECT_ROOT, Perlin, Terrain, World, check_values, generate_world, load_session, make_world
 
@@ -174,6 +175,7 @@ def test_checked_parameters_cover_the_world_shaping_ones():
             "canopyWidthRange.min", "shapeRange.max", "reward.shape.weight"} <= names
 
 
+@pytest.mark.slow
 def test_committed_world_files_are_fresh(tmp_path):
     """The generated .world files are what the game plays and what replay loads. Regenerating from the current
     SessionConfig assets must reproduce them exactly (this also pins the RNG streams and draw order); Unity warns at

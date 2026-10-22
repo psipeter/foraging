@@ -67,6 +67,8 @@ class Result:
     trace: list = field(default_factory=list)   # (bush id, fruits taken this visit, reward this visit)
     look_time: float = 0.0     # turning the view
     press_time: float = 0.0    # pressing W (to walk) and Space (to harvest)
+    fruits: list = field(default_factory=list)   # (t, bush id, k, reward, running total) for every fruit taken, t in session seconds
+    snapshots: dict = field(default_factory=dict)   # checkpoint time -> a deep copy of the agent as it was then (see run_episode)
 
 
 class State:
@@ -182,7 +184,29 @@ def _walk(agent, world, s, res, direction, distance, percept, walkable=None):
     return True
 
 
-def _harvest(agent, world, s, res, j, percept):
+class _Checkpoints:
+    """Snapshots of the agent at chosen session times. What an agent learns changes only at the moments the engine tells it something
+    (a reward, the end of a visit), so the snapshot for time t is taken just before the first such update after t: the agent as it
+    was at t (a time with no update after it gets the final state, taken when the session ends)."""
+
+    def __init__(self, times, duration):
+        times = sorted({float(t) for t in times})
+        if any(t < 0.0 or t > duration for t in times):
+            raise ValueError(f"checkpoint times must lie within the session (0 to {duration:g} s), got {times}")
+        self.pending = times
+        self.taken = {}
+
+    def before_update(self, agent, now):
+        while self.pending and self.pending[0] < now:
+            self.taken[self.pending.pop(0)] = copy.deepcopy(agent)
+
+    def finish(self, agent):
+        while self.pending:
+            self.taken[self.pending.pop(0)] = copy.deepcopy(agent)
+        return self.taken
+
+
+def _harvest(agent, world, s, res, j, percept, cp=None):
     """Walk to bush j and harvest it. Returns False when the session should end (clock out, or no fruit taken)."""
     if s.depleted[j]:
         raise ValueError(f"agent chose depleted bush {j}")
@@ -234,6 +258,9 @@ def _harvest(agent, world, s, res, j, percept):
         res.harvest_time += fd
         s.total += r
         rewards.append(r)
+        res.fruits.append((world.session_duration - s.time_left, j, int(s.fruits_taken[j]) - 1, r, s.total))
+        if cp is not None:
+            cp.before_update(agent, world.session_duration - s.time_left)
         agent.record_reward(j, r)
         if s.fruits_taken[j] >= F:
             s.depleted[j] = True
@@ -243,6 +270,10 @@ def _harvest(agent, world, s, res, j, percept):
             break
     if s.fruits_taken[j] >= F:
         s.depleted[j] = True
+    if rewards:
+        if cp is not None:
+            cp.before_update(agent, world.session_duration - s.time_left)
+        agent.end_visit(j)
     res.n_visits += 1
     res.n_fruits += len(rewards)
     res.trace.append((j, len(rewards), float(sum(rewards))))
@@ -250,8 +281,19 @@ def _harvest(agent, world, s, res, j, percept):
     return bool(rewards)           # arrived with less than one fruit's time left: nothing more to do
 
 
-def run_episode(agent, world, agent_rng=None, percept=None):
-    """Run one session. Returns a Result. `percept` is the sensor for this run (see perception.py for how it is resolved)."""
+def run_episode(agent, world, agent_rng=None, percept=None, checkpoints=()):
+    """Run one session. Returns a Result. `percept` is the sensor for this run (see perception.py for how it is resolved).
+
+    `checkpoints` are session times (seconds, 0 to the session's length): the Result's `snapshots` maps each to a deep copy of the agent
+    as it was then, to be scored later (an Interlude, say) as if the session had ended there. That is the same as running a shorter
+    session only when the agent's behavior does not depend on how long the session is, so an actor that plans for the deadline
+    (`deadline_dependent`) is refused: run sessions of different lengths instead."""
+    cp = None
+    if len(checkpoints):
+        if getattr(getattr(agent, "actor", None), "deadline_dependent", False):
+            raise ValueError("checkpoints are a shortcut for agents that do not plan for the end of the session; "
+                             "run sessions of different lengths for this one")
+        cp = _Checkpoints(checkpoints, world.session_duration)
     if agent_rng is None:
         agent_rng = np.random.default_rng(np.random.SeedSequence([world.seed, AGENT_STREAM]))
     agent.begin_session(world, agent_rng)
@@ -273,7 +315,7 @@ def run_episode(agent, world, agent_rng=None, percept=None):
                 raise ValueError(f"agent chose bush {j}, which does not exist ({world.n} bushes)")
             if memory is not None and not memory.known[j]:
                 raise ValueError(f"agent chose bush {j}, which it has never seen or been told about")
-            if not _harvest(agent, world, s, res, j, percept):
+            if not _harvest(agent, world, s, res, j, percept, cp):
                 break
         elif isinstance(action, Explore):
             if not float(action.distance) > 0.0:
@@ -295,6 +337,8 @@ def run_episode(agent, world, agent_rng=None, percept=None):
 
     res.total = s.total
     res.idle_time = max(0.0, s.time_left)
+    if cp is not None:
+        res.snapshots = cp.finish(agent)
     agent.end_session(res)
     return res
 
@@ -318,18 +362,25 @@ def _freeze(value):
     return tuple(_freeze(v) for v in value) if isinstance(value, (list, tuple)) else value
 
 
+# Session overrides that cannot change an Interlude (it is a function of the world seed, terrain, reward function and the
+# Interlude's own settings): leaving them out of the cache key lets sessions of different lengths share one Interlude.
+NON_INTERLUDE_OVERRIDES = ("session_duration",)
+
+
 @functools.lru_cache(maxsize=None)
-def _interlude_for(session, seed, overrides):
+def _interlude_for(session, seed, mode, overrides):
     from interlude import generate_interlude
-    sidecar, params, _ = generate_interlude(f"{session}_Interlude", seed=seed, **dict(overrides))
+    sidecar, params, _ = generate_interlude(f"{session}_Interlude", seed=seed, mode=mode, **dict(overrides))
     return sidecar, float(params.interlude_bonus_per_correct), bool(params.is_practice)
 
 
-def get_interlude(session, seed, **overrides):
+def get_interlude(session, seed, mode=None, **overrides):
     """The Interlude the game shows for this session at this world seed (the same generator and search the human files come
-    from; seconds per call, so cached). `overrides` as for get_worlds. The caller gets its own copy of the sidecar, so editing
+    from; seconds per call, so cached). `mode` is "designed" or "random" (None: the Interlude asset's own `interludeMode`);
+    `overrides` as for get_worlds, e.g. interlude_trial_count=50. The caller gets its own copy of the sidecar, so editing
     it cannot change what later calls (or other agents) are scored on."""
-    sidecar, bonus, practice = _interlude_for(session, seed, tuple(sorted((k, _freeze(v)) for k, v in overrides.items())))
+    key = tuple(sorted((k, _freeze(v)) for k, v in overrides.items() if k not in NON_INTERLUDE_OVERRIDES))
+    sidecar, bonus, practice = _interlude_for(session, seed, mode, key)
     return copy.deepcopy(sidecar), bonus, practice
 
 
@@ -399,7 +450,7 @@ def run_n(agent_factory, session="S1", seeds=range(100), worlds=None, percept=No
     return Summary(np.array([r.total for r in results], dtype=float), results)
 
 
-def evaluate_n(agent_factory, session="S1", seeds=range(10), n_samples=200, percept=None, **overrides):
+def evaluate_n(agent_factory, session="S1", seeds=range(10), n_samples=200, percept=None, interlude_mode=None, **overrides):
     """For each world seed: run the session with a fresh agent, then evaluate it on that world's Interlude with the critic
     frozen. Returns (Summary of session totals, list of InterludeScore). Generating the Interludes takes seconds per seed."""
     worlds = get_worlds(session, seeds, **overrides)
@@ -407,7 +458,7 @@ def evaluate_n(agent_factory, session="S1", seeds=range(10), n_samples=200, perc
     for seed, w in zip(seeds, worlds):
         agent = agent_factory()
         results.append(run_episode(agent, w, percept=percept))
-        sidecar, bonus, practice = get_interlude(session, seed, **overrides)
+        sidecar, bonus, practice = get_interlude(session, seed, interlude_mode, **overrides)
         scores.append(evaluate_interlude(agent, sidecar, bonus, practice, n_samples=n_samples))
     return Summary(np.array([r.total for r in results], dtype=float), results), scores
 
@@ -417,15 +468,20 @@ def compare(factories, session="S1", seeds=range(100), baseline=None, percept=No
     paired differences (mean, standard error) against it."""
     worlds = get_worlds(session, seeds, **overrides)
     out = {name: run_n(f, worlds=worlds, percept=percept) for name, f in factories.items()}
+    print(format_table(out, baseline))
+    return out
+
+
+def format_table(summaries, baseline=None):
+    """The comparison table of `compare` from {name: Summary}: mean, std, se and, against `baseline`, the paired difference."""
     lines = [f"{'agent':<20}{'mean':>9}{'std':>9}{'se':>8}" + (f"{'diff vs ' + baseline:>22}" if baseline else "")]
-    for name, summ in out.items():
+    for name, summ in summaries.items():
         line = f"{name:<20}{summ.mean:>9.1f}{summ.std:>9.1f}{summ.se:>8.2f}"
         if baseline and name != baseline:
-            d = summ.totals - out[baseline].totals
+            d = summ.totals - summaries[baseline].totals
             line += f"{d.mean():>14.1f} ± {d.std(ddof=1) / np.sqrt(len(d)):.1f}"
         lines.append(line)
-    print("\n".join(lines))
-    return out
+    return "\n".join(lines)
 
 
 def _coerce(text):
@@ -449,6 +505,20 @@ def main():
                          "nothing (default: the world's own, as wide as the session camera)")
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE",
                     help="session parameter overrides in snake_case, e.g. tree_spacing=30")
+    ap.add_argument("--record", action="store_true",
+                    help="record the runs in the results database (results/results.sqlite) and reuse any already recorded for "
+                         "this agent, environment and code; needs --tag")
+    ap.add_argument("--tag", default=None, help="name of the experiment (with --record)")
+    ap.add_argument("--note", default=None, help="free-text note stored with the run (with --record)")
+    ap.add_argument("--interlude", action="store_true", help="with --record: also score each agent on its Interlude")
+    ap.add_argument("--n-samples", type=int, default=200, help="repeated choices per Interlude trial (with --interlude)")
+    ap.add_argument("--checkpoints", default=None, metavar="T1,T2,...",
+                    help="with --interlude: also score a copy of each agent as it was at these session times (seconds), a learning "
+                         "curve from one session per seed (not for agents that plan for the end of the session)")
+    ap.add_argument("--interlude-mode", default=None, choices=["designed", "random"],
+                    help="with --interlude: which trials (default: the Interlude asset's own interludeMode, designed). Set the trial "
+                         "count with --set interlude_trial_count=N")
+    ap.add_argument("--db", default=None, help="results database path (default results/results.sqlite)")
     args = ap.parse_args()
     names = [a for a in args.agents.split(",") if a]
     if not names:
@@ -457,8 +527,29 @@ def main():
     percept = None
     if args.percept:
         percept = NullPercept() if args.percept == "none" else ConePercept(*[float(v) for v in args.percept.split(",")])
-    compare({n: agents.REGISTRY[n] for n in names}, args.session, _parse_seeds(args.seeds),
-            baseline=args.baseline or names[0], percept=percept, **overrides)
+    seeds = _parse_seeds(args.seeds)
+    if not args.record:
+        if args.tag or args.note or args.interlude or args.interlude_mode or args.checkpoints:
+            raise SystemExit("--tag, --note, --interlude, --interlude-mode and --checkpoints apply to --record")
+        compare({n: agents.REGISTRY[n] for n in names}, args.session, seeds, baseline=args.baseline or names[0], percept=percept,
+                **overrides)
+        return
+    if not args.tag:
+        raise SystemExit("--record needs --tag (the name of the experiment)")
+    import results
+    summaries = {}
+    with results.Store(args.db) as store:
+        for name in names:
+            report = results.record_run(name, args.session, seeds, args.tag, note=args.note, percept=percept, overrides=overrides,
+                                        kind="interlude" if args.interlude else "session", n_samples=args.n_samples,
+                                        interlude_mode=args.interlude_mode,
+                                        checkpoints=[float(x) for x in args.checkpoints.split(",")] if args.checkpoints else None, store=store)
+            summaries[name] = Summary(report.totals, [])
+            print(f"{name}: agent {report.agent_id}, computed {report.n_computed}, reused {report.n_reused}")
+    code = report.code
+    print(f"environment {report.env_id}, engine {code['engine_hash']}, agents {code['agents_hash']}, commit {code['commit']}"
+          f"{' (dirty)' if code['dirty'] else ''}, tag {args.tag}")
+    print(format_table(summaries, args.baseline or names[0]))
 
 
 if __name__ == "__main__":

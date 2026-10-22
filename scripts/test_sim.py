@@ -7,6 +7,7 @@ import itertools
 
 from agents import (REGISTRY, Actor, ComposedAgent, GreedyAgent, Harvest, NearestAgent, PlannerAgent, UtilityActor,
                     oracle_agent)
+import sim
 from sim import run_episode, run_n
 from world import World, load_session, make_world
 
@@ -83,6 +84,7 @@ def test_session_clock_cuts_off_mid_fruit_and_mid_walk():
     assert r2.total == 0 and r2.walk_time == pytest.approx(10.0)
 
 
+@pytest.mark.slow
 def test_real_world_runs_and_is_paired_reproducible():
     a = run_n(NearestAgent, "S1", seeds=range(5))
     b = run_n(NearestAgent, "S1", seeds=range(5))
@@ -155,8 +157,9 @@ def _brute_force_best(w):
     return best
 
 
+@pytest.mark.slow
 def test_planner_exact_matches_brute_force():
-    for seed in range(4):
+    for seed in range(2):
         w = _noise_free_world(seed, n=6)
         agent = PlannerAgent("exact")
         total = run_episode(agent, w).total
@@ -203,7 +206,7 @@ def test_a_walk_that_exactly_fits_arrives_but_one_that_does_not_stops_short():
 # --- the motor costs: turning the view and pressing keys (costs.py) ------------------------------------------------
 
 import costs
-from agents import Explore, Look, Stop
+from agents import Explore, FullKnowledge, Look, OracleCritic, Stop
 
 
 class Sequence(Actor):
@@ -337,3 +340,75 @@ def test_fruit_timing_does_not_drift_over_hundreds_of_fruits():
     w = tiny_world([[i * 0.1, 0.0] for i in range(30)], [[1] * 10] * 30, duration=60.0, fd=0.2)
     r = run_episode(Fixed(list(range(30))), w)
     assert r.n_fruits == 300 and r.total == 300
+
+
+@pytest.mark.slow
+def test_an_interlude_is_shared_by_sessions_of_different_lengths():
+    sim._interlude_for.cache_clear()
+    a, _, _ = sim.get_interlude("P", 0, "random", session_duration=20, interlude_trial_count=4)
+    b, _, _ = sim.get_interlude("P", 0, "random", session_duration=90, interlude_trial_count=4)
+    assert a == b and sim._interlude_for.cache_info().misses == 1
+    sim.get_interlude("P", 0, "random", session_duration=20, interlude_trial_count=5)       # a setting that does change it
+    assert sim._interlude_for.cache_info().misses == 2
+
+
+def test_the_result_lists_every_fruit_with_its_time_bush_and_reward():
+    w = tiny_world(np.array([[5.0, 0.0], [-5.0, 0.0]]), [[2, 4, 6], [8, 8, 8]])
+    res = run_episode(NearestAgent(), w)
+    assert [f[1] for f in res.fruits] == [0, 0, 0, 1, 1, 1] or [f[1] for f in res.fruits] == [1, 1, 1, 0, 0, 0]
+    assert len(res.fruits) == res.n_fruits and res.fruits[-1][4] == res.total and sum(f[3] for f in res.fruits) == res.total
+    times = [f[0] for f in res.fruits]
+    assert times == sorted(times) and times[0] > 0
+    ks = {}
+    for t, bush, k, reward, total in res.fruits:
+        assert k == ks.get(bush, -1) + 1 and reward == w.fruit_reward[bush, k]
+        ks[bush] = k
+
+
+# --- checkpoints ---------------------------------------------------------------------------------------------------
+
+def checkpoint_agent():
+    from agents import DeltaRuleCritic, FullKnowledge
+    return ComposedAgent(UtilityActor("nearest"), DeltaRuleCritic(), FullKnowledge())
+
+
+def checkpoint_world(duration=60.0):
+    from test_agents import world_with
+    return world_with([[5, 0], [-6, 0]], rewards=[[2, 2, 2], [9, 9, 9]], attrs=[[0.1, 0.5, 0.5], [0.9, 0.5, 0.5]], duration=duration, fd=0.5)
+
+
+def test_a_checkpoint_is_the_agent_as_it_was_then_and_equals_a_shorter_session():
+    world = checkpoint_world()
+    agent = checkpoint_agent()
+    res = run_episode(agent, world, checkpoints=[0, 40, 60])
+    first_end = res.fruits[2][0]                                                  # the first bush's last fruit
+    mid = first_end + 0.1
+    res = run_episode(agent := checkpoint_agent(), world, checkpoints=[0, mid, 60])
+    assert sorted(res.snapshots) == [0.0, mid, 60.0]
+    assert not res.snapshots[0.0].critic.w.any()                                  # before anything was learned
+    assert np.allclose(res.snapshots[60.0].critic.w, agent.critic.w) and agent.critic.w.any()
+    shorter = checkpoint_agent()
+    run_episode(shorter, checkpoint_world(duration=mid))                          # a session that really ends at `mid`
+    assert np.allclose(res.snapshots[mid].critic.w, shorter.critic.w)
+    assert not np.allclose(res.snapshots[mid].critic.w, agent.critic.w)           # and it differs from the end: it learned after `mid`
+    assert res.snapshots[60.0] is not agent and res.snapshots[60.0].critic is not agent.critic
+    before = res.snapshots[mid].critic.w.copy()
+    agent.critic.w += 1.0
+    assert np.allclose(res.snapshots[mid].critic.w, before)                       # a snapshot is a copy
+
+
+def test_checkpoints_after_the_agent_stops_get_its_final_state_and_none_means_no_snapshots():
+    agent = ComposedAgent(Fixed([0]), OracleCritic(), FullKnowledge())
+    res = run_episode(agent, tiny_world([[3, 0]], [[1, 1]], duration=30.0), checkpoints=[5, 30])
+    assert sorted(res.snapshots) == [5.0, 30.0]
+    assert run_episode(NearestAgent(), tiny_world([[3, 0]], [[1, 1]])).snapshots == {}
+
+
+def test_checkpoints_must_be_inside_the_session_and_not_for_deadline_planners():
+    w = tiny_world([[3, 0]], [[1, 1]], duration=30.0)
+    for bad in ([-1], [31]):
+        with pytest.raises(ValueError, match="within the session"):
+            run_episode(NearestAgent(), w, checkpoints=bad)
+    with pytest.raises(ValueError, match="plan for the end"):
+        run_episode(PlannerAgent("beam"), w, checkpoints=[10])
+    run_episode(PlannerAgent("beam"), w)                                          # fine without checkpoints

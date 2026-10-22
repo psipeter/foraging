@@ -21,6 +21,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from specs import Component
+
 
 @dataclass
 class Observation:
@@ -33,7 +35,7 @@ class Observation:
     depleted: np.ndarray
 
 
-class NullPercept:
+class NullPercept(Component):
     """Sees nothing (an agent that relies entirely on what its memory was given)."""
     observes = False
 
@@ -41,7 +43,7 @@ class NullPercept:
         return Observation(np.zeros(0, dtype=int), np.zeros((0, 2)), np.zeros(0), np.zeros((0, 3)), np.zeros(0, dtype=bool))
 
 
-class ConePercept:
+class ConePercept(Component):
     """A view cone: a bush is seen when the edge of its canopy is within `distance` of the viewer and any part of it lies
     within `angle` degrees (total, horizontal) centered on the heading. Attributes are seen exactly; terrain does not hide
     anything (see scripts/visibility.py for a model that does)."""
