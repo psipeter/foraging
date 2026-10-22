@@ -24,9 +24,9 @@ def _style():
                          "ytick.color": INK_SECONDARY, "axes.edgecolor": GRID, "font.size": 10})
 
 
-def plot_reward_rate(curves, path, title=None, colors=None):
-    """Save the figure of `analysis.RateCurves`: mean reward per second against session time, one line per agent with its
-    confidence band. Returns the path written."""
+def plot_cumulative_reward(curves, path, title=None, colors=None):
+    """Save the figure of `analysis.CumulativeCurves`: mean cumulative reward (or, with a baseline, the paired lead over it) against session
+    time, one line per agent with its confidence band. Returns the path written."""
     _style()
     fig, ax = plt.subplots(figsize=(8.0, 4.8))
     ids = list(curves.agents)
@@ -38,14 +38,14 @@ def plot_reward_rate(curves, path, title=None, colors=None):
         ax.plot(curves.t, c["mean"], color=colors[a], linewidth=2, solid_capstyle="round", solid_joinstyle="round", label=f"{c['label']} (n={c['n']})")
         ends.append((c["mean"][-1], a))
     ax.set_xlim(0, curves.duration)
-    quantity = getattr(curves, "quantity", "rate")
+    quantity = curves.quantity
     if quantity == "advantage":
         ax.axhline(0, color=INK_MUTED, linewidth=1)
         ax.text(curves.duration, 0, f"{curves.baseline}", ha="right", va="bottom", fontsize=8, color=INK_MUTED)
     else:
         ax.set_ylim(bottom=0)
     ax.set_xlabel("time in session (s)")
-    ax.set_ylabel({"rate": "reward per second", "cumulative": "cumulative reward", "advantage": "cumulative reward ahead of the baseline"}[quantity])
+    ax.set_ylabel({"cumulative": "cumulative reward", "advantage": "cumulative reward ahead of the baseline"}[quantity])
     ax.yaxis.grid(True, color=GRID, linewidth=1)
     ax.set_axisbelow(True)
     sns.despine(ax=ax, left=True)
@@ -60,10 +60,7 @@ def plot_reward_rate(curves, path, title=None, colors=None):
     if len(ids) > 1:
         ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=1, frameon=False, fontsize=9, labelcolor=INK_SECONDARY)
     sel = curves.sel
-    if quantity == "rate":
-        smoothing = f"; {curves.params['bin_seconds']:g} s bins" if curves.smoothing == "bin" else f"; Gaussian low-pass, sigma {curves.params['sigma']:g} s"
-        heading, note = f"Reward rate over the session: {sel.env['session']}", f"mean and {curves.confidence:.0%} interval across seeds{smoothing}"
-    elif quantity == "cumulative":
+    if quantity == "cumulative":
         heading, note = f"Cumulative reward over the session: {sel.env['session']}", f"mean and {curves.confidence:.0%} interval across seeds"
     else:
         heading = f"Lead over the baseline in cumulative reward: {sel.env['session']}"

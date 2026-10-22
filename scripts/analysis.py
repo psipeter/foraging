@@ -20,7 +20,7 @@ import json
 from dataclasses import dataclass, field
 
 import numpy as np
-from scipy import ndimage, stats
+from scipy import stats
 
 import fingerprint
 import specs
@@ -371,11 +371,8 @@ def format_effect(effect, sel=None, metric="total"):
 
 
 # --------------------------------------------------------------------------------------------------
-# Reward rate over the session
+# Cumulative reward over the session
 # --------------------------------------------------------------------------------------------------
-
-LOWPASS_DT = 0.1      # seconds: resolution of the impulse train that the low-pass filter smooths
-
 
 def session_seconds(sel):
     """The session length of a selection (the `session_duration` override if there is one, else the session asset's)."""
@@ -384,41 +381,14 @@ def session_seconds(sel):
     return float(over["session_duration"]) if "session_duration" in over else float(load_session(sel.env["session"]).session_duration)
 
 
-def rate_curve(t, reward, duration, smoothing="bin", bin_seconds=5.0, sigma=5.0, step=1.0):
-    """Reward per second against session time for one episode's fruits (`t`, `reward`).
-
-    smoothing="bin":     the reward in each `bin_seconds` bin divided by the bin's length (the last bin may be shorter), returned at
-                         the bin centres.
-    smoothing="lowpass": the fruits as an impulse train smoothed by a Gaussian of standard deviation `sigma` seconds (a zero-phase
-                         low-pass filter), normalized at the session's edges so it does not sag there, sampled every `step` seconds.
-    Returns (times, rates)."""
-    t, reward = np.asarray(t, dtype=float), np.asarray(reward, dtype=float)
-    if smoothing == "bin":
-        edges = np.append(np.arange(0.0, duration, bin_seconds), duration)
-        sums, _ = np.histogram(t, bins=edges, weights=reward)
-        return (edges[:-1] + edges[1:]) / 2.0, sums / np.diff(edges)
-    if smoothing == "lowpass":
-        n = int(round(duration / LOWPASS_DT))
-        fine, _ = np.histogram(t, bins=n, range=(0.0, duration), weights=reward)
-        s = sigma / LOWPASS_DT
-        smooth = ndimage.gaussian_filter1d(fine / LOWPASS_DT, s, mode="constant")
-        smooth /= ndimage.gaussian_filter1d(np.ones(n), s, mode="constant")
-        centres = (np.arange(n) + 0.5) * LOWPASS_DT
-        grid = np.arange(step / 2.0, duration, step)
-        return grid, np.interp(grid, centres, smooth)
-    raise ValueError(f"unknown smoothing '{smoothing}' (expected 'bin' or 'lowpass')")
-
-
 @dataclass
-class RateCurves:
+class CumulativeCurves:
     t: np.ndarray                 # (n_t,) session seconds
     duration: float
-    smoothing: str
-    params: dict                  # bin_seconds or sigma
     confidence: float
     agents: dict                  # agent_id -> {"label", "n", "mean", "lo", "hi", "per_seed" (n, n_t), "seeds"}
     sel: Selection = None
-    quantity: str = "rate"        # "rate" (reward per second), "cumulative" (reward so far) or "advantage" (cumulative reward over a baseline's)
+    quantity: str = "cumulative"  # "cumulative" (reward so far) or "advantage" (cumulative reward over a baseline's)
     baseline: str = None          # the baseline's label (quantity "advantage")
 
 
@@ -472,28 +442,7 @@ def cumulative_curve(store, sel, step=1.0, confidence=0.95, baseline=None):
         out[aid] = {"label": labels[aid], "n": len(m), "mean": mean, "lo": mean - half, "hi": mean + half, "per_seed": m, "seeds": seeds}
     if not out:
         raise SelectionError("nothing to plot: the baseline is the only agent in the selection")
-    return RateCurves(grid, duration, "cumulative", {}, confidence, out, sel, "advantage" if base else "cumulative",
-                      labels[base] if base else None)
-
-
-def reward_rate_curve(store, sel, smoothing="bin", bin_seconds=5.0, sigma=5.0, step=1.0, confidence=0.95):
-    """Reward rate against time in the session, one curve per agent in the selection: the mean over its seeds and a `confidence`
-    t-interval of that mean (needs two or more seeds; with one the interval is NaN). Smoothing as in `rate_curve`."""
-    duration = session_seconds(sel)
-    series = _fruit_series(store, sel)
-    labels = dict(zip(sel.agents, specs.labels(list(sel.agents.values()))))
-    out, grid = {}, None
-    for aid, slot in sel.rows.items():
-        seeds = sorted(slot)
-        curves = []
-        for seed in seeds:
-            t, reward = series.get(slot[seed]["episode_id"], ([], []))
-            grid, rate = rate_curve(t, reward, duration, smoothing, bin_seconds, sigma, step)
-            curves.append(rate)
-        mean, half = _interval(np.array(curves), confidence)
-        out[aid] = {"label": labels[aid], "n": len(curves), "mean": mean, "lo": mean - half, "hi": mean + half, "per_seed": np.array(curves), "seeds": seeds}
-    params = {"bin_seconds": bin_seconds} if smoothing == "bin" else {"sigma": sigma}
-    return RateCurves(grid, duration, smoothing, params, confidence, out, sel)
+    return CumulativeCurves(grid, duration, confidence, out, sel, "advantage" if base else "cumulative", labels[base] if base else None)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -574,15 +523,10 @@ def main(argv=None):
     p = sub.add_parser("table", help="compare the agents of a selection")
     _common_filters(p)
     p.add_argument("--baseline", default=None, help="agent id or registry name for paired differences")
-    p = sub.add_parser("curve", help="reward rate against time in the session, one curve per agent (saves a figure)")
+    p = sub.add_parser("curve", help="cumulative reward against time in the session, one curve per agent (saves a figure)")
     _common_filters(p)
-    p.add_argument("--quantity", default="cumulative", choices=["cumulative", "rate"],
-                   help="cumulative reward so far (default; with --baseline, the paired advantage over it) or reward per second")
-    p.add_argument("--baseline", default=None, help="with --quantity cumulative: agent id or registry name; plot each agent's lead over it")
-    p.add_argument("--smoothing", default="bin", choices=["bin", "lowpass"], help="for --quantity rate")
-    p.add_argument("--bin", type=float, default=5.0, dest="bin_seconds", help="bin width in seconds (--smoothing bin)")
-    p.add_argument("--sigma", type=float, default=5.0, help="Gaussian low-pass width in seconds (--smoothing lowpass)")
-    p.add_argument("--out", default=None, help="figure path (default results/<tag>_rate_<smoothing>.png)")
+    p.add_argument("--baseline", default=None, help="agent id or registry name: plot each agent's paired lead over it instead")
+    p.add_argument("--out", default=None, help="figure path (default results/<tag>_cumulative.png, or _advantage.png with --baseline)")
     p = sub.add_parser("learning", help="Interlude score against training time (a run recorded with --checkpoints); saves a figure")
     _common_filters(p)
     p.add_argument("--out", default=None, help="figure path (default results/<tag>_learning.png)")
@@ -608,15 +552,11 @@ def main(argv=None):
             print(describe(sel, curves.metric))
         elif args.command == "curve":
             import plots
-            if args.quantity == "cumulative":
-                curves = cumulative_curve(store, sel, baseline=args.baseline)
-                name = "advantage" if args.baseline else "cumulative"
-                what = "advantage in cumulative reward" if args.baseline else "cumulative reward"
-            else:
-                curves = reward_rate_curve(store, sel, args.smoothing, args.bin_seconds, args.sigma)
-                name, what = f"rate_{args.smoothing}", "reward per second"
+            curves = cumulative_curve(store, sel, baseline=args.baseline)
+            name = "advantage" if args.baseline else "cumulative"
+            what = "advantage in cumulative reward" if args.baseline else "cumulative reward"
             out = args.out or DEFAULT_PATH.parent / f"{'+'.join(args.tag or ['all'])}_{name}.png"
-            print(plots.plot_reward_rate(curves, out))
+            print(plots.plot_cumulative_reward(curves, out))
             print(describe(sel, what))
         elif args.command == "table":
             print(format_table(table(sel, args.metric, args.baseline), sel, args.metric))

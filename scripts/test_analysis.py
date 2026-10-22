@@ -216,26 +216,7 @@ def test_fruit_events_come_back_as_arrays_for_one_agent_and_seed(tmp_path):
             analysis.fruit_events(s, sel, "greedy_rate_10", 99)
 
 
-# --- reward rate over the session ---------------------------------------------------------------------------------
-
-def test_binned_rate_is_the_reward_in_each_bin_over_its_length():
-    t, reward = [0.5, 1.5, 4.9, 5.1, 9.9, 12.0], [1, 2, 3, 4, 5, 6]
-    centres, rate = analysis.rate_curve(t, reward, 12.0, "bin", bin_seconds=5.0)
-    assert list(centres) == [2.5, 7.5, 11.0]                                            # the last bin is 2 s long
-    assert list(rate) == [(1 + 2 + 3) / 5, (4 + 5) / 5, 6 / 2]
-    widths = np.array([5.0, 5.0, 2.0])
-    assert (rate * widths).sum() == sum(reward)
-
-
-def test_lowpass_rate_is_flat_for_a_steady_rate_and_conserves_the_reward():
-    t = np.arange(0.5, 100.0, 1.0)                                                       # one reward of 2 every second
-    grid, rate = analysis.rate_curve(t, np.full(len(t), 2.0), 100.0, "lowpass", sigma=4.0)
-    assert np.allclose(rate, 2.0, atol=0.02)                                             # no sag at the session's edges
-    grid, bump = analysis.rate_curve([50.0], [10.0], 100.0, "lowpass", sigma=3.0, step=0.5)
-    assert abs(bump.sum() * 0.5 - 10.0) < 0.05 and abs(grid[np.argmax(bump)] - 50.0) <= 0.5
-    with pytest.raises(ValueError):
-        analysis.rate_curve(t, t, 100.0, "boxcar")
-
+# --- cumulative reward over the session ---------------------------------------------------------------------------
 
 def recorded(tmp_path, agents=("nearest", "greedy_rate_10"), seeds=(0, 1, 2, 3), duration=30):
     s = Store(tmp_path / "r.sqlite")
@@ -244,50 +225,16 @@ def recorded(tmp_path, agents=("nearest", "greedy_rate_10"), seeds=(0, 1, 2, 3),
     return s, analysis.select(s, tag="c")
 
 
-def test_the_curves_have_a_mean_and_a_t_interval_per_agent(tmp_path):
-    from scipy import stats
-    s, sel = recorded(tmp_path)
-    with s:
-        curves = analysis.reward_rate_curve(s, sel, "bin", bin_seconds=10.0)
-        assert curves.duration == 30.0 and list(curves.t) == [5.0, 15.0, 25.0] and len(curves.agents) == 2
-        for aid, c in curves.agents.items():
-            assert c["n"] == 4 and c["per_seed"].shape == (4, 3)
-            by_hand = []
-            for seed in c["seeds"]:
-                fruits = s.fruits(sel.rows[aid][seed]["episode_id"])
-                by_hand.append(analysis.rate_curve([f["t"] for f in fruits], [f["reward"] for f in fruits], 30.0, "bin", 10.0)[1])
-            assert np.allclose(c["per_seed"], np.array(by_hand))
-            m = np.array(by_hand)
-            half = stats.t.ppf(0.975, 3) * m.std(axis=0, ddof=1) / 2.0
-            assert np.allclose(c["mean"], m.mean(axis=0)) and np.allclose(c["hi"] - c["mean"], half)
-            assert np.allclose((c["per_seed"] * 10.0).sum(axis=1), [sel.rows[aid][sd]["total"] for sd in c["seeds"]])   # all the reward is in the bins
-        low = analysis.reward_rate_curve(s, sel, "lowpass", sigma=4.0)
-        assert low.smoothing == "lowpass" and len(low.t) == 30 and all(np.isfinite(c["mean"]).all() for c in low.agents.values())
-
-
 def test_one_seed_has_no_interval_and_episodes_without_fruit_events_are_refused(tmp_path):
     s, sel = recorded(tmp_path, agents=("nearest",), seeds=(0,))
     with s:
-        c = next(iter(analysis.reward_rate_curve(s, sel).agents.values()))
+        c = next(iter(analysis.cumulative_curve(s, sel).agents.values()))
         assert c["n"] == 1 and np.isnan(c["lo"]).all() and np.isfinite(c["mean"]).all()
         add(s, delta(), [1, 2], tag="old", overrides={"session_duration": 30})            # no fruits stored, but fruits were taken
         s.conn.execute("UPDATE episodes SET n_fruits = 7 WHERE agent_id NOT IN (SELECT agent_id FROM runs WHERE tag = 'c')")
         s.conn.commit()
         with pytest.raises(analysis.SelectionError, match="no stored fruit events"):
-            analysis.reward_rate_curve(s, analysis.select(s, tag="old"))
-
-
-def test_the_figure_and_the_curve_command_are_written(tmp_path, capsys):
-    import plots
-    s, sel = recorded(tmp_path)
-    with s:
-        curves = analysis.reward_rate_curve(s, sel, "bin", bin_seconds=5.0)
-        out = plots.plot_reward_rate(curves, tmp_path / "sub" / "rate.png")
-        assert out.exists() and out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n" and out.stat().st_size > 5000
-    png = tmp_path / "cmd.png"
-    analysis.main(["curve", "--tag", "c", "--quantity", "rate", "--smoothing", "lowpass", "--sigma", "3", "--out", str(png), "--db", str(tmp_path / "r.sqlite")])
-    text = capsys.readouterr().out
-    assert png.exists() and "reward per second" in text and "engine" in text
+            analysis.cumulative_curve(s, analysis.select(s, tag="old"))
 
 
 # --- learning curves from checkpoints -----------------------------------------------------------------------------
@@ -347,6 +294,19 @@ def test_cumulative_reward_ends_at_the_total_never_decreases_and_matches_the_fru
         assert list(coarse.t) == [0.0, 10.0, 20.0, 30.0]
 
 
+def test_the_cumulative_curve_has_a_t_interval_across_seeds(tmp_path):
+    from scipy import stats
+    s, sel = recorded(tmp_path)
+    with s:
+        curves = analysis.cumulative_curve(s, sel)
+        for c in curves.agents.values():
+            m = c["per_seed"]
+            assert c["n"] == 4 and m.shape == (4, 31)
+            assert np.allclose(c["mean"], m.mean(axis=0))
+            assert np.allclose(c["hi"] - c["mean"], stats.t.ppf(0.975, 3) * m.std(axis=0, ddof=1) / 2.0)
+            assert np.allclose(c["lo"], 2 * c["mean"] - c["hi"])
+
+
 def test_the_advantage_over_a_baseline_is_the_paired_difference_of_cumulative_reward(tmp_path):
     s, sel = recorded(tmp_path)
     with s:
@@ -367,7 +327,7 @@ def test_the_cumulative_and_advantage_figures_and_commands_are_written(tmp_path,
     s, sel = recorded(tmp_path)
     with s:
         for kw in ({}, {"baseline": "nearest"}):
-            out = plots.plot_reward_rate(analysis.cumulative_curve(s, sel, **kw), tmp_path / f"c{len(kw)}.png")
+            out = plots.plot_cumulative_reward(analysis.cumulative_curve(s, sel, **kw), tmp_path / f"c{len(kw)}.png")
             assert out.exists() and out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
     db = str(tmp_path / "r.sqlite")
     analysis.main(["curve", "--tag", "c", "--out", str(tmp_path / "cum.png"), "--db", db])
