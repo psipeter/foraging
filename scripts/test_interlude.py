@@ -138,7 +138,7 @@ def test_correct_side_matches_true_values_and_is_roughly_balanced(built):
         want = "either" if abs(d) < TIE_TOLERANCE else ("left" if d > 0 else "right")
         assert t["correct"] == want
     sides = [t["correct"] for t in sidecar["trials"]]
-    assert abs(sides.count("left") - sides.count("right")) <= 4
+    assert abs(sides.count("left") - sides.count("right")) <= len(sides) // 2 + 1     # 3-2 or 4-1 passes, all one side does not
 
 
 def test_contrasts_differ_in_exactly_one_feature(built):

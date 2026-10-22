@@ -1,6 +1,6 @@
 """Run only the Python tests that the files you changed could affect.
 
-The suite has three test files with different dependencies; a change to Unity C#, docs or Unity assets that the
+The suite has several test files with different dependencies; a change to Unity C#, docs or Unity assets that the
 Python code never reads cannot break them, so there is no reason to run them. This compares the working tree with a git
 ref (default HEAD; uncommitted and untracked files count) and runs the test files whose inputs changed.
 
@@ -36,32 +36,37 @@ def _is_interlude_file(path):
     return path.startswith("Assets/StreamingAssets/Worlds/") and path.endswith(".interlude.json")
 
 
+def _is_world_file(path):
+    # the committed session worlds are compared with a fresh generation (test_committed_world_files_are_fresh)
+    return path.startswith("Assets/StreamingAssets/Worlds/") and path.endswith(".world")
+
+
 # test file -> what it depends on: exact paths, and predicates over a repo-relative path.
-# (The Python code reads only the SessionConfig .asset YAML, never C# or the generated world files.)
+# (The Python code reads the SessionConfig .asset YAML; test_world also reads WorldData.cs and the generated .world files.)
 DEPENDENCIES = {
     "scripts/test_world.py": {
-        "paths": {"scripts/world.py", "scripts/conftest.py"},
-        "match": [_is_session_asset],
+        "paths": {"scripts/world.py", "Assets/Scripts/World/WorldData.cs"},   # (the C# check names are mirrored)
+        "match": [_is_session_asset, _is_world_file],
     },
     "scripts/test_sim.py": {
-        "paths": {"scripts/sim.py", "scripts/agents.py", "scripts/perception.py", "scripts/world.py", "scripts/conftest.py"},
+        "paths": {"scripts/sim.py", "scripts/agents.py", "scripts/perception.py", "scripts/world.py"},
         "match": [_is_session_asset],
     },
     "scripts/test_agents.py": {
         "paths": {"scripts/agents.py", "scripts/sim.py", "scripts/perception.py", "scripts/world.py", "scripts/interlude.py",
-                  "scripts/test_sim.py", "scripts/conftest.py"},
+                  "scripts/test_sim.py"},
         "match": [_is_session_asset, _is_interlude_asset],
     },
     "scripts/test_replay.py": {
-        "paths": {"scripts/replay.py", "scripts/world.py", "scripts/conftest.py"},
+        "paths": {"scripts/replay.py", "scripts/world.py"},
         "match": [_is_session_asset],
     },
     "scripts/test_visibility.py": {
-        "paths": {"scripts/visibility.py", "scripts/replay.py", "scripts/world.py", "scripts/conftest.py"},
+        "paths": {"scripts/visibility.py", "scripts/replay.py", "scripts/world.py"},
         "match": [],
     },
     "scripts/test_interlude.py": {
-        "paths": {"scripts/interlude.py", "scripts/world.py", "scripts/conftest.py"},
+        "paths": {"scripts/interlude.py", "scripts/world.py"},
         "match": [_is_session_asset, _is_interlude_asset, _is_interlude_file],
     },
 }

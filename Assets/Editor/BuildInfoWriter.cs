@@ -6,16 +6,34 @@ using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 
 // Writes Assets/StreamingAssets/build_info.json (gitignored) with the git commit the code was built from, so each
-// session's manifest.json can say which code produced it. "dirty" is true when files that shape the game (scripts,
-// shaders, session configs, worlds, instruction text) differ from that commit; Inspector churn elsewhere is ignored.
+// session's manifest.json can say which code produced it. "dirty" is true when files that shape the game (scripts and
+// their execution order, shaders, materials, prefabs, render and input settings, the time/quality/physics project
+// settings, session configs, worlds, instruction text) differ from that commit; other Inspector churn is ignored.
 // Refreshed on Editor load, on entering Play mode and before every build.
 [InitializeOnLoad]
 public class BuildInfoWriter : IPreprocessBuildWithReport
 {
     private static readonly string[] TrackedPaths =
     {
-        "Assets/Scripts", "Assets/Shaders", "Assets/ScriptableObjects", "Assets/StreamingAssets", "Assets/Scenes"
+        "Assets/Scripts", "Assets/Shaders", "Assets/ScriptableObjects", "Assets/StreamingAssets", "Assets/Scenes",
+        "Assets/Prefabs", "Assets/Materials", "Assets/Resources", "Assets/Settings", "Assets/PlayerInputActions.inputactions",
+        "ProjectSettings/TimeManager.asset", "ProjectSettings/QualitySettings.asset", "ProjectSettings/GraphicsSettings.asset",
+        "ProjectSettings/DynamicsManager.asset", "ProjectSettings/InputManager.asset", "ProjectSettings/URPProjectSettings.asset",
+        "ProjectSettings/ProjectSettings.asset"
     };
+
+    // A script's .meta holds its execution order, which decides what each frame's logic reads; other .meta files are
+    // Unity's own churn.
+    private static bool IsIgnored(string line)
+    {
+        string trimmed = line.Trim();
+        if (trimmed.Length == 0 || trimmed.Contains("build_info.json"))
+        {
+            return true;
+        }
+
+        return trimmed.EndsWith(".meta") && !trimmed.Contains("Assets/Scripts/");
+    }
 
     public int callbackOrder => 0;
 
@@ -52,8 +70,7 @@ public class BuildInfoWriter : IPreprocessBuildWithReport
             bool dirty = false;
             foreach (string line in status.Split('\n'))
             {
-                // Ignore the generated file itself and .meta churn.
-                if (line.Trim().Length > 0 && !line.Contains("build_info.json") && !line.EndsWith(".meta"))
+                if (!IsIgnored(line))
                 {
                     dirty = true;
                     break;
