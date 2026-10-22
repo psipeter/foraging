@@ -34,6 +34,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
+import costs
 from world import bush_value
 
 REGISTRY = {}   # name -> zero-argument agent factory
@@ -58,7 +59,8 @@ class Explore:
 
 @dataclass(frozen=True)
 class Look:
-    """Turn the view by `angle` degrees (+ = right); costs |angle| / turn rate seconds."""
+    """Turn the view by `angle` degrees (+ = right); costs costs.TURN_OVERHEAD + |angle| / costs.TURN_RATE seconds. A zero angle
+    is refused (an action that costs nothing)."""
     angle: float
 
 
@@ -91,6 +93,16 @@ class WorldKnowledge:
     attrs: np.ndarray
     values: object = None
     reward_function: object = None
+
+    def __post_init__(self):
+        # Own, read-only copies: a component that is granted the knowledge can read it but can neither change the world it
+        # came from (worlds are shared across the agents of a comparison) nor see later changes to it.
+        for name in ("pos", "radius", "attrs", "values"):
+            value = getattr(self, name)
+            if value is not None:
+                value = np.array(value, dtype=float, copy=True)
+                value.flags.writeable = False
+                setattr(self, name, value)
 
     @property
     def n(self):
@@ -204,8 +216,9 @@ class FullMemory(Memory):
 class Critic:
     """Value representation and learning rule. `value(attrs, ids=None) -> (mean, sd)` per bush: expected reward per fruit
     and the critic's uncertainty about it. `ids` identify the bushes (a participant can tell the bushes it has seen apart);
-    learned critics use the attributes only, and an oracle may look the ids up in what it was granted. `version` changes
-    whenever the value function does."""
+    learned critics use the attributes only, and an oracle may look the ids up in what it was granted (in the Interlude only an
+    omniscient critic is given ids: the session's bush ids mean nothing there). `version` changes whenever the value function
+    does: `update` bumps it after every refit of a critic that learns (one that overrides `_fit`)."""
     version = 0
     frozen = False
     omniscient = False    # True for critics that are granted the world's own knowledge (see grant)
@@ -214,9 +227,11 @@ class Critic:
         pass
 
     def update(self, memory):
-        """Learn from what memory now holds, unless frozen."""
-        if not self.frozen:
+        """Learn from what memory now holds, unless frozen. A critic that learns (overrides `_fit`) has changed afterwards, so
+        its `version` is bumped here and an actor that caches work on it (the planner) knows to redo it."""
+        if not self.frozen and type(self)._fit is not Critic._fit:
             self._fit(memory)
+            self.version += 1
 
     def _fit(self, memory):
         pass
@@ -327,6 +342,7 @@ class Task:
         self.session_duration = world.session_duration
         self.gap_base = p.harvest_range_gap_base
         self.gap_per_radius = p.harvest_range_gap_per_radius
+        self.max_angle = float(getattr(p, "harvest_max_angle", 35.0))   # the harvest cone's half-angle
         self.n_bushes = len(world.pos)       # capacity of a memory (how many bush ids exist), not where they are
 
     def for_bushes(self, n_bushes):
@@ -344,8 +360,9 @@ class View:
     """Read-only view for the actor: its body (position, heading, time left, score), memory, critic and task. Value and rate
     utilities are computed from the critic here, so an actor cannot see the true rewards."""
 
-    def __init__(self, body, memory, critic, task):
+    def __init__(self, body, memory, critic, task, in_interlude=False):
         self.body, self.memory, self.critic, self.task = body, memory, critic, task
+        self.in_interlude = in_interlude
 
     @property
     def time_elapsed(self):
@@ -359,17 +376,22 @@ class View:
         return self.task.reach(self.memory.radius)
 
     def travel_times(self):
-        """(n,) seconds of walking from here to harvest range of each bush; inf for bushes not available."""
+        """(n,) seconds from here until the first fruit of each bush could be taken: turning to it, the key presses and the
+        walking to its harvest range (costs.approach, the arithmetic the engine charges); inf for bushes not available."""
         m = self.memory
-        d = np.hypot(*(m.pos - self.body.pos).T)
-        t = np.maximum(0.0, d - self.reach()) / self.task.speed
+        _, _, turn, press, walking, _ = costs.approach(self.body.pos, self.body.heading, m.pos, m.radius, self.reach(),
+                                                       self.task.speed, self.task.max_angle)
+        t = turn + press + walking
         t[~self.candidates()] = float("inf")
         return t
 
     def values(self):
         """(n,) the critic's expected reward per fruit for every bush in memory (and its uncertainty)."""
         m = self.memory
-        return self.critic.value(m.attrs, np.arange(m.n))
+        # In the Interlude a bush's id means nothing to a critic that learned in the session (the ids are another table's), so
+        # only a critic that was granted the Interlude's own table is given them.
+        ids = None if self.in_interlude and not getattr(self.critic, "omniscient", False) else np.arange(m.n)
+        return self.critic.value(m.attrs, ids)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -445,8 +467,9 @@ class UtilityActor(Actor):
         if self.max_walk_time is not None:
             in_range = t <= self.max_walk_time
             if not in_range.any():
-                return Harvest(int(t.argmin()))
-            u = np.where(in_range, u, -np.inf)
+                u = -t                  # nothing close enough: the quickest to reach, by the same choice rule
+            else:
+                u = np.where(in_range, u, -np.inf)
         else:
             u = np.where(np.isfinite(t), u, -np.inf)
         j = self.choice.pick(u, self.rng)
@@ -460,9 +483,10 @@ class UtilityActor(Actor):
 class PlannerActor(Actor):
     """Plans one route over the bushes in memory, then follows it. The objective is expected reward: the sum over the route of
     (the critic's mean per fruit * fruits taken), with whole-bush harvesting (no early leaving) and no reward noise. The last
-    bush may be partly harvested if the clock runs out. Walking is simulated exactly as the engine does it (straight line to
-    the edge of the target's harvest range, position tracked), so the plan's value equals what the engine pays when rewards
-    equal the critic's values.
+    bush may be partly harvested if the clock runs out. Time is simulated exactly as the engine charges it (costs.approach:
+    turning to the bush from the current heading, the key presses, a straight walk to the edge of its harvest range, position and
+    heading tracked), so the plan's value equals what the engine pays when rewards equal the critic's values. Bushes the critic
+    values at zero or less are left out: visiting one only costs time.
 
     The plan is made at the first decision and made again only when the map in memory or the critic has changed since (a
     full-knowledge oracle therefore plans once); a re-plan starts from the current position and time and treats bushes that
@@ -511,12 +535,16 @@ class PlannerActor(Actor):
         m = view.memory
         task = self.task
         mean, _ = view.values()
-        self._ids = np.flatnonzero(m.known & ~m.depleted & (m.taken == 0))
+        ids = np.flatnonzero(m.known & ~m.depleted & (m.taken == 0))
+        self._ids = ids[mean[ids] > 0.0]
         self.F = task.fruit_count
         self.fd = task.fruit_duration
         self.T = task.session_duration
         self.P = m.pos[self._ids]
         self.reach = view.reach()[self._ids]
+        self.rad = m.radius[self._ids]
+        self.max_angle = task.max_angle
+        self.start_heading = float(view.body.heading)
         self.value = mean[self._ids]
         self.speed = task.speed
         self.start = np.array(view.body.pos, dtype=float)
@@ -537,16 +565,16 @@ class PlannerActor(Actor):
 
     # ---- shared primitives (same arithmetic as sim.run_episode) -----------------------------------
 
-    def _step_all(self, pos, t, visited):
-        """For every bush: (walk time, harvestable fruits k, new time) from `pos` at time `t`. k == 0 where
-        the bush is visited, or cannot be reached with time for one fruit."""
-        dist = np.hypot(self.P[:, 0] - pos[0], self.P[:, 1] - pos[1])
-        walk = np.maximum(0.0, dist - self.reach)
-        arrive = t + walk / self.speed
+    def _step_all(self, pos, heading, t, visited):
+        """For every bush: (distance, walk, time the first fruit could start, harvestable fruits k, heading after) from `pos`
+        facing `heading` at time `t`. k == 0 where the bush is visited, or cannot be reached with time for one fruit."""
+        dist, walk, turn, press, walking, brg = costs.approach(pos, heading, self.P, self.rad, self.reach, self.speed,
+                                                               self.max_angle)
+        arrive = t + turn + press + walking
         k = np.minimum(self.F, np.floor((self.T - arrive) / self.fd + 1e-9)).astype(int)
         k[visited] = 0
         k = np.maximum(k, 0)
-        return dist, walk, arrive, k
+        return dist, walk, arrive, k, brg
 
     def _move(self, pos, dist, walk, j):
         if walk[j] > 0.0:
@@ -565,7 +593,7 @@ class PlannerActor(Actor):
         np.fill_diagonal(into, np.inf)
         from_start = np.maximum(0.0, D[n, :n] - self.reach) / self.speed
         m = np.minimum(into.min(axis=0), from_start)
-        cost = self.F * self.fd + m
+        cost = self.F * self.fd + m + costs.HARVEST_PRESS_TIME      # (turning and the W press can be zero: a lower bound)
         val = self.value * self.F
         order = np.argsort(-(val / cost))
         self._order = order
@@ -590,14 +618,14 @@ class PlannerActor(Actor):
 
     def _beam(self, width):
         n = len(self.P)
-        # state: (score, reward, t, pos, last, visited bool array, plan list)
+        # state: (score, reward, t, pos, last, visited bool array, plan list, heading)
         start_vis = np.zeros(n, dtype=bool)
-        beam = [(0.0, 0.0, self.t0, self.start.copy(), -1, start_vis, [])]
+        beam = [(0.0, 0.0, self.t0, self.start.copy(), -1, start_vis, [], self.start_heading)]
         best_reward, best_plan = 0.0, []
         while beam:
             children = {}
-            for _, reward, t, pos, last, visited, plan in beam:
-                dist, walk, arrive, k = self._step_all(pos, t, visited)
+            for _, reward, t, pos, last, visited, plan, heading in beam:
+                dist, walk, arrive, k, brg = self._step_all(pos, heading, t, visited)
                 for j in np.flatnonzero(k > 0):
                     new_reward = reward + self.value[j] * k[j]
                     t_new = arrive[j] + k[j] * self.fd
@@ -613,7 +641,7 @@ class PlannerActor(Actor):
                     key = (j, vis.tobytes())
                     old = children.get(key)
                     if old is None or t_new < old[2]:
-                        children[key] = (score, new_reward, t_new, self._move(pos, dist, walk, j), j, vis, new_plan)
+                        children[key] = (score, new_reward, t_new, self._move(pos, dist, walk, j), j, vis, new_plan, float(brg[j]))
             beam = sorted(children.values(), key=lambda s: -s[0])[:width]
         return best_plan, best_reward
 
@@ -625,7 +653,7 @@ class PlannerActor(Actor):
         visited = np.zeros(n, dtype=bool)
         capped = {"hit": False}
 
-        def recurse(pos, t, reward, plan):
+        def recurse(pos, heading, t, reward, plan):
             if capped["hit"]:
                 return
             self.nodes += 1
@@ -637,7 +665,7 @@ class PlannerActor(Actor):
             bound = reward + self._bound(visited[self._order], self.T - t)
             if bound <= best["value"] + 1e-9:
                 return
-            dist, walk, arrive, k = self._step_all(pos, t, visited)
+            dist, walk, arrive, k, brg = self._step_all(pos, heading, t, visited)
             cand = np.flatnonzero(k > 0)
             if len(cand) == 0:
                 return
@@ -652,11 +680,11 @@ class PlannerActor(Actor):
                     continue
                 visited[j] = True
                 plan.append(j)
-                recurse(self._move(pos, dist, walk, j), arrive[j] + k[j] * self.fd, new_reward, plan)
+                recurse(self._move(pos, dist, walk, j), float(brg[j]), arrive[j] + k[j] * self.fd, new_reward, plan)
                 plan.pop()
                 visited[j] = False
 
-        recurse(self.start.copy(), self.t0, 0.0, [])
+        recurse(self.start.copy(), self.start_heading, self.t0, 0.0, [])
         return best["plan"], best["value"], not capped["hit"]
 
 
@@ -709,7 +737,7 @@ class ComposedAgent:
         self._start(self.interlude_memory, self.task.for_bushes(knowledge.n), knowledge, new_critic=False)
 
     def view(self, body):
-        return View(body, self.active_memory, self.critic, self.task)
+        return View(body, self.active_memory, self.critic, self.task, in_interlude=self.interlude_memory is not None)
 
     def observe(self, obs):
         self.active_memory.observe(obs)

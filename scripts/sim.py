@@ -6,12 +6,17 @@ memory) returns an action; the engine charges its time and tells the agent what 
     Harvest(j)             walk in a straight line to the edge of bush j's harvest range, then harvest it one fruit at a
                            time (fruit_harvest_duration each), asking the actor after every fruit whether to stay or leave
     Explore(bearing, d)    walk d units along a bearing (stopping at the map edge or the mountains), looking as it goes
-    Look(angle)            turn the view; costs |angle| / TURN_RATE seconds
+    Look(angle)            turn the view; costs TURN_OVERHEAD + |angle| / TURN_RATE seconds (an angle of 0 is refused)
     Stop                   do nothing for the rest of the session
 
-The session clock cuts off mid-walk, mid-look or mid-fruit (a fruit not finished when time runs out is not collected).
-Bushes never regrow. Facing time at a harvest, collisions with canopies and terrain slope are ignored. The heading is the
-direction of the last walk (toward the bush at a harvest) and starts at yaw 0 (+Z), as in the game.
+Every action costs time (costs.py): turning the view with the mouse (before a walk to face the way, before a harvest to bring
+the bush into the harvest cone), pressing W to start walking, pressing Space to start harvesting, then the walking and the
+fruits. An action that would consume no time is an error, so a session always advances.
+
+The session clock cuts off mid-turn, mid-press, mid-walk, mid-look or mid-fruit (a fruit not finished when time runs out is not
+collected). Bushes never regrow. Collisions with canopies and terrain slope are ignored. The heading is the direction of the last
+walk (toward the bush at a harvest) and starts at yaw 0 (+Z), as in the game. A bush is harvested only if the agent's memory
+knows it (the engine refuses an id the agent never perceived).
 
 What the agent sees is the environment's job, not the agent's (perception.py): by default a view cone as wide as the session's
 camera, observed every OBS_STEP units of walking and after every look. A run can pass its own `percept=` (a sensitivity sweep over
@@ -34,19 +39,20 @@ Command line (agents are looked up in agents.REGISTRY):
 """
 
 import argparse
+import copy
 import functools
 import math
 from dataclasses import dataclass, field
 
 import numpy as np
 
+import costs
 from agents import Body, Explore, Harvest, Look, Stop, WorldKnowledge
 from perception import ConePercept, NullPercept, Observation, percept_for  # noqa: F401  (re-exported)
 from world import generate_world, load_session, _parse_seeds
 
 AGENT_STREAM = 99  # SeedSequence child key for agent randomness, kept apart from the world's streams
 OBS_STEP = 5.0     # world units of walking between looks
-TURN_RATE = 180.0  # degrees per second of turning the view (to be calibrated from participants' logged yaw rates)
 WALK_STEP = 2.0    # resolution of the map-edge / mountain check while exploring
 
 
@@ -59,7 +65,8 @@ class Result:
     harvest_time: float
     idle_time: float           # time left unused at the end (agent stopped, or nothing to do)
     trace: list = field(default_factory=list)   # (bush id, fruits taken this visit, reward this visit)
-    look_time: float = 0.0
+    look_time: float = 0.0     # turning the view
+    press_time: float = 0.0    # pressing W (to walk) and Space (to harvest)
 
 
 class State:
@@ -125,10 +132,27 @@ class _Walkable:
 # One session
 # --------------------------------------------------------------------------------------------------
 
+def _spend(s, res, field, seconds):
+    """Charge `seconds` to `res.<field>`. Returns False (the clock now at 0, the remainder charged) when time ran out first."""
+    seconds = float(seconds)
+    if seconds > s.time_left:
+        setattr(res, field, getattr(res, field) + s.time_left)
+        s.time_left = 0.0
+        return False
+    setattr(res, field, getattr(res, field) + seconds)
+    s.time_left -= seconds
+    return True
+
+
 def _walk(agent, world, s, res, direction, distance, percept, walkable=None):
-    """Walk up to `distance` along the unit vector `direction` (x, z), looking every OBS_STEP units; stops early when the clock
-    runs out or `walkable` refuses the next point. Returns False if the clock ran out."""
-    s.heading = math.degrees(math.atan2(direction[0], direction[1]))
+    """Turn to face `direction` (x, z), press W, then walk up to `distance` along it, looking every OBS_STEP units; stops early
+    when the clock runs out or `walkable` refuses the next point. Returns False if the clock ran out."""
+    heading = math.degrees(math.atan2(direction[0], direction[1]))
+    if not _spend(s, res, "look_time", costs.turn_time(costs.wrap(heading - s.heading), costs.TURN_DEADBAND)):
+        return False
+    s.heading = heading
+    if not _spend(s, res, "press_time", costs.WALK_PRESS_TIME):
+        return False
     speed = world.move_speed
     done = 0.0
     while done < distance - 1e-12:
@@ -145,6 +169,7 @@ def _walk(agent, world, s, res, direction, distance, percept, walkable=None):
                 if not walkable(s.pos[0] + direction[0] * f, s.pos[1] + direction[1] * f):
                     chunk = chunk * (i - 1) / steps
                     done = distance                      # blocked: stop after this partial chunk
+                    blocked_by_clock = False             # the wall comes first: the time not walked stays on the clock
                     break
         s.pos = s.pos + np.asarray(direction) * chunk
         s.time_left -= chunk / speed
@@ -165,13 +190,18 @@ def _harvest(agent, world, s, res, j, percept):
     fd = world.fruit_duration
     F = world.fruit_count
 
-    # Walk in a straight line until the bush's harvest range is reached.
+    # Turn to face the bush, then (if it is out of range) press W and walk in a straight line to its harvest range.
+    max_angle = float(getattr(world.params, "harvest_max_angle", 35.0))
+    dist, walk, turn, _, walking, brg = costs.approach(s.pos, s.heading, world.pos[j][None], world.canopy_radius[j:j + 1],
+                                                       world.reach[j:j + 1], speed, max_angle)
+    dist, walk, turn, t_walk, brg = float(dist[0]), float(walk[0]), float(turn[0]), float(walking[0]), float(brg[0])
     delta = world.pos[j] - s.pos
-    dist = float(np.hypot(*delta))
-    walk = max(0.0, dist - world.reach[j])
-    t_walk = walk / speed
+    if not _spend(s, res, "look_time", turn):
+        return False
     if dist > 0.0:
-        s.heading = math.degrees(math.atan2(delta[0], delta[1]))
+        s.heading = brg
+    if walk > 0.0 and not _spend(s, res, "press_time", costs.WALK_PRESS_TIME):
+        return False
     if t_walk > s.time_left:
         res.walk_time += s.time_left
         s.time_left = 0.0
@@ -192,13 +222,15 @@ def _harvest(agent, world, s, res, j, percept):
             s.pos = start + direction * walk
     s.time_left -= t_walk
     res.walk_time += t_walk
+    if not _spend(s, res, "press_time", costs.HARVEST_PRESS_TIME):
+        return False
 
     # Harvest fruit by fruit.
     rewards = []
-    while s.fruits_taken[j] < F and s.time_left >= fd:
+    while s.fruits_taken[j] < F and s.time_left >= fd - 1e-9:      # (repeated subtraction drifts by ~1e-13)
         r = float(world.fruit_reward[j, s.fruits_taken[j]])
         s.fruits_taken[j] += 1
-        s.time_left -= fd
+        s.time_left = max(0.0, s.time_left - fd)
         res.harvest_time += fd
         s.total += r
         rewards.append(r)
@@ -229,29 +261,37 @@ def run_episode(agent, world, agent_rng=None, percept=None):
     percept = _resolve_percept(agent, world, percept)
     _look(agent, world, s, percept)
 
+    memory = getattr(agent, "active_memory", None)
     while s.time_left > 0:
         action = agent.act(s.body())
         if action is None or isinstance(action, Stop):
             break
+        before = s.time_left
         if isinstance(action, Harvest):
-            if not _harvest(agent, world, s, res, int(action.bush), percept):
+            j = int(action.bush)
+            if not 0 <= j < world.n:
+                raise ValueError(f"agent chose bush {j}, which does not exist ({world.n} bushes)")
+            if memory is not None and not memory.known[j]:
+                raise ValueError(f"agent chose bush {j}, which it has never seen or been told about")
+            if not _harvest(agent, world, s, res, j, percept):
                 break
         elif isinstance(action, Explore):
+            if not float(action.distance) > 0.0:
+                raise ValueError(f"{action!r} walks nowhere: a distance must be positive")
             rad = math.radians(action.bearing)
-            if not _walk(agent, world, s, res, (math.sin(rad), math.cos(rad)), max(0.0, float(action.distance)), percept, walkable):
+            if not _walk(agent, world, s, res, (math.sin(rad), math.cos(rad)), float(action.distance), percept, walkable):
                 break
         elif isinstance(action, Look):
-            cost = abs(action.angle) / TURN_RATE
-            if cost > s.time_left:
-                res.look_time += s.time_left
-                s.time_left = 0.0
+            if not abs(float(action.angle)) > 0.0:
+                raise ValueError(f"{action!r} turns nowhere: an angle must be non-zero")
+            if not _spend(s, res, "look_time", costs.turn_time(action.angle)):
                 break
             s.heading = (s.heading + action.angle) % 360.0
-            s.time_left -= cost
-            res.look_time += cost
             _look(agent, world, s, percept)
         else:
             raise TypeError(f"agent returned {action!r}, not an action")
+        if not s.time_left < before:
+            raise RuntimeError(f"{action!r} took no time (check the constants in costs.py): the session would never end")
 
     res.total = s.total
     res.idle_time = max(0.0, s.time_left)
@@ -273,13 +313,24 @@ class InterludeScore:
     bonus: float                    # expected hidden bonus (accuracy * trials * bonus per correct; 0 in a practice Interlude)
 
 
+def _freeze(value):
+    """A hashable form of an override value (lists become tuples)."""
+    return tuple(_freeze(v) for v in value) if isinstance(value, (list, tuple)) else value
+
+
 @functools.lru_cache(maxsize=None)
-def get_interlude(session, seed, **overrides):
-    """The Interlude the game shows for this session at this world seed (the same generator and search the human files come
-    from; seconds per call, so cached). `overrides` as for get_worlds."""
+def _interlude_for(session, seed, overrides):
     from interlude import generate_interlude
     sidecar, params, _ = generate_interlude(f"{session}_Interlude", seed=seed, **dict(overrides))
     return sidecar, float(params.interlude_bonus_per_correct), bool(params.is_practice)
+
+
+def get_interlude(session, seed, **overrides):
+    """The Interlude the game shows for this session at this world seed (the same generator and search the human files come
+    from; seconds per call, so cached). `overrides` as for get_worlds. The caller gets its own copy of the sidecar, so editing
+    it cannot change what later calls (or other agents) are scored on."""
+    sidecar, bonus, practice = _interlude_for(session, seed, tuple(sorted((k, _freeze(v)) for k, v in overrides.items())))
+    return copy.deepcopy(sidecar), bonus, practice
 
 
 def evaluate_interlude(agent, sidecar, bonus_per_correct=5.0, practice=False, n_samples=200, rng=None):

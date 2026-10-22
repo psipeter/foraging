@@ -5,6 +5,7 @@ import pytest
 
 from agents import (Actor, Argmax, Body, ComposedAgent, Critic, Explore, FullKnowledge, FullMemory, Harvest, Look, OracleCritic,
                     PlannerActor, Softmax, Stop, Task, UtilityActor, View, WorldKnowledge, oracle_agent, utility_rate)
+import costs
 from interlude import generate_interlude
 from world import load_session
 from perception import (ConePercept, NullPercept, Observation, horizontal_fov, percept_for, percept_from_params)
@@ -41,7 +42,6 @@ class MeanCritic(Critic):
         attrs, rewards, ids = memory.experiences()
         self.seen.append(len(rewards))
         self.mean = float(rewards.mean()) if len(rewards) else 0.0
-        self.version += 1
 
     def value(self, attrs, ids=None):
         n = len(attrs)
@@ -175,11 +175,13 @@ def percept_agent(actions, percept, memory=None):
     return ComposedAgent(Script(*actions), OracleCritic(), memory or FullMemory(), percept)
 
 
+@pytest.mark.motor_costs
 def test_look_costs_time_turns_the_view_and_reveals():
     w = world_with([[40, 0]], speed=5.0)
     agent = percept_agent([Look(90.0)], ConePercept(60.0, 100.0))
     r = run_episode(agent, w)
-    assert r.look_time == pytest.approx(0.5) and r.idle_time == pytest.approx(w.session_duration - 0.5)
+    turn = costs.TURN_OVERHEAD + 90.0 / costs.TURN_RATE
+    assert r.look_time == pytest.approx(turn) and r.idle_time == pytest.approx(w.session_duration - turn)
     assert agent.memory.known[0]                               # facing +x now, the bush is in the cone
     agent2 = percept_agent([], ConePercept(60.0, 100.0))
     run_episode(agent2, w)
@@ -197,10 +199,15 @@ def test_explore_walks_a_bearing_observing_along_the_way():
     assert not short.memory.known[0]                           # 49 from the edge at the end of a 10-unit walk
 
 
-def test_explore_stops_at_the_clock_and_at_unwalkable_ground():
+def test_explore_stops_at_the_clock():
     w = world_with([[500, 500]], speed=5.0, duration=3.0)
     r = run_episode(percept_agent([Explore(90.0, 100.0)], NullPercept()), w)
     assert r.walk_time == pytest.approx(3.0) and r.idle_time == 0.0
+
+
+@pytest.mark.motor_costs
+def test_explore_stops_at_unwalkable_ground():
+    w = world_with([[500, 500]], speed=5.0)
     # mountains beyond x = 50 and a map edge at 100: exploring east from the origin stops at the foot of the mountains
     w = world_with([[500, 500]], speed=5.0)
     w.params.world_half_extent, w.params.mountain_block_threshold = 100.0, 0.5
@@ -517,7 +524,6 @@ class ResettingCritic(Critic):
     def _fit(self, memory):
         attrs, rewards, ids = memory.experiences()
         self.w = float(rewards.mean() / max(attrs[:, 1].mean(), 1e-9)) if len(rewards) else 0.0
-        self.version += 1
 
     def value(self, attrs, ids=None):
         return self.w * np.asarray(attrs)[:, 1], np.zeros(len(attrs))
@@ -658,3 +664,149 @@ def test_interlude_overrides_reach_the_cache_and_evaluate_n():
     _, scores = evaluate_n(lambda: oracle_agent(UtilityActor("value")), "S3", seeds=[3], n_samples=5,
                            interlude_trial_count=3)
     assert scores[0].n_trials == 3
+
+
+# --- the planner and the actors under the motor costs; ids in the Interlude; the critic version --------------------
+
+import itertools
+
+
+class IdSpy(Critic):
+    """Records the ids it is asked about (a per-id critic would key on them)."""
+    def __init__(self):
+        self.asked = []
+
+    def value(self, attrs, ids=None):
+        self.asked.append(None if ids is None else np.array(ids))
+        return np.asarray(attrs)[:, 1].copy(), np.zeros(len(attrs))
+
+
+def test_only_an_omniscient_critic_is_given_bush_ids_in_the_interlude():
+    spy = IdSpy()
+    agent = ComposedAgent(UtilityActor("value"), spy, FullKnowledge())
+    agent.begin_session(world_with([[20, 0]]), np.random.default_rng(0))
+    agent.act(Body(np.zeros(2), 0.0, 60.0, 0.0))
+    assert spy.asked[-1] is not None                                   # in the session ids identify the bushes
+    spy.asked.clear()
+    evaluate_interlude(agent, toy_interlude(), n_samples=3)
+    assert spy.asked and all(a is None for a in spy.asked)             # in the Interlude they are another table's
+    oracle = oracle_agent(UtilityActor("value"))
+    oracle.begin_session(world_with([[20, 0]]), np.random.default_rng(0))
+    assert evaluate_interlude(oracle, dict(toy_interlude(), value=list(toy_interlude()["color"])), n_samples=5).accuracy == 1.0
+
+
+def test_a_learning_critics_version_is_bumped_by_update_not_by_the_critic():
+    class Learner(Critic):
+        def _fit(self, memory):
+            self.n = len(memory.experiences()[1])           # (no version bookkeeping of its own)
+
+        def value(self, attrs, ids=None):
+            return np.zeros(len(attrs)), np.zeros(len(attrs))
+    w = world_with([[5, 0]], rewards=[[2, 4, 6]])
+    critic = Learner()
+    run_episode(ComposedAgent(UtilityActor("value"), critic, FullKnowledge()), w)
+    assert critic.version == 4 and critic.n == 3                        # the initial fit + one per fruit
+    assert OracleCritic().version == 0
+    oracle = oracle_agent(UtilityActor("value"))
+    run_episode(oracle, w)
+    assert oracle.critic.version == 0                                   # a critic that learns nothing never forces a re-plan
+
+
+def test_a_softmax_actor_that_finds_nothing_in_range_still_goes_through_its_choice_rule():
+    w = world_with([[20, 0], [0, 20], [-20, 0], [0, -20]], rewards=[[1, 1]] * 4)
+    picks = set()
+    for seed in range(40):
+        agent = ComposedAgent(UtilityActor("value", max_walk_time=0.0, choice=Softmax(1e6)), OracleCritic(), FullKnowledge())
+        agent.begin_session(w, np.random.default_rng(seed))
+        picks.add(agent.act(Body(np.zeros(2), 0.0, 60.0, 0.0)).bush)
+    assert len(picks) > 1                                               # not always the nearest
+
+
+class _Table(Critic):
+    def __init__(self, values):
+        self.values = np.asarray(values, dtype=float)
+
+    def value(self, attrs, ids=None):
+        return self.values[np.asarray(ids)], np.zeros(len(ids))
+
+
+def _best_by_engine(world, critic_values):
+    """The best total over every ordered visiting list, by running the engine (whole bushes, rewards = clipped values)."""
+    from test_sim import Fixed
+    best = 0.0
+    for r in range(1, len(critic_values) + 1):
+        for order in itertools.permutations(range(len(critic_values)), r):
+            best = max(best, run_episode(Fixed(list(order)), world).total)
+    return best
+
+
+@pytest.mark.motor_costs
+def test_the_planner_is_optimal_with_negative_critic_values_and_with_the_motor_costs():
+    rng = np.random.default_rng(3)
+    for trial in range(25):
+        n = 5
+        values = np.round(rng.uniform(-4, 4, n), 1)
+        pos = rng.uniform(-40, 40, (n, 2))
+        w = world_with(pos, rewards=[[max(0, int(round(v)))] * 6 for v in values], duration=float(rng.uniform(8, 30)))
+        agent = ComposedAgent(PlannerActor("exact", incumbent_width=1), _Table(values), FullKnowledge())
+        r = run_episode(agent, w)
+        # the plan's objective uses the critic's (positive) values; the engine pays the integer rewards: compare to the best route
+        assert agent.exact
+        assert r.total == pytest.approx(_best_by_engine(w, values)), (trial, values)
+
+
+@pytest.mark.motor_costs
+def test_the_plans_value_is_what_the_engine_pays_when_rewards_equal_the_values():
+    rng = np.random.default_rng(5)
+    for trial in range(25):
+        n = 6
+        values = rng.integers(1, 6, n)
+        w = world_with(rng.uniform(-50, 50, (n, 2)), rewards=[[int(v)] * 8 for v in values], duration=float(rng.uniform(5, 40)))
+        agent = oracle_agent(PlannerActor("exact"))
+        r = run_episode(agent, w)
+        assert agent.plan_value == pytest.approx(r.total), trial
+
+
+@pytest.mark.motor_costs
+def test_travel_times_include_the_turn_and_the_presses_the_engine_charges():
+    w = world_with([[0, 48], [48, 0]], speed=5.0)
+    agent = oracle_agent(UtilityActor("nearest"))
+    agent.begin_session(w, np.random.default_rng(0))
+    t = agent.view(Body(np.zeros(2), 0.0, 60.0, 0.0)).travel_times()
+    ahead = costs.WALK_PRESS_TIME + costs.HARVEST_PRESS_TIME + 8.0
+    assert t[0] == pytest.approx(ahead) and t[1] == pytest.approx(ahead + costs.TURN_OVERHEAD + 90.0 / costs.TURN_RATE)
+    assert agent.act(Body(np.zeros(2), 0.0, 60.0, 0.0)).bush == 0         # straight ahead is quicker than to the side
+
+
+# --- shared data an agent could otherwise corrupt ------------------------------------------------------------------
+
+def test_a_grant_is_a_read_only_copy_of_the_world():
+    w = world_with([[10, 0], [0, 20]], rewards=[[3, 3], [5, 5]], attrs=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
+    k = WorldKnowledge.from_world(w)
+    for name in ("pos", "radius", "attrs", "values"):
+        arr = getattr(k, name)
+        assert not np.shares_memory(arr, getattr(w, {"values": "value", "attrs": "color", "radius": "canopy_radius"}.get(name, name)))
+        assert not arr.flags.writeable
+        with pytest.raises(ValueError):
+            arr[0] = 99.0
+    before = w.value.copy()
+    agent = oracle_agent(UtilityActor("value"))
+    agent.begin_session(w, np.random.default_rng(0))
+    with pytest.raises(ValueError):
+        agent.critic.values[0] = 99.0                      # an omniscient critic cannot edit what it was granted
+    assert np.array_equal(w.value, before)
+    sidecar = toy_interlude()
+    sidecar["value"] = list(sidecar["color"])
+    assert not WorldKnowledge.from_sidecar(sidecar).values.flags.writeable
+
+
+def test_get_interlude_hands_out_copies_and_accepts_list_overrides():
+    from sim import get_interlude
+    a = get_interlude("P", 100, pool_samples=40_000)[0]
+    original = a["trials"][0]["correct"]
+    a["trials"][0]["correct"] = "poisoned"
+    a["treePos"][0] = -999.0
+    b = get_interlude("P", 100, pool_samples=40_000)[0]
+    assert b["trials"][0]["correct"] == original and b["treePos"][0] != -999.0     # the cache was not edited through `a`
+    c = get_interlude("P", 100, pool_samples=40_000, canopy_width_range=[2.0, 5.0])[0]   # unhashable list: no TypeError
+    assert c["n"] == b["n"]

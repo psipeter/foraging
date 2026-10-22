@@ -49,11 +49,11 @@ DEPENDENCIES = {
         "match": [_is_session_asset, _is_world_file],
     },
     "scripts/test_sim.py": {
-        "paths": {"scripts/sim.py", "scripts/agents.py", "scripts/perception.py", "scripts/world.py"},
+        "paths": {"scripts/sim.py", "scripts/agents.py", "scripts/perception.py", "scripts/world.py", "scripts/costs.py", "scripts/conftest.py"},
         "match": [_is_session_asset],
     },
     "scripts/test_agents.py": {
-        "paths": {"scripts/agents.py", "scripts/sim.py", "scripts/perception.py", "scripts/world.py", "scripts/interlude.py",
+        "paths": {"scripts/agents.py", "scripts/sim.py", "scripts/perception.py", "scripts/world.py", "scripts/interlude.py", "scripts/costs.py", "scripts/conftest.py",
                   "scripts/test_sim.py"},
         "match": [_is_session_asset, _is_interlude_asset],
     },

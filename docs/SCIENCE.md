@@ -641,7 +641,7 @@ with the oracle critic and full-knowledge memory and reproduce their pre-refacto
   as wide as the session camera (107.5 deg horizontal for 75 deg vertical at 16:9) with no distance limit; a run can replace it (`run_n(..., percept=)`,
   `sim.py --percept ANGLE,DISTANCE`) and an agent may carry its own override. Realistic constraints (terrain occlusion, resolvability by angular
   size, attribute noise) become new percept classes, calibrated against participants' logged visible sets. Walking, exploring and looking are actions of the
-  actor, with time costs (looking costs angle / turn rate, to be calibrated from participants' yaw rates).
+  actor, with time costs from `scripts/costs.py`: turning the view (`0.17 s + angle / 480 deg/s`, before a walk to face the way, before a harvest to bring the bush into the harvest cone; under 5 degrees it is free), pressing W to walk (0.2 s) and Space to harvest (0.3 s). The values are provisional, fitted to the developer's debug sessions (91 turns, 58 Space presses; the W press is a guess) and to be recalibrated from participants' logs. Every action costs time and a no-op (`Look(0)`, `Explore` of 0) is refused. These costs change every simulated total: the agent baselines below were computed without them and are stale.
 - **Interludes:** after a session the critic is frozen and carried over (no outcomes are shown in an Interlude, so humans do not learn there either), the
   agent starts a fresh memory for the Interlude's own bushes, and both bushes of each trial are shown to it as observed, whatever its sensor (the trials are
   built so both are in view; the Interlude tests what was learned, not perception). The actor's choice rule then picks between them, repeated enough times to
