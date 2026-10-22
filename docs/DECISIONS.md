@@ -1009,3 +1009,31 @@ blocks by more than 1 unit are in the game's list only 0.6-1.3% of the time (2-5
 
 **Interlude freshness:** `test_committed_interlude_file_is_fresh` regenerates each Interlude and compares it to the committed `.interlude.json` (numbers to 1e-6). Rejected: a parameter echo plus a Unity startup warning (more code for a check the tests already give, since the
 person regenerates by script anyway); the session `.world` files keep Unity's existing startup check.
+
+
+---
+
+## Agents are actor x critic x memory with the percept in the engine (v1 framework)
+
+**Decision:** an agent is `ComposedAgent(actor, critic, memory, percept)` (`scripts/agents.py`), run by `sim.run_episode`.
+- **Memory** is the constraint on the other two: it holds dense per-bush records (position, radius, attributes, spent, fruits taken) and a reward *list* per bush (one entry per fruit). The actor may use only that map; the critic learns only from `memory.experiences()`, which is derived from the reward lists, so a forgetful memory limits what is learned without any extra plumbing. `FullKnowledge` is preloaded with the whole map (no rewards), `FullMemory` accumulates what it sees and gets.
+- **Critic** = value representation + learning rule: `value(attributes, ids) -> (mean, sd)`, `update(memory)`, `freeze()`. A function of attributes, not bush id, so it can score Interlude bushes; the oracle also accepts world ids (needed because toy test worlds carry values that do not follow from their attributes).
+- **Actor** = the policy: `act(view) -> Harvest | Explore | Look | Stop`, `keep_harvesting` (leave/peek), and `choose_between` (Interlude). Value and rate utilities are computed from the critic (`View.values`), so an actor cannot read the true rewards; the choice rule (hard-max or softmax) is part of the actor and returns probabilities so likelihoods can be fit to human choices later. Planning and re-planning live in the planner actor: it plans at the first decision and again only when the map in memory or the critic's version changes, so a full-knowledge oracle plans once.
+- **Percept** is not a component: it is the sensor the engine applies (`ConePercept(angle, distance)`, observed every 5 units of walking and after every look; see the next entry for where it lives). Walking, exploring and looking are actions of the actor with time costs (`TURN_RATE` 180 deg/s is a placeholder to be calibrated from participants' logged yaw rates). Rejected: percept as a component (the user's call: perception is what the body gets, and the policy decides where to look and walk).
+
+**Interludes for simulated agents** come from `interlude.generate_interlude(..., seed=)` (new `seed` and override arguments): the very generator and trials the game uses, for the same world seed. A reduced simulation-only search was rejected so that what an agent is scored on is what a human sees; if more trials are needed to separate agents, change the human Interludes too. The critic is frozen, the pair is put in a fresh memory (both bushes are in view by construction), and the actor's own utility and choice rule pick `n_samples` times (sampled, not probability-weighted); ties are broken at random in the Interlude (the session keeps the original lowest-index tie rule so results are unchanged). The per-trial result is correct / incorrect against the trial's correct side ("either" always counts), scored overall and by trial type, plus the expected hidden bonus.
+
+**Not modelled / limits:** the cone ignores terrain occlusion (use `visibility.py` to model it later) and vertical extent; attributes are seen exactly; memory never forgets; the planner treats partly harvested bushes as gone when it re-plans; the Interlude evaluation assumes both bushes are in view and ignores its 10 s limit. The old `choose_target` agent protocol and `State` helpers were removed; `NearestAgent`, `GreedyAgent` and `PlannerAgent` are now factory functions that build composed agents, and the planner's attributes (`plan`, `plan_value`, `exact`, `nodes`) are read through the agent.
+
+**Verification of the refactor:** before changing anything, the pre-refactor engine's totals, visit sequences and walk/harvest/idle times were captured for `nearest`, `greedy_rate_15`, `greedy_value_10`, `greedy_rate_5` and `plan_beam` on 6 S1 and 4 S3 worlds (90 s sessions); the composed agents reproduce all 50 runs exactly (not stored in the repo; the 15 tests in `test_sim.py`, including the brute-force planner checks, keep guarding the arithmetic).
+
+
+---
+
+## Perception belongs to the environment (`scripts/perception.py`), not to the agent
+
+**Decision:** the sensor model (`Observation`, `NullPercept`, `ConePercept`, `percept_from_params`, `percept_for`) lives in `scripts/perception.py` and is resolved by the engine in this order: `agent.percept` (an explicit per-agent override), the run's `percept=` argument (`run_episode`, `run_n`, `compare`, `evaluate_n`, `sim.py --percept ANGLE,DISTANCE`), then the world's own default (`world.percept` if set, else a cone as wide as the session camera's horizontal field of view with no distance limit: 107.5 deg for the game's 75 deg vertical FOV at 16:9, from `camera_field_of_view`).
+
+**Why:** perception models the participant's body and screen (field of view, how far attributes can be resolved, occlusion), which are the same for every agent in a session; agents then differ only in memory, critic and actor, so comparisons are fair by construction and there is one place to tune the constraints as they are calibrated against participants' logged visible sets (`visibility.py`). Resolvability numbers are simulation knobs, not game config, so they are not SessionConfig fields. The per-agent override and per-run argument stay for sensitivity sweeps and deliberately different observers. Rejected: a percept attribute required on every agent (what v1 had: `None` meant "sees nothing", which silently made limited-memory agents blind).
+
+**Detail:** during a harvest walk the engine looks every 5 units from the walk's start but ends at exactly `start + direction * walk`, so oracle agents' results do not depend on the sensor (they are bit-identical to the pre-refactor engine with the default cone, a narrow cone or none; a test and a 40-run comparison against the captured pre-refactor results guard this).

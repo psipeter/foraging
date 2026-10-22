@@ -186,8 +186,8 @@ Assets/
 docs/        SCIENCE.md, DECISIONS.md
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
              interlude.py (Interlude stimulus design + bush placement on the session's terrain), world.py (reads SessionConfig .asset YAML; generates worlds from one seed — mirrors the
-             C# placement/attribute/reward rules; exports .npz), sim.py (fast session engine + run_n /
-             compare), agents.py (all agents + registry), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), test_*.py (pytest; run them with `scripts/run_tests.py`, which
+             C# placement/attribute/reward rules; exports .npz), sim.py (fast session engine: actions, cone percept, Interlude
+             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent), agents.py (agent components memory / critic / actor, ComposedAgent, registry), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), test_*.py (pytest; run them with `scripts/run_tests.py`, which
              runs only the test files the changed files can affect, or `--all` before committing)
 ```
 

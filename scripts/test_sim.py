@@ -5,7 +5,8 @@ import pytest
 
 import itertools
 
-from agents import REGISTRY, Agent, GreedyAgent, NearestAgent, PlannerAgent
+from agents import (REGISTRY, Actor, ComposedAgent, GreedyAgent, Harvest, NearestAgent, PlannerAgent, UtilityActor,
+                    oracle_agent)
 from sim import run_episode, run_n
 from world import World, load_session, make_world
 
@@ -20,16 +21,20 @@ def tiny_world(pos, rewards, duration=60.0, speed=5.0, fd=0.5, radius=1.0, gap=7
                  canopy_radius=np.full(n, radius), value=fr.mean(1), fruit_reward=fr, start=np.zeros(2))
 
 
-class Fixed(Agent):
+class FixedActor(Actor):
     """Visits a fixed list of bushes; leaves each after `take` fruits (None = exhaust)."""
     def __init__(self, order, take=None):
-        self.order, self.take, self.k = list(order), take, 0
+        self.order, self.take = list(order), take
 
-    def choose_target(self, state):
-        return self.order.pop(0) if self.order else None
+    def act(self, view):
+        return Harvest(self.order.pop(0)) if self.order else None
 
-    def keep_harvesting(self, state, bush, reward):
-        return self.take is None or state.fruits_taken[bush] < self.take
+    def keep_harvesting(self, view, bush, reward):
+        return self.take is None or view.state.fruits_taken[bush] < self.take
+
+
+def Fixed(order, take=None):
+    return oracle_agent(FixedActor(order, take))
 
 
 def test_walk_and_harvest_arithmetic():
@@ -79,13 +84,8 @@ def test_session_clock_cuts_off_mid_fruit_and_mid_walk():
 
 
 def test_real_world_runs_and_is_paired_reproducible():
-    class Nearest(Agent):
-        def choose_target(self, state):
-            t = state.travel_times()
-            t[state.depleted] = np.inf
-            return int(np.argmin(t))
-    a = run_n(Nearest, "S1", seeds=range(5))
-    b = run_n(Nearest, "S1", seeds=range(5))
+    a = run_n(NearestAgent, "S1", seeds=range(5))
+    b = run_n(NearestAgent, "S1", seeds=range(5))
     assert np.array_equal(a.totals, b.totals) and a.mean > 0
     r = a.results[0]
     assert r.walk_time + r.harvest_time + r.idle_time == pytest.approx(load_session("S1").session_duration)
@@ -131,7 +131,8 @@ def test_greedy_rate_trades_value_against_time():
 
 
 def test_greedy_registry_and_stop():
-    assert isinstance(REGISTRY["greedy_value_10"](), GreedyAgent)
+    agent = REGISTRY["greedy_value_10"]()
+    assert isinstance(agent, ComposedAgent) and isinstance(agent.actor, UtilityActor) and agent.actor.max_walk_time == 10
     r = run_episode(GreedyAgent(10), tiny_world([[5, 0]], [[1, 1]]))
     assert r.n_visits == 1
 

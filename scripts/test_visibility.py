@@ -50,7 +50,7 @@ def test_bush_ahead_is_visible_with_egocentric_coordinates():
 
 
 def test_sides_and_behind():
-    # hfov = 2 atan(tan(37.5 deg) * 16/9) ~ 110 deg: +-55 deg is the edge
+    # hfov = 2 atan(tan(37.5 deg) * 16/9) ~ 107.5 deg: +-54 deg is the edge
     log = make_log([[40 * math.sin(math.radians(a)), 40 * math.cos(math.radians(a))] for a in (30, -30, 70, -70, 180)])
     s = seen(log)
     assert sorted(s["tree_id"]) == [0, 1]

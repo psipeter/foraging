@@ -429,13 +429,17 @@ def build_trials(params, terrain, pool, rng):
 # Output
 # --------------------------------------------------------------------------------------------------
 
-def generate_interlude(name, pool_samples=None):
+def generate_interlude(name, pool_samples=None, seed=None, **overrides):
     """Build the sidecar dict (bush table + trials) for the Interlude asset `name`; returns (sidecar, params, terrain).
-    `pool_samples` overrides POOL_SAMPLES (the tests use a smaller search to run fast)."""
-    params = load_session(name)
+    `pool_samples` overrides POOL_SAMPLES (the tests use a smaller search to run fast). `seed` replaces the world seed of
+    the Interlude and of the session it probes, and `overrides` (snake_case SessionConfig fields) apply to both, so the
+    simulator can build, for any world it plays, the very Interlude the game would show for that world."""
+    if seed is not None:
+        overrides = {**overrides, "world_seed": int(seed)}
+    params = load_session(name, **overrides)
     if not bool(params.is_interlude):
         raise ValueError(f"{name} is not an Interlude asset (isInterlude is off)")
-    base = load_session(params.interlude_for)
+    base = load_session(params.interlude_for, **overrides)
     if params.reward_function != base.reward_function:
         raise ValueError(f"{name}: reward function differs from {params.interlude_for}")
     mine, theirs = check_values(params), check_values(base)
