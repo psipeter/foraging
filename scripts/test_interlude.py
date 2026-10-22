@@ -33,6 +33,28 @@ def test_deterministic():
     assert a == b
 
 
+def _same(a, b, tol=1e-6):
+    """Recursive equality: numbers within `tol` (floating-point noise across machines), everything else exactly."""
+    if isinstance(a, dict):
+        return isinstance(b, dict) and a.keys() == b.keys() and all(_same(a[k], b[k], tol) for k in a)
+    if isinstance(a, list):
+        return isinstance(b, list) and len(a) == len(b) and all(_same(x, y, tol) for x, y in zip(a, b))
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool):
+        return abs(a - b) <= tol
+    return a == b
+
+
+def test_committed_interlude_file_is_fresh(built):
+    """Unity does not warn when an *.interlude.json is stale. Regenerating from the current assets (the session's terrain,
+    seed and reward function, and the Interlude's own geometry and trial count) must give the committed file."""
+    name, sidecar, params, terrain = built
+    committed = sidecar_path(name, sidecar["seed"])
+    assert committed.exists(), f"{committed} is missing: run scripts/interlude.py {name}"
+    on_disk = json.load(open(committed))
+    assert _same(on_disk, json.loads(json.dumps(sidecar))), (
+        f"{committed.name} is stale: re-run ./venv/bin/python scripts/interlude.py {name}")
+
+
 def test_interlude_assets_copy_the_session_they_probe(built):
     name, sidecar, params, terrain = built
     base = load_session(params.interlude_for)

@@ -992,3 +992,20 @@ not a tuned number, only "no clearing beyond the spawn point". All worlds change
 
 Interlude trials used pitch 0, which showed a lot of sky. `InterludeManager.PitchTowardsPair` sets the pitch at each teleport so the average of the two bushes' `Tree.GetVisibleCenter()` (canopy base + a quarter of its height, the middle of
 the visible half-buried ellipsoid) is on the centre line. Rejected: aiming at bush bases (`GetWorldCenter`, the ground-level canopy centre) which would put the visible bushes in the upper half of the view; aiming at the crowns. The yaw is still from the trial file.
+
+
+---
+
+## Visibility is reconstructed offline (`scripts/visibility.py`), not logged; Interlude freshness test
+
+**Decision:** which bushes the participant could see is derived from trajectory + world + camera, not stored. A bush is visible when any of 11 points on the camera-facing upper surface of its canopy (a half-buried ellipsoid: radius = canopy radius, vertical radius = half the
+shape-dependent canopy height) is inside the frustum and a 3-unit-step heightfield march over the world's elevation grid clears the terrain. Output is sparse per step (id, azimuth, elevation, distance, angular size, `visible_fraction`), so resolvability thresholds
+(`min_angular_deg`, `max_distance`) are the analyst's choice, not baked into the data. Terrain-only occlusion: bushes do not hide each other (a limitation).
+
+**Why not log it (as the old `movement.csv` did):** it is a deterministic function of what is already logged, and the old rule was poor. It tested a 2-unit box at the bush's *centre*, which sits at ground level (the canopy is half-buried), against a physics ray that ends on the ground
+surface. Validated against the old logs (20 debug sessions whose world matches exactly): the game's lists include only ~55% of in-frustum bushes whose terrain line is clear and ~38% of grazing ones, i.e. the ground-level endpoint made the flag nearly a coin flip. The reconstruction
+uses points on the canopy surface instead. Validation of the machinery itself against those logs: the world's elevation grid reproduces the registry's bush heights to 0.000, the camera is `terrain + eyeHeight` (median 5.100), 99% of the game's visible bushes pass the frustum test, and bushes my march
+blocks by more than 1 unit are in the game's list only 0.6-1.3% of the time (2-5 units: 6.7% of 165). There is no exact ground truth for occlusion; the new logs deliberately do not carry visibility, so this cannot be re-checked against the game.
+
+**Interlude freshness:** `test_committed_interlude_file_is_fresh` regenerates each Interlude and compares it to the committed `.interlude.json` (numbers to 1e-6). Rejected: a parameter echo plus a Unity startup warning (more code for a check the tests already give, since the
+person regenerates by script anyway); the session `.world` files keep Unity's existing startup check.

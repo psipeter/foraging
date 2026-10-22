@@ -187,7 +187,7 @@ docs/        SCIENCE.md, DECISIONS.md
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
              interlude.py (Interlude stimulus design + bush placement on the session's terrain), world.py (reads SessionConfig .asset YAML; generates worlds from one seed — mirrors the
              C# placement/attribute/reward rules; exports .npz), sim.py (fast session engine + run_n /
-             compare), agents.py (all agents + registry), replay.py (loads a logged session, replays its harvests, resamples for agents), test_*.py (pytest; run them with `scripts/run_tests.py`, which
+             compare), agents.py (all agents + registry), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), test_*.py (pytest; run them with `scripts/run_tests.py`, which
              runs only the test files the changed files can affect, or `--all` before committing)
 ```
 
@@ -270,7 +270,7 @@ serialized, the world file's name and sha256, build commit, display, frame stati
 An Interlude writes the same plus `interlude.csv` (one row per forced-choice trial; see `docs/SCIENCE.md`).
 World files are archived once by hash in `ForagingData/_worlds/`. `scripts/replay.py` loads a folder, re-derives the
 harvests from the trajectory (mirroring `HarvestManager`) and checks them against the log: **change `HarvestManager`'s
-range/bearing/timer rules and `replay.py` together.** The clock `t` is unpaused session seconds (stands still under an
+range/bearing/timer rules and `replay.py` together** (and the camera, canopy or terrain-sampling rules with `visibility.py`). The clock `t` is unpaused session seconds (stands still under an
 instruction screen). **The path and the column semantics are fixed once real data exists — changing them breaks
 downstream analysis and comparability.** Add columns only at the end, and say so. `Assets/Editor/BuildInfoWriter.cs`
 writes the gitignored `StreamingAssets/build_info.json` (git commit, dirty flag) that the manifest reads.

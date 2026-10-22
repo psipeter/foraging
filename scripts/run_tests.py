@@ -31,6 +31,11 @@ def _is_session_asset(path):
     return path.startswith(SESSION_CONFIGS) and path.endswith(".asset") and not _is_interlude_asset(path)
 
 
+def _is_interlude_file(path):
+    # the committed Interlude trial files are compared with a fresh generation (test_committed_interlude_file_is_fresh)
+    return path.startswith("Assets/StreamingAssets/Worlds/") and path.endswith(".interlude.json")
+
+
 # test file -> what it depends on: exact paths, and predicates over a repo-relative path.
 # (The Python code reads only the SessionConfig .asset YAML, never C# or the generated world files.)
 DEPENDENCIES = {
@@ -46,9 +51,13 @@ DEPENDENCIES = {
         "paths": {"scripts/replay.py", "scripts/world.py", "scripts/conftest.py"},
         "match": [_is_session_asset],
     },
+    "scripts/test_visibility.py": {
+        "paths": {"scripts/visibility.py", "scripts/replay.py", "scripts/world.py", "scripts/conftest.py"},
+        "match": [],
+    },
     "scripts/test_interlude.py": {
         "paths": {"scripts/interlude.py", "scripts/world.py", "scripts/conftest.py"},
-        "match": [_is_session_asset, _is_interlude_asset],
+        "match": [_is_session_asset, _is_interlude_asset, _is_interlude_file],
     },
 }
 

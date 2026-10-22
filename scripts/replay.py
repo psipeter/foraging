@@ -42,6 +42,7 @@ class Bushes:
     canopy_radius: np.ndarray   # (n,)
     fruit_reward: np.ndarray    # (n, fruit_count) reward of the k-th fruit taken from each bush
     value: np.ndarray           # (n,) R_bush
+    shape: np.ndarray = None    # (n,) shape attribute (sets the canopy height; see visibility.py)
 
 
 @dataclass
@@ -51,7 +52,8 @@ class SessionLog:
     traj: np.ndarray            # (frames, 6): t, x, z, yaw, pitch, keys
     events: list                # dicts: t, real, type, tree_id, k, reward, running_total, note
     bushes: Bushes
-    grids: dict = field(default_factory=dict)   # terrain grids (empty for an Interlude loaded without its world)
+    grids: dict = field(default_factory=dict)   # terrain grids: moisture, elevation, rock, snow, ramp; (res, res) [x, z]
+    half_extent: float = 0.0                    # the grids span [-half_extent, half_extent] in x and z
 
     @property
     def config(self):
@@ -115,8 +117,8 @@ def load_session_log(folder):
         pos=np.asarray(table["treePos"], dtype=float).reshape(n, 2),
         canopy_radius=np.asarray(table["canopyRadius"], dtype=float),
         fruit_reward=np.asarray(table["fruitRewards"], dtype=int).reshape(n, fruits),
-        value=np.asarray(table["value"], dtype=float))
-    return SessionLog(folder, manifest, traj, events, bushes, grids)
+        value=np.asarray(table["value"], dtype=float), shape=np.asarray(table["shape"], dtype=float))
+    return SessionLog(folder, manifest, traj, events, bushes, grids, float(header["halfExtent"]))
 
 
 # --------------------------------------------------------------------------------------------------

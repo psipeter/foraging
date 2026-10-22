@@ -523,8 +523,14 @@ range/bearing cone and per-bush carry-over use only position, yaw and `t`, and e
 `fruit_reward[bush][k]` in the world file. The world is pinned by sha256 and archived by the logger in
 `ForagingData/_worlds/`. `scripts/replay.py` re-derives every `fruit` event from the trajectory and checks it against
 the log (`./venv/bin/python scripts/replay.py <folder or id>`); it also resamples a session to a uniform time grid
-(`steps`) for agents. Logging state per frame rather than inputs avoids having to reproduce Unity's physics. Derived
-quantities (which bushes are visible, egocentric observations) are not logged; compute them from trajectory + terrain.
+(`steps`) for agents. Logging state per frame rather than inputs avoids having to reproduce Unity's physics. **What the participant could see**
+is derived, not logged: `scripts/visibility.py` (`visible_bushes(log, dt=0.1)`, or the CLI) rebuilds it per step from the trajectory,
+the world's terrain and the camera (eye = terrain + `eyeHeight`, FOV and clip planes from the manifest, aspect from the logged display
+size). A bush counts as visible when part of its camera-facing upper canopy (a half-buried ellipsoid; height from the shape attribute)
+is inside the view frustum and the line of sight clears the terrain. Per visible bush it returns `visible_fraction`, egocentric
+`azimuth` (+ right) and `elevation` (+ up), `distance` and angular `width`/`height` (threshold on those for resolvability; there is no
+built-in distance cutoff beyond the far clip). Not modelled: bushes hiding other bushes, fruit visibility, fog. In an Interlude only
+the trial's pair exists.
 World files are written by `scripts/world.py`, so regenerating them gives a new hash; old logs keep their archived copy.
 Format notes live in `CLAUDE.md` ("Data logging") and `docs/DECISIONS.md`.
 
@@ -626,11 +632,11 @@ its generated files; a participant-ID screen; and writing the hypotheses down.
   the world and a participant's draws can be reproduced from the file. The remaining uses of the global
   `UnityEngine.Random` are cosmetic (the fruit-colour bursts in `Tree.cs`) and a fallback in `HarvestManager` for a
   bush with no stored rewards; ambient audio uses its own `System.Random` so it never touches that stream.
-- **Interlude files can go stale unnoticed.** Unity warns when a *session's* world file no longer matches its
-  `SessionConfig`, but an Interlude's `*.interlude.json` carries no such check, and neither Unity nor the tests compare the
-  committed files with a fresh generation. If a session's terrain, seed or reward function, or the Interlude's geometry or
-  trial count, changes and `scripts/interlude.py` is not re-run, bush positions can stop matching the terrain (and moisture
-  values the reward). A freshness test (regenerate and compare) or a parameter echo in the file would close this.
+- **Interlude files can go stale (now caught by a test).** Unity warns when a *session's* world file no longer matches its
+  `SessionConfig`, but not for an Interlude's `*.interlude.json`. `scripts/test_interlude.py::test_committed_interlude_file_is_fresh`
+  regenerates each Interlude from the current assets and fails when the committed file differs (re-run `scripts/interlude.py`);
+  `run_tests.py` runs it whenever a session or Interlude asset or an `.interlude.json` changes. Unity itself still gives no warning, and
+  the session `.world` files have no such test (Unity's startup check covers them).
 - **Interlude parameters are untuned:** trial counts (3 practice, 5 otherwise), the 5-point bonus, the 10 s limit (with a
   ~2 s walk and 0.5 s harvest), the bush distance/bearing, and the stimulus mix. The Interlude uses the session's own
   terrain, so participants may recognise regions (a spatial-memory confound); the harvested bushes are gone and the
