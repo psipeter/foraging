@@ -183,11 +183,12 @@ Assets/
              mesh vertex colors), VertexColorUnlit, FruitUnlit, CanopyRim (additive
              fresnel highlight overlay) and HarvestRing (clock-style progress ring)
   Materials/ Prefabs/ Resources/Textures
-docs/        SCIENCE.md, DECISIONS.md
+docs/        SCIENCE.md, DECISIONS.md, REVIEW_POLICY.md (what code review optimizes; see "Adversarial review")
+.claude/     agents/ (simplifier, red-team, arbiter) and skills/adversarial-review/
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
              interlude.py (Interlude stimulus design + bush placement on the session's terrain), world.py (reads SessionConfig .asset YAML; generates worlds from one seed — mirrors the
              C# placement/attribute/reward rules; exports .npz), sim.py (fast session engine: actions, cone percept, Interlude
-             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent), costs.py (turning and key-press time costs and the `approach` arithmetic shared by the engine and the actors; provisional values fitted to debug logs), conftest.py (tests run with motor costs off unless marked `motor_costs`), agents.py (agent components memory / critic / actor, ComposedAgent, registry), plots.py (matplotlib/seaborn figures for the results database, PNG into `results/`), analysis.py (queries over the results database: `select`, `table`, `paired`, `gap_closed`, `component_effect`, `cumulative_curve`, `checkpoint_curve`, command line), results.py (the results database: schema, `Store`, `record_run`, `lookup`, `delete_run`), fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag), specs.py (agent specs: `Component` base that records constructor arguments, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), test_*.py (pytest; run them with `scripts/run_tests.py`, which
+             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent), costs.py (turning and key-press time costs and the `approach` arithmetic shared by the engine and the actors; provisional values fitted to debug logs), conftest.py (tests run with motor costs off unless marked `motor_costs`), agents.py (agent components memory / critic / actor, ComposedAgent, registry), plots.py (matplotlib/seaborn figures for the results database, PNG into `results/`), analysis.py (queries over the results database: `select`, `table`, `paired`, `gap_closed`, `component_effect`, `cumulative_curve`, `checkpoint_curve`, command line), results.py (the results database: schema, `Store`, `record_run`, `lookup`, `delete_run`), fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag), specs.py (agent specs: `Component` base that records constructor arguments, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), mutation_check.py (mutation testing of the changed lines in a scratch copy; see "Adversarial review"), test_*.py (pytest; run them with `scripts/run_tests.py`, which
              runs only the test files the changed files can affect, or `--all` before committing; `--fast` skips `slow`-marked tests)
 ```
 
@@ -351,7 +352,7 @@ results table as its last output, which is the completion marker. This went wron
 `./venv/bin/python scripts/run_tests.py` runs only the Python test files the changed
 files can affect (`--all` before committing; `--dry-run` shows the decision). `--fast`
 additionally skips tests marked `slow` (freshness checks of committed generated files, long
-planner/Interlude searches): ~7 s vs ~15 s for everything, so use it while iterating, but run
+planner/Interlude searches): a few seconds vs about 35 s for everything, so use it while iterating, but run
 the plain command after touching a session/Interlude asset, `world.py`, `interlude.py` or the
 planner. The tests call the real generators in memory and write nothing into the project. There
 are no Unity-side tests.
@@ -464,6 +465,21 @@ random stream comes from the world seed, so a result is reproducible from its ke
   tree was dirty. Prefer a clean-tree run before a result goes into a doc.
 - Compare components by holding the others fixed (agents that differ in exactly one parameter or component), via `agent_params`.
 - The agent/human performance metric is not decided: store raw scores, compute any metric at query time, and name it in the report.
+
+### Simplifier agent
+`.claude/agents/simplifier.md` reviews code for needless complexity: it strips comments from a scratch copy, has a cold reader describe
+what the code does, and treats whatever is hard to follow as a finding. Run on its own, it applies small behavior-preserving fixes itself (verified by
+`recompile` / `run_tests.py`) and proposes anything larger. Invoke it after a feature works and before the person commits, and for an
+occasional module sweep, not during exploration. It does not hunt bugs (the Red-team session does). It must flag edits to hash-sensitive
+Python (`ENGINE_FILES`, `AGENT_FILES`), since even a comment edit changes the results-database code hashes.
+
+### Adversarial review (red-team, simplifier, arbiter)
+`/adversarial-review [--since REF] [--no-rebuttal] [--save] [paths]` reviews a diff before the person commits: the **red-team**
+(`.claude/agents/red-team.md`) and the **simplifier** (dry-run) in parallel, an **arbiter** for what stays disputed. The protocol is in
+`.claude/skills/adversarial-review/SKILL.md` and the goals, complexity budget, escalation rules and **Known and deferred** list in
+`docs/REVIEW_POLICY.md`. Scientific design, the hash/meaning of stored results, and disagreements about goals go to the person, never to
+the arbiter. Nothing is applied until the person agrees. `scripts/mutation_check.py` (an optional aid the red-team uses only for engine, planner or replay changes; also runnable by hand)
+mutates the lines you changed in a scratch copy and lists the mutants the tests do not notice.
 
 ### Docs upkeep
 Update `docs/SCIENCE.md` when the task design, session configs, or findings

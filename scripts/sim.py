@@ -216,14 +216,13 @@ def _harvest(agent, world, s, res, j, percept, cp=None):
 
     # Turn to face the bush, then (if it is out of range) press W and walk in a straight line to its harvest range.
     max_angle = float(getattr(world.params, "harvest_max_angle", 35.0))
-    dist, walk, turn, _, walking, brg = costs.approach(s.pos, s.heading, world.pos[j][None], world.canopy_radius[j:j + 1],
-                                                       world.reach[j:j + 1], speed, max_angle)
-    dist, walk, turn, t_walk, brg = float(dist[0]), float(walk[0]), float(turn[0]), float(walking[0]), float(brg[0])
+    dist, walk, turn, _, walking, new_heading = costs.approach(s.pos, s.heading, world.pos[j][None],
+                                                               world.canopy_radius[j:j + 1], world.reach[j:j + 1], speed, max_angle)
+    dist, walk, turn, t_walk, new_heading = (float(v[0]) for v in (dist, walk, turn, walking, new_heading))
     delta = world.pos[j] - s.pos
     if not _spend(s, res, "look_time", turn):
         return False
-    if dist > 0.0:
-        s.heading = brg
+    s.heading = new_heading
     if walk > 0.0 and not _spend(s, res, "press_time", costs.WALK_PRESS_TIME):
         return False
     if t_walk > s.time_left:

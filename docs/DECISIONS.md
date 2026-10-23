@@ -1163,3 +1163,28 @@ First 10-seed trial (tag `learning-trial`, S1 at 90 s, random Interlude with 50 
 
 **Reward-rate curves removed (PI):** `analysis.rate_curve` / `reward_rate_curve` (binned and Gaussian low-pass smoothing, `curve --quantity rate`) and the rate branch of the plot are deleted. The curves are too hard to read: the oracle and `nearest` are flat, the learner's rise is a few tenths of a reward per second inside wide bands, and any smoothing choice changes how the wiggle looks without making the learning easier to see. Cumulative reward and the paired advantage over a baseline (`cumulative_curve`) carry the same information and read directly; the Interlude learning curve (`checkpoint_curve`) carries the learning itself. `plots.plot_reward_rate` became `plots.plot_cumulative_reward` and `RateCurves` became `CumulativeCurves`. The earlier entry above describes what was built and why it was dropped. The 100-seed result stands: the learner's cumulative lead over `nearest` is about zero until roughly 28 s and then grows.
 
+
+---
+
+## Adversarial review: red-team against simplifier, an arbiter for disagreements, mutation testing as the evidence
+
+**Problem:** the red-team review done by hand over several sessions found real defects (a replay that failed on every practice session, an engine that let blind agents harvest, planner results that were not optimal) and many gaps in the tests, but it was a one-off. The simplifier agent pushes the other way (less code). Run alone, each drifts: the red-team toward guards for cases that never occur, the simplifier toward removing the check that mattered.
+
+**Decision:** `/adversarial-review` (the protocol is in `.claude/skills/adversarial-review/SKILL.md`, the arbiter's yardstick in `docs/REVIEW_POLICY.md`) runs the `red-team` and a dry-run `simplifier` in parallel on one diff, lets each answer the other's conflicting items once, and sends what is still disputed to an `arbiter`. Scientific design, the hash or meaning of stored results, and disagreements about goals are escalated to the person. The orchestration lives in a skill because subagents cannot spawn subagents. Nothing is applied until the person agrees.
+
+**Evidence over opinion:** the red-team may report only findings it can demonstrate, and runs `scripts/mutation_check.py`, which mutates the changed lines (flip a comparison, swap + and -, off-by-one a constant, negate a condition, flip a boolean) in a scratch copy of the project and runs the tests that depend on the file; the survivors are leads for it to judge. On the first real run it flagged untested rules in the new motor-cost code (the sign of the turn, the 5 degree deadband), which the hand review had not.
+
+**Rejected:** a hand-written mutant catalog (the patterns rot as soon as the code changes, as the first manual harness did); sending every item to the arbiter (cost, and most items are not in conflict); letting the arbiter decide scientific-design questions (CLAUDE.md reserves them for the person); letting the simplifier apply its small tier during a joint review (the point is that both sides argue before anything changes); a single reviewer with both hats (it argues with itself and always agrees).
+
+**Cost:** two long reviews in parallel plus a short rebuttal each; the arbiter only on conflicts. For a small diff run one agent alone.
+
+
+---
+
+## An in-range harvest no longer turns the simulated view for free
+
+**Problem (found by the first `/adversarial-review`):** `costs.approach` charged an in-range harvest only the turn needed to bring the bush inside the harvest cone (nothing when it was already inside), but `sim._harvest` still set the heading to the bush's full bearing, and `PlannerActor` copied that. Up to the canopy's angular radius plus `harvestMaxAngle` of turning was therefore free, and the next action measured its turn from a heading the player never took (a harvest at bearing 30 degrees followed by `Explore(0)` charged a 30 degree turn back that never happened). In the game harvesting does not rotate the camera.
+
+**Decision:** `approach` returns the heading after the action: the bush's bearing when there is a walk (movement follows the view), otherwise the old heading turned only by the amount charged (unchanged when the bush was already in the cone). The engine and the planner both use it. Tests: `test_a_harvest_in_range_turns_the_view_only_as_far_as_it_is_charged`, and the planner's start heading and 20-trial plan-value tests.
+
+**Consequences:** engine (`sim.py`, `costs.py`) and agents (`agents.py`) code hashes move, so earlier stored runs are stale by hash; simulated totals change slightly wherever a harvest was followed by a turn. Baselines in `docs/SCIENCE.md` are to be marked stale and re-run only when asked.

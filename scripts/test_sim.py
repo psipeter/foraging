@@ -412,3 +412,61 @@ def test_checkpoints_must_be_inside_the_session_and_not_for_deadline_planners():
     with pytest.raises(ValueError, match="plan for the end"):
         run_episode(PlannerAgent("beam"), w, checkpoints=[10])
     run_episode(PlannerAgent("beam"), w)                                          # fine without checkpoints
+
+
+@pytest.mark.motor_costs
+def test_the_turn_is_measured_from_the_current_heading_and_the_deadband_is_five_degrees():
+    class Faces(Actor):
+        """Turns to a heading first, then harvests the bush."""
+        def __init__(self, heading):
+            self.todo = [Look(heading), Harvest(0)] if heading else [Harvest(0)]
+
+        def act(self, view):
+            return self.todo.pop(0) if self.todo else Stop()
+
+    def turn_cost(heading, bush):
+        r = run_episode(oracle_agent(Faces(heading)), tiny_world([bush], [[1, 2]]))
+        return r.look_time - (costs.turn_time(heading) if heading else 0.0)       # what the harvest itself turned
+
+    assert turn_cost(90.0, [48, 0]) == pytest.approx(0.0)                         # already facing +x
+    assert turn_cost(90.0, [0, 48]) == pytest.approx(costs.TURN_OVERHEAD + 90.0 / costs.TURN_RATE)
+    assert turn_cost(180.0, [0, 48]) == pytest.approx(costs.TURN_OVERHEAD + 180.0 / costs.TURN_RATE)
+    assert turn_cost(-90.0, [-48, 0]) == pytest.approx(0.0)
+    inside, outside = np.radians(4.9), np.radians(5.1)
+    assert turn_cost(0.0, [40 * np.sin(inside), 40 * np.cos(inside)]) == 0.0      # inside the deadband
+    assert turn_cost(0.0, [40 * np.sin(outside), 40 * np.cos(outside)]) > 0.17    # outside it
+
+
+class Script(Actor):
+    """Does the given actions in order, then stops."""
+    def __init__(self, *actions):
+        self.todo = list(actions)
+
+    def act(self, view):
+        return self.todo.pop(0) if self.todo else Stop()
+
+
+def _look_time(bush, *actions):
+    return run_episode(oracle_agent(Script(*actions)), tiny_world([bush], [[1, 2]])).look_time
+
+
+@pytest.mark.motor_costs
+def test_look_turns_relative_and_an_explore_turns_from_the_current_heading_with_the_deadband():
+    quarter = costs.turn_time(90.0)
+    assert _look_time([0, 48], Look(90.0), Explore(0.0, 1.0)) == pytest.approx(2 * quarter)       # Explore turns back from 90
+    assert _look_time([0, 48], Look(90.0), Explore(90.0, 1.0)) == pytest.approx(quarter)          # already facing 90
+    assert _look_time([0, 48], Explore(4.9, 1.0)) == 0.0                                          # inside the deadband
+    assert _look_time([0, 48], Explore(5.1, 1.0)) > costs.TURN_OVERHEAD
+    assert _look_time([0, -48], Look(90.0), Look(90.0), Harvest(0)) == pytest.approx(2 * quarter)  # two looks add up to 180
+
+
+@pytest.mark.motor_costs
+def test_a_harvest_in_range_turns_the_view_only_as_far_as_it_is_charged():
+    ang_r = np.degrees(np.arcsin(1.0 / 6.0))                       # canopy radius 1 at distance 6, in reach (8)
+    inside = [6 * np.sin(np.radians(30.0)), 6 * np.cos(np.radians(30.0))]      # within the canopy + 35 degree cone: no turn
+    assert _look_time(inside, Harvest(0)) == 0.0
+    assert _look_time(inside, Harvest(0), Explore(0.0, 1.0)) == 0.0                # the view never left 0
+    outside = [6 * np.sin(np.radians(60.0)), 6 * np.cos(np.radians(60.0))]
+    edge = 60.0 - ang_r - 35.0                                     # the heading that brings the bush to the cone's edge
+    assert _look_time(outside, Harvest(0)) == pytest.approx(costs.turn_time(edge))
+    assert _look_time(outside, Harvest(0), Explore(edge, 1.0)) == pytest.approx(costs.turn_time(edge))

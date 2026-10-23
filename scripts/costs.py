@@ -49,7 +49,8 @@ def approach(pos, heading, targets, radius, reach, speed, max_angle):
                    bring it inside the harvest cone (`max_angle` beyond the canopy's angular radius)
       press        seconds of key presses: W when there is a walk, then Space
       walking      seconds of walking
-      new_heading  the heading after: toward the bush (unchanged when standing on it)
+      new_heading  the heading after: toward the bush when there is a walk (movement follows the view); otherwise the heading
+                   turned only by the amount charged (so none when the bush is already inside the harvest cone)
     The seconds before the first fruit are turn + press + walking."""
     d = np.asarray(targets, dtype=float) - np.asarray(pos, dtype=float)
     dist = np.hypot(d[..., 0], d[..., 1])
@@ -60,4 +61,7 @@ def approach(pos, heading, targets, radius, reach, speed, max_angle):
         ang_r = np.where(dist > 1e-9, np.degrees(np.arcsin(np.clip(radius / np.where(dist > 1e-9, dist, 1.0), 0.0, 1.0))), 90.0)
     turn = np.where(walk > 0.0, turn_time(delta, TURN_DEADBAND), turn_time(np.maximum(0.0, delta - ang_r - max_angle)))
     press = np.where(walk > 0.0, WALK_PRESS_TIME, 0.0) + HARVEST_PRESS_TIME
-    return dist, walk, turn, press, walk / speed, brg
+    signed = wrap(brg - heading)
+    in_range_turn = np.sign(signed) * np.maximum(0.0, delta - ang_r - max_angle)
+    new_heading = np.where(walk > 0.0, brg, wrap(heading + in_range_turn))
+    return dist, walk, turn, press, walk / speed, new_heading

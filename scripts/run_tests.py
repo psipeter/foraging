@@ -86,6 +86,10 @@ DEPENDENCIES = {
         "paths": {"scripts/visibility.py", "scripts/replay.py", "scripts/world.py"},
         "match": [],
     },
+    "scripts/test_mutation_check.py": {       # run_tests.py is a path because mutation_check imports it
+        "paths": {"scripts/mutation_check.py", "scripts/run_tests.py"},
+        "match": [],
+    },
     "scripts/test_interlude.py": {
         "paths": {"scripts/interlude.py", "scripts/world.py"},
         "match": [_is_session_asset, _is_interlude_asset, _is_interlude_file],

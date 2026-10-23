@@ -692,13 +692,13 @@ class PlannerActor(Actor):
     def _step_all(self, pos, heading, t, visited):
         """For every bush: (distance, walk, time the first fruit could start, harvestable fruits k, heading after) from `pos`
         facing `heading` at time `t`. k == 0 where the bush is visited, or cannot be reached with time for one fruit."""
-        dist, walk, turn, press, walking, brg = costs.approach(pos, heading, self.P, self.rad, self.reach, self.speed,
+        dist, walk, turn, press, walking, new_heading = costs.approach(pos, heading, self.P, self.rad, self.reach, self.speed,
                                                                self.max_angle)
         arrive = t + turn + press + walking
         k = np.minimum(self.F, np.floor((self.T - arrive) / self.fd + 1e-9)).astype(int)
         k[visited] = 0
         k = np.maximum(k, 0)
-        return dist, walk, arrive, k, brg
+        return dist, walk, arrive, k, new_heading
 
     def _move(self, pos, dist, walk, j):
         if walk[j] > 0.0:
@@ -749,7 +749,7 @@ class PlannerActor(Actor):
         while beam:
             children = {}
             for _, reward, t, pos, last, visited, plan, heading in beam:
-                dist, walk, arrive, k, brg = self._step_all(pos, heading, t, visited)
+                dist, walk, arrive, k, new_heading = self._step_all(pos, heading, t, visited)
                 for j in np.flatnonzero(k > 0):
                     new_reward = reward + self.value[j] * k[j]
                     t_new = arrive[j] + k[j] * self.fd
@@ -765,7 +765,7 @@ class PlannerActor(Actor):
                     key = (j, vis.tobytes())
                     old = children.get(key)
                     if old is None or t_new < old[2]:
-                        children[key] = (score, new_reward, t_new, self._move(pos, dist, walk, j), j, vis, new_plan, float(brg[j]))
+                        children[key] = (score, new_reward, t_new, self._move(pos, dist, walk, j), j, vis, new_plan, float(new_heading[j]))
             beam = sorted(children.values(), key=lambda s: -s[0])[:width]
         return best_plan, best_reward
 
@@ -789,7 +789,7 @@ class PlannerActor(Actor):
             bound = reward + self._bound(visited[self._order], self.T - t)
             if bound <= best["value"] + 1e-9:
                 return
-            dist, walk, arrive, k, brg = self._step_all(pos, heading, t, visited)
+            dist, walk, arrive, k, new_heading = self._step_all(pos, heading, t, visited)
             cand = np.flatnonzero(k > 0)
             if len(cand) == 0:
                 return
@@ -804,7 +804,7 @@ class PlannerActor(Actor):
                     continue
                 visited[j] = True
                 plan.append(j)
-                recurse(self._move(pos, dist, walk, j), float(brg[j]), arrive[j] + k[j] * self.fd, new_reward, plan)
+                recurse(self._move(pos, dist, walk, j), float(new_heading[j]), arrive[j] + k[j] * self.fd, new_reward, plan)
                 plan.pop()
                 visited[j] = False
 

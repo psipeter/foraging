@@ -763,13 +763,23 @@ def test_the_planner_is_optimal_with_negative_critic_values_and_with_the_motor_c
 @pytest.mark.motor_costs
 def test_the_plans_value_is_what_the_engine_pays_when_rewards_equal_the_values():
     rng = np.random.default_rng(5)
-    for trial in range(10):
+    for trial in range(20):         # heading-tracking mistakes in the plan first show at trial 16
         n = 6
         values = rng.integers(1, 6, n)
         w = world_with(rng.uniform(-50, 50, (n, 2)), rewards=[[int(v)] * 8 for v in values], duration=float(rng.uniform(5, 40)))
         agent = oracle_agent(PlannerActor("exact"))
         r = run_episode(agent, w)
         assert agent.plan_value == pytest.approx(r.total), trial
+
+
+@pytest.mark.motor_costs
+def test_the_plan_starts_from_the_heading_the_agent_has():
+    w = world_with([[48, 0]], rewards=[[3, 3]], speed=5.0, duration=9.2)       # one fruit fits only if no 90 degree turn is needed
+    for heading, expected in ((90.0, 3.0), (0.0, 0.0)):
+        agent = oracle_agent(PlannerActor("exact"))
+        agent.begin_session(w, np.random.default_rng(0))
+        agent.act(Body(np.zeros(2), heading, 9.2, 0.0))
+        assert agent.plan_value == pytest.approx(expected), heading
 
 
 @pytest.mark.motor_costs
