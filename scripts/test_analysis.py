@@ -334,3 +334,59 @@ def test_the_cumulative_and_advantage_figures_and_commands_are_written(tmp_path,
     assert "cumulative reward" in capsys.readouterr().out and (tmp_path / "cum.png").exists()
     analysis.main(["curve", "--tag", "c", "--baseline", "nearest", "--out", str(tmp_path / "adv.png"), "--db", db])
     assert "advantage in cumulative reward" in capsys.readouterr().out and (tmp_path / "adv.png").exists()
+
+
+# --- panels: 2 x 2 sessions, seaborn lines with a shared legend ---------------------------------------------------------
+
+def test_the_lowest_performing_agent_is_the_baseline_when_asked(tmp_path):
+    s, sel = recorded(tmp_path, agents=("nearest", "greedy_rate_10", "delta_value_10"))
+    with s:
+        lowest = analysis.lowest_performing(sel)
+        means = {a: np.mean(list(sel.values(a).values())) for a in sel.agents}
+        assert means[lowest] == min(means.values())
+        curves = analysis.cumulative_curve(s, sel, baseline="lowest")
+        assert curves.quantity == "advantage" and curves.baseline_id == lowest and lowest not in curves.agents and len(curves.agents) == 2
+        same = analysis.cumulative_curve(s, sel, baseline=lowest)
+        assert all(np.allclose(curves.agents[a]["per_seed"], same.agents[a]["per_seed"]) for a in curves.agents)
+        assert all((c["mean"][-1] >= 0) for c in curves.agents.values())                      # nobody is below the lowest
+
+
+def test_figures_are_a_two_by_two_grid_of_sessions_with_one_line_per_agent_and_stable_colours(tmp_path):
+    import plots
+    s, sel = recorded(tmp_path)
+    with s:
+        curves = analysis.cumulative_curve(s, sel)
+        names = {aid: f"agent-{i}" for i, aid in enumerate(sel.agents)}
+        panels = {f"S{i}": curves for i in range(1, 5)}
+        fig = plots.figure_cumulative(panels, names=names, order=["agent-1", "agent-0"])
+        axes = [a for a in fig.axes if a.get_visible() and a.get_title(loc="left")]
+        assert [a.get_title(loc="left") for a in axes] == ["S1", "S2", "S3", "S4"] and fig.axes[0].get_gridspec().get_geometry() == (2, 2)
+        assert all(len(a.get_lines()) == len(curves.agents) for a in axes)                     # a line per agent (the interval is a band)
+        colours = {tuple(line.get_color() for line in a.get_lines()) for a in axes}
+        assert len(colours) == 1                                                               # the same colour for the same agent everywhere
+        legend = fig.legends[0]
+        assert [t.get_text() for t in legend.get_texts()] == ["agent-1", "agent-0"] and len(legend.get_lines()) == 2
+        df = plots.long_form(curves, names)
+        assert list(df.columns) == ["agent", "seed", "t", "value"] and set(df["agent"]) == {"agent-0", "agent-1"}
+        assert len(df) == sum(c["per_seed"].size for c in curves.agents.values())
+        import matplotlib.pyplot as plt
+        plt.close(fig)
+        one = plots.figure_cumulative(curves)
+        assert one.axes[0].get_gridspec().get_geometry() == (1, 1)
+        plt.close(one)
+
+
+def test_a_figure_holds_at_most_the_palette_and_the_advantage_panel_names_its_baseline(tmp_path):
+    import plots
+    s, sel = recorded(tmp_path)
+    with s:
+        lead = analysis.cumulative_curve(s, sel, baseline="lowest")
+        fig = plots.figure_cumulative({"S1": lead}, names={lead.baseline_id: "the-floor"})
+        assert any("baseline: the-floor" in t.get_text() for t in fig.axes[0].texts)
+        import matplotlib.pyplot as plt
+        plt.close(fig)
+        curves = analysis.cumulative_curve(s, sel)
+        many = {aid: f"a{i}" for i, aid in enumerate(curves.agents)}
+        big = analysis.CumulativeCurves(curves.t, curves.duration, 0.95, {f"id{i}": dict(next(iter(curves.agents.values())), label=f"a{i}") for i in range(9)}, curves.sel)
+        with pytest.raises(ValueError, match="palette"):
+            plots.figure_cumulative(big)

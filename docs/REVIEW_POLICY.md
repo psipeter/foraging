@@ -34,6 +34,7 @@ Complexity is spent where a failure is silent, expensive or unrecoverable, and s
   still required where the mirror is not testable, e.g. C# against Python).
 - **No speculative generality.** A parameter, hook, class or option needs a second user today, or a value a researcher will vary
   (then it belongs in `SessionConfig` or `costs.py`, per `CLAUDE.md`). "It might be useful when we add X" is not a reason.
+- **New code pays by deleting code.** A fix that adds code, tests or options names what it lets us delete, merge or stop maintaining, unless it prevents a named failure that has happened or plausibly will. Count net lines of a whole review, not of a single finding; a review that adds much and removes little has not met the complexity budget. Readability and compactness are goals of review in themselves, not only a tie-break.
 - **A fix pays for itself.** Anything costing more than about 30 lines, a new concept, or a new file must name the failure it prevents
   and say how it would happen. Below that, adopt a red-team fix when its severity is medium or higher, or when it is a line or two.
 - **A test must be able to fail.** A test that survives every plausible mutant of the rule it names (see `scripts/mutation_check.py`)
@@ -83,3 +84,4 @@ Re-raise one only with new evidence or because the code around it changed.
   decision time between actions is not modelled.
 - The simulator pays about 0.9 more fruits per 60 s than the game (frame quantisation): compare agents to humans as paired
   differences.
+- After walking to a bush, rounding leaves the agent a hair outside its range in about 40% of cases, so re-harvesting it after leaving early is charged a W press the game would not need (`costs.approach`). No actor leaves a bush early yet; fix when one does (see DECISIONS, "Review of the engine-agent boundary").

@@ -391,6 +391,11 @@ def test_a_checkpoint_is_the_agent_as_it_was_then_and_equals_a_shorter_session()
     run_episode(shorter, checkpoint_world(duration=mid))                          # a session that really ends at `mid`
     assert np.allclose(res.snapshots[mid].critic.w, shorter.critic.w)
     assert not np.allclose(res.snapshots[mid].critic.w, agent.critic.w)           # and it differs from the end: it learned after `mid`
+    mid_visit = res.fruits[4][0] + 0.1                                           # inside the second visit, after its second fruit
+    at_mid_visit = run_episode(checkpoint_agent(), world, checkpoints=[mid_visit])
+    shorter = checkpoint_agent()
+    run_episode(shorter, checkpoint_world(duration=mid_visit))                    # that session ends the visit (end_visit) when time runs out
+    assert np.allclose(at_mid_visit.snapshots[mid_visit].critic.w, shorter.critic.w) and shorter.critic.w.any()
     assert res.snapshots[60.0] is not agent and res.snapshots[60.0].critic is not agent.critic
     before = res.snapshots[mid].critic.w.copy()
     agent.critic.w += 1.0

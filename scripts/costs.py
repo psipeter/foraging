@@ -21,6 +21,7 @@ TURN_OVERHEAD = 0.17     # seconds to start and settle a turn, whatever its size
 TURN_DEADBAND = 5.0      # degrees: an implicit turn (before a walk) smaller than this is not needed
 WALK_PRESS_TIME = 0.2    # seconds to press W and start moving
 HARVEST_PRESS_TIME = 0.3  # seconds to press Space once the bush is in reach and in view
+DEFAULT_MAX_ANGLE = 35.0  # harvest cone half-angle for toy worlds whose params lack harvest_max_angle (SessionConfig has it)
 
 
 def wrap(angle):
@@ -39,6 +40,11 @@ def turn_time(angle, deadband=0.0):
     return np.where(a <= deadband, 0.0, TURN_OVERHEAD + a / TURN_RATE)
 
 
+def max_angle(params):
+    """The harvest cone's half-angle in degrees: the session's `harvest_max_angle`, else the default (toy worlds)."""
+    return float(getattr(params, "harvest_max_angle", DEFAULT_MAX_ANGLE))
+
+
 def approach(pos, heading, targets, radius, reach, speed, max_angle):
     """What it takes to start harvesting each of `targets` ((n, 2) positions) from `pos` facing `heading`.
 
@@ -47,7 +53,8 @@ def approach(pos, heading, targets, radius, reach, speed, max_angle):
       walk         distance to walk to enter harvest range (0 when already in range)
       turn         seconds of turning: to face the bush when there is a walk (movement follows the view), else just enough to
                    bring it inside the harvest cone (`max_angle` beyond the canopy's angular radius)
-      press        seconds of key presses: W when there is a walk, then Space
+      press        seconds of key presses: W when there is a walk, then Space (the engine charges the two separately so the
+                   session clock can run out between them; only the actors use the sum)
       walking      seconds of walking
       new_heading  the heading after: toward the bush when there is a walk (movement follows the view); otherwise the heading
                    turned only by the amount charged (so none when the bush is already inside the harvest cone)

@@ -578,7 +578,7 @@ default view cone, seeds 0-99; random Interlude with 50 trials and 20 samples pe
 | `delta_rate_10` (delta-rule critic, additive RBF features, neutral prior, full memory) | 335.2 ± 3.4 | +45.6 ± 4.1 | 0.91 |
 | `greedy_rate_10` (oracle) | 399.8 ± 2.3 | +110.2 ± 3.9 | 1.00 |
 
-Learning curve (Interlude accuracy of the learner against training time; the 95% interval is about ±0.01 to ±0.03): 0.50 at 0 s, 0.62 at 10 s,
+Learning curve (STALE: taken before the mid-visit checkpoint fix, which moves checkpoints up by about 0.4 points on average, and before bush ids were shuffled; re-run to refresh) (Interlude accuracy of the learner against training time; the 95% interval is about ±0.01 to ±0.03): 0.50 at 0 s, 0.62 at 10 s,
 0.76 at 20 s, 0.82 at 30 s, 0.86 at 45 s, 0.89 at 60 s, 0.90 at 75 s, 0.91 at 90 s; `nearest` stays at chance and the oracle at 1.00 throughout.
 The learner closes 0.39 ± 0.04 of the nearest-to-oracle gap per seed in total reward. Its reward lead over `nearest` (cumulative-reward advantage)
 is about zero until roughly 28 s and then grows at close to the oracle's slope, so the Interlude shows it knowing the value function (0.76 at 20 s)

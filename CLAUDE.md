@@ -188,7 +188,7 @@ docs/        SCIENCE.md, DECISIONS.md, REVIEW_POLICY.md (what code review optimi
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
              interlude.py (Interlude stimulus design + bush placement on the session's terrain), world.py (reads SessionConfig .asset YAML; generates worlds from one seed — mirrors the
              C# placement/attribute/reward rules; exports .npz), sim.py (fast session engine: actions, cone percept, Interlude
-             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent), costs.py (turning and key-press time costs and the `approach` arithmetic shared by the engine and the actors; provisional values fitted to debug logs), conftest.py (tests run with motor costs off unless marked `motor_costs`), agents.py (agent components memory / critic / actor, ComposedAgent, registry), plots.py (matplotlib/seaborn figures for the results database, PNG into `results/`), analysis.py (queries over the results database: `select`, `table`, `paired`, `gap_closed`, `component_effect`, `cumulative_curve`, `checkpoint_curve`, command line), results.py (the results database: schema, `Store`, `record_run`, `lookup`, `delete_run`), fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag), specs.py (agent specs: `Component` base that records constructor arguments, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), mutation_check.py (mutation testing of the changed lines in a scratch copy; see "Adversarial review"), test_*.py (pytest; run them with `scripts/run_tests.py`, which
+             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent), costs.py (turning and key-press time costs and the `approach` arithmetic shared by the engine and the actors; provisional values fitted to debug logs), conftest.py (tests run with motor costs off unless marked `motor_costs`), agents.py (agent components memory / critic / actor, ComposedAgent, registry), battery.py (the assessment battery: every session S1-S4 plus its Interlude with checkpoints, populations of agents, a serial runner and command line), plots.py (matplotlib/seaborn figures for the results database, PNG into `results/`: a 2 x 2 grid of sessions, `sns.lineplot` per agent), analysis.py (queries over the results database: `select`, `table`, `paired`, `gap_closed`, `component_effect`, `cumulative_curve`, `checkpoint_curve`, command line), results.py (the results database: schema, `Store`, `record_run`, `lookup`, `delete_run`), fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag), specs.py (agent specs: `Component` base that records constructor arguments, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), mutation_check.py (mutation testing of the changed lines in a scratch copy; see "Adversarial review"), test_*.py (pytest; run them with `scripts/run_tests.py`, which
              runs only the test files the changed files can affect, or `--all` before committing; `--fast` skips `slow`-marked tests)
 ```
 
@@ -427,12 +427,32 @@ random stream comes from the world seed, so a result is reproducible from its ke
   the paired difference to the baseline's cumulative reward in the same worlds (the baseline is left out): flat at zero until an agent
   starts beating it, then rising. (A reward-rate curve with binning or low-pass smoothing was built and removed: too hard to read, flat and
   wiggly with the world's layout; see DECISIONS.)
+- **Figures are grids of panels, one per session** (2 x 2 for S1-S4): `plots.plot_cumulative_reward(panels, path, names=, order=)` and
+  `plots.plot_learning_curve(...)` take `{session: curves}` (or one curves object) and draw each agent with `seaborn.lineplot` from the per-seed
+  curves (`plots.long_form`): mean and 95% bootstrap interval across seeds, `hue` = agent name, the same colour for the same agent in every
+  panel, one shared legend, at most 8 agents per figure (the palette). The advantage figure uses the **lowest-performing agent of each session**
+  as its baseline (`cumulative_curve(..., baseline="lowest")`, `curve --baseline lowest`). For the battery, `battery.py plot --tag T [--groups g1,g2]
+  [--kinds cumulative,advantage,learning]` saves one figure per (group, kind) as `results/<tag>_<group>_<kind>.png`; the groups (`battery.GROUPS`) each
+  hold at most 8 agents and include `nearest`.
 - `checkpoint_curve(store, sel, metric="interlude_accuracy")`: Interlude score against training time from a checkpointed run, mean and 95%
   t-interval across seeds per agent; `analysis.py learning --tag T --kind interlude [--out path.png]` saves the figure
   (`plots.plot_learning_curve`, default `results/<tag>_learning.png`). Record it with
   `sim.py S1 --seeds 0-99 --agents ... --set session_duration=90 interlude_trial_count=50 --record --interlude --interlude-mode random --n-samples 20 --checkpoints 0,10,20,30,45,60,75,90 --tag T`.
 - `gap_closed(sel, agent, floor, ceiling)`: per-seed fraction of the floor-to-ceiling gap (not the project's chosen metric, which is a
   TODO(PI); say which metric a result uses).
+
+**The assessment battery** (`scripts/battery.py`; "battery" because "test suite" already means pytest). One definition of how agents are compared:
+S1 to S4 at their design durations (90, 120, 120, 150 s, passed as `session_duration` overrides because the assets carry a temporary 15 s), each
+followed by its random Interlude (50 trials, **one pick per trial** so the spread between seeds has the same source as a person's), with a copy of the
+agent scored at 0, 0.1, 0.2, 0.35, 0.5, 0.75 and 1.0 of each session; 10 seeds by default; each agent starts fresh in every session.
+```bash
+./venv/bin/python scripts/battery.py list
+./venv/bin/python scripts/battery.py run --population main --tag <name> [--agents a,b,...] [--seeds 0-9] [--db PATH]   # records <name>/<session> runs
+```
+It is just `record_run` (kind interlude) per agent per session, sessions as the outer loop so each Interlude is generated once per (session, seed)
+and shared by all agents. Populations (`POPULATIONS`, names are labels; identity is the spec hash) live in `battery.py`, not `agents.py`, so editing
+them does not move the agents-code hash. Planners are refused (not checkpointable). **Scores and plots are deliberately not part of it**: they are
+computed from the database afterwards (see `analysis.py`).
 
 **Adding things**
 - *A parameter on a component:* give it a default and include its resolved value in `spec()`. This changes the hash of every agent
@@ -470,12 +490,13 @@ random stream comes from the world seed, so a result is reproducible from its ke
 `.claude/agents/simplifier.md` reviews code for needless complexity: it strips comments from a scratch copy, has a cold reader describe
 what the code does, and treats whatever is hard to follow as a finding. Run on its own, it applies small behavior-preserving fixes itself (verified by
 `recompile` / `run_tests.py`) and proposes anything larger. Invoke it after a feature works and before the person commits, and for an
-occasional module sweep, not during exploration. It does not hunt bugs (the Red-team session does). It must flag edits to hash-sensitive
-Python (`ENGINE_FILES`, `AGENT_FILES`), since even a comment edit changes the results-database code hashes.
+occasional module sweep, not during exploration. It does not hunt bugs (the Red-team session does). It also runs a compactness pass (the five
+largest simplifications) and a readability pass (how easy a newcomer or a naive agent would find the code). It does not weigh the hash
+cost of editing `ENGINE_FILES` / `AGENT_FILES` (even a comment edit moves the code hashes): the caller batches those and says so.
 
 ### Adversarial review (red-team, simplifier, arbiter)
 `/adversarial-review [--since REF] [--no-rebuttal] [--save] [paths]` reviews a diff before the person commits: the **red-team**
-(`.claude/agents/red-team.md`) and the **simplifier** (dry-run) in parallel, an **arbiter** for what stays disputed. The protocol is in
+(`.claude/agents/red-team.md`) and the **simplifier** (dry-run, first, so the red-team sees what it proposes to delete), an **arbiter** for what stays disputed. The protocol is in
 `.claude/skills/adversarial-review/SKILL.md` and the goals, complexity budget, escalation rules and **Known and deferred** list in
 `docs/REVIEW_POLICY.md`. Scientific design, the hash/meaning of stored results, and disagreements about goals go to the person, never to
 the arbiter. Nothing is applied until the person agrees. `scripts/mutation_check.py` (an optional aid the red-team uses only for engine, planner or replay changes; also runnable by hand)

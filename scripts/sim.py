@@ -14,12 +14,14 @@ the bush into the harvest cone), pressing W to start walking, pressing Space to 
 fruits. An action that would consume no time is an error, so a session always advances.
 
 The session clock cuts off mid-turn, mid-press, mid-walk, mid-look or mid-fruit (a fruit not finished when time runs out is not
-collected). Bushes never regrow. Collisions with canopies and terrain slope are ignored. The heading is the direction of the last
-walk (toward the bush at a harvest) and starts at yaw 0 (+Z), as in the game. A bush is harvested only if the agent's memory
+collected). Bushes never regrow. Collisions with canopies and terrain slope are ignored. The heading is the view's yaw (degrees
+about +Y from +Z toward +X; consumers wrap differences, so its range is not fixed): it starts at 0 as in the game, a Look turns it,
+a walk (an Explore, or a Harvest that has to walk) points it along the walk, and a Harvest already in range turns it only as far
+as the turn charged. A bush is harvested only if the agent's memory
 knows it (the engine refuses an id the agent never perceived).
 
 What the agent sees is the environment's job, not the agent's (perception.py): by default a view cone as wide as the session's
-camera, observed every OBS_STEP units of walking and after every look. A run can pass its own `percept=` (a sensitivity sweep over
+camera, observed every OBS_STEP units of walking and after every turn (a Look, or the turn before a walk or harvest). A run can pass its own `percept=` (a sensitivity sweep over
 the sensor) and an agent may carry its own override; NullPercept sees nothing and leaves an agent to what its memory was given.
 
 Per-fruit rewards are pre-drawn in the World (fruit_reward[bush, k]: the k-th fruit taken from that bush),
@@ -75,14 +77,12 @@ class State:
     """Live session state, owned by the engine. Agents read it through agents.View; they never see the world's bush table."""
 
     def __init__(self, world):
-        self.world = world
         self.time_left = world.session_duration
         self.pos = world.start.copy()
         self.heading = 0.0
         self.depleted = np.zeros(world.n, dtype=bool)
         self.fruits_taken = np.zeros(world.n, dtype=np.int64)
         self.total = 0.0
-        self.history = []      # (bush id, [per-fruit rewards]) for each completed visit
 
     def body(self):
         """The part of the state an agent may read: a snapshot (the position is copied)."""
@@ -95,7 +95,7 @@ class State:
 
 def _resolve_percept(agent, world, percept):
     """agent.percept, else the run's `percept`, else the world's default (see perception.py)."""
-    if getattr(agent, "percept", None) is not None:
+    if agent.percept is not None:
         return agent.percept
     return percept if percept is not None else percept_for(world)
 
@@ -153,6 +153,7 @@ def _walk(agent, world, s, res, direction, distance, percept, walkable=None):
     if not _spend(s, res, "look_time", costs.turn_time(costs.wrap(heading - s.heading), costs.TURN_DEADBAND)):
         return False
     s.heading = heading
+    _look(agent, world, s, percept)
     if not _spend(s, res, "press_time", costs.WALK_PRESS_TIME):
         return False
     speed = world.move_speed
@@ -187,7 +188,8 @@ def _walk(agent, world, s, res, direction, distance, percept, walkable=None):
 class _Checkpoints:
     """Snapshots of the agent at chosen session times. What an agent learns changes only at the moments the engine tells it something
     (a reward, the end of a visit), so the snapshot for time t is taken just before the first such update after t: the agent as it
-    was at t (a time with no update after it gets the final state, taken when the session ends)."""
+    was at t (a time with no update after it gets the final state, taken when the session ends). A session that really ended at t in
+    the middle of a visit would still have ended that visit (`end_visit`), so a snapshot taken during one applies it to the copy."""
 
     def __init__(self, times, duration):
         times = sorted({float(t) for t in times})
@@ -196,9 +198,13 @@ class _Checkpoints:
         self.pending = times
         self.taken = {}
 
-    def before_update(self, agent, now):
+    def before_update(self, agent, now, visiting=None):
+        """Snapshot every pending time before `now`. `visiting` is the bush whose visit is under way with fruits already taken."""
         while self.pending and self.pending[0] < now:
-            self.taken[self.pending.pop(0)] = copy.deepcopy(agent)
+            snap = copy.deepcopy(agent)
+            if visiting is not None:
+                snap.end_visit(visiting)
+            self.taken[self.pending.pop(0)] = snap
 
     def finish(self, agent):
         while self.pending:
@@ -215,7 +221,7 @@ def _harvest(agent, world, s, res, j, percept, cp=None):
     F = world.fruit_count
 
     # Turn to face the bush, then (if it is out of range) press W and walk in a straight line to its harvest range.
-    max_angle = float(getattr(world.params, "harvest_max_angle", 35.0))
+    max_angle = costs.max_angle(world.params)
     dist, walk, turn, _, walking, new_heading = costs.approach(s.pos, s.heading, world.pos[j][None],
                                                                world.canopy_radius[j:j + 1], world.reach[j:j + 1], speed, max_angle)
     dist, walk, turn, t_walk, new_heading = (float(v[0]) for v in (dist, walk, turn, walking, new_heading))
@@ -223,6 +229,7 @@ def _harvest(agent, world, s, res, j, percept, cp=None):
     if not _spend(s, res, "look_time", turn):
         return False
     s.heading = new_heading
+    _look(agent, world, s, percept)
     if walk > 0.0 and not _spend(s, res, "press_time", costs.WALK_PRESS_TIME):
         return False
     if t_walk > s.time_left:
@@ -231,18 +238,14 @@ def _harvest(agent, world, s, res, j, percept, cp=None):
         return False
     if walk > 0.0:
         direction = delta / dist
-        if not percept.observes:
-            s.pos = s.pos + direction * walk
-        else:
-            # Look every OBS_STEP units from the walk's start, then end at exactly start + direction * walk, so the final
-            # position (and everything that follows from it) does not depend on how often the sensor is applied.
-            start = s.pos.copy()
-            done = 0.0
-            while done < walk - 1e-12:
-                done = min(done + OBS_STEP, walk)
-                s.pos = start + direction * done
-                _look(agent, world, s, percept)
-            s.pos = start + direction * walk
+        # Look every OBS_STEP units from the walk's start; the last step ends at exactly start + direction * walk, so the final
+        # position (and everything that follows from it) does not depend on how often the sensor is applied.
+        start = s.pos.copy()
+        done = 0.0
+        while done < walk - 1e-12:
+            done = min(done + OBS_STEP, walk)
+            s.pos = start + direction * done
+            _look(agent, world, s, percept)
     s.time_left -= t_walk
     res.walk_time += t_walk
     if not _spend(s, res, "press_time", costs.HARVEST_PRESS_TIME):
@@ -259,7 +262,7 @@ def _harvest(agent, world, s, res, j, percept, cp=None):
         rewards.append(r)
         res.fruits.append((world.session_duration - s.time_left, j, int(s.fruits_taken[j]) - 1, r, s.total))
         if cp is not None:
-            cp.before_update(agent, world.session_duration - s.time_left)
+            cp.before_update(agent, world.session_duration - s.time_left, visiting=j if len(rewards) > 1 else None)
         agent.record_reward(j, r)
         if s.fruits_taken[j] >= F:
             s.depleted[j] = True
@@ -267,16 +270,11 @@ def _harvest(agent, world, s, res, j, percept, cp=None):
             break
         if not agent.keep_harvesting(s.body(), j, r):
             break
-    if s.fruits_taken[j] >= F:
-        s.depleted[j] = True
     if rewards:
-        if cp is not None:
-            cp.before_update(agent, world.session_duration - s.time_left)
         agent.end_visit(j)
     res.n_visits += 1
     res.n_fruits += len(rewards)
     res.trace.append((j, len(rewards), float(sum(rewards))))
-    s.history.append((j, rewards))
     return bool(rewards)           # arrived with less than one fruit's time left: nothing more to do
 
 
@@ -289,7 +287,7 @@ def run_episode(agent, world, agent_rng=None, percept=None, checkpoints=()):
     (`deadline_dependent`) is refused: run sessions of different lengths instead."""
     cp = None
     if len(checkpoints):
-        if getattr(getattr(agent, "actor", None), "deadline_dependent", False):
+        if agent.actor.deadline_dependent:
             raise ValueError("checkpoints are a shortcut for agents that do not plan for the end of the session; "
                              "run sessions of different lengths for this one")
         cp = _Checkpoints(checkpoints, world.session_duration)
@@ -302,7 +300,7 @@ def run_episode(agent, world, agent_rng=None, percept=None, checkpoints=()):
     percept = _resolve_percept(agent, world, percept)
     _look(agent, world, s, percept)
 
-    memory = getattr(agent, "active_memory", None)
+    memory = agent.active_memory
     while s.time_left > 0:
         action = agent.act(s.body())
         if action is None or isinstance(action, Stop):
@@ -312,7 +310,7 @@ def run_episode(agent, world, agent_rng=None, percept=None, checkpoints=()):
             j = int(action.bush)
             if not 0 <= j < world.n:
                 raise ValueError(f"agent chose bush {j}, which does not exist ({world.n} bushes)")
-            if memory is not None and not memory.known[j]:
+            if not memory.known[j]:
                 raise ValueError(f"agent chose bush {j}, which it has never seen or been told about")
             if not _harvest(agent, world, s, res, j, percept, cp):
                 break
@@ -338,7 +336,6 @@ def run_episode(agent, world, agent_rng=None, percept=None, checkpoints=()):
     res.idle_time = max(0.0, s.time_left)
     if cp is not None:
         res.snapshots = cp.finish(agent)
-    agent.end_session(res)
     return res
 
 
@@ -447,19 +444,6 @@ def run_n(agent_factory, session="S1", seeds=range(100), worlds=None, percept=No
         worlds = get_worlds(session, seeds, **overrides)
     results = [run_episode(agent_factory(), w, percept=percept) for w in worlds]
     return Summary(np.array([r.total for r in results], dtype=float), results)
-
-
-def evaluate_n(agent_factory, session="S1", seeds=range(10), n_samples=200, percept=None, interlude_mode=None, **overrides):
-    """For each world seed: run the session with a fresh agent, then evaluate it on that world's Interlude with the critic
-    frozen. Returns (Summary of session totals, list of InterludeScore). Generating the Interludes takes seconds per seed."""
-    worlds = get_worlds(session, seeds, **overrides)
-    results, scores = [], []
-    for seed, w in zip(seeds, worlds):
-        agent = agent_factory()
-        results.append(run_episode(agent, w, percept=percept))
-        sidecar, bonus, practice = get_interlude(session, seed, interlude_mode, **overrides)
-        scores.append(evaluate_interlude(agent, sidecar, bonus, practice, n_samples=n_samples))
-    return Summary(np.array([r.total for r in results], dtype=float), results), scores
 
 
 def compare(factories, session="S1", seeds=range(100), baseline=None, percept=None, **overrides):

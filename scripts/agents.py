@@ -39,6 +39,7 @@ from specs import Component, SpecError, build, spec_hash
 from world import bush_value
 
 REGISTRY = {}   # name -> zero-argument agent factory
+INTERLUDE_TIME_TIE = 0.01   # seconds: travel times to the two bushes of an Interlude trial closer than this are a tie
 
 
 # --------------------------------------------------------------------------------------------------
@@ -458,7 +459,7 @@ class Task:
         self.session_duration = world.session_duration
         self.gap_base = p.harvest_range_gap_base
         self.gap_per_radius = p.harvest_range_gap_per_radius
-        self.max_angle = float(getattr(p, "harvest_max_angle", 35.0))   # the harvest cone's half-angle
+        self.max_angle = costs.max_angle(p)   # the harvest cone's half-angle
         self.n_bushes = len(world.pos)       # capacity of a memory (how many bush ids exist), not where they are
 
     def for_bushes(self, n_bushes):
@@ -479,6 +480,7 @@ class View:
     def __init__(self, body, memory, critic, task, in_interlude=False):
         self.body, self.memory, self.critic, self.task = body, memory, critic, task
         self.in_interlude = in_interlude
+        self._equalized = None       # (candidate ids, tolerance) once equalize_times has been applied
 
     @property
     def time_elapsed(self):
@@ -499,7 +501,19 @@ class View:
                                                        self.task.speed, self.task.max_angle)
         t = turn + press + walking
         t[~self.candidates()] = float("inf")
+        if self._equalized is not None:
+            ids, tolerance = self._equalized
+            if np.isfinite(t[ids]).all() and np.ptp(t[ids]) < tolerance:
+                t[ids] = t[ids].mean()
         return t
+
+    def equalize_times(self, candidates, tolerance):
+        """A copy of this view in which the travel times of `candidates` count as one (their mean) when they differ by less than `tolerance`
+        seconds: an Interlude pair is built to be equal in the terms the harvest rules use, and turning to the centre of a wider canopy
+        still takes a few milliseconds more, which must not decide a choice."""
+        other = copy.copy(self)
+        other._equalized = (np.asarray(candidates, dtype=int), float(tolerance))
+        return other
 
     def values(self):
         """(n,) the critic's expected reward per fruit for every bush in memory (and its uncertainty)."""
@@ -598,6 +612,7 @@ class UtilityActor(Actor):
         return None if j is None else Harvest(j)
 
     def choose_between(self, view, candidates, rng):
+        view = view.equalize_times(candidates, INTERLUDE_TIME_TIE)
         u = np.asarray(self.utility(view), dtype=float)[np.asarray(candidates)]
         return self.choice.pick(u, rng, random_ties=True)
 
@@ -853,7 +868,6 @@ class ComposedAgent:
                 component.grant(knowledge)
 
     def begin_session(self, world, rng):
-        self.rng = rng
         self.interlude_memory = None
         self.task = Task(world)
         self._start(self.memory, self.task, WorldKnowledge.from_world(world))
@@ -897,9 +911,6 @@ class ComposedAgent:
     def choose_between(self, body, candidates, rng):
         """Index into `candidates` (bush ids in the active memory) of the bush the actor prefers."""
         return self.actor.choose_between(self.view(body), candidates, rng)
-
-    def end_session(self, result):
-        pass
 
 
 def build_agent(spec, extra=None):

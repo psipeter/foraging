@@ -12,6 +12,7 @@ SeedSequence (the order below is part of the format; add new streams at the end)
     3 tree attributes (shape, color)
     4 per-fruit reward noise                5 mountain ridge noise
     6 mountain rock-edge noise              7 mountain snow-edge noise
+    8 bush id order (a shuffle of the finished bush table: an id says nothing about where a bush is)
 
 This module mirrors TreeGenerator.GenerateSites, TerrainManager (moisture field, mountain ramp,
 tree-site mask), Tree.ApplyAttributes (canopy radius) and RewardFunction/HarvestManager (bush value,
@@ -520,7 +521,7 @@ def _lattice_sites(params, terrain, rng):
 
 def generate_world(params, seed):
     """Build the world for (params, seed). `params` is a namespace from load_session()."""
-    rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(8)]
+    rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(9)]
     terrain = Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]))
 
     pos = _lattice_sites(params, terrain, rngs[2])
@@ -543,8 +544,11 @@ def generate_world(params, seed):
     noise = rngs[4].standard_normal((n, fruit_count)) * float(params.reward_std)
     fruit_reward = np.maximum(0, np.rint(value[:, None] + noise)).astype(np.int32)
 
-    return World(params=params, seed=int(seed), pos=pos, shape=shape, color=color, moisture=moisture,
-                 canopy_radius=canopy_radius, value=value, fruit_reward=fruit_reward,
+    # The lattice enumerates sites in space order, so ids would be spatially ordered: shuffle them (every per-bush array together),
+    # so that an agent, or a future component using ids as numbers, learns nothing about unseen bushes from an id.
+    order = rngs[8].permutation(n)
+    return World(params=params, seed=int(seed), pos=pos[order], shape=shape[order], color=color[order], moisture=moisture[order],
+                 canopy_radius=canopy_radius[order], value=value[order], fruit_reward=fruit_reward[order],
                  start=np.zeros(2))
 
 

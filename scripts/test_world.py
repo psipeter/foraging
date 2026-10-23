@@ -25,6 +25,14 @@ def test_lattice_rules():
         assert 0.9 < w.n * 0.866 * p.tree_spacing ** 2 / valley < 1.5
 
 
+def test_bush_ids_are_not_spatially_ordered():
+    w = make_world("S1", 0)
+    consecutive = np.hypot(*(w.pos[1:] - w.pos[:-1]).T).mean()
+    random_pairs = np.hypot(*(w.pos - w.pos[np.random.default_rng(0).permutation(w.n)]).T).mean()
+    assert consecutive > 0.8 * random_pairs
+    assert abs(np.corrcoef(np.arange(w.n), w.pos[:, 0])[0, 1]) < 0.2
+
+
 def test_overrides_change_density():
     assert make_world("S1", 1, tree_spacing=40).n < make_world("S1", 1).n * 0.5
 

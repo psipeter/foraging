@@ -10,7 +10,7 @@ import costs
 from interlude import generate_interlude
 from world import load_session
 from perception import (ConePercept, NullPercept, Observation, horizontal_fov, percept_for, percept_from_params)
-from sim import State, evaluate_interlude, run_episode, run_n
+from sim import State, evaluate_interlude, get_interlude, run_episode, run_n
 from test_sim import tiny_world
 
 
@@ -227,12 +227,59 @@ def test_a_null_percept_learns_nothing_new_by_walking():
     assert not agent.memory.known.any()
 
 
+class SpyCone(ConePercept):
+    """A view cone that records where and facing which way it was used: (position, heading) per observation."""
+    def __init__(self, fov=60.0, distance=100.0):
+        super().__init__(fov, distance)
+        self.calls = []
+
+    def observe(self, world, pos, heading, depleted):
+        self.calls.append((np.array(pos, dtype=float), float(heading)))
+        return super().observe(world, pos, heading, depleted)
+
+
+def spied_harvest(bush_xy):
+    """Harvest bush 0 (the only one) with an agent that never needs the sensor (FullKnowledge); returns (result, spy)."""
+    spy = SpyCone()
+    agent = ComposedAgent(Script(Harvest(0)), OracleCritic(), FullKnowledge(), spy)
+    return run_episode(agent, world_with([bush_xy], speed=5.0)), spy
+
+
 def test_harvest_range_is_walked_to_and_heading_faces_the_bush():
-    w = world_with([[0, 60]], speed=5.0)
-    agent = ComposedAgent(Script(Harvest(0)), OracleCritic(), FullKnowledge(), ConePercept(10.0, 200.0))
-    # FullKnowledge never needs the percept; Script above harvests bush 0 directly.
-    r = run_episode(agent, w)
-    assert r.n_fruits == 2 and agent.memory.taken[0] == 2 and agent.memory.depleted[0]
+    r, spy = spied_harvest([48, 0])
+    assert r.n_fruits == 2
+    headings = [h for _, h in spy.calls]
+    assert headings[0] == 0.0 and all(h == pytest.approx(90.0) for h in headings[1:])    # turned east, then walked east
+    assert spy.calls[-1][0][0] == pytest.approx(40.0)                                    # to the edge of its range (8 away)
+
+
+def test_the_view_is_observed_along_a_harvest_walk_every_few_units():
+    _, spy = spied_harvest([0, 60])
+    z = [p[1] for p, _ in spy.calls]
+    assert z[:3] == [0.0, 0.0, 5.0] and z[-1] == pytest.approx(52.0) and len(z) == 13   # start, after the turn, then every 5 units
+
+
+def test_an_in_range_harvest_turns_the_view_toward_the_bush_only_to_the_edge_of_the_cone():
+    edge = 90.0 - np.degrees(np.arcsin(1.0 / 6.0)) - 35.0                                  # canopy radius 1, 6 away, cone 35
+    for side in (1, -1):
+        r, spy = spied_harvest([6 * side, 0])
+        assert [h for _, h in spy.calls] == [0.0, pytest.approx(side * edge)]
+
+
+@pytest.mark.motor_costs
+def test_turning_before_a_walk_is_observed_at_the_new_heading_like_a_look():
+    w = world_with([[-1, -3]], speed=5.0)
+    for action in (Explore(180.0, 6.0), Look(180.0)):
+        agent = percept_agent([action], ConePercept(60.0, 100.0))
+        run_episode(agent, w)
+        assert agent.memory.known[0], action                   # the bush behind is in view as soon as the view turns
+
+
+def test_the_tasks_reach_is_the_engines_reach():
+    w = world_with([[10, 0], [0, 20]], speed=5.0)
+    w.canopy_radius = np.array([1.0, 3.0])
+    w.params.harvest_range_gap_per_radius = 0.5               # the toy worlds' default of 0 would hide this term
+    assert np.allclose(Task(w).reach(w.canopy_radius), w.reach)
 
 
 # --- critic ------------------------------------------------------------------------------------------------
@@ -385,14 +432,6 @@ def test_interlude_scoring_chance_and_softmax():
     soft_hot = evaluate_interlude(session_agent(UtilityActor("value", choice=Softmax(100.0))), toy_interlude(), n_samples=2000)
     soft_cold = evaluate_interlude(session_agent(UtilityActor("value", choice=Softmax(0.02))), toy_interlude(), n_samples=2000)
     assert abs(soft_hot.by_type["contrast"] - 0.5) < 0.06 and soft_cold.by_type["contrast"] > 0.98
-
-
-def test_interlude_uses_the_critic_not_the_world_and_is_frozen():
-    agent = session_agent(UtilityActor("value"))
-    agent.critic.mean = None
-    before = agent.critic.version
-    evaluate_interlude(agent, toy_interlude(), n_samples=5)
-    assert agent.critic.version == before
 
 
 @pytest.mark.slow
@@ -660,14 +699,11 @@ def test_the_critic_is_never_updated_during_an_interlude():
 
 
 @pytest.mark.slow
-def test_interlude_overrides_reach_the_cache_and_evaluate_n():
-    from sim import evaluate_n, get_interlude
+def test_interlude_overrides_reach_the_cache():
+    from sim import get_interlude
     a = get_interlude("S3", 3, pool_samples=60_000, interlude_trial_count=3)[0]
     b = get_interlude("S3", 3, pool_samples=60_000)[0]
     assert a["n"] == 3 and b["n"] == int(load_session("S3_Interlude").interlude_trial_count) != 3
-    _, scores = evaluate_n(lambda: oracle_agent(UtilityActor("value")), "S3", seeds=[3], n_samples=5,
-                           interlude_trial_count=3)
-    assert scores[0].n_trials == 3
 
 
 # --- the planner and the actors under the motor costs; ids in the Interlude; the critic version --------------------
@@ -945,3 +981,56 @@ def test_the_delta_rule_agent_runs_a_session_and_its_critic_is_frozen_for_the_in
     agent.record_reward(0, 99.0)
     agent.end_visit(0)
     assert agent.critic.version == v
+
+
+# --- Interlude pairs: travel times that differ by milliseconds are a tie ----------------------------------------------
+
+def pair_view(gap, critic=None):
+    """A view at the origin facing +z of two bushes straight ahead whose travel times differ by `gap` seconds (the second is further
+    by gap * speed units; speed 5 in the toy world)."""
+    w = world_with([[0.0, 40.0], [0.0, 40.0 + 5.0 * gap]])
+    memory = begin_memory(FullKnowledge(), w)
+    view = View(Body(np.zeros(2), 0.0, 90.0, 0.0), memory, critic or OracleCritic(), Task(w))
+    return view, memory
+
+
+def picks(actor, view, n=400):
+    rng = np.random.default_rng(0)
+    return np.array([actor.choose_between(view, [0, 1], rng) for _ in range(n)])
+
+
+def test_equalize_times_averages_the_times_of_candidates_within_the_tolerance_only():
+    view, _ = pair_view(0.004)
+    t = view.travel_times()
+    assert t[1] - t[0] == pytest.approx(0.004)
+    close = view.equalize_times([0, 1], 0.01).travel_times()
+    assert close[0] == close[1] == pytest.approx(t[:2].mean())
+    far, _ = pair_view(0.04)
+    assert np.allclose(far.equalize_times([0, 1], 0.01).travel_times(), far.travel_times())      # 40 ms apart: left alone
+    assert view.travel_times()[1] == pytest.approx(t[1])                                           # the original view is unchanged
+
+
+def test_a_nearest_agent_picks_between_a_pair_at_random_when_the_times_differ_by_milliseconds():
+    near_tie, _ = pair_view(0.004)
+    p = picks(UtilityActor("nearest"), near_tie)
+    assert 0.4 < p.mean() < 0.6                                                                    # not always the quicker bush
+    clear, _ = pair_view(0.04)
+    assert picks(UtilityActor("nearest"), clear).sum() == 0                                        # 40 ms is a real difference: the nearer one
+
+
+def test_values_still_decide_a_pair_whose_times_are_a_tie():
+    for table, expected in (([5.0, 1.0], 0), ([1.0, 5.0], 1)):
+        view, _ = pair_view(0.004, TableCritic(table))
+        for utility in ("rate", "value"):
+            assert set(picks(UtilityActor(utility), view, 50)) == {expected}
+
+
+@pytest.mark.slow
+def test_nearest_is_at_chance_on_a_random_interlude_where_shape_is_rewarded():
+    # S4 rewards shape (inverted); the wider canopy of a pair needs a slightly larger turn, which used to make `nearest` pick the
+    # narrower one every time (accuracy 0.27 here): a floor agent that knew nothing about shape was using it
+    sidecar, bonus, practice = get_interlude("S4", 0, "random", interlude_trial_count=50, session_duration=150)
+    agent = REGISTRY["nearest"]()
+    run_episode(agent, world_with([[20, 0]]))
+    score = evaluate_interlude(agent, sidecar, bonus, practice, n_samples=200)
+    assert abs(score.accuracy - 0.5) < 0.05

@@ -78,6 +78,11 @@ DEPENDENCIES = {
                   "scripts/perception.py", "scripts/sim.py", "scripts/world.py", "scripts/costs.py", "scripts/conftest.py"},
         "match": [_is_session_asset],
     },
+    "scripts/test_battery.py": {
+        "paths": {"scripts/battery.py", "scripts/analysis.py", "scripts/results.py", "scripts/fingerprint.py", "scripts/specs.py",
+                  "scripts/agents.py", "scripts/sim.py", "scripts/world.py", "scripts/interlude.py", "scripts/conftest.py"},
+        "match": [_is_session_asset, _is_interlude_asset],
+    },
     "scripts/test_replay.py": {
         "paths": {"scripts/replay.py", "scripts/world.py"},
         "match": [_is_session_asset],

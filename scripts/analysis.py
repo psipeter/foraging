@@ -390,6 +390,7 @@ class CumulativeCurves:
     sel: Selection = None
     quantity: str = "cumulative"  # "cumulative" (reward so far) or "advantage" (cumulative reward over a baseline's)
     baseline: str = None          # the baseline's label (quantity "advantage")
+    baseline_id: str = None       # and its agent id
 
 
 def _fruit_series(store, sel):
@@ -417,11 +418,18 @@ def _interval(m, confidence):
     return mean, np.full_like(mean, np.nan)
 
 
+def lowest_performing(sel, metric="total"):
+    """The id of the agent of the selection with the lowest mean `metric` (the first by id on a tie): the baseline that needs no choosing."""
+    means = {aid: np.mean(list(sel.values(aid, metric).values())) for aid in sel.agents}
+    return min(means, key=lambda aid: (means[aid], aid))
+
+
 def cumulative_curve(store, sel, step=1.0, confidence=0.95, baseline=None):
     """Reward collected so far against session time, one curve per agent: the mean over its seeds and a `confidence` t-interval. The
     curve ends at the episode's total reward (the value at time T is the total). With a `baseline` (an agent of the selection) each
     curve is instead the paired difference to the baseline's cumulative reward in the same world ("advantage": how far ahead of it
-    the agent is by each time), the baseline itself is left out, and the interval is of the paired difference."""
+    the agent is by each time), the baseline itself is left out, and the interval is of the paired difference. `baseline="lowest"` takes the
+    lowest-performing agent of the selection (by mean total reward) as the baseline."""
     duration = session_seconds(sel)
     grid = np.linspace(0.0, duration, int(round(duration / step)) + 1)
     series = _fruit_series(store, sel)
@@ -431,7 +439,7 @@ def cumulative_curve(store, sel, step=1.0, confidence=0.95, baseline=None):
         return np.concatenate([[0.0], np.cumsum(reward)])[np.searchsorted(np.asarray(t, dtype=float), grid, side="right")]
 
     labels = dict(zip(sel.agents, specs.labels(list(sel.agents.values()))))
-    base = resolve_agent_in(sel, baseline) if baseline is not None else None
+    base = (lowest_performing(sel) if baseline == "lowest" else resolve_agent_in(sel, baseline)) if baseline is not None else None
     out = {}
     for aid, slot in sel.rows.items():
         if aid == base:
@@ -442,7 +450,7 @@ def cumulative_curve(store, sel, step=1.0, confidence=0.95, baseline=None):
         out[aid] = {"label": labels[aid], "n": len(m), "mean": mean, "lo": mean - half, "hi": mean + half, "per_seed": m, "seeds": seeds}
     if not out:
         raise SelectionError("nothing to plot: the baseline is the only agent in the selection")
-    return CumulativeCurves(grid, duration, confidence, out, sel, "advantage" if base else "cumulative", labels[base] if base else None)
+    return CumulativeCurves(grid, duration, confidence, out, sel, "advantage" if base else "cumulative", labels[base] if base else None, base)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -525,7 +533,7 @@ def main(argv=None):
     p.add_argument("--baseline", default=None, help="agent id or registry name for paired differences")
     p = sub.add_parser("curve", help="cumulative reward against time in the session, one curve per agent (saves a figure)")
     _common_filters(p)
-    p.add_argument("--baseline", default=None, help="agent id or registry name: plot each agent's paired lead over it instead")
+    p.add_argument("--baseline", default=None, help="agent id or registry name, or 'lowest' (the lowest-performing agent): plot each agent's paired lead over it instead")
     p.add_argument("--out", default=None, help="figure path (default results/<tag>_cumulative.png, or _advantage.png with --baseline)")
     p = sub.add_parser("learning", help="Interlude score against training time (a run recorded with --checkpoints); saves a figure")
     _common_filters(p)
