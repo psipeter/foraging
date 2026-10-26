@@ -103,9 +103,9 @@ MonoBehaviour:
   harvestRangeGapBase: 7
   harvestRangeGapPerRadius: 0
   fruitColorPreservation: 0.5
-  terrainNoiseFrequency: 0.6
+  terrainNoiseFrequency: 2
   terrainNoiseOctaves: 1
-  terrainMaxElevation: 20
+  terrainMaxElevation: 12
   moistureTerraceLevels: 4
   moistureTerraceSharpness: 0.3
   moistureTerraceResidual: 0.1

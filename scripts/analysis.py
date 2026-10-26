@@ -9,8 +9,8 @@ component. Everything here only reads; open the file with `results.Store(path, r
 A `Selection` is guaranteed to be comparable: exactly one environment, and for each agent one episode per seed (one code version
 each). By default only results from the current engine code are used (`engine="current"`); pass an engine hash or "any" to look
 at older ones, and the selection says so in `notes`. The metric is chosen at query time (a column, "interlude:<trial type>", or a
-function of the episode row); the performance metric the project will use is still a TODO(PI), so none is built in beyond
-`gap_closed` (the fraction of the floor-to-ceiling gap an agent closes).
+function of the episode row). There is deliberately no normalised score: the paired lead over a baseline (`paired`, `table`) is the
+quantity to optimise, in reward points; scores per session are in battery.py (`scores`).
 
 CLI:  ./venv/bin/python scripts/analysis.py {runs,table,effect,curve,learning} ...   (see --help)
 """
@@ -195,23 +195,6 @@ def paired(sel, agent_id, baseline_id, metric="total"):
     common = sorted(set(a) & set(b))
     d = np.array([a[s] - b[s] for s in common])
     return len(common), (float(d.mean()) if len(d) else float("nan")), _se(d)
-
-
-def gap_closed(sel, agent, floor, ceiling, metric="total"):
-    """The fraction of the floor-to-ceiling gap `agent` closes, per seed: (agent - floor) / (ceiling - floor), averaged over the seeds
-    all three have (seeds where the gap is under 1e-9 are dropped). Returns (n, mean, standard error, n dropped). Agents are
-    given as ids, registry names or specs. Not the project's chosen metric (a TODO(PI)); a query-time convenience."""
-    ids = [resolve_agent_in(sel, x) for x in (agent, floor, ceiling)]
-    v = [sel.values(i, metric) for i in ids]
-    common = sorted(set(v[0]) & set(v[1]) & set(v[2]))
-    fractions, dropped = [], 0
-    for s in common:
-        gap = v[2][s] - v[1][s]
-        if abs(gap) < 1e-9:
-            dropped += 1
-        else:
-            fractions.append((v[0][s] - v[1][s]) / gap)
-    return len(fractions), (float(np.mean(fractions)) if fractions else float("nan")), _se(fractions), dropped
 
 
 def resolve_agent_in(sel, agent):
@@ -534,10 +517,10 @@ def main(argv=None):
     p = sub.add_parser("curve", help="cumulative reward against time in the session, one curve per agent (saves a figure)")
     _common_filters(p)
     p.add_argument("--baseline", default=None, help="agent id or registry name, or 'lowest' (the lowest-performing agent): plot each agent's paired lead over it instead")
-    p.add_argument("--out", default=None, help="figure path (default results/<tag>_cumulative.png, or _advantage.png with --baseline)")
+    p.add_argument("--out", default=None, help="figure path (default results/<tag>_reward.png, or _advantage.png with --baseline)")
     p = sub.add_parser("learning", help="Interlude score against training time (a run recorded with --checkpoints); saves a figure")
     _common_filters(p)
-    p.add_argument("--out", default=None, help="figure path (default results/<tag>_learning.png)")
+    p.add_argument("--out", default=None, help="figure path (default results/<tag>_interlude.png)")
     p = sub.add_parser("effect", help="the effect of one component, holding the rest fixed")
     _common_filters(p)
     p.add_argument("--factor", required=True, help="path into the agent spec, e.g. critic.alpha or critic.features")
@@ -555,13 +538,13 @@ def main(argv=None):
         if args.command == "learning":
             import plots
             curves = checkpoint_curve(store, sel, "interlude_accuracy" if args.metric == "total" else args.metric)
-            out = args.out or DEFAULT_PATH.parent / f"{'+'.join(args.tag or ['all'])}_learning.png"
+            out = args.out or DEFAULT_PATH.parent / f"{'+'.join(args.tag or ['all'])}_interlude.png"
             print(plots.plot_learning_curve(curves, out))
             print(describe(sel, curves.metric))
         elif args.command == "curve":
             import plots
             curves = cumulative_curve(store, sel, baseline=args.baseline)
-            name = "advantage" if args.baseline else "cumulative"
+            name = "advantage" if args.baseline else "reward"
             what = "advantage in cumulative reward" if args.baseline else "cumulative reward"
             out = args.out or DEFAULT_PATH.parent / f"{'+'.join(args.tag or ['all'])}_{name}.png"
             print(plots.plot_cumulative_reward(curves, out))

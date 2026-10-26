@@ -5,7 +5,7 @@ import pytest
 
 from agents import (Actor, Argmax, Body, ComposedAgent, Critic, Explore, FullKnowledge, FullMemory, Harvest, Look, OracleCritic,
                     PlannerActor, Softmax, Stop, Task, UtilityActor, View, WorldKnowledge, oracle_agent, utility_rate,
-                    REGISTRY, DeltaRuleCritic, NeutralPrior, Prior, RBFFeatures)
+                    REGISTRY, ConstantPrior, DeltaRuleCritic, NeutralPrior, Prior, RBFFeatures)
 import costs
 from interlude import generate_interlude
 from world import load_session
@@ -165,7 +165,7 @@ def test_oracle_agents_are_unaffected_by_the_sensor():
     rng = np.random.default_rng(3)
     w = world_with(rng.uniform(-80, 80, (12, 2)), rewards=rng.integers(0, 6, (12, 4)).tolist(), duration=40.0)
     w.value = np.array([np.mean(r) for r in w.fruit_reward])
-    for make in (NearestAgent, lambda: GreedyAgent(15, "rate")):
+    for make in (lambda: NearestAgent(whole_map=True), lambda: GreedyAgent(15, "rate", whole_map=True)):
         runs = [run_episode(make(), w, percept=p) for p in (None, NullPercept(), ConePercept(20.0, 30.0), ConePercept(360.0, 1e4))]
         assert all(r.trace == runs[0].trace and r.total == runs[0].total for r in runs)
 
@@ -914,11 +914,19 @@ def fitted(critic, memory):
     return critic
 
 
-def test_the_first_bush_teaches_the_baseline_and_nothing_else():
+def test_with_the_running_mean_prior_the_first_bush_teaches_the_baseline_and_nothing_else():
     m = learner_memory([[0.2, 0.2, 0.2], [0.8, 0.8, 0.8]], [[5, 5, 5], []])
-    critic = fitted(DeltaRuleCritic(), m)
+    critic = fitted(DeltaRuleCritic(prior=NeutralPrior()), m)
     mean, sd = critic.value(m.attrs)
     assert np.allclose(mean, 5.0) and np.all(sd == 0.0)
+
+
+def test_the_default_prior_is_a_small_fixed_baseline_so_the_first_bush_teaches_its_neighbourhood_and_unseen_regions_stay_low():
+    m = learner_memory([[0.2, 0.2, 0.2], [0.95, 0.95, 0.95]], [[5, 5, 5], []])
+    critic = fitted(DeltaRuleCritic(), m)
+    assert critic.spec()["prior"] == {"type": "ConstantPrior", "level": 0.1}
+    near, far = critic.value(m.attrs)[0]
+    assert near > 1.0 and 0.1 <= far < near                                               # learned about the harvested bush; the unseen one stays lower
 
 
 def test_the_delta_rule_generalizes_to_unseen_bushes_in_order_and_falls_back_toward_the_baseline_far_away():
@@ -1034,3 +1042,29 @@ def test_nearest_is_at_chance_on_a_random_interlude_where_shape_is_rewarded():
     run_episode(agent, world_with([[20, 0]]))
     score = evaluate_interlude(agent, sidecar, bonus, practice, n_samples=200)
     assert abs(score.accuracy - 0.5) < 0.05
+
+
+def test_the_gain_scales_the_learned_deviation_at_read_out_and_leaves_learning_alone():
+    rows = [[0.1, 0.5, 0.5], [0.9, 0.5, 0.5], [0.5, 0.5, 0.5]]
+    plain, gained = DeltaRuleCritic(alpha=0.5), DeltaRuleCritic(alpha=0.5, gain=4.0)
+    memory = learner_memory(rows, [[1.0] * 4, [9.0] * 4, []])
+    fitted(plain, memory)
+    fitted(gained, memory)
+    assert np.allclose(plain.w, gained.w)                                     # the same learning
+    v1, v4 = plain.value(np.array(rows))[0], gained.value(np.array(rows))[0]
+    base = plain._baseline
+    assert np.allclose(v4 - base, 4.0 * (v1 - base)) and np.all(np.argsort(v1) == np.argsort(v4))      # the same ranking, spread four times wider
+    assert gained.spec()["gain"] == 4 and plain.spec()["gain"] == 1
+    assert ComposedAgent(UtilityActor(), DeltaRuleCritic(gain=2.0), FullMemory()).spec_hash() != ComposedAgent(UtilityActor(), DeltaRuleCritic(), FullMemory()).spec_hash()
+
+
+def test_a_constant_prior_never_moves_and_the_weights_then_carry_the_whole_level():
+    rows = [[0.1, 0.5, 0.5], [0.9, 0.5, 0.5]]
+    memory = learner_memory(rows, [[4.0] * 4, [6.0] * 4])
+    assert ConstantPrior(0.1).value(memory) == 0.1 and ConstantPrior(0.1).value(learner_memory(rows, [[], []])) == 0.1
+    assert NeutralPrior().value(memory) == pytest.approx(5.0)                       # the default follows the mean of the bush means
+    critic = fitted(DeltaRuleCritic(prior=ConstantPrior(0.1), alpha=1.0), memory)
+    assert critic._baseline == 0.1
+    mean = critic.value(np.array(rows))[0]
+    assert mean.min() > 3.0                                                       # the weights learned the level (the bushes paid 4 and 6), not only a deviation
+    assert DeltaRuleCritic(prior=ConstantPrior(0.1)).spec()["prior"] == {"type": "ConstantPrior", "level": 0.1}

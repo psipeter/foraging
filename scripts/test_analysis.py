@@ -118,18 +118,6 @@ def test_metrics_can_be_a_column_a_trial_type_or_a_function(store):
     assert sel.values(a, lambda row: row["total"] * 10) == {0: 10.0, 1: 20.0}
 
 
-def test_gap_closed_is_the_per_seed_fraction_between_floor_and_ceiling(store):
-    add(store, REGISTRY["nearest"](), [10, 10, 10, 10])
-    add(store, REGISTRY["greedy_rate_10"](), [30, 20, 10, 50])                       # seed 2: no gap, dropped
-    add(store, delta(), [20, 15, 99, 30])
-    sel = analysis.select(store)
-    n, mean, se, dropped = analysis.gap_closed(sel, delta(), "nearest", "greedy_rate_10")
-    fractions = [(20 - 10) / 20, (15 - 10) / 10, (30 - 10) / 40]
-    assert n == 3 and dropped == 1 and mean == pytest.approx(np.mean(fractions)) and se == pytest.approx(np.std(fractions, ddof=1) / np.sqrt(3))
-    with pytest.raises(KeyError):
-        analysis.gap_closed(sel, "greedy_rate_5", "nearest", "greedy_rate_10")
-
-
 # --- component effect ----------------------------------------------------------------------------------------------
 
 def test_component_effect_compares_agents_that_differ_only_in_the_factor(store):
@@ -359,8 +347,8 @@ def test_figures_are_a_two_by_two_grid_of_sessions_with_one_line_per_agent_and_s
         names = {aid: f"agent-{i}" for i, aid in enumerate(sel.agents)}
         panels = {f"S{i}": curves for i in range(1, 5)}
         fig = plots.figure_cumulative(panels, names=names, order=["agent-1", "agent-0"])
-        axes = [a for a in fig.axes if a.get_visible() and a.get_title(loc="left")]
-        assert [a.get_title(loc="left") for a in axes] == ["S1", "S2", "S3", "S4"] and fig.axes[0].get_gridspec().get_geometry() == (2, 2)
+        axes = [a for a in fig.axes if a.get_visible() and a.get_title()]
+        assert [a.get_title() for a in axes] == ["S1", "S2", "S3", "S4"] and fig.axes[0].get_gridspec().get_geometry() == (2, 2)
         assert all(len(a.get_lines()) == len(curves.agents) for a in axes)                     # a line per agent (the interval is a band)
         colours = {tuple(line.get_color() for line in a.get_lines()) for a in axes}
         assert len(colours) == 1                                                               # the same colour for the same agent everywhere

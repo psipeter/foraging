@@ -188,7 +188,7 @@ docs/        SCIENCE.md, DECISIONS.md, REVIEW_POLICY.md (what code review optimi
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
              interlude.py (Interlude stimulus design + bush placement on the session's terrain), world.py (reads SessionConfig .asset YAML; generates worlds from one seed — mirrors the
              C# placement/attribute/reward rules; exports .npz), sim.py (fast session engine: actions, cone percept, Interlude
-             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent), costs.py (turning and key-press time costs and the `approach` arithmetic shared by the engine and the actors; provisional values fitted to debug logs), conftest.py (tests run with motor costs off unless marked `motor_costs`), agents.py (agent components memory / critic / actor, ComposedAgent, registry), battery.py (the assessment battery: every session S1-S4 plus its Interlude with checkpoints, populations of agents, a serial runner and command line), plots.py (matplotlib/seaborn figures for the results database, PNG into `results/`: a 2 x 2 grid of sessions, `sns.lineplot` per agent), analysis.py (queries over the results database: `select`, `table`, `paired`, `gap_closed`, `component_effect`, `cumulative_curve`, `checkpoint_curve`, command line), results.py (the results database: schema, `Store`, `record_run`, `lookup`, `delete_run`), fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag), specs.py (agent specs: `Component` base that records constructor arguments, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), mutation_check.py (mutation testing of the changed lines in a scratch copy; see "Adversarial review"), test_*.py (pytest; run them with `scripts/run_tests.py`, which
+             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent: `ConePercept` is the default, `OccludedConePercept` adds terrain and bush occlusion and holds the geometry `visibility.py` shares), costs.py (turning and key-press time costs and the `approach` arithmetic shared by the engine and the actors; provisional values fitted to debug logs), conftest.py (tests run with motor costs off unless marked `motor_costs`), agents.py (agent components memory / critic / actor, ComposedAgent, registry), battery.py (the assessment battery: every session S1-S4 plus its Interlude with checkpoints, populations of agents, a serial runner and command line), plots.py (matplotlib/seaborn figures for the results database, PNG into `results/`: a 2 x 2 grid of sessions, `sns.lineplot` per agent; colour-blind-safe `glasbey` colours plus a matplotlib linestyle per agent, warns above 5 agents), analysis.py (queries over the results database: `select`, `table`, `paired`, `component_effect`, `cumulative_curve`, `checkpoint_curve`, command line), results.py (the results database: schema, `Store`, `record_run`, `lookup`, `delete_run`), fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag), specs.py (agent specs: `Component` base that records constructor arguments, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), mutation_check.py (mutation testing of the changed lines in a scratch copy; see "Adversarial review"), test_*.py (pytest; run them with `scripts/run_tests.py`, which
              runs only the test files the changed files can affect, or `--all` before committing; `--fast` skips `slow`-marked tests)
 ```
 
@@ -430,16 +430,19 @@ random stream comes from the world seed, so a result is reproducible from its ke
 - **Figures are grids of panels, one per session** (2 x 2 for S1-S4): `plots.plot_cumulative_reward(panels, path, names=, order=)` and
   `plots.plot_learning_curve(...)` take `{session: curves}` (or one curves object) and draw each agent with `seaborn.lineplot` from the per-seed
   curves (`plots.long_form`): mean and 95% bootstrap interval across seeds, `hue` = agent name, the same colour for the same agent in every
-  panel, one shared legend, at most 8 agents per figure (the palette). The advantage figure uses the **lowest-performing agent of each session**
-  as its baseline (`cumulative_curve(..., baseline="lowest")`, `curve --baseline lowest`). For the battery, `battery.py plot --tag T [--groups g1,g2]
-  [--kinds cumulative,advantage,learning]` saves one figure per (group, kind) as `results/<tag>_<group>_<kind>.png`; the groups (`battery.GROUPS`) each
-  hold at most 8 agents and include `nearest`.
-- `checkpoint_curve(store, sel, metric="interlude_accuracy")`: Interlude score against training time from a checkpointed run, mean and 95%
-  t-interval across seeds per agent; `analysis.py learning --tag T --kind interlude [--out path.png]` saves the figure
-  (`plots.plot_learning_curve`, default `results/<tag>_learning.png`). Record it with
-  `sim.py S1 --seeds 0-99 --agents ... --set session_duration=90 interlude_trial_count=50 --record --interlude --interlude-mode random --n-samples 20 --checkpoints 0,10,20,30,45,60,75,90 --tag T`.
-- `gap_closed(sel, agent, floor, ceiling)`: per-seed fraction of the floor-to-ceiling gap (not the project's chosen metric, which is a
-  TODO(PI); say which metric a result uses).
+  panel, one shared legend, one linestyle per agent as well as one colour (`plots.SERIES`, `plots.STYLES`), at most 8 agents per figure (the palette) and a warning above 5 (`plots.MAX_DISTINCT`). The advantage figure uses the **lowest-performing agent of each session**
+  as its baseline (`cumulative_curve(..., baseline="lowest")`, `curve --baseline lowest`). For the battery, `battery.py plot --tag T --population P [--kinds reward,advantage,interlude]` saves one figure per kind as
+  `results/<tag>_<population>_<kind>.png`; each population (all including `nearest`; more than 5 agents warns) is one figure group, except that the `scan-*` figures leave out `nearest` and `oracle` (`battery.FIGURE_OMITS`; they stay in the population for `scores`), so their advantage baseline is the lowest learner.
+- **Figure size and font conventions** (`plots.MODES`, from the evidence_integration project's `utils/plot_style.py` / `make_figures.py`): `mode="paper"`
+  (default; `battery.py plot --mode`) is 6.5 in wide (a letter-page `\textwidth`) with 9 pt text (axis titles 10, ticks and legend 8, axes 0.8 pt,
+  lines 2.5 pt, 300 dpi); `mode="presentation"` is 10.6 in wide with 15 pt text (labels 17, titles 18, ticks 13, legend 14, axes 1.2 pt, 200 dpi). Height is
+  `rows * panel_height + extra_height` (foraging's own values), and the title, subtitle, legend and footer are placed from the font sizes (`plots._margins`).
+  Seaborn's `ticks` theme, no gridlines, shared x axes across panels (shared y too in the Interlude figure; the reward and advantage panels have their own, since sessions differ in maximum reward). Battery figures are saved as `<tag>_<population>_{reward,advantage,interlude}.png`. Unlike evidence_integration, figures are PNG, not SVG.
+- **Figure colour conventions** (`plots.SERIES`, `plots.STYLES`, `plots.MAX_DISTINCT`; rationale and the recipe that generated the palette in
+  `docs/DECISIONS.md`, "Figure colours"): at most **5 agents per figure** (a warning above that; the palette holds 8 as a hard limit), each agent keeps one colour **and**
+  one linestyle in every panel and figure; a new plot type must take its colours from `plots.SERIES` in order (lines also `STYLES`; scatter
+  adds a marker per agent) and never hard-code colours. Colour is never the only channel for line or scatter plots. Check a new figure under simulated
+  colour-blindness (deuteranopia, protanopia, tritanopia) before relying on it, and do not change the palette without re-measuring the worst pair.
 
 **The assessment battery** (`scripts/battery.py`; "battery" because "test suite" already means pytest). One definition of how agents are compared:
 S1 to S4 at their design durations (90, 120, 120, 150 s, passed as `session_duration` overrides because the assets carry a temporary 15 s), each
@@ -450,9 +453,14 @@ agent scored at 0, 0.1, 0.2, 0.35, 0.5, 0.75 and 1.0 of each session; 10 seeds b
 ./venv/bin/python scripts/battery.py run --population main --tag <name> [--agents a,b,...] [--seeds 0-9] [--db PATH]   # records <name>/<session> runs
 ```
 It is just `record_run` (kind interlude) per agent per session, sessions as the outer loop so each Interlude is generated once per (session, seed)
-and shared by all agents. Populations (`POPULATIONS`, names are labels; identity is the spec hash) live in `battery.py`, not `agents.py`, so editing
-them does not move the agents-code hash. Planners are refused (not checkpointable). **Scores and plots are deliberately not part of it**: they are
-computed from the database afterwards (see `analysis.py`).
+and shared by all agents. Populations (`POPULATIONS`: `main` = `nearest`, `oracle`, `learner`, the standard agents; `learner-parameters`, `choice-noise` and `knowledge` are
+the investigations; names are labels, identity is the spec hash) live in `battery.py`, not `agents.py`, so editing them does not move the agents-code hash.
+**Standard agents:** the actor is the rate utility within 15 s of walking and the map comes from the view cone (`FullMemory`); `whole_map=True` gives the
+full-information variant, and the registry's `greedy_*` entries stay full-information benchmarks. Planners are refused (not checkpointable). **Scores and plots are deliberately not part of the run**: they are
+computed from the database afterwards: `battery.py scores --tag T --population P` prints, per session and agent, the paired reward lead over `nearest`
+(in reward points, with its standard error), its split into **quality** (picks better bushes) and **efficiency** (takes more fruits) with fruits and reward per fruit,
+the final Interlude accuracy, and the learning-curve area (`auc`, chance-corrected) and time to 0.8 accuracy (`t80`, fraction of the session). There is no
+normalised score (no share of a floor-to-ceiling gap): see DECISIONS, "What a score is for".
 
 **Adding things**
 - *A parameter on a component:* give it a default and include its resolved value in `spec()`. This changes the hash of every agent

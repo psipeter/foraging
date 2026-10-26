@@ -299,6 +299,17 @@ class NeutralPrior(Prior):
         return float(mean.mean()) if len(mean) else self.initial
 
 
+class ConstantPrior(Prior):
+    """A fixed baseline, whatever has been seen: the weights then carry the whole level of the values, and a region with no experience
+    looks like `level`. The default of DeltaRuleCritic (0.1). (NeutralPrior follows the mean of the bush means instead.)"""
+
+    def __init__(self, level=1.0):
+        self.level = float(level)
+
+    def value(self, memory):
+        return self.level
+
+
 class Features(Component):
     """A representation of the attributes: `features(attrs (n, 3)) -> (n, dim)`, rows scaled to unit length, so that
     `phi(x) . phi(x')` is a kernel with k(x, x) = 1 and one delta-rule step of size alpha moves the prediction at x' by
@@ -342,22 +353,30 @@ class RBFFeatures(Features):
 class DeltaRuleCritic(Critic):
     """TD(0) with nothing to bootstrap from (a bush's state does not change while it is harvested), i.e. the Rescorla-Wagner delta
     rule: value(x) = prior + w . phi(x), and after each bush, w += alpha * (bush mean reward - value(x_bush)) * phi(x_bush).
-    The prior is re-read at every update (NeutralPrior: the mean of the bush means so far), so the features only learn
-    deviations from it, and the first bush harvested teaches the baseline and nothing else. Learns once per bush (a fruit
+    The default prior is a small fixed baseline (ConstantPrior(0.1)): the weights then carry the whole level of the values, and a region
+    with no experience looks like 0.1 (small but positive, so the rate utility still ranks unseen bushes by travel time; a larger
+    constant acts as an optimism bonus, which belongs to the actor). NeutralPrior, the running mean of the bush means, is the
+    alternative: the features then learn deviations from a moving level, and the first bush harvested teaches the baseline and nothing
+    else. Learns once per bush (a fruit
     list is summarized by its mean), from the bush's own fruits taken since the last update; a bush that is visited again is
-    learned from again, against its mean over all fruits taken. No uncertainty is reported (sd = 0)."""
+    learned from again, against its mean over all fruits taken. No uncertainty is reported (sd = 0).
+
+    `gain` multiplies the learned deviation at read-out only (value = baseline + gain * w . phi); learning is unchanged (the error is
+    computed without it), so a gain above 1 leaves the ranking of bushes alone and scales how far values sit from the baseline: a test of
+    whether under-scaled values, not wrong ones, are what holds an agent back."""
     update_on = "bush"
 
-    def __init__(self, features=None, prior=None, alpha=0.5):
+    def __init__(self, features=None, prior=None, alpha=0.5, gain=1.0):
         self.features = features if features is not None else RBFFeatures()
-        self.prior = prior if prior is not None else NeutralPrior()
+        self.prior = prior if prior is not None else ConstantPrior(0.1)
         self.alpha = float(alpha)
+        self.gain = float(gain)
         self.w = np.zeros(self.features.dim)
         self._baseline = None
         self._learned = np.zeros(0, dtype=int)
 
     def params(self):
-        return {"features": self.features, "prior": self.prior, "alpha": self.alpha}
+        return {"features": self.features, "prior": self.prior, "alpha": self.alpha, "gain": self.gain}
 
     def begin(self, task):
         self.w = np.zeros(self.features.dim)
@@ -377,7 +396,7 @@ class DeltaRuleCritic(Critic):
     def value(self, attrs, ids=None):
         attrs = np.asarray(attrs, dtype=float)
         base = self._baseline if self._baseline is not None else 0.0
-        return base + self.features(attrs) @ self.w, np.zeros(len(attrs))
+        return base + self.gain * (self.features(attrs) @ self.w), np.zeros(len(attrs))
 
 
 # --------------------------------------------------------------------------------------------------
@@ -582,9 +601,13 @@ class UtilityActor(Actor):
 
     `utility` is one of UTILITIES (or a function of the view); `max_walk_time` limits the candidates to bushes within that
     many seconds of walking (falling back to the quickest-to-reach bush when none is, so the agent keeps moving); `choice`
-    is the ChoiceRule. With utility "nearest" and Argmax this is the nearest-bush forager."""
+    is the ChoiceRule. With utility "nearest" and Argmax this is the nearest-bush forager.
 
-    def __init__(self, utility="value", max_walk_time=None, choice=None):
+    The default, `rate` within 15 s of walking, is the standard actor: in the battery `rate` was never worse than `value` at any window (24
+    of 24 comparisons, both critics, S1-S4), the window hardly mattered to `rate`, and `value` without a tight window walks across the map
+    for the best bush and does worse than the blind nearest-bush forager (docs/DECISIONS.md, "One actor default")."""
+
+    def __init__(self, utility="rate", max_walk_time=15.0, choice=None):
         self.utility = UTILITIES[utility] if isinstance(utility, str) else utility
         self.max_walk_time = max_walk_time
         if choice is not None:
@@ -925,21 +948,27 @@ def oracle_agent(actor, percept=None):
     return ComposedAgent(actor, OracleCritic(), FullKnowledge(), percept)
 
 
-def NearestAgent():
+def _oracle(actor, whole_map):
+    """The oracle critic with the map from the sensor (the view cone, the default) or, with `whole_map`, preloaded with every bush."""
+    return oracle_agent(actor) if whole_map else ComposedAgent(actor, OracleCritic(), FullMemory())
+
+
+def NearestAgent(whole_map=False):
     """Walk to the bush that is quickest to reach, harvest it until exhausted, repeat. "Closest" is by walking time to the
     edge of the bush's harvest range (so a wide canopy counts as nearer than its center distance suggests). Ignores bush
-    value entirely."""
-    return oracle_agent(UtilityActor("nearest"))
+    value entirely. Like every standard agent it sees through the view cone; `whole_map=True` gives it every bush from the start."""
+    return _oracle(UtilityActor("nearest", None), whole_map)
 
 
-def GreedyAgent(max_walk_time=10.0, score="value"):
-    """Full-information, one-step greedy: among bushes reachable within `max_walk_time` seconds of walking, go to the best
-    one, harvest it until exhausted, repeat. No path planning. score="value": highest expected reward remaining on the bush
+def GreedyAgent(max_walk_time=15.0, score="rate", whole_map=False):
+    """The oracle critic (true values) with the one-step greedy actor: among bushes reachable within `max_walk_time` seconds of walking, go
+    to the best one, harvest it until exhausted, repeat. No path planning. score="value": highest expected reward remaining on the bush
     (critic mean * fruits left); score="rate": highest expected reward remaining per second of (walk + harvest) time. If
-    nothing is within range, falls back to the quickest-to-reach bush so the agent keeps moving."""
+    nothing is within range, falls back to the quickest-to-reach bush so the agent keeps moving. The map comes from the view cone
+    unless `whole_map` (the full-information benchmark of the older results)."""
     if score not in ("value", "rate"):
         raise ValueError(f"unknown score '{score}'")
-    return oracle_agent(UtilityActor(score, max_walk_time))
+    return _oracle(UtilityActor(score, max_walk_time), whole_map)
 
 
 def PlannerAgent(method="exact", **kwargs):
@@ -947,7 +976,7 @@ def PlannerAgent(method="exact", **kwargs):
     return oracle_agent(PlannerActor(method, **kwargs))
 
 
-def DeltaRuleAgent(score="rate", max_walk_time=10.0, features=None, prior=None, alpha=0.5):
+def DeltaRuleAgent(score="rate", max_walk_time=15.0, features=None, prior=None, alpha=0.5):
     """The simplest learner: starts with an empty map (what the sensor shows it) and learns a value for the attributes by the delta
     rule on `features` (default RBFFeatures), then goes to the bush it values best (one-step greedy, as GreedyAgent). It has no
     exploring actor yet, so it only visits bushes it has seen."""
@@ -955,10 +984,12 @@ def DeltaRuleAgent(score="rate", max_walk_time=10.0, features=None, prior=None, 
 
 
 REGISTRY["nearest"] = NearestAgent
+REGISTRY["oracle"] = GreedyAgent                  # the standard actor (rate, 15 s), true values, map from the view cone
+REGISTRY["learner"] = DeltaRuleAgent              # the same actor with the delta-rule critic, map from the view cone
 for _score in ("value", "rate"):
     REGISTRY[f"delta_{_score}_10"] = (lambda s: lambda: DeltaRuleAgent(s, 10.0))(_score)
 for _score in ("value", "rate"):
     for _t in (5, 10, 15, 20, 30):
-        REGISTRY[f"greedy_{_score}_{_t}"] = (lambda t, s: lambda: GreedyAgent(t, s))(_t, _score)
+        REGISTRY[f"greedy_{_score}_{_t}"] = (lambda t, s: lambda: GreedyAgent(t, s, whole_map=True))(_t, _score)   # the full-information benchmarks
 REGISTRY["plan_exact"] = lambda: PlannerAgent("exact")
 REGISTRY["plan_beam"] = lambda: PlannerAgent("beam")

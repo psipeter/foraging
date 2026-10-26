@@ -96,14 +96,14 @@ def test_real_world_runs_and_is_paired_reproducible():
 def test_nearest_agent_visits_by_walking_time_and_exhausts():
     # From the start: bush 0 center 30 away (walk 22), bush 1 center 20 away (walk 12). Then bush 0 is the only one left.
     w = tiny_world([[30, 0], [0, 20]], [[1, 1], [2, 2]])
-    r = run_episode(NearestAgent(), w)
+    r = run_episode(NearestAgent(whole_map=True), w)
     assert [t[0] for t in r.trace] == [1, 0] and r.total == 6 and r.n_fruits == 4
     assert REGISTRY["nearest"] is NearestAgent
 
 
 def test_nearest_agent_stops_when_everything_is_gone():
     w = tiny_world([[5, 0]], [[1, 1]])
-    r = run_episode(NearestAgent(), w)
+    r = run_episode(NearestAgent(whole_map=True), w)
     assert r.n_visits == 1 and r.idle_time == pytest.approx(59.0)
 
 
@@ -114,11 +114,11 @@ def _greedy_world():
 
 def test_greedy_value_picks_best_within_time_and_falls_back():
     w = _greedy_world()
-    r = run_episode(GreedyAgent(max_walk_time=10, score="value"), w)
+    r = run_episode(GreedyAgent(max_walk_time=10, score="value", whole_map=True), w)
     assert r.trace[0][0] == 1                       # B beats nearer A; C is out of range
-    r = run_episode(GreedyAgent(max_walk_time=1, score="value"), _greedy_world())
+    r = run_episode(GreedyAgent(max_walk_time=1, score="value", whole_map=True), _greedy_world())
     assert r.trace[0][0] == 0                       # nothing within 1 s: falls back to the quickest (A)
-    r = run_episode(GreedyAgent(max_walk_time=30, score="value"), _greedy_world())
+    r = run_episode(GreedyAgent(max_walk_time=30, score="value", whole_map=True), _greedy_world())
     assert [t[0] for t in r.trace][0] == 2          # everything in range: highest value
 
 
@@ -126,16 +126,16 @@ def test_greedy_rate_trades_value_against_time():
     # Two bushes, 4 fruits each: far has value 2.0 / near has value 1.5. Walking 30 units more costs 6 s vs 2 s of harvest.
     w = tiny_world([[18, 0], [48, 0]], [[1, 2, 2, 1], [2, 2, 2, 2]])
     w.value = np.array([1.5, 2.0])
-    assert run_episode(GreedyAgent(30, "value"), w).trace[0][0] == 1
+    assert run_episode(GreedyAgent(30, "value", whole_map=True), w).trace[0][0] == 1
     w = tiny_world([[18, 0], [48, 0]], [[1, 2, 2, 1], [2, 2, 2, 2]])
     w.value = np.array([1.5, 2.0])
-    assert run_episode(GreedyAgent(30, "rate"), w).trace[0][0] == 0
+    assert run_episode(GreedyAgent(30, "rate", whole_map=True), w).trace[0][0] == 0
 
 
 def test_greedy_registry_and_stop():
     agent = REGISTRY["greedy_value_10"]()
     assert isinstance(agent, ComposedAgent) and isinstance(agent.actor, UtilityActor) and agent.actor.max_walk_time == 10
-    r = run_episode(GreedyAgent(10), tiny_world([[5, 0]], [[1, 1]]))
+    r = run_episode(GreedyAgent(10, whole_map=True), tiny_world([[5, 0]], [[1, 1]]))
     assert r.n_visits == 1
 
 
@@ -181,7 +181,7 @@ def test_planner_not_worse_than_greedy_on_real_world():
     w = get_worlds("S1", [0])[0]
     plan = PlannerAgent("beam", beam_width=100)
     run_episode(plan, w)
-    greedy_trace = run_episode(GreedyAgent(15, "rate"), w).trace
+    greedy_trace = run_episode(GreedyAgent(15, "rate", whole_map=True), w).trace
     greedy_expected = sum(w.value[j] * n for j, n, _ in greedy_trace)   # expected reward of greedy's own route
     assert plan.plan_value >= greedy_expected - 1e-9
 
@@ -354,7 +354,7 @@ def test_an_interlude_is_shared_by_sessions_of_different_lengths():
 
 def test_the_result_lists_every_fruit_with_its_time_bush_and_reward():
     w = tiny_world(np.array([[5.0, 0.0], [-5.0, 0.0]]), [[2, 4, 6], [8, 8, 8]])
-    res = run_episode(NearestAgent(), w)
+    res = run_episode(NearestAgent(whole_map=True), w)
     assert [f[1] for f in res.fruits] == [0, 0, 0, 1, 1, 1] or [f[1] for f in res.fruits] == [1, 1, 1, 0, 0, 0]
     assert len(res.fruits) == res.n_fruits and res.fruits[-1][4] == res.total and sum(f[3] for f in res.fruits) == res.total
     times = [f[0] for f in res.fruits]
@@ -406,14 +406,14 @@ def test_checkpoints_after_the_agent_stops_get_its_final_state_and_none_means_no
     agent = ComposedAgent(Fixed([0]), OracleCritic(), FullKnowledge())
     res = run_episode(agent, tiny_world([[3, 0]], [[1, 1]], duration=30.0), checkpoints=[5, 30])
     assert sorted(res.snapshots) == [5.0, 30.0]
-    assert run_episode(NearestAgent(), tiny_world([[3, 0]], [[1, 1]])).snapshots == {}
+    assert run_episode(NearestAgent(whole_map=True), tiny_world([[3, 0]], [[1, 1]])).snapshots == {}
 
 
 def test_checkpoints_must_be_inside_the_session_and_not_for_deadline_planners():
     w = tiny_world([[3, 0]], [[1, 1]], duration=30.0)
     for bad in ([-1], [31]):
         with pytest.raises(ValueError, match="within the session"):
-            run_episode(NearestAgent(), w, checkpoints=bad)
+            run_episode(NearestAgent(whole_map=True), w, checkpoints=bad)
     with pytest.raises(ValueError, match="plan for the end"):
         run_episode(PlannerAgent("beam"), w, checkpoints=[10])
     run_episode(PlannerAgent("beam"), w)                                          # fine without checkpoints
@@ -475,3 +475,65 @@ def test_a_harvest_in_range_turns_the_view_only_as_far_as_it_is_charged():
     edge = 60.0 - ang_r - 35.0                                     # the heading that brings the bush to the cone's edge
     assert _look_time(outside, Harvest(0)) == pytest.approx(costs.turn_time(edge))
     assert _look_time(outside, Harvest(0), Explore(edge, 1.0)) == pytest.approx(costs.turn_time(edge))
+
+
+# ---- OccludedConePercept ---------------------------------------------------------------------------
+
+def _tiny_world(bush_pos, radius, shape, ridge=None):
+    """A flat world of bushes (all at the origin side), optionally with a ridge of height `ridge` across z = 0."""
+    from types import SimpleNamespace
+    from perception import OccludedConePercept  # noqa: F401
+    from world import World
+    res, half = 201, 100.0
+    grid = np.zeros((res, res), dtype=np.float32)
+    if ridge:
+        grid[:, res // 2 - 2:res // 2 + 3] = ridge
+    params = SimpleNamespace(world_half_extent=half, shape_range=(0.0, 1.0), canopy_height_range=(2.0, 30.0), eye_height=5.0)
+    n = len(bush_pos)
+    w = World(params=params, seed=0, pos=np.array(bush_pos, dtype=float), shape=np.array(shape, dtype=float), color=np.zeros(n),
+              moisture=np.zeros(n), canopy_radius=np.array(radius, dtype=float), value=np.zeros(n),
+              fruit_reward=np.zeros((n, 1), dtype=int), start=np.zeros(2))
+    w._terrain = SimpleNamespace(grids=lambda: {"elevation": grid})
+    return w
+
+
+def test_occluded_percept_sees_what_the_cone_sees_on_open_ground():
+    from perception import ConePercept, OccludedConePercept
+    w = _tiny_world([(0.0, 40.0), (30.0, 60.0)], [3.0, 3.0], [0.5, 0.5])
+    dep = np.zeros(2, dtype=bool)
+    cone, occ = ConePercept(100.0, 1000.0), OccludedConePercept(100.0, 1000.0)
+    assert list(occ.observe(w, np.zeros(2), 0.0, dep).ids) == list(cone.observe(w, np.zeros(2), 0.0, dep).ids) == [0, 1]
+
+
+def test_occluded_percept_loses_a_small_bush_behind_a_big_one_but_not_beside_it():
+    from perception import OccludedConePercept
+    dep = np.zeros(2, dtype=bool)
+    occ = OccludedConePercept(100.0, 1000.0)
+    behind = _tiny_world([(0.0, 30.0), (0.0, 70.0)], [14.0, 2.0], [1.0, 0.0])
+    assert list(occ.observe(behind, np.zeros(2), 0.0, dep).ids) == [0]
+    beside = _tiny_world([(0.0, 30.0), (40.0, 70.0)], [14.0, 2.0], [1.0, 0.0])
+    assert list(occ.observe(beside, np.zeros(2), 0.0, dep).ids) == [0, 1]
+
+
+def test_occluded_percept_loses_a_bush_behind_a_ridge():
+    from perception import OccludedConePercept
+    w = _tiny_world([(0.0, 40.0)], [3.0], [0.0], ridge=40.0)
+    flat = _tiny_world([(0.0, 40.0)], [3.0], [0.0])
+    dep = np.zeros(1, dtype=bool)
+    occ = OccludedConePercept(100.0, 1000.0)
+    start = np.array([0.0, -20.0])
+    assert len(occ.observe(flat, start, 0.0, dep).ids) == 1
+    assert len(occ.observe(w, start, 0.0, dep).ids) == 0
+
+
+def test_occluded_percept_never_sees_more_than_the_cone_in_a_real_world():
+    from perception import ConePercept, OccludedConePercept
+    w = sim.get_worlds("S3", [3])[0]
+    cone = sim.percept_for(w)
+    occ = OccludedConePercept(cone.angle, cone.distance)
+    dep = np.zeros(w.n, dtype=bool)
+    rng = np.random.default_rng(1)
+    for _ in range(5):
+        pos, heading = w.start + rng.uniform(-60, 60, 2), rng.uniform(0, 360)
+        seen, all_in_cone = set(occ.observe(w, pos, heading, dep).ids), set(cone.observe(w, pos, heading, dep).ids)
+        assert seen <= all_in_cone and len(seen) < len(all_in_cone)

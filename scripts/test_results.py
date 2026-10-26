@@ -85,7 +85,7 @@ def test_an_agent_is_stored_once_with_its_components_and_parameters(store):
     assert agent_id == store.record_agent(spec) == REGISTRY["delta_rate_10"]().spec_hash()
     row = store.select("SELECT * FROM agents WHERE agent_id = ?", (agent_id,))[0]
     assert (row["memory"], row["critic"], row["features"], row["prior"], row["actor"], row["choice"], row["percept"]) == \
-        ("FullMemory", "DeltaRuleCritic", "RBFFeatures", "NeutralPrior", "UtilityActor", "Argmax", None)
+        ("FullMemory", "DeltaRuleCritic", "RBFFeatures", "ConstantPrior", "UtilityActor", "Argmax", None)
     params = {(r["component"], r["key"]): r["value"] for r in store.select("SELECT * FROM agent_params WHERE agent_id = ?", (agent_id,))}
     assert params[("critic", "alpha")] == 0.5 and params[("critic", "features.length_scale")] == 0.3
     assert params[("actor", "utility")] == "rate" and params[("critic", "features.additive")] == 1

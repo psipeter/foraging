@@ -19,8 +19,9 @@ def make_log(bush_xz, yaw=0.0, pitch=0.0, ground=lambda x, z: 0.0 * x, shape=0.0
     grids = {"elevation": ground(gx, gz).astype(np.float32)}
     xz = np.array(bush_xz, dtype=float).reshape(-1, 2)
     n = len(xz)
-    bushes = Bushes(pos=xz, canopy_radius=np.full(n, radius), fruit_reward=np.zeros((n, 1), dtype=int),
-                    value=np.zeros(n), shape=np.full(n, shape))
+    bushes = Bushes(pos=xz, canopy_radius=np.broadcast_to(np.asarray(radius, dtype=float), (n,)).copy(),
+                    fruit_reward=np.zeros((n, 1), dtype=int), value=np.zeros(n),
+                    shape=np.broadcast_to(np.asarray(shape, dtype=float), (n,)).copy())
     traj = np.array([[0.1, at[0], at[1], yaw, pitch, 0]])
     return SessionLog(Path("."), MANIFEST, traj, list(events), bushes, grids, HALF)
 
@@ -171,3 +172,50 @@ def test_each_trial_shows_its_own_pair():
     log.traj = np.array([[0.5, 0, 0, 0, 0, 0], [0.999, 0, 0, 0, 0, 0], [1.0, 0, 0, 0, 0, 0], [1.5, 0, 0, 0, 0, 0]])
     v = visible_bushes(log, dt=None, frames=[0, 1, 2, 3])
     assert [sorted(v.at(i)["tree_id"]) for i in range(4)] == [[0, 1], [0, 1], [1, 2], [1, 2]]
+
+
+# --- bushes hiding each other --------------------------------------------------------------------------------------
+
+def test_a_big_bush_hides_a_small_one_directly_behind_it_but_not_one_beside_it():
+    # eye 5.1 above flat ground; the near bush is 8 wide and 15 tall, the far ones are low (shape 0: 1 tall)
+    xz = [[0.0, 20.0], [0.0, 60.0], [30.0, 60.0]]
+    kw = dict(radius=[8.0, 1.0, 1.0], shape=[1.0, 0.0, 0.0])
+    on = seen(make_log(xz, **kw))
+    assert sorted(on["tree_id"]) == [0, 2]                                    # the one behind it is hidden, the one beside it is not
+    assert sorted(seen(make_log(xz, **kw), bush_occlusion=False)["tree_id"]) == [0, 1, 2]
+
+
+def test_a_bush_is_partly_hidden_by_a_lower_one_in_front_and_the_crown_still_shows():
+    # far: tall (15) and 3 wide; near: 8 tall and 3 wide, straight ahead: the lower canopy points are hidden, the crown is not
+    xz = [[0.0, 20.0], [0.0, 50.0]]
+    kw = dict(radius=3.0, shape=[0.5, 1.0])
+    with_it = dict(zip(seen(make_log(xz, **kw))["tree_id"], seen(make_log(xz, **kw))["visible_fraction"]))
+    without = dict(zip(seen(make_log(xz, **kw), bush_occlusion=False)["tree_id"], seen(make_log(xz, **kw), bush_occlusion=False)["visible_fraction"]))
+    assert 0.0 < with_it[1] < without[1]
+    assert with_it[0] == without[0]                                           # the nearer bush is not affected
+
+
+def test_only_bushes_that_exist_hide_others_in_an_interlude_and_a_bush_behind_the_target_hides_nothing():
+    xz = [[0.0, 20.0], [0.0, 60.0], [0.0, 90.0]]
+    kw = dict(radius=[8.0, 1.0, 8.0], shape=[1.0, 0.0, 1.0])
+    pair = [{"type": "trial_start", "t": 0.0, "note": "order=0;trial=0;left=1;right=2"}]       # the big bush 0 does not exist in this trial
+    assert sorted(seen(make_log(xz, events=pair, **kw))["tree_id"]) == [1, 2]
+    assert 1 in seen(make_log([[0.0, 60.0], [0.0, 90.0]], radius=[1.0, 8.0], shape=[0.0, 1.0]))["tree_id"]   # a big bush behind it changes nothing
+
+
+def test_bush_occlusion_leaves_a_bush_with_nothing_in_front_unchanged():
+    xz = [[0.0, 40.0], [30.0, 40.0], [-25.0, 55.0]]
+    a, b = seen(make_log(xz)), seen(make_log(xz), bush_occlusion=False)
+    assert list(a["tree_id"]) == list(b["tree_id"]) and np.allclose(a["visible_fraction"], b["visible_fraction"])
+
+
+def test_the_command_line_can_turn_bush_occlusion_off(monkeypatch):
+    import visibility
+    seen_flags = []
+    named = lambda s: __import__("dataclasses").replace(make_log([[0.0, 40.0]]), manifest={**MANIFEST, "sessionName": "T", "sessionId": "t"})
+    monkeypatch.setattr(visibility, "load_session_log", named)
+    monkeypatch.setattr(visibility, "visible_bushes", lambda log, **kw: seen_flags.append(kw["bush_occlusion"]) or visible_bushes(log, dt=None, frames=[0]))
+    for argv, expected in ((["x"], True), (["x", "--no-bush-occlusion"], False)):
+        monkeypatch.setattr("sys.argv", ["visibility.py", *argv])
+        visibility.main()
+        assert seen_flags[-1] is expected

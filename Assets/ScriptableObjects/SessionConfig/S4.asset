@@ -17,9 +17,11 @@ MonoBehaviour:
   isPractice: 0
   isInterlude: 0
   interludeFor: 
+  interludeMode: 0
   interludeTrialCount: 10
   interludeTrialSeconds: 7
   interludeHarvestFruits: 10
+  interludeSwitchPolicy: 3
   interludeBonusPerCorrect: 5
   freezeSun: 0
   interludeBushDistance: 24.4
@@ -101,9 +103,9 @@ MonoBehaviour:
   harvestRangeGapBase: 7
   harvestRangeGapPerRadius: 0
   fruitColorPreservation: 0.5
-  terrainNoiseFrequency: 0.6
+  terrainNoiseFrequency: 2
   terrainNoiseOctaves: 1
-  terrainMaxElevation: 20
+  terrainMaxElevation: 12
   moistureTerraceLevels: 4
   moistureTerraceSharpness: 0.3
   moistureTerraceResidual: 0.1

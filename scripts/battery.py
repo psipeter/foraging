@@ -4,7 +4,8 @@
 
     ./venv/bin/python scripts/battery.py run --population main --tag first-battery [--seeds 0-9] [--agents a,b,...] [--db PATH]
     ./venv/bin/python scripts/battery.py list
-    ./venv/bin/python scripts/battery.py plot --tag first-battery [--groups knowledge,...] [--kinds cumulative,advantage,learning]
+    ./venv/bin/python scripts/battery.py scores --tag first-battery --population main
+    ./venv/bin/python scripts/battery.py plot --tag first-battery --population main [--kinds reward,advantage,interlude]
 
 For each session the battery plays the agent for the session's design duration (passed as an override: the assets may carry a temporary
 shorter one), then scores a copy of the agent on the session's Interlude at several times (checkpoints, as fractions of the session)
@@ -23,9 +24,12 @@ by every agent through sim's cache. Agents that plan for the end of the session 
 import argparse
 from dataclasses import dataclass
 
+import numpy as np
+
 import analysis
 import results
-from agents import (REGISTRY, ComposedAgent, DeltaRuleCritic, FullKnowledge, FullMemory, OracleCritic, RBFFeatures, Softmax, UtilityActor)
+from agents import (REGISTRY, ComposedAgent, ConstantPrior, DeltaRuleCritic, FullKnowledge, FullMemory, NeutralPrior, OracleCritic, RBFFeatures,
+                    Softmax, UtilityActor)
 from world import _parse_seeds
 
 
@@ -48,6 +52,8 @@ class Battery:
 
 BATTERIES = {
     "standard": Battery("standard", {"S1": 90, "S2": 120, "S3": 120, "S4": 150}, (0.0, 0.1, 0.2, 0.35, 0.5, 0.75, 1.0)),
+    # the same battery with longer sessions (PI): more time to exploit what has been learned
+    "long": Battery("long", {"S1": 120, "S2": 120, "S3": 180, "S4": 180}, (0.0, 0.1, 0.2, 0.35, 0.5, 0.75, 1.0)),
 }
 
 
@@ -55,46 +61,87 @@ BATTERIES = {
 # Populations of agents (names are labels; an agent's identity is the hash of its spec)
 # --------------------------------------------------------------------------------------------------
 
-def _agent(critic, utility="rate", window=15.0, choice=None, memory=None):
-    """An agent from its parts: `critic` "oracle" (with the whole map) or "learner" (delta rule on RBF features, map from the view cone)."""
-    learner = critic == "learner"
-    return ComposedAgent(UtilityActor(utility, window, choice), DeltaRuleCritic() if learner else OracleCritic(),
-                         memory if memory is not None else (FullMemory() if learner else FullKnowledge()))
+def _agent(critic, choice=None, whole_map=False):
+    """The standard actor (rate, 15 s) with `critic` "oracle" (true values) or "learner" (delta rule on RBF features), a `choice` rule, and
+    the map from the view cone unless `whole_map`."""
+    memory = FullKnowledge() if whole_map else FullMemory()
+    return ComposedAgent(UtilityActor(choice=choice), DeltaRuleCritic() if critic == "learner" else OracleCritic(), memory)
 
 
 def main_population():
-    """The 24 agents of the first battery: the floor, a window x utility grid on both critics, cone against whole map, learner
-    parameters and choice noise. Windows are travel times to rings 2, 5 and 10 of bushes (6, 15, 30 s; bushes are 23 units apart)."""
-    pop = {"nearest": REGISTRY["nearest"]}
-    for critic in ("oracle", "learner"):
-        for utility in ("rate", "value"):
-            for window in (6.0, 15.0, 30.0):
-                pop[f"{critic}_{utility}_w{window:g}"] = lambda c=critic, u=utility, w=window: _agent(c, u, w)
-    pop["oracle_cone_rate_w15"] = lambda: _agent("oracle", memory=FullMemory())
-    pop["learner_fullmap_rate_w15"] = lambda: _agent("learner", memory=FullKnowledge())
-    for alpha in (0.2, 1.0):
-        pop[f"learner_alpha{alpha:g}"] = lambda a=alpha: ComposedAgent(UtilityActor("rate", 15.0), DeltaRuleCritic(alpha=a), FullMemory())
-    for length in (0.15, 0.5):
-        pop[f"learner_len{length:g}"] = lambda n=length: ComposedAgent(UtilityActor("rate", 15.0), DeltaRuleCritic(features=RBFFeatures(n)), FullMemory())
-    pop["learner_joint"] = lambda: ComposedAgent(UtilityActor("rate", 15.0), DeltaRuleCritic(features=RBFFeatures(0.3, 4, additive=False)), FullMemory())
-    for critic in ("learner", "oracle"):
-        for temperature in (0.3, 1.0):
-            pop[f"{critic}_softmax{temperature:g}"] = lambda c=critic, t=temperature: _agent(c, choice=Softmax(t))
+    """The standard agents: the floor, the oracle and the learner, all with the standard actor (rate utility within 15 s) and the view cone.
+    (The window x utility grid and the cone-against-whole-map check were run first: docs/DECISIONS.md, "One actor default".)"""
+    return {"nearest": REGISTRY["nearest"], "oracle": REGISTRY["oracle"], "learner": REGISTRY["learner"]}
+
+
+def _scan(label, values, make):
+    """A population of the floor, the oracle (the ceiling) and learners that differ in one parameter: `make(value)` is the learner's critic."""
+    pop = {"nearest": REGISTRY["nearest"], "oracle": REGISTRY["oracle"]}
+    for value in values:
+        pop[f"learner_{label}{value:g}"] = lambda v=value: ComposedAgent(UtilityActor(), make(v), FullMemory())
     return pop
 
 
-POPULATIONS = {"main": main_population}
+def scan_alpha_population():
+    """The delta-rule learning rate (the standard learner has 0.5)."""
+    return _scan("alpha", (0.1, 0.3, 0.5, 0.8), lambda v: DeltaRuleCritic(alpha=v))
 
-# Figures hold at most 8 agents (the palette), so the main population is plotted as groups that each answer one question; every group
-# includes the floor so the panels share a reference.
-GROUPS = {
-    "grid-oracle": ["nearest"] + [f"oracle_{u}_w{w}" for u in ("rate", "value") for w in (6, 15, 30)],
-    "grid-learner": ["nearest"] + [f"learner_{u}_w{w}" for u in ("rate", "value") for w in (6, 15, 30)],
-    "knowledge": ["nearest", "oracle_rate_w15", "oracle_cone_rate_w15", "learner_fullmap_rate_w15", "learner_rate_w15"],
-    "learner-parameters": ["nearest", "learner_rate_w15", "learner_alpha0.2", "learner_alpha1", "learner_len0.15", "learner_len0.5", "learner_joint"],
-    "choice-noise": ["nearest", "oracle_rate_w15", "oracle_softmax0.3", "oracle_softmax1", "learner_rate_w15", "learner_softmax0.3", "learner_softmax1"],
-}
-KINDS = ("cumulative", "advantage", "learning")
+
+def scan_length_population():
+    """The RBF width in attribute units (the standard learner has 0.3)."""
+    return _scan("len", (0.1, 0.3, 0.5, 0.7), lambda v: DeltaRuleCritic(features=RBFFeatures(length_scale=v)))
+
+
+def scan_gain_population():
+    """A gain on the learned deviation at read-out (the standard learner has 1): does a larger spread of values, with the same ranking, help?"""
+    return _scan("gain", (1, 2, 4, 8), lambda v: DeltaRuleCritic(gain=v))
+
+
+def scan_window_population():
+    """The learner's walking window: the standard 15 s (ring 5 of bushes) against 60 s (past any hop in the valley: effectively no window)."""
+    pop = {"nearest": REGISTRY["nearest"], "oracle": REGISTRY["oracle"]}
+    for window in (15.0, 60.0):
+        pop[f"learner_window{window:g}"] = lambda w=window: ComposedAgent(UtilityActor(max_walk_time=w), DeltaRuleCritic(), FullMemory())
+    return pop
+
+
+def scan_prior_population():
+    """The learner's baseline: the standard fixed 0.1 (`learner`) against the running mean of the bush means and larger fixed baselines (1, 2: they
+    act as an optimism bonus, which belongs to the actor)."""
+    pop = {"nearest": REGISTRY["nearest"], "oracle": REGISTRY["oracle"], "learner": REGISTRY["learner"],
+           "learner_meanprior": lambda: ComposedAgent(UtilityActor(), DeltaRuleCritic(prior=NeutralPrior()), FullMemory())}
+    for level in (1.0, 2.0):
+        pop[f"learner_prior{level:g}"] = lambda v=level: ComposedAgent(UtilityActor(), DeltaRuleCritic(prior=ConstantPrior(v)), FullMemory())
+    return pop
+
+
+def scan_centers_population():
+    """The number of RBF centers per attribute (the standard learner has 8)."""
+    return _scan("centers", (4, 8, 12, 16), lambda v: DeltaRuleCritic(features=RBFFeatures(n_centers=v)))
+
+
+def choice_noise_population():
+    """The oracle and the learner with a softmax choice rule at two temperatures, against the floor (to be investigated)."""
+    pop = {"nearest": REGISTRY["nearest"], "oracle": REGISTRY["oracle"], "learner": REGISTRY["learner"]}
+    for critic in ("oracle", "learner"):
+        for temperature in (0.3, 1.0):
+            pop[f"{critic}_softmax{temperature:g}"] = lambda c=critic, t=temperature: _agent(c, Softmax(t))
+    return pop
+
+
+def knowledge_population():
+    """Cone against whole map for both critics (the check that set the cone as the default)."""
+    return {"nearest": REGISTRY["nearest"], "oracle": REGISTRY["oracle"], "oracle_fullmap": lambda: _agent("oracle", whole_map=True),
+            "learner": REGISTRY["learner"], "learner_fullmap": lambda: _agent("learner", whole_map=True)}
+
+
+# Each population is also one figure group (5 agents or fewer to avoid the `plots.MAX_DISTINCT` warning; 8 is the palette's limit) and includes the floor, so the panels share a reference.
+POPULATIONS = {"main": main_population, "scan-alpha": scan_alpha_population, "scan-length": scan_length_population,
+               "scan-centers": scan_centers_population, "scan-gain": scan_gain_population, "scan-prior": scan_prior_population, "scan-window": scan_window_population, "choice-noise": choice_noise_population, "knowledge": knowledge_population}
+# Agents a population records but its figures leave out: the scans compare their learners with one another, so the floor and the ceiling
+# (still in the population for `scores`) would only crowd the plots.
+FIGURE_OMITS = {name: ("nearest", "oracle") for name in ("scan-alpha", "scan-length", "scan-centers")}
+KINDS = ("reward", "advantage", "interlude")
 
 
 def resolve(names, population=None):
@@ -140,31 +187,86 @@ def run_battery(agents, battery, tag, seeds=None, store=None, progress=print):
     return reports
 
 
-def plot_battery(store, tag, battery, population="main", groups=None, kinds=KINDS, out_dir=None):
-    """Save one figure per (group, kind): a 2 x 2 grid of the battery's sessions, one line per agent of the group. `kinds`: "cumulative"
-    (reward so far), "advantage" (lead over the lowest-performing agent of each session) and "learning" (Interlude accuracy against training
-    time). Returns the paths."""
+def plot_battery(store, tag, battery, population="main", kinds=KINDS, out_dir=None, mode="paper"):
+    """Save one figure per kind for a population: a 2 x 2 grid of the battery's sessions, one line per agent. `kinds`: "reward" (cumulative reward so
+    far), "advantage" (lead over the lowest-performing agent of each session) and "interlude" (Interlude accuracy against training time).
+    Returns the paths, `<out_dir>/<tag>_<population>_<kind>.png`."""
     import plots
     out_dir = out_dir if out_dir is not None else results.DEFAULT_PATH.parent
-    pop = POPULATIONS[population]()
+    members = {name: factory for name, factory in POPULATIONS[population]().items() if name not in FIGURE_OMITS.get(population, ())}
+    names = {factory().spec_hash(): name for name, factory in members.items()}
+    specs_of = [factory().spec() for factory in members.values()]
+    titles = {"reward": "cumulative reward", "advantage": "lead over the lowest-performing agent in cumulative reward",
+              "interlude": "Interlude accuracy against training time"}
     paths = []
-    for group in groups or list(GROUPS):
-        members = {name: pop[name] for name in GROUPS[group]}
-        names = {factory().spec_hash(): name for name, factory in members.items()}
-        specs_of = [factory().spec() for factory in members.values()]
-        for kind in kinds:
-            panels = {}
-            for session in battery.sessions:
-                sel = analysis.select(store, tag=f"{tag}/{session}", kind="interlude", agents=specs_of)
-                if kind == "learning":
-                    panels[session] = analysis.checkpoint_curve(store, sel)
-                else:
-                    panels[session] = analysis.cumulative_curve(store, sel, baseline="lowest" if kind == "advantage" else None)
-            draw = plots.plot_learning_curve if kind == "learning" else plots.plot_cumulative_reward
-            paths.append(draw(panels, f"{out_dir}/{tag}_{group}_{kind}.png", names=names, order=list(members), title=f"{group}: "
-                              + {"cumulative": "cumulative reward", "advantage": "lead over the lowest-performing agent in cumulative reward",
-                                 "learning": "Interlude accuracy against training time"}[kind]))
+    for kind in kinds:
+        panels = {}
+        for session in battery.sessions:
+            sel = analysis.select(store, tag=f"{tag}/{session}", kind="interlude", agents=specs_of)
+            if kind == "interlude":
+                panels[session] = analysis.checkpoint_curve(store, sel)
+            else:
+                panels[session] = analysis.cumulative_curve(store, sel, baseline="lowest" if kind == "advantage" else None)
+        draw = plots.plot_learning_curve if kind == "interlude" else plots.plot_cumulative_reward
+        paths.append(draw(panels, f"{out_dir}/{tag}_{population}_{kind}.png", names=names, order=list(members), title=f"{population}: {titles[kind]}", mode=mode))
     return paths
+
+
+def scores(store, tag, battery, population, floor="nearest"):
+    """Per agent and session numbers for a recorded population, against the `floor` agent (it must be in the population). Rows are dicts:
+    session, agent, total (mean reward), lead (the paired mean difference to the floor in reward points) and lead_se, then the lead's
+    split into quality and efficiency, accuracy (final Interlude accuracy), auc and t80 (speed of learning).
+
+    Reward is fruits x reward per fruit, so with F the mean fruits taken and q = total / F (a ratio of means) the lead over the floor is
+    exactly F_floor (q - q_floor)  +  (F - F_floor) q: `quality` is the first term (it picks better bushes, at the floor's pace) and
+    `efficiency` the second (it takes more fruits, at its own reward per fruit). Both are in reward points and add up to `lead`.
+    `auc` is the area under the chance-corrected accuracy curve over the session's normalised time (0: chance throughout, 1: perfect from
+    the start; its standard error is across seeds) and `t80` the fraction of the session at which the mean accuracy first reaches 0.8
+    (interpolated; NaN if it never does). No normalisation to a ceiling is made: the oracle is just another agent in the population."""
+    members = POPULATIONS[population]()
+    ids = {name: factory().spec_hash() for name, factory in members.items()}
+    rows = []
+    for session in battery.sessions:
+        sel = analysis.select(store, tag=f"{tag}/{session}", kind="interlude", agents=[f().spec() for f in members.values()])
+        curves = analysis.checkpoint_curve(store, sel)
+        x = np.asarray(curves.t, dtype=float) / float(battery.sessions[session])
+        base = sel.rows[ids[floor]]
+        for name, aid in ids.items():
+            seeds = sorted(set(sel.rows[aid]) & set(base))
+            total = np.array([sel.rows[aid][s]["total"] for s in seeds])
+            fruits = np.array([sel.rows[aid][s]["n_fruits"] for s in seeds], dtype=float)
+            total0 = np.array([base[s]["total"] for s in seeds])
+            fruits0 = np.array([base[s]["n_fruits"] for s in seeds], dtype=float)
+            q, q0 = total.mean() / fruits.mean(), total0.mean() / fruits0.mean()
+            acc = np.asarray(curves.agents[aid]["per_seed"], dtype=float)
+            auc = np.trapezoid((acc - 0.5) / 0.5, x, axis=1)
+            mean = acc.mean(axis=0)
+            hit = np.flatnonzero(mean >= 0.8)
+            if len(hit) == 0:
+                t80 = float("nan")
+            elif hit[0] == 0:
+                t80 = float(x[0])
+            else:
+                k = hit[0]
+                t80 = float(x[k - 1] + (0.8 - mean[k - 1]) / (mean[k] - mean[k - 1]) * (x[k] - x[k - 1]))
+            diff = total - total0
+            rows.append({"session": session, "agent": name, "total": float(total.mean()), "lead": float(diff.mean()),
+                         "lead_se": float(diff.std(ddof=1) / np.sqrt(len(diff))) if len(diff) > 1 else float("nan"),
+                         "fruits": float(fruits.mean()), "per_fruit": float(q), "quality": float(fruits0.mean() * (q - q0)),
+                         "efficiency": float((fruits.mean() - fruits0.mean()) * q), "accuracy": float(acc[:, -1].mean()),
+                         "auc": float(auc.mean()), "auc_se": float(auc.std(ddof=1) / np.sqrt(len(auc))), "t80": t80})
+    return rows
+
+
+def format_scores(rows):
+    lines = []
+    for session in dict.fromkeys(r["session"] for r in rows):
+        lines.append(f"{session}:  {'agent':<20}{'total':>7}{'lead':>15}{'quality':>9}{'effic.':>8}{'fruits':>8}{'/fruit':>7}{'final acc':>10}{'auc':>13}{'t80':>6}")
+        for r in (r for r in rows if r["session"] == session):
+            lines.append(f"     {r['agent']:<20}{r['total']:>7.0f}{r['lead']:>+9.1f} ±{r['lead_se']:>4.1f}{r['quality']:>+9.1f}{r['efficiency']:>+8.1f}"
+                         f"{r['fruits']:>8.1f}{r['per_fruit']:>7.2f}{r['accuracy']:>10.2f}{r['auc']:>8.2f} ±{r['auc_se']:>4.2f}{r['t80']:>6.2f}")
+        lines.append("")
+    return "\n".join(lines)
 
 
 def session_readout(store, tag, battery, aliases=None):
@@ -204,19 +306,27 @@ def main(argv=None):
     p.add_argument("--tag", required=True)
     p.add_argument("--seeds", default=None, help="e.g. 0-9 (default: the battery's)")
     p.add_argument("--db", default=None)
+    p = sub.add_parser("scores", help="per agent and session scores of a recorded population (reward lead, gap closed, accuracy, learning-curve area)")
+    p.add_argument("--battery", default="standard", choices=list(BATTERIES))
+    p.add_argument("--population", default="main", choices=list(POPULATIONS))
+    p.add_argument("--tag", required=True)
+    p.add_argument("--db", default=None)
     p = sub.add_parser("plot", help="save the 2 x 2 session figures of a recorded battery, one set per agent group")
     p.add_argument("--battery", default="standard", choices=list(BATTERIES))
     p.add_argument("--population", default="main", choices=list(POPULATIONS))
     p.add_argument("--tag", required=True)
-    p.add_argument("--groups", default=None, help=f"comma-separated from {', '.join(GROUPS)} (default: all)")
-    p.add_argument("--kinds", default=",".join(KINDS), help="cumulative, advantage, learning")
+    p.add_argument("--kinds", default=",".join(KINDS), help="reward, advantage, interlude")
     p.add_argument("--out", default=None, help="output directory (default results/)")
+    p.add_argument("--mode", default="paper", choices=["paper", "presentation"], help="figure width and font sizes (plots.MODES)")
     p.add_argument("--db", default=None)
     args = ap.parse_args(argv)
+    if args.command == "scores":
+        with results.Store(args.db, readonly=True) as store:
+            print(format_scores(scores(store, args.tag, BATTERIES[args.battery], args.population)))
+        return
     if args.command == "plot":
         with results.Store(args.db, readonly=True) as store:
-            for path in plot_battery(store, args.tag, BATTERIES[args.battery], args.population,
-                                     [g for g in args.groups.split(",") if g] if args.groups else None, args.kinds.split(","), args.out):
+            for path in plot_battery(store, args.tag, BATTERIES[args.battery], args.population, args.kinds.split(","), args.out, args.mode):
                 print(path)
         return
     if args.command == "list":

@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import specs
-from agents import (REGISTRY, Actor, ComposedAgent, DeltaRuleCritic, FullKnowledge, FullMemory, NeutralPrior, OracleCritic,
+from agents import (REGISTRY, Actor, ComposedAgent, ConstantPrior, DeltaRuleCritic, FullKnowledge, FullMemory, NeutralPrior, OracleCritic,
                     PlannerActor, RBFFeatures, Softmax, UtilityActor, build_agent)
 from perception import ConePercept, NullPercept
 from sim import run_episode
@@ -37,18 +37,18 @@ def test_the_spec_is_plain_json_with_defaults_resolved():
     assert specs.canonical_json(spec) == specs.canonical_json(__import__("json").loads(specs.canonical_json(spec)))
     assert spec["critic"] == {"type": "DeltaRuleCritic", "alpha": 0.5,
                               "features": {"type": "RBFFeatures", "length_scale": 0.3, "n_centers": 8, "additive": True},
-                              "prior": {"type": "NeutralPrior", "initial": 1}}
+                              "prior": {"type": "ConstantPrior", "level": 0.1}, "gain": 1}
     assert spec["actor"]["choice"] == {"type": "Argmax"}                     # the actor's default choice rule is reported
     assert spec["percept"] is None and spec["memory"] == {"type": "FullMemory"}
 
 
 def test_changing_any_parameter_changes_the_hash_and_equal_agents_share_it():
     base = ComposedAgent(UtilityActor("rate", 10.0), DeltaRuleCritic(alpha=0.5), FullMemory())
-    same = ComposedAgent(UtilityActor("rate", 10), DeltaRuleCritic(RBFFeatures(), NeutralPrior(), 0.5), FullMemory())
+    same = ComposedAgent(UtilityActor("rate", 10), DeltaRuleCritic(RBFFeatures(), ConstantPrior(0.1), 0.5), FullMemory())
     assert base.spec_hash() == same.spec_hash()                              # 10 vs 10.0 and explicit defaults are the same agent
     variants = [ComposedAgent(UtilityActor("rate", 10.0), DeltaRuleCritic(alpha=0.2), FullMemory()),
                 ComposedAgent(UtilityActor("rate", 10.0), DeltaRuleCritic(RBFFeatures(length_scale=0.2)), FullMemory()),
-                ComposedAgent(UtilityActor("rate", 10.0), DeltaRuleCritic(prior=NeutralPrior(2.0)), FullMemory()),
+                ComposedAgent(UtilityActor("rate", 10.0), DeltaRuleCritic(prior=ConstantPrior(2.0)), FullMemory()),
                 ComposedAgent(UtilityActor("value", 10.0), DeltaRuleCritic(), FullMemory()),
                 ComposedAgent(UtilityActor("rate", 10.0, Softmax(0.5)), DeltaRuleCritic(), FullMemory()),
                 ComposedAgent(UtilityActor("rate", 10.0), DeltaRuleCritic(), FullMemory(), ConePercept(60, 50))]
@@ -60,7 +60,7 @@ def test_changing_any_parameter_changes_the_hash_and_equal_agents_share_it():
 def test_the_hash_of_a_plain_agent_is_pinned():
     # If this fails you changed a component's parameters or a default: every agent using it has a new identity. That is intended
     # when done on purpose (re-hash stored results from their spec JSON, see CLAUDE.md "Results database"); then update this value.
-    assert specs.spec_hash(spec_of("nearest")) == "ec2396541b09"
+    assert specs.spec_hash(spec_of("nearest")) == "79cd754b6ebc"
 
 
 def test_numbers_are_canonical_whatever_their_type():
@@ -145,6 +145,6 @@ def test_labels_leave_out_the_parameters_of_a_component_whose_type_differs():
 
     mixed = specs.labels([spec_of("nearest"), delta_agent(0.2), delta_agent(0.5)])
     assert len(set(mixed)) == 3
-    assert mixed[0] == "OracleCritic, FullKnowledge, max_walk_time=None, utility=nearest"      # no alpha, features or prior fields
-    assert mixed[1].startswith("DeltaRuleCritic, FullMemory") and mixed[1].endswith("alpha=0.2") and "alpha=0.5" in mixed[2]
+    assert mixed[0] == "OracleCritic, max_walk_time=None, utility=nearest"      # no alpha, features or prior fields (the memory is the same for all three)
+    assert mixed[1].startswith("DeltaRuleCritic") and mixed[1].endswith("alpha=0.2") and "alpha=0.5" in mixed[2]
     assert "length_scale" not in mixed[1]

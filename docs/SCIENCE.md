@@ -440,17 +440,21 @@ different there. All values are `SessionConfig` fields; the field is built in `s
 | Sessions | `terrainMaxElevation` | Moisture field |
 |---|---|---|
 | P, S1, S2 (moisture irrelevant) | 12 (snow line kept by `snowLineFraction` 0.564) | continuous, wavelength ~50 units (`terrainNoiseFrequency` 2), range up to ≈ 12 units of relief (bushes span about 0–12) |
-| S3, S4 (moisture rewarded) | 20 | **terraced**: `moistureTerraceLevels` 4, `moistureTerraceSharpness` 0.3, `moistureTerraceResidual` 0.1, `terrainNoiseFrequency` 0.6 (wavelength ~165 units) |
+| S3, S4 (moisture rewarded) | 12 (as P, S1, S2; was 20) | **terraced**: `moistureTerraceLevels` 4, `moistureTerraceSharpness` 0.3, `moistureTerraceResidual` 0.1, `terrainNoiseFrequency` 2 (wavelength ~50 units, as the other sessions; was 0.6, ~165 units) |
 
 Terracing: the continuous field is rank-normalised over the valley (so each level covers about the
 same area), snapped to 4 evenly spaced moisture levels with ramps between plateaus, and given a small
 undulation (±0.1) on plateau tops; levels are inset by that amplitude so the full 0–1 range is used
 without clipping. Elevation and ground colour follow moisture, so there are 4 ground colours and
-4 height tiers. On the seeds used (S3, S4): ~165–180 bushes per level, ~6–7 large patches holding
+4 height tiers. **Patch size (PI, 2026-10-26):** S3 and S4 use the same noise frequency (2) and elevation (12) as the other sessions; the earlier
+long patches (frequency 0.6, about 165 units, elevation 20) kept a learner from using what it knew (S3: its share of the oracle's lead 0.31, against 0.65 at
+frequency 2; DECISIONS, "S3 patch size"). On the S3 and S4 worlds now: about 165–190 bushes per moisture level, valley slope median 7.6–7.7° and 99th percentile
+49–50°, and 65–68% of the bushes within 150 units of the start hidden from it by terrain (the old terrain: 4.6°, 37°, 41% for S3); the simulator's view cone ignores
+that occlusion. Earlier figures for the old terrain: ~6–7 large patches holding
 ~80% of bushes (median ~65 bushes per patch), p99 slope ≈ 31° (the old terrain: 27°), bush moisture
 std ≈ 0.30 (old continuum: 0.16, so moisture's reward spread is ≈ 0.44 at weight 1.5 (S4) and ≈ 0.89 at weight 3 (S3), vs 0.24 at 1.5 on the old terrain; in S3 colour's spread is 0.43, so moisture contributes about twice as much).
-In the S3 world the start region has few of the wettest (level 3) bushes nearby (16 within 160
-units against 72 of level 0), so reaching them takes travel. The moisture–height coupling is
+On the old S3 terrain the start region had few of the wettest (level 3) bushes nearby (16 within 160
+units against 72 of level 0), so reaching them took travel (not rechecked on the new terrain). The moisture–height coupling is
 likely to be revisited (TODO below). Design decision and alternatives: DECISIONS ("Terraced moisture").
 
 ### Session progression (P–S4 implemented; S5 is a TODO)

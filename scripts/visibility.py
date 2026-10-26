@@ -11,14 +11,16 @@ the camera, so it is recomputed here from `replay.SessionLog`:
   config's `shapeRange` and `canopyHeightRange`.
 * A bush is visible when at least one of a handful of points on the camera-facing part of its upper canopy surface lies
   inside the view frustum and the straight line from the eye to it clears the terrain (a heightfield march over the
-  world file's elevation grid). `visible_fraction` is the share of those points that qualify, a graded measure of how
-  much of the bush is in view.
+  world file's elevation grid) and passes through no other bush's canopy (`bush_occlusion`, on by default: each canopy
+  is an opaque half-ellipsoid, the same shape as the one that is sampled, and only bushes that exist at that moment can hide
+  another, so in an Interlude only the pair). `visible_fraction` is the share of those points that qualify, a graded measure
+  of how much of the bush is in view.
 * In an Interlude only the trial's two bushes exist (the rest are inactive objects), taken from the `trial_start` events. Under
   the Hide switch policy the unchosen bush is gone HIDE_SECONDS after the `choice_lock` event (under Exhaust and Lock it stays
   visible).
 
-Not modelled: bushes hiding other bushes (a tall canopy can partly hide one behind it), fruit visibility, fog, and any
-limit on how far away attributes can be resolved. Use the returned `distance` and angular `width`/`height` to threshold
+Not modelled: fruit visibility (fruit hanging in front of a canopy, or hiding behind one), foliage that is translucent at the
+edges, a camera inside a canopy, fog, and any limit on how far away attributes can be resolved. Use the returned `distance` and angular `width`/`height` to threshold
 on resolvability (`min_angular_deg=`) rather than baking in a cutoff.
 
 Egocentric coordinates per visible bush: `azimuth` (degrees right of the view centre, + = right, matching
@@ -35,12 +37,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from perception import canopy_height_of, hidden_by_bushes, hidden_by_terrain, sample_grid, unit_directions
 from replay import load_session_log, parse_note
 
-# Directions of the canopy surface sample points: (elevation above the horizon in degrees, azimuth in degrees); the crown
-# is the first point. Points on the far side of the canopy are dropped per frame (they face away from the eye).
-SURFACE_RINGS = ((90.0, (0.0,)), (50.0, (0.0, 90.0, 180.0, 270.0)), (15.0, (0.0, 60.0, 120.0, 180.0, 240.0, 300.0)))
-RAY_STEP = 3.0          # world units between terrain samples along a line of sight (the mesh cell is about 1.6)
 HIDE_SECONDS = 0.4      # InterludeManager.hideSeconds: how long the unchosen bush takes to shrink away under policy Hide
 
 
@@ -49,22 +48,9 @@ HIDE_SECONDS = 0.4      # InterludeManager.hideSeconds: how long the unchosen bu
 # --------------------------------------------------------------------------------------------------
 
 def canopy_height(config, shape):
-    """Full canopy height (Tree.ApplyAttributes): squat/wide at shape 0, tall/narrow at 1."""
-    lo, hi = config["shapeRange"]["x"], config["shapeRange"]["y"]
-    t = np.clip((np.asarray(shape, dtype=float) - lo) / max(hi - lo, 1e-9), 0.0, 1.0)
-    h = config["canopyHeightRange"]
-    return h["x"] + (h["y"] - h["x"]) * t
-
-
-def sample_grid(grid, half, x, z):
-    """Bilinear sample of a (res, res) grid indexed [x, z] spanning [-half, half] (WorldData.Sample); clamped at the edge."""
-    res = grid.shape[0]
-    u = np.clip((np.asarray(x, dtype=float) + half) / (2.0 * half) * (res - 1), 0.0, res - 1 - 1e-9)
-    v = np.clip((np.asarray(z, dtype=float) + half) / (2.0 * half) * (res - 1), 0.0, res - 1 - 1e-9)
-    i, j = u.astype(int), v.astype(int)
-    fu, fv = u - i, v - j
-    return ((1 - fu) * (1 - fv) * grid[i, j] + fu * (1 - fv) * grid[i + 1, j]
-            + (1 - fu) * fv * grid[i, j + 1] + fu * fv * grid[i + 1, j + 1])
+    """Full canopy height (Tree.ApplyAttributes) from the logged config."""
+    return canopy_height_of(shape, (config["shapeRange"]["x"], config["shapeRange"]["y"]),
+                            (config["canopyHeightRange"]["x"], config["canopyHeightRange"]["y"]))
 
 
 def camera_axes(yaw_deg, pitch_deg):
@@ -74,16 +60,6 @@ def camera_axes(yaw_deg, pitch_deg):
     right = np.array([math.cos(y), 0.0, -math.sin(y)])
     up = np.array([math.sin(y) * math.sin(p), math.cos(p), math.cos(y) * math.sin(p)])
     return forward, right, up
-
-
-def _unit_directions():
-    out = []
-    for elev, azimuths in SURFACE_RINGS:
-        e = math.radians(elev)
-        for a in azimuths:
-            a = math.radians(a)
-            out.append((math.cos(e) * math.sin(a), math.sin(e), math.cos(e) * math.cos(a)))
-    return np.array(out)        # (P, 3) as (x, up, z) on the unit sphere
 
 
 @dataclass
@@ -115,9 +91,10 @@ class Visibility:
 # Visibility along a trajectory
 # --------------------------------------------------------------------------------------------------
 
-def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=0.0, frames=None):
+def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=0.0, frames=None, bush_occlusion=True):
     """Visible bushes at every `dt` seconds of the session (the logged state at the start of each step), or at the given
-    trajectory `frames` (indices) when `dt` is None. See the module docstring for the model."""
+    trajectory `frames` (indices) when `dt` is None. `bush_occlusion=False` ignores bushes hiding each other (terrain still hides).
+    See the module docstring for the model."""
     cfg, man = log.config, log.manifest
     b = log.bushes
     elevation = log.grids["elevation"]
@@ -137,7 +114,7 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
     rx = b.canopy_radius
     ry = canopy_height(cfg, b.shape) * 0.5
     ground = sample_grid(elevation, half, b.pos[:, 0], b.pos[:, 1])
-    dirs = _unit_directions()
+    dirs = unit_directions()
     # Sample points (n, P, 3) in world coordinates and their outward normals.
     pts = np.empty((n, len(dirs), 3))
     pts[:, :, 0] = b.pos[:, None, 0] + rx[:, None] * dirs[None, :, 0]
@@ -179,6 +156,7 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
             candidates = np.array(trial_pair[k], dtype=int)
             gone = [locked for t_lock, locked in hide_locks if t >= t_lock + HIDE_SECONDS]
             candidates = np.array([c for c in candidates if c not in gone], dtype=int)
+        exists = candidates                                               # the bushes that exist now (they can also hide each other)
         near_enough = np.hypot(*(b.pos[candidates] - eye[[0, 2]]).T) <= max_distance + rx[candidates]
         candidates = candidates[near_enough]
 
@@ -193,12 +171,15 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
         mi, pi = np.nonzero(ok)
         if len(mi):
             target = pts[candidates[mi], pi]                              # (r, 3)
-            length = np.linalg.norm(target - eye, axis=-1)
-            steps = max(2, int(math.ceil(length.max() / RAY_STEP)))
-            frac = (np.arange(steps) + 0.5) / steps                       # (S,)
-            along = eye[None, None, :] + (target - eye)[:, None, :] * frac[None, :, None]    # (r, S, 3)
-            blocked = (sample_grid(elevation, half, along[..., 0], along[..., 2]) > along[..., 1]).any(axis=1)
+            blocked = hidden_by_terrain(eye, target, elevation, half)
             ok[mi[blocked], pi[blocked]] = False
+
+        # Other bushes' canopies, for the points that are still in view.
+        mi, pi = np.nonzero(ok)
+        if bush_occlusion and len(mi):
+            occluders = exists[np.hypot(*(b.pos[exists] - eye[[0, 2]]).T) <= max_distance + rx[exists]]
+            behind = hidden_by_bushes(eye, pts[candidates[mi], pi], candidates[mi], occluders, b.pos, ground, rx, ry)
+            ok[mi[behind], pi[behind]] = False
 
         frac_visible = ok.mean(axis=1)
         seen = frac_visible > 0
@@ -231,10 +212,11 @@ def main():
     parser.add_argument("--dt", type=float, default=0.1, help="seconds between steps (default 0.1)")
     parser.add_argument("--min-angular", type=float, default=0.0, help="drop bushes whose angular size is below this (degrees)")
     parser.add_argument("--csv", default=None, help="write step,t,tree_id,azimuth,... rows to this file")
+    parser.add_argument("--no-bush-occlusion", action="store_true", help="let bushes be seen through other bushes (terrain still hides)")
     args = parser.parse_args()
 
     log = load_session_log(args.session)
-    vis = visible_bushes(log, dt=args.dt, min_angular_deg=args.min_angular)
+    vis = visible_bushes(log, dt=args.dt, min_angular_deg=args.min_angular, bush_occlusion=not args.no_bush_occlusion)
     counts = vis.counts()
     print(f"{log.manifest['sessionName']} ({log.manifest['sessionId']}): {len(vis.t)} steps of {args.dt} s; "
           f"visible bushes per step: mean {counts.mean():.1f}, min {counts.min()}, max {counts.max()}")

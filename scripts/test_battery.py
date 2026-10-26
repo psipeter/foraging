@@ -18,35 +18,64 @@ def test_the_standard_battery_is_the_four_sessions_with_checkpoints_as_fractions
     assert (b.n_samples, b.interlude_mode, len(b.seeds)) == (1, "random", 10)          # one pick per trial, like a participant
 
 
-def test_the_main_population_is_24_distinct_agents_that_build_and_round_trip():
+def test_the_long_battery_has_longer_sessions_and_the_same_design_otherwise():
+    long, standard = battery.BATTERIES["long"], battery.BATTERIES["standard"]
+    assert long.sessions == {"S1": 120, "S2": 120, "S3": 180, "S4": 180}
+    assert long.checkpoint_fractions == standard.checkpoint_fractions and long.checkpoints("S3") == [0.0, 18.0, 36.0, 63.0, 90.0, 135.0, 180.0]
+    assert (long.n_samples, long.interlude_mode, long.interlude_trials, long.seeds) == (standard.n_samples, standard.interlude_mode, standard.interlude_trials, standard.seeds)
+
+
+def test_every_population_builds_round_trips_and_fits_a_figure():
     from agents import build_agent
-    pop = battery.main_population()
-    assert len(pop) == 24 and "nearest" in pop
-    hashes = {name: factory().spec_hash() for name, factory in pop.items()}
-    assert len(set(hashes.values())) == 24                                              # no two aliases are the same agent
-    for name, factory in pop.items():
-        spec = factory().spec()
-        assert build_agent(spec).spec() == spec
-    ref = pop["learner_rate_w15"]().spec()
-    assert ref["critic"]["type"] == "DeltaRuleCritic" and ref["memory"]["type"] == "FullMemory" and ref["actor"]["max_walk_time"] == 15
-    assert pop["oracle_rate_w15"]().spec()["memory"]["type"] == "FullKnowledge"
-    assert pop["oracle_cone_rate_w15"]().spec()["critic"]["type"] == "OracleCritic" and pop["oracle_cone_rate_w15"]().spec()["memory"]["type"] == "FullMemory"
-    assert pop["learner_fullmap_rate_w15"]().spec()["memory"]["type"] == "FullKnowledge"
-    assert pop["learner_softmax0.3"]().spec()["actor"]["choice"] == {"type": "Softmax", "temperature": 0.3}
-    assert pop["learner_joint"]().spec()["critic"]["features"]["additive"] is False
+    assert {n: len(m()) for n, m in battery.POPULATIONS.items()} == {"main": 3, "scan-alpha": 6, "scan-length": 6, "scan-centers": 6, "scan-gain": 6, "scan-prior": 6, "scan-window": 4, "choice-noise": 7, "knowledge": 5}
+    for name, make in battery.POPULATIONS.items():
+        pop = make()
+        assert "nearest" in pop and len(pop) <= 8                                          # the floor is in every figure; the palette holds 8
+        assert len({f().spec_hash() for f in pop.values()}) == len(pop)                    # no two aliases are the same agent
+        for factory in pop.values():
+            spec = factory().spec()
+            assert build_agent(spec).spec() == spec
+
+
+def test_the_standard_agents_share_one_actor_and_see_through_the_view_cone():
+    main = battery.main_population()
+    specs = {name: factory().spec() for name, factory in main.items()}
+    assert specs["oracle"]["actor"] == specs["learner"]["actor"] == {"type": "UtilityActor", "utility": "rate", "max_walk_time": 15,
+                                                                      "choice": {"type": "Argmax"}}
+    assert specs["nearest"]["actor"]["utility"] == "nearest" and specs["nearest"]["actor"]["max_walk_time"] is None
+    assert {s["memory"]["type"] for s in specs.values()} == {"FullMemory"}                  # the cone is the default for all three
+    assert specs["oracle"]["critic"]["type"] == "OracleCritic" and specs["learner"]["critic"]["type"] == "DeltaRuleCritic"
+    knowledge = {name: factory().spec() for name, factory in battery.knowledge_population().items()}
+    assert knowledge["oracle_fullmap"]["memory"]["type"] == knowledge["learner_fullmap"]["memory"]["type"] == "FullKnowledge"
+    assert knowledge["oracle_fullmap"]["actor"] == specs["oracle"]["actor"]
+    prior = {n: f().spec()["critic"]["prior"] for n, f in battery.scan_prior_population().items() if n.startswith("learner")}
+    assert prior["learner"] == {"type": "ConstantPrior", "level": 0.1} and prior["learner_meanprior"] == {"type": "NeutralPrior", "initial": 1}
+    assert prior["learner_prior1"] == {"type": "ConstantPrior", "level": 1} and prior["learner_prior2"] == {"type": "ConstantPrior", "level": 2}
+    window = {n: f().spec() for n, f in battery.scan_window_population().items()}
+    assert window["learner_window15"]["actor"]["max_walk_time"] == 15 and window["learner_window60"]["actor"]["max_walk_time"] == 60
+    assert window["learner_window15"] == specs["learner"]                                    # the 15 s learner is the standard learner
+    noise = battery.choice_noise_population()
+    assert noise["learner_softmax0.3"]().spec()["actor"]["choice"] == {"type": "Softmax", "temperature": 0.3}
+    for scan, key, levels in ((battery.scan_alpha_population(), "alpha", [0.1, 0.3, 0.5, 0.8]),
+                              (battery.scan_length_population(), "features", [0.1, 0.3, 0.5, 0.7]),
+                              (battery.scan_centers_population(), "features", [4, 8, 12, 16])):
+        learners = [f().spec()["critic"] for n, f in scan.items() if n.startswith("learner")]
+        got = [c[key] if key == "alpha" else c[key]["length_scale" if levels[0] < 1 else "n_centers"] for c in learners]
+        assert got == levels and all(f().spec()["actor"] == specs["oracle"]["actor"] for f in scan.values() if f is not scan["nearest"])
+    assert REGISTRY["oracle"]().spec_hash() == main["oracle"]().spec_hash() and REGISTRY["learner"]().spec_hash() == main["learner"]().spec_hash()
 
 
 def test_resolve_takes_population_names_then_registry_names():
-    chosen = battery.resolve(["nearest", "learner_alpha0.2", "delta_rate_10"], "main")
-    assert list(chosen) == ["nearest", "learner_alpha0.2", "delta_rate_10"]
-    assert len(battery.resolve(None, "main")) == 24
+    chosen = battery.resolve(["nearest", "oracle", "delta_rate_10"], "main")
+    assert list(chosen) == ["nearest", "oracle", "delta_rate_10"]
+    assert len(battery.resolve(None, "main")) == 3
     with pytest.raises(KeyError):
         battery.resolve(["nonexistent"], "main")
 
 
 @pytest.mark.slow
 def test_a_battery_run_records_every_session_with_its_checkpoints_and_reuses_them(tmp_path):
-    agents = battery.resolve(["nearest", "learner_rate_w15"], "main")
+    agents = battery.resolve(["nearest", "learner"], "main")
     with results.Store(tmp_path / "r.sqlite") as store:
         reports = run_battery(agents, TINY, "t", store=store, progress=None)
         assert list(reports) == ["P", "S1"] and all(len(r) == 2 and r[0].n_computed == 2 for r in reports.values())
@@ -73,22 +102,42 @@ def test_an_agent_that_plans_for_the_deadline_is_refused_before_anything_runs(tm
 def test_the_command_line_lists_and_runs(tmp_path, capsys, monkeypatch):
     battery.main(["list"])
     out = capsys.readouterr().out
-    assert "battery standard" in out and "population main: 24 agents" in out
+    assert "battery standard" in out and "population main: 3 agents" in out
     monkeypatch.setitem(battery.BATTERIES, "standard", TINY)
-    battery.main(["run", "--agents", "nearest,learner_rate_w15", "--tag", "cli", "--seeds", "0-1", "--db", str(tmp_path / "r.sqlite")])
+    battery.main(["run", "--agents", "nearest,learner", "--tag", "cli", "--seeds", "0-1", "--db", str(tmp_path / "r.sqlite")])
     out = capsys.readouterr().out
-    assert "P: total reward" in out and "S1: Interlude accuracy at the end" in out and "learner_rate_w15" in out
+    assert "P: total reward" in out and "S1: Interlude accuracy at the end" in out and "learner" in out
 
 
 @pytest.mark.slow
 def test_plot_battery_saves_the_three_figures_of_a_group_with_one_panel_per_session(tmp_path, monkeypatch):
-    monkeypatch.setitem(battery.GROUPS, "tiny", ["nearest", "learner_rate_w15"])
-    agents = battery.resolve(["nearest", "learner_rate_w15"], "main")
+    agents = battery.resolve(["nearest", "learner"], "main")
+    monkeypatch.setitem(battery.POPULATIONS, "tiny", lambda: agents)
     with results.Store(tmp_path / "r.sqlite") as store:
         run_battery(agents, TINY, "pt", store=store, progress=None)
-        paths = battery.plot_battery(store, "pt", TINY, groups=["tiny"], out_dir=tmp_path)
-    assert [p.name for p in paths] == ["pt_tiny_cumulative.png", "pt_tiny_advantage.png", "pt_tiny_learning.png"]
+        paths = battery.plot_battery(store, "pt", TINY, population="tiny", out_dir=tmp_path)
+    assert [p.name for p in paths] == ["pt_tiny_reward.png", "pt_tiny_advantage.png", "pt_tiny_interlude.png"]
     assert all(p.exists() and p.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n" for p in paths)
     monkeypatch.setitem(battery.BATTERIES, "standard", TINY)
-    battery.main(["plot", "--tag", "pt", "--groups", "tiny", "--kinds", "learning", "--out", str(tmp_path / "cli"), "--db", str(tmp_path / "r.sqlite")])
-    assert (tmp_path / "cli" / "pt_tiny_learning.png").exists()
+    battery.main(["plot", "--tag", "pt", "--population", "tiny", "--kinds", "interlude", "--out", str(tmp_path / "cli"), "--db", str(tmp_path / "r.sqlite")])
+    assert (tmp_path / "cli" / "pt_tiny_interlude.png").exists()
+
+
+@pytest.mark.slow
+def test_scores_summarize_each_agent_in_each_session(tmp_path):
+    agents = battery.resolve(["nearest", "oracle", "learner"], "main")
+    with results.Store(tmp_path / "r.sqlite") as store:
+        run_battery(agents, TINY, "sc", store=store, progress=None)
+        rows = battery.scores(store, "sc", TINY, "main")
+    assert [(r["session"], r["agent"]) for r in rows] == [(s, a) for s in TINY.sessions for a in ("nearest", "oracle", "learner")]
+    for r in rows:
+        assert r["quality"] + r["efficiency"] == pytest.approx(r["lead"])                          # the lead is exactly its two parts
+        assert r["total"] == pytest.approx(r["fruits"] * r["per_fruit"])
+        if r["agent"] == "nearest":
+            assert r["lead"] == 0.0 and r["quality"] == 0.0 and r["efficiency"] == 0.0
+        if r["agent"] == "oracle":
+            assert r["accuracy"] == 1.0 and r["auc"] == pytest.approx(1.0) and r["t80"] == 0.0
+        assert -1.0 <= r["auc"] <= 1.0 and (r["t80"] != r["t80"] or 0.0 <= r["t80"] <= 1.0)
+        assert "gap" not in r
+    text = battery.format_scores(rows)
+    assert "P:" in text and "S1:" in text and "learner" in text and "t80" in text and "quality" in text
