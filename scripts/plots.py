@@ -51,7 +51,7 @@ def _style(mode):
     if mode not in MODES:
         raise ValueError(f"mode {mode!r}; choose from {sorted(MODES)}")
     sns.set_theme(style="ticks")
-    plt.rcParams.update({"font.family": "sans-serif", "lines.linewidth": 2.5, "savefig.dpi": MODES[mode]["dpi"], **MODES[mode]["rc"]})
+    plt.rcParams.update({"font.family": "sans-serif", "savefig.dpi": MODES[mode]["dpi"], **MODES[mode]["rc"]})
     return MODES[mode]
 
 
@@ -101,7 +101,7 @@ def _legend_rows(n_agents):
     return int(np.ceil(n_agents / min(3, n_agents)))
 
 
-def _margins(fig, n_agents):
+def _margins(n_agents):
     """Inches above the panels (title, subtitle) and below them (legend, footer), from the font sizes, so the text never overlaps."""
     title, small, legend = plt.rcParams["axes.titlesize"], _small(), plt.rcParams["legend.fontsize"]
     top = 0.08 + (title + small) * 1.3 / 72 + 0.12
@@ -117,7 +117,7 @@ def _figsize(cfg, rows, n_agents):
 
 def _header(fig, heading, note, n_agents):
     """Title and subtitle at the top left, and the panels laid out between the margins."""
-    top, footer, bottom = _margins(fig, n_agents)
+    top, footer, bottom = _margins(n_agents)
     height = fig.get_figheight()
     fig.text(0.01, 1 - 0.08 / height, heading, ha="left", va="top", fontsize=plt.rcParams["axes.titlesize"], fontweight="bold")   # not suptitle: tight_layout would reserve room for it
     fig.text(0.01, 1 - (0.08 + plt.rcParams["axes.titlesize"] * 1.3 / 72) / height, note, va="top", fontsize=_small(), color=INK_MUTED)
@@ -136,7 +136,7 @@ def _finish(fig, axes, panels, seen, palette, footer_extra=""):
         ax.set_visible(False)
     handles = [Line2D([0], [0], color=palette[n], lw=2, ls=ls) for n, ls in zip(seen, STYLES)]
     fig.legend(handles, seen, loc="lower center", ncol=min(3, len(seen)), frameon=False,
-               bbox_to_anchor=(0.5, (_margins(fig, len(seen))[1] + 0.05) / fig.get_figheight()))
+               bbox_to_anchor=(0.5, (_margins(len(seen))[1] + 0.05) / fig.get_figheight()))
     first = next(iter(panels.values()))
     code = first.sel.code
     tags = ", ".join(sorted({t.split("/")[0] for panel in panels.values() for t in panel.sel.tags})) or "any"
@@ -172,9 +172,10 @@ def figure_cumulative(panels, names=None, order=None, title=None, mode=DEFAULT_M
             ax.axhline(0, color=INK_MUTED, linewidth=1)
             ax.text(0.02, 0.97, f"baseline: {(names or {}).get(curves.baseline_id, curves.baseline)}", transform=ax.transAxes,
                     ha="left", va="top", fontsize=_small(), color=INK_MUTED)
-        ax.set_ylabel("reward ahead of baseline" if curves.quantity == "advantage" else "cumulative reward")
-        if curves.quantity != "advantage":
+            ax.set_ylabel("reward ahead of baseline")
+        else:
             ax.set_ylim(bottom=0)
+            ax.set_ylabel("cumulative reward")
     axes.flat[0].set_xlim(0, max(curves.duration for curves in panels.values()))   # the x axis is shared, each panel has its own y axis
     for i, ax in enumerate(axes.flat[:len(panels)]):
         if i + cols >= len(panels):

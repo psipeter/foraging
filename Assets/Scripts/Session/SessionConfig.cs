@@ -52,6 +52,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float interludeBushDistance = 22.6f;
     [Tooltip("Bearing (degrees from the heading) of each canopy's inner edge, on opposite sides, so the heading bisects the pair and turning to either is the same. Keep it large enough that neither canopy can come into harvest range by walking straight ahead (scripts/interlude.py checks).")]
     [SerializeField] private float interludeBushBearing = 31.5f;
+    [Tooltip("Random-mode Interludes only: the two bushes of every trial stand on ground that differs in elevation by at least this many world units (the valley's elevation is (1 - moisture) * terrainMaxElevation), so the terrain difference is clearly visible; 0 = no minimum. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
+    [SerializeField] private float interludeMinElevationDifference = 0f;
 
     [Header("Instructions")]
     [Tooltip("File in StreamingAssets shown before this session. '{session}' and '{total}' are replaced by this session's number and the count of non-practice sessions.")]
@@ -275,6 +277,7 @@ public class SessionConfig : ScriptableObject
     public bool FreezeSun => freezeSun;
     public float InterludeBushDistance => interludeBushDistance;
     public float InterludeBushBearing => interludeBushBearing;
+    public float InterludeMinElevationDifference => interludeMinElevationDifference;
     public string InstructionsFile => instructionsFile;
     public string ControlsReminder => controlsReminder;
     public string FirstHarvestMessage => firstHarvestMessage;

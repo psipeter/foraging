@@ -291,7 +291,12 @@ explored and planned. Flow: P → Interlude (practice) → S1 → Interlude 1 �
   trial is a pair of bushes with independent uniform random shape and colour (moisture is still the terrain's at the final positions, so
   relevant-moisture sessions still see moisture differences; roughly a quarter to a half of random pairs differ by more than 0.2). Pairs whose
   true rewards are within the tie tolerance are redrawn, so every trial has a definite correct side, half of them on the left; the geometry
-  rules (equal edge distance and bearing, clear view, no hump) are unchanged. All trials have type `random` in `interlude.csv`; scoring
+  rules (equal edge distance and bearing, clear view, no hump) are unchanged. **Elevation floor (S3 and S4 only):** `interludeMinElevationDifference` is 3 world
+  units on `S3_Interlude` and `S4_Interlude` (0 = off, the default and the value on the others): the two bushes of every trial stand on ground whose
+  elevation, `(1 - moisture) * terrainMaxElevation`, differs by at least that (moisture difference 0.25 at elevation 12, about one terrace step),
+  so the terrain difference is clearly visible. Placements that fail it are discarded (about 43% of random placements on the S3/S4 terrain),
+  which also makes moisture more informative about the correct side than the unconstrained 60% (S3) and 51% (S4). S1 and S2 are unconstrained
+  because moisture does not affect their reward. All trials have type `random` in `interlude.csv`; scoring
   is accuracy only (small gaps are hard on purpose: they probe the resolution of the learned value function). The trial count is
   `interludeTrialCount`: the human assets keep their small counts, and the simulator can use another (`interlude_trial_count=50` as a
   session override, recorded in the environment) because 50 trials is a measurement of a model, not a block a person sits through.
@@ -572,9 +577,35 @@ the simulated agent baselines below (code in `scripts/`).
 Runs are recorded in `results/results.sqlite` (gitignored; conventions in CLAUDE.md, "Results database") and queried with
 `scripts/analysis.py`. They supersede the stale table below as it is re-run.
 
+**Current baselines: the `long` battery** (tag `newterrain-floor-100`: seeds 0-99, engine `9c6f77c2dcd0`, commit `3891865` plus uncommitted edits (dirty tree);
+S1 120 s, S2 120 s, S3 180 s, S4 180 s, motor costs on, default view cone; each followed by its random Interlude of 50 trials, one pick per trial, with the
+S3 and S4 pairs at least 3 elevation units apart (`interludeMinElevationDifference`); the agent scored on a copy at 0, 0.1, 0.2, 0.35, 0.5, 0.75 and 1.0 of the session).
+Agents: `nearest` (rate utility within 15 s, no value knowledge), `oracle` (the same actor with the true values) and `learner` (delta-rule critic on additive
+RBF features, `ConstantPrior(0.1)`). Lead = paired mean difference to `nearest` in reward points ± se, split into quality (better bushes) and efficiency
+(more fruits); accuracy is the final Interlude accuracy; `auc` is the chance-corrected area under the learning curve (1 = perfect from the start) and `t80` the
+fraction of the session at which accuracy first reaches 0.8:
+
+| Session | `nearest` total | Oracle lead | Learner lead | Learner quality / efficiency | Learner final accuracy | Learner `auc` | Learner `t80` |
+|---|---|---|---|---|---|---|---|
+| S1 (120 s) | 383 | +141.3 ± 4.6 | +80.0 ± 4.9 | +102.3 / -22.3 | 0.90 | 0.60 | 0.36 |
+| S2 (120 s) | 353 | +209.2 ± 5.7 | +91.9 ± 5.8 | +108.2 / -16.3 | 0.83 | 0.54 | 0.47 |
+| S3 (180 s) | 860 | +223.4 ± 8.1 | +145.4 ± 9.6 | +181.8 / -36.5 | 0.86 | 0.50 | 0.55 |
+| S4 (180 s) | 1260 | +188.5 ± 8.6 | +109.5 ± 8.9 | +164.7 / -55.2 | 0.88 | 0.51 | 0.55 |
+
+`nearest` stays at chance in every Interlude (0.49-0.51); the oracle is at 1.00. Both agents earn their lead through quality; they take fewer fruits
+than `nearest` (the oracle gives up 89-155 points of efficiency, the learner 16-55). Reading it: S3 and S4 are the slowest to be learned (`t80` 0.55 against 0.36 and 0.47). **What changed against the earlier record
+`newterrain-long-100`** (engine `b53c58237da4`, S3/S4 Interlude pairs unconstrained): the reward columns are identical (the floor only changes the Interlude
+pairs, and the same worlds and seeds were used); S1 and S2 Interlude numbers are identical; S3 `t80` 0.59 to 0.55 with accuracy 0.86 unchanged; S4 accuracy 0.90 to 0.88,
+`auc` 0.57 to 0.51 and `t80` 0.42 to 0.55, so the floored S4 pairs are a little harder for this learner (the cause is untested: a pair that differs in height need not differ much in reward, since moisture is the weaker weight there). Figures: `results/newterrain-floor-100_main_{reward,advantage,interlude}.png` (gitignored). **These supersede the
+old S3/S4 numbers anywhere in this file or the database: every S3 and S4 record made before the terrain change (frequency 0.6, elevation 20) or before the
+floor has a different environment hash and is not comparable.** The two earlier 100-seed S3/S4 battery records (`newterrain-long-30`, `newterrain-long-100`)
+are kept in the database for comparison.
+
 **`s1-90s-learning`** (first 100-seed run on a clean tree: commit `f3f5606`, engine `282a3fe3d692`; S1 at its design 90 s, motor costs on,
 default view cone, seeds 0-99; random Interlude with 50 trials and 20 samples per trial; Interlude scored on copies of each agent at
 0, 10, 20, 30, 45, 60, 75 and 90 s). Total reward, mean ± se, paired difference to `nearest` ± se, and Interlude accuracy at the end of the session:
+
+(In this table `nearest` is the old full-map agent (`ec2396541b09`) and `delta_rate_10` has the old neutral prior: both names now build different specs, so select them by id.)
 
 | Agent | Total | vs nearest | Interlude accuracy at 90 s |
 |---|---|---|---|
@@ -592,6 +623,8 @@ should reach the oracle's accuracy, so 0.91 leaves room for stronger critics. Th
 `rate-trial`, `learning-trial`) are superseded by this run.
 
 ### Simulated agent baselines (preliminary, STALE)
+
+**Superseded by the battery table above** (view-cone agents, the current terrain, motor costs, the speed and harvest rate of the current build). The table below is kept only for the full-information reference agents (`greedy_rate_15`, `plan_beam`), which the battery does not run; its `nearest` is the old full-map agent and its S3/S4 columns are for the old terrain.
 
 **These numbers were computed before the speed, harvest-rate and map-size changes** (speed 5,
 0.5 s per fruit, `worldHalfExtent` 200 with ~140 trees; session durations as in the table below). Player speed is
@@ -651,7 +684,7 @@ them here (path to code/notebooks; abandoned analyses with a pointer to an
 
 Next steps and open TODOs (details in the sections they live in): restore the design session durations
 (temporarily 15 s) and retune them for the faster pace; rebalance rewards/world/timing so the blind `nearest` agent stays
-clearly worse than `greedy`/`plan_beam` in S3–S4; re-run the agent baselines (stale); revisit the moisture-to-height
+clearly worse than `greedy`/`plan_beam` in S3–S4; re-run the full-information reference baselines (the battery table above covers `nearest`, `oracle` and `learner`); revisit the moisture-to-height
 coupling; decide and build S5 (interacting pair plus additive feature); for the Interlude, the prediction (reward-estimate)
 mode, analysis code, a simulated-learner agent to calibrate stops-to-learn and Interlude length, and a freshness check on
 its generated files; a participant-ID screen; and writing the hypotheses down.
@@ -675,11 +708,12 @@ with the oracle critic and full-knowledge memory and reproduce their pre-refacto
   bonus), leave/peek rule, and exploration (walk or look to see more bushes, or pick a bush to peek at). **Critic** = the value representation and
   its learning rule, from per-fruit rewards (full knowledge of the true reward function is the `oracle` critic). **Memory** = constraints on what
   the other two may use: the bushes seen so far (map: positions, attributes, spent or not) for the actor, and the (attributes, reward)
-  experiences for the critic; full memory accumulates everything seen, full knowledge is preloaded with the whole map. `nearest`, `greedy` and `plan`
-  are actors with the oracle critic and full-knowledge memory. The **percept** is not a component: it belongs to the environment (`scripts/perception.py`),
-  the sensor the engine applies: a view cone with an angle and distance and a heading, exact attributes, no terrain occlusion at first. By default it is
+  experiences for the critic; full memory accumulates everything seen, full knowledge is preloaded with the whole map. `greedy` and `plan`
+  are actors with the oracle critic and full-knowledge memory (the `greedy_*` entries; `nearest` is the same actor with a view-cone memory since the standard agents
+  were redefined, so older tags hold a different `nearest`: pass an agent id, not the alias, to `analysis.py` for them). The **percept** is not a component: it belongs to the environment (`scripts/perception.py`),
+  the sensor the engine applies: a view cone with an angle and distance and a heading, exact attributes, no terrain occlusion by default (the opt-in `OccludedConePercept` adds terrain and bush occlusion). By default it is
   as wide as the session camera (107.5 deg horizontal for 75 deg vertical at 16:9) with no distance limit; a run can replace it (`run_n(..., percept=)`,
-  `sim.py --percept ANGLE,DISTANCE`) and an agent may carry its own override. Realistic constraints (terrain occlusion, resolvability by angular
+  `sim.py --percept ANGLE,DISTANCE`) and an agent may carry its own override. Further constraints (resolvability by angular
   size, attribute noise) become new percept classes, calibrated against participants' logged visible sets. Walking, exploring and looking are actions of the
   actor, with time costs from `scripts/costs.py`: turning the view (`0.17 s + angle / 480 deg/s`, before a walk to face the way, before a harvest to bring the bush into the harvest cone, the view then ending at the cone's edge, not facing the bush; under 5 degrees it is free), pressing W to walk (0.2 s) and Space to harvest (0.3 s). The values are provisional, fitted to the developer's debug sessions (91 turns, 58 Space presses; the W press is a guess) and to be recalibrated from participants' logs. Every action costs time and a no-op (`Look(0)`, `Explore` of 0) is refused. These costs change every simulated total: the agent baselines below were computed without them and are stale.
 - **Interludes:** after a session the critic is frozen and carried over (no outcomes are shown in an Interlude, so humans do not learn there either), the

@@ -26,6 +26,7 @@ MonoBehaviour:
   freezeSun: 1
   interludeBushDistance: 22.6
   interludeBushBearing: 31.5
+  interludeMinElevationDifference: 3
   instructionsFile: instructions_interlude.txt
   controlsReminder: 
   firstHarvestMessage: 

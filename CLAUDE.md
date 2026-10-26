@@ -333,7 +333,7 @@ The generated files are manual steps (nothing runs them at build time):
   reward weights/std, fruit count, moisture terracing): `./venv/bin/python scripts/world.py <sessions> --unity`.
   Unity warns at startup when a session world is stale.
 - **Interlude** (its session's terrain, seed or reward function; or
-  `interludeMode`, `interludeTrialCount`, `interludeBushDistance`, `interludeBushBearing`): copy the
+  `interludeMode`, `interludeTrialCount`, `interludeBushDistance`, `interludeBushBearing`, `interludeMinElevationDifference`): copy the
   changed values onto the `*_Interlude` asset, then
   `./venv/bin/python scripts/interlude.py <names>_Interlude`. Unity does **not** warn
   when an Interlude file is stale.
@@ -370,7 +370,8 @@ database. Design rationale and rejected alternatives: `docs/DECISIONS.md` ("Resu
   Only library classes (`agents.py`, `perception.py`) build from a spec by name; a component defined elsewhere is passed in `extra`.
 - **Names are labels, not data.** Never use a name as a key. When reporting, build the label from the spec showing only the fields
   that differ among the agents in the table (`alpha=0.2` vs `alpha=0.5`; `rbf` vs `ssp`). Old registry names (`nearest`,
-  `greedy_rate_15`) stay as aliases that build the right spec.
+  `greedy_rate_15`) stay as aliases that build the *current* spec of that name: `nearest` is now the view-cone agent and `delta_rate_10`
+  has the ConstantPrior default, so results recorded under their old definitions are selected by agent id, not by alias.
 - An experiment is referred to by its `tag` (free text, e.g. `alpha-sweep-1`). In docs, describe an agent in words (components and
   parameters) plus the tag; a hash appears only where a result must be re-found.
 
@@ -435,7 +436,7 @@ random stream comes from the world seed, so a result is reproducible from its ke
   `results/<tag>_<population>_<kind>.png`; each population (all including `nearest`; more than 5 agents warns) is one figure group, except that the `scan-*` figures leave out `nearest` and `oracle` (`battery.FIGURE_OMITS`; they stay in the population for `scores`), so their advantage baseline is the lowest learner.
 - **Figure size and font conventions** (`plots.MODES`, from the evidence_integration project's `utils/plot_style.py` / `make_figures.py`): `mode="paper"`
   (default; `battery.py plot --mode`) is 6.5 in wide (a letter-page `\textwidth`) with 9 pt text (axis titles 10, ticks and legend 8, axes 0.8 pt,
-  lines 2.5 pt, 300 dpi); `mode="presentation"` is 10.6 in wide with 15 pt text (labels 17, titles 18, ticks 13, legend 14, axes 1.2 pt, 200 dpi). Height is
+  lines 2 pt, 300 dpi); `mode="presentation"` is 10.6 in wide with 15 pt text (labels 17, titles 18, ticks 13, legend 14, axes 1.2 pt, 200 dpi). Height is
   `rows * panel_height + extra_height` (foraging's own values), and the title, subtitle, legend and footer are placed from the font sizes (`plots._margins`).
   Seaborn's `ticks` theme, no gridlines, shared x axes across panels (shared y too in the Interlude figure; the reward and advantage panels have their own, since sessions differ in maximum reward). Battery figures are saved as `<tag>_<population>_{reward,advantage,interlude}.png`. Unlike evidence_integration, figures are PNG, not SVG.
 - **Figure colour conventions** (`plots.SERIES`, `plots.STYLES`, `plots.MAX_DISTINCT`; rationale and the recipe that generated the palette in
@@ -445,7 +446,7 @@ random stream comes from the world seed, so a result is reproducible from its ke
   colour-blindness (deuteranopia, protanopia, tritanopia) before relying on it, and do not change the palette without re-measuring the worst pair.
 
 **The assessment battery** (`scripts/battery.py`; "battery" because "test suite" already means pytest). One definition of how agents are compared:
-S1 to S4 at their design durations (90, 120, 120, 150 s, passed as `session_duration` overrides because the assets carry a temporary 15 s), each
+S1 to S4 at the durations of the default `long` battery (120, 120, 180, 180 s, passed as `session_duration` overrides because the assets carry a temporary 15 s; `--battery standard` is the shorter 90, 120, 120, 150 s one that older records used), each
 followed by its random Interlude (50 trials, **one pick per trial** so the spread between seeds has the same source as a person's), with a copy of the
 agent scored at 0, 0.1, 0.2, 0.35, 0.5, 0.75 and 1.0 of each session; 10 seeds by default; each agent starts fresh in every session.
 ```bash

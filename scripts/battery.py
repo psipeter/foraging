@@ -55,6 +55,7 @@ BATTERIES = {
     # the same battery with longer sessions (PI): more time to exploit what has been learned
     "long": Battery("long", {"S1": 120, "S2": 120, "S3": 180, "S4": 180}, (0.0, 0.1, 0.2, 0.35, 0.5, 0.75, 1.0)),
 }
+DEFAULT_BATTERY = "long"      # the battery every command uses unless `--battery` names another; `standard` stays for the records made with it
 
 
 # --------------------------------------------------------------------------------------------------
@@ -221,15 +222,16 @@ def scores(store, tag, battery, population, floor="nearest"):
     exactly F_floor (q - q_floor)  +  (F - F_floor) q: `quality` is the first term (it picks better bushes, at the floor's pace) and
     `efficiency` the second (it takes more fruits, at its own reward per fruit). Both are in reward points and add up to `lead`.
     `auc` is the area under the chance-corrected accuracy curve over the session's normalised time (0: chance throughout, 1: perfect from
-    the start; its standard error is across seeds) and `t80` the fraction of the session at which the mean accuracy first reaches 0.8
-    (interpolated; NaN if it never does). No normalisation to a ceiling is made: the oracle is just another agent in the population."""
+    the start; its standard error is across seeds; time is the checkpoint time over the last checkpoint's, the recorded session length) and `t80` the fraction of the session at which the mean accuracy first reaches 0.8
+    (interpolated; NaN if it never does). `accuracy`, `auc` and `t80` use all of an agent's seeds, `lead` only the seeds it shares with the floor
+    (the same under a complete battery). No normalisation to a ceiling is made: the oracle is just another agent in the population."""
     members = POPULATIONS[population]()
     ids = {name: factory().spec_hash() for name, factory in members.items()}
     rows = []
     for session in battery.sessions:
         sel = analysis.select(store, tag=f"{tag}/{session}", kind="interlude", agents=[f().spec() for f in members.values()])
         curves = analysis.checkpoint_curve(store, sel)
-        x = np.asarray(curves.t, dtype=float) / float(battery.sessions[session])
+        x = np.asarray(curves.t, dtype=float) / float(curves.t[-1])     # the recorded session length, whichever battery is named
         base = sel.rows[ids[floor]]
         for name, aid in ids.items():
             seeds = sorted(set(sel.rows[aid]) & set(base))
@@ -300,19 +302,19 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("list", help="list batteries and populations")
     p = sub.add_parser("run", help="run a population (or named agents) through a battery and record it")
-    p.add_argument("--battery", default="standard", choices=list(BATTERIES))
+    p.add_argument("--battery", default=DEFAULT_BATTERY, choices=list(BATTERIES))
     p.add_argument("--population", default="main", choices=list(POPULATIONS))
     p.add_argument("--agents", default=None, help="comma-separated names from the population or the registry (default: the whole population)")
     p.add_argument("--tag", required=True)
     p.add_argument("--seeds", default=None, help="e.g. 0-9 (default: the battery's)")
     p.add_argument("--db", default=None)
     p = sub.add_parser("scores", help="per agent and session scores of a recorded population (reward lead, gap closed, accuracy, learning-curve area)")
-    p.add_argument("--battery", default="standard", choices=list(BATTERIES))
+    p.add_argument("--battery", default=DEFAULT_BATTERY, choices=list(BATTERIES))
     p.add_argument("--population", default="main", choices=list(POPULATIONS))
     p.add_argument("--tag", required=True)
     p.add_argument("--db", default=None)
     p = sub.add_parser("plot", help="save the 2 x 2 session figures of a recorded battery, one set per agent group")
-    p.add_argument("--battery", default="standard", choices=list(BATTERIES))
+    p.add_argument("--battery", default=DEFAULT_BATTERY, choices=list(BATTERIES))
     p.add_argument("--population", default="main", choices=list(POPULATIONS))
     p.add_argument("--tag", required=True)
     p.add_argument("--kinds", default=",".join(KINDS), help="reward, advantage, interlude")

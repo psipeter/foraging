@@ -213,10 +213,19 @@ class Designer:
                 return False
         return True
 
+    def elevation_apart(self, dm):
+        """Elevation difference (world units) of two valley points whose moisture differs by `dm`: elevation is (1 - moisture) * terrainMaxElevation."""
+        return np.asarray(dm) * float(self.p.terrain_max_elevation)
+
+    def min_elevation_apart(self):
+        return float(getattr(self.p, "interlude_min_elevation_difference", 0.0))
+
     def pick(self, kind):
-        """A placement whose (nominal) moisture relation is `kind`, away from the spawn points already used."""
+        """A placement whose (nominal) moisture relation is `kind`, away from the spawn points already used. `apart` is the placements
+        whose nominal bushes differ in elevation by at least `interludeMinElevationDifference`."""
         if kind not in self._masks:
-            self._masks[kind] = np.flatnonzero(KIND_MASKS[kind](self.pool["dm"]))
+            mask = self.elevation_apart(self.pool["dm"]) >= self.min_elevation_apart() if kind == "apart" else KIND_MASKS[kind](self.pool["dm"])
+            self._masks[kind] = np.flatnonzero(mask)
         cand = self.rng.permutation(self._masks[kind])
         for spacing in (MIN_SITE_SPACING, MIN_SITE_SPACING / 2.0, 0.0):
             for i in cand[:6000]:
@@ -318,7 +327,7 @@ class Designer:
 
     def random_trial(self, want_left_better):
         """Random mode: both bushes get independent uniform shape and colour (moisture is the terrain's at the final position, as
-        everywhere). A pair whose true rewards are within the tie tolerance is redrawn, so a trial always has a correct side;
+        everywhere; with `interludeMinElevationDifference` > 0 the pair must also stand on ground that differs in elevation by at least that much). A pair whose true rewards are within the tie tolerance is redrawn, so a trial always has a correct side;
         `want_left_better` (or None) picks which side that is."""
         def build(i):
             for _ in range(RANDOM_DRAWS):
@@ -327,10 +336,12 @@ class Designer:
                 d = self.value(lt) - self.value(rt)
                 if abs(d) < TIE_TOLERANCE or (want_left_better is not None and (d > 0) != want_left_better):
                     continue
+                if self.elevation_apart(abs(lt["moisture"] - rt["moisture"])) < self.min_elevation_apart():
+                    continue            # the final positions (they shift with the radii) are too level: another draw
                 return lt, rt
             return None
 
-        return self.attempt("any", build)
+        return self.attempt("apart" if self.min_elevation_apart() > 0.0 else "any", build)
 
     def _extreme(self, feature):
         if feature not in self.relevant:

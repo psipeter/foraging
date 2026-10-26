@@ -102,8 +102,9 @@ def test_an_agent_that_plans_for_the_deadline_is_refused_before_anything_runs(tm
 def test_the_command_line_lists_and_runs(tmp_path, capsys, monkeypatch):
     battery.main(["list"])
     out = capsys.readouterr().out
-    assert "battery standard" in out and "population main: 3 agents" in out
-    monkeypatch.setitem(battery.BATTERIES, "standard", TINY)
+    assert "battery standard" in out and "battery long" in out and "population main: 3 agents" in out
+    assert battery.DEFAULT_BATTERY == "long"
+    monkeypatch.setitem(battery.BATTERIES, battery.DEFAULT_BATTERY, TINY)
     battery.main(["run", "--agents", "nearest,learner", "--tag", "cli", "--seeds", "0-1", "--db", str(tmp_path / "r.sqlite")])
     out = capsys.readouterr().out
     assert "P: total reward" in out and "S1: Interlude accuracy at the end" in out and "learner" in out
@@ -118,7 +119,7 @@ def test_plot_battery_saves_the_three_figures_of_a_group_with_one_panel_per_sess
         paths = battery.plot_battery(store, "pt", TINY, population="tiny", out_dir=tmp_path)
     assert [p.name for p in paths] == ["pt_tiny_reward.png", "pt_tiny_advantage.png", "pt_tiny_interlude.png"]
     assert all(p.exists() and p.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n" for p in paths)
-    monkeypatch.setitem(battery.BATTERIES, "standard", TINY)
+    monkeypatch.setitem(battery.BATTERIES, battery.DEFAULT_BATTERY, TINY)
     battery.main(["plot", "--tag", "pt", "--population", "tiny", "--kinds", "interlude", "--out", str(tmp_path / "cli"), "--db", str(tmp_path / "r.sqlite")])
     assert (tmp_path / "cli" / "pt_tiny_interlude.png").exists()
 

@@ -350,3 +350,15 @@ def test_the_mode_comes_from_the_asset_unless_given_and_designed_files_carry_no_
         interlude_mode(NS(), "shuffled")
     designed = get("S1_Interlude")[0]
     assert "mode" not in designed and {t["type"] for t in designed["trials"]} <= {"contrast", "graded", "extrapolation"}
+
+
+def test_random_mode_elevation_floor_applies_only_where_the_asset_sets_it():
+    for name in ("S3_Interlude", "S4_Interlude"):
+        sidecar, params, terrain = get_random(name) if name in RANDOM_NAMES else generate_interlude(name, mode="random", interlude_trial_count=50)
+        assert params.interlude_min_elevation_difference == 3.0
+        m = np.array(sidecar["moisture"])
+        assert (np.abs(m[0::2] - m[1::2]) * params.terrain_max_elevation >= 3.0).all()
+    sidecar, params, _ = get_random("S1_Interlude")
+    m = np.array(sidecar["moisture"])
+    assert getattr(params, "interlude_min_elevation_difference", 0.0) == 0.0
+    assert (np.abs(m[0::2] - m[1::2]) * params.terrain_max_elevation < 3.0).any()       # without a floor, level pairs occur
