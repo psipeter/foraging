@@ -18,7 +18,8 @@ Each agent starts fresh in every session (no carry-over). Scores and plots are n
 database (scripts/analysis.py).
 
 Agents run in one process, session by session, so each Interlude (about a second to generate) is built once per (session, seed) and shared
-by every agent through sim's cache. Agents that plan for the end of the session cannot be checkpointed and are refused.
+by every agent through sim's cache. A checkpoint is the agent as it stood at that time of a session of the battery's length (for an agent that
+plans for the end of the session, not what a shorter session would give).
 """
 
 import argparse
@@ -28,8 +29,9 @@ import numpy as np
 
 import analysis
 import results
-from agents import (REGISTRY, ComposedAgent, ConstantPrior, DeltaRuleCritic, FullKnowledge, FullMemory, NeutralPrior, OracleCritic, RBFFeatures,
-                    Softmax, UtilityActor)
+from agents import (REGISTRY, AreaRestrictedActor, ComposedAgent, ConstantPrior, CuriousActor, DeltaRuleCritic, FeatureKernel, FullKnowledge, FullMemory, FullSweeps, GPAgent,
+                    PosteriorActor, LearnerAgent, NeutralPrior, OracleCritic, PrioritizedReplay, RBFFeatures, RBFKernel, SampledReplay, Softmax,
+                    SoftmaxActor, UtilityActor)
 from world import _parse_seeds
 
 
@@ -69,79 +71,97 @@ def _agent(critic, choice=None, whole_map=False):
     return ComposedAgent(UtilityActor(choice=choice), DeltaRuleCritic() if critic == "learner" else OracleCritic(), memory)
 
 
-def main_population():
-    """The standard agents: the floor, the oracle and the learner, all with the standard actor (rate utility within 15 s) and the view cone.
-    (The window x utility grid and the cone-against-whole-map check were run first: docs/DECISIONS.md, "One actor default".)"""
-    return {"nearest": REGISTRY["nearest"], "oracle": REGISTRY["oracle"], "learner": REGISTRY["learner"]}
+def _named(*names, **extra):
+    """The registry agents `names`, then `extra` ({label: factory})."""
+    return {**{name: REGISTRY[name] for name in names}, **extra}
 
 
-def _scan(label, values, make):
-    """A population of the floor, the oracle (the ceiling) and learners that differ in one parameter: `make(value)` is the learner's critic."""
-    pop = {"nearest": REGISTRY["nearest"], "oracle": REGISTRY["oracle"]}
-    for value in values:
-        pop[f"learner_{label}{value:g}"] = lambda v=value: ComposedAgent(UtilityActor(), make(v), FullMemory())
-    return pop
+def _scan(reference, label, values, make):
+    """The registry agents `reference` plus agents that differ in one parameter: `make(value)` builds each, labelled `<label><value>`."""
+    return _named(*reference, **{f"{label}{value:g}": (lambda v=value: make(v)) for value in values})
 
 
-def scan_alpha_population():
-    """The delta-rule learning rate (the standard learner has 0.5)."""
-    return _scan("alpha", (0.1, 0.3, 0.5, 0.8), lambda v: DeltaRuleCritic(alpha=v))
+FLOOR = ("nearest", "oracle")              # the floor and the ceiling, in every population so that the panels share a reference
+DELTA = FLOOR + ("learner",)               # ... and the delta-rule learner with the standard actor
+GP = FLOOR + ("gp_mean",)                  # ... and the GP critic with the standard actor: the reference of every GP scan
 
 
-def scan_length_population():
-    """The RBF width in attribute units (the standard learner has 0.3)."""
-    return _scan("len", (0.1, 0.3, 0.5, 0.7), lambda v: DeltaRuleCritic(features=RBFFeatures(length_scale=v)))
-
-
-def scan_gain_population():
-    """A gain on the learned deviation at read-out (the standard learner has 1): does a larger spread of values, with the same ranking, help?"""
-    return _scan("gain", (1, 2, 4, 8), lambda v: DeltaRuleCritic(gain=v))
-
-
-def scan_window_population():
-    """The learner's walking window: the standard 15 s (ring 5 of bushes) against 60 s (past any hop in the valley: effectively no window)."""
-    pop = {"nearest": REGISTRY["nearest"], "oracle": REGISTRY["oracle"]}
-    for window in (15.0, 60.0):
-        pop[f"learner_window{window:g}"] = lambda w=window: ComposedAgent(UtilityActor(max_walk_time=w), DeltaRuleCritic(), FullMemory())
-    return pop
-
-
-def scan_prior_population():
-    """The learner's baseline: the standard fixed 0.1 (`learner`) against the running mean of the bush means and larger fixed baselines (1, 2: they
-    act as an optimism bonus, which belongs to the actor)."""
-    pop = {"nearest": REGISTRY["nearest"], "oracle": REGISTRY["oracle"], "learner": REGISTRY["learner"],
-           "learner_meanprior": lambda: ComposedAgent(UtilityActor(), DeltaRuleCritic(prior=NeutralPrior()), FullMemory())}
-    for level in (1.0, 2.0):
-        pop[f"learner_prior{level:g}"] = lambda v=level: ComposedAgent(UtilityActor(), DeltaRuleCritic(prior=ConstantPrior(v)), FullMemory())
-    return pop
-
-
-def scan_centers_population():
-    """The number of RBF centers per attribute (the standard learner has 8)."""
-    return _scan("centers", (4, 8, 12, 16), lambda v: DeltaRuleCritic(features=RBFFeatures(n_centers=v)))
-
-
-def choice_noise_population():
-    """The oracle and the learner with a softmax choice rule at two temperatures, against the floor (to be investigated)."""
-    pop = {"nearest": REGISTRY["nearest"], "oracle": REGISTRY["oracle"], "learner": REGISTRY["learner"]}
+def _choice_noise():
+    pop = _named(*DELTA)
     for critic in ("oracle", "learner"):
         for temperature in (0.3, 1.0):
             pop[f"{critic}_softmax{temperature:g}"] = lambda c=critic, t=temperature: _agent(c, Softmax(t))
     return pop
 
 
-def knowledge_population():
-    """Cone against whole map for both critics (the check that set the cone as the default)."""
-    return {"nearest": REGISTRY["nearest"], "oracle": REGISTRY["oracle"], "oracle_fullmap": lambda: _agent("oracle", whole_map=True),
-            "learner": REGISTRY["learner"], "learner_fullmap": lambda: _agent("learner", whole_map=True)}
+def _gp_kernel():
+    pop = _named(*GP)
+    for additive, label, lengths in ((True, "add", (0.2, 0.5)), (False, "joint", (0.3, 0.5))):
+        for length in lengths:
+            pop[f"gp_{label}{length:g}"] = lambda a=additive, l=length: GPAgent(kernel=RBFKernel(l, additive=a))
+    return pop
 
 
-# Each population is also one figure group (5 agents or fewer to avoid the `plots.MAX_DISTINCT` warning; 8 is the palette's limit) and includes the floor, so the panels share a reference.
-POPULATIONS = {"main": main_population, "scan-alpha": scan_alpha_population, "scan-length": scan_length_population,
-               "scan-centers": scan_centers_population, "scan-gain": scan_gain_population, "scan-prior": scan_prior_population, "scan-window": scan_window_population, "choice-noise": choice_noise_population, "knowledge": knowledge_population}
+# Each population is also one figure group (5 agents or fewer to avoid the `plots.MAX_DISTINCT` warning; 8 is the palette's limit) and includes
+# the floor. The comment above each says what it compares (docs/DECISIONS.md: "One actor default", "Exploration policies").
+POPULATIONS = {
+    # the standard agents: the floor, the oracle and the learner, all with the standard actor and the view cone
+    "main": lambda: _named(*DELTA),
+    # the delta-rule learner's parameters (the standard learner: alpha 0.5, RBF width 0.3, 8 centers, a 15 s window, a fixed 0.1 baseline)
+    "scan-alpha": lambda: _scan(FLOOR, "learner_alpha", (0.1, 0.3, 0.5, 0.8), lambda v: LearnerAgent(UtilityActor(), alpha=v)),
+    "scan-length": lambda: _scan(FLOOR, "learner_len", (0.1, 0.3, 0.5, 0.7), lambda v: LearnerAgent(UtilityActor(), features=RBFFeatures(length_scale=v))),
+    "scan-centers": lambda: _scan(FLOOR, "learner_centers", (4, 8, 12, 16), lambda v: LearnerAgent(UtilityActor(), features=RBFFeatures(n_centers=v))),
+    # the running mean of the bush means and larger fixed baselines (1, 2: they act as an optimism bonus, which belongs to the actor)
+    "scan-prior": lambda: _named(*DELTA, learner_meanprior=lambda: LearnerAgent(UtilityActor(), prior=NeutralPrior()),
+                                 **_scan((), "learner_prior", (1.0, 2.0), lambda v: LearnerAgent(UtilityActor(), prior=ConstantPrior(v)))),
+    # 15 s (ring 5 of bushes) against 60 s (past any hop in the valley: effectively no window)
+    "scan-window": lambda: _scan(FLOOR, "learner_window", (15.0, 60.0), lambda v: LearnerAgent(UtilityActor(max_walk_time=v))),
+    "choice-noise": _choice_noise,
+    # cone against whole map for both critics (the check that set the cone as the default)
+    "knowledge": lambda: _named("nearest", "oracle", oracle_fullmap=lambda: _agent("oracle", whole_map=True), learner=REGISTRY["learner"],
+                                learner_fullmap=lambda: _agent("learner", whole_map=True)),
+    # the exploration policies, each on both critics
+    "learners": lambda: _named(*DELTA, "gp_mean", "gp_joint"),
+    "explore-posterior": lambda: _named(*DELTA, "gp_mean", "gp_ucb", "gp_thompson", "gp_hybrid"),
+    "explore-noise": lambda: _named(*DELTA, "gp_mean", "gp_softmax", "gp_softmax_horizon"),
+    "explore-bonus": lambda: _named(*DELTA, "gp_mean", "gp_curious", "gp_peek", "gp_curious_peek", "gp_ars"),
+    "delta-noise": lambda: _named(*DELTA, "softmax", "softmax_horizon"),
+    "delta-bonus": lambda: _named(*DELTA, "curious", "peek", "curious_peek", "ars"),
+    # the ladder from the exact GP to the delta rule, one difference at a time (the reversion value fixed at 0.1, every bush weighted alike, the prior and noise
+    # fixed, the delta rule's own features as the kernel: `gp_matched` differs from `learner` in the update rule alone), and the matched GP's regularisation
+    "critic-ladder": lambda: _named(*DELTA, "gp_mean", "gp_fixmean", "gp_equalw", "gp_fixhyper", "gp_matched"),
+    "scan-matched-noise": lambda: _scan(DELTA + ("gp_matched",), "matched_noise", (0.1, 1.0, 3.0),
+                                        lambda v: GPAgent(kernel=FeatureKernel(RBFFeatures()), prior_mean=0.1, weight_by_count=False, prior_std=1.0, noise_std=v)),
+    # replay in the delta-rule critic, during the session: extra passes over everything stored after each bush (does it converge to the exact fit,
+    # `gp_matched`?) and other ways of choosing what to replay
+    "scan-replay-epochs": lambda: _scan(DELTA + ("gp_matched",), "replay_epochs", (1, 5, 20, 100), lambda v: LearnerAgent(UtilityActor(), replay=FullSweeps(v))),
+    "scan-replay-policy": lambda: _named(*DELTA, "gp_matched", replay_sampled20=lambda: LearnerAgent(UtilityActor(), replay=SampledReplay(20)),
+                                         replay_sampled100=lambda: LearnerAgent(UtilityActor(), replay=SampledReplay(100)),
+                                         replay_top5=lambda: LearnerAgent(UtilityActor(), replay=PrioritizedReplay(5)),
+                                         replay_top20=lambda: LearnerAgent(UtilityActor(), replay=PrioritizedReplay(20))),
+    # one parameter of the GP critic or of an exploration policy on it, against `gp_mean`
+    "scan-gp-kernel": _gp_kernel,
+    "scan-gp-prior": lambda: _named(*GP, **{"gp_mean0.1": lambda: GPAgent(prior_mean=0.1), "gp_mean0.5": lambda: GPAgent(prior_mean=0.5),
+                                            "gp_std0.5": lambda: GPAgent(initial_std=0.5), "gp_std2": lambda: GPAgent(initial_std=2.0)}),
+    "scan-ucb-beta": lambda: _scan(GP, "ucb_beta", (0.1, 0.25, 0.5, 1.0), lambda v: GPAgent(PosteriorActor(v, temperature=0.05))),
+    "scan-ucb-temp": lambda: _scan(GP, "ucb_temp", (0.02, 0.05, 0.1), lambda v: GPAgent(PosteriorActor(temperature=v))),
+    "scan-hybrid-beta": lambda: _scan(GP, "hybrid_beta", (0.1, 0.25, 0.5, 1.0), lambda v: GPAgent(PosteriorActor(v, sample=True))),
+    "scan-softmax-temp": lambda: _scan(GP, "softmax_temp", (0.01, 0.02, 0.05, 0.1), lambda v: GPAgent(SoftmaxActor(v))),
+    "scan-horizon-temp": lambda: _scan(GP, "horizon_temp", (0.05, 0.1, 0.2, 0.4), lambda v: GPAgent(SoftmaxActor(v, horizon=True))),
+    "scan-curious-beta": lambda: _scan(GP, "curious_beta", (0.1, 0.3, 1.0, 2.0), lambda v: GPAgent(CuriousActor(beta=v))),
+    "scan-curious-high": lambda: {**_scan(GP, "curious_beta", (2.0, 4.0, 8.0), lambda v: GPAgent(CuriousActor(beta=v))), "learner": REGISTRY["learner"]},
+    "scan-peek": lambda: _scan(GP, "peek_k", (1, 2, 3, 5), lambda v: GPAgent(CuriousActor(beta=0.0, peek_fruits=v))),
+    "scan-ars-radius": lambda: _scan(GP, "ars_radius", (0.3, 0.5, 0.8), lambda v: GPAgent(AreaRestrictedActor(radius=v, growth=2.0))),
+    "scan-ars-growth": lambda: _scan(GP, "ars_growth", (1.5, 2.0, 3.0), lambda v: GPAgent(AreaRestrictedActor(radius=0.5, growth=v))),
+    # one parameter of an exploration policy on the delta-rule critic, against that policy's default
+    "scan-delta-horizon-temp": lambda: _scan(DELTA + ("softmax_horizon",), "dhorizon_temp", (0.02, 0.05, 0.2), lambda v: LearnerAgent(SoftmaxActor(v, horizon=True))),
+    "scan-delta-curious-beta": lambda: _scan(DELTA + ("curious",), "dcurious_beta", (1.0, 2.0, 4.0), lambda v: LearnerAgent(CuriousActor(beta=v))),
+    "scan-delta-peek-margin": lambda: _scan(DELTA + ("peek",), "dpeek_margin", (0.5, 1.5, 2.0), lambda v: LearnerAgent(CuriousActor(beta=0.0, peek_fruits=2, margin=v))),
+}
+
 # Agents a population records but its figures leave out: the scans compare their learners with one another, so the floor and the ceiling
-# (still in the population for `scores`) would only crowd the plots.
-FIGURE_OMITS = {name: ("nearest", "oracle") for name in ("scan-alpha", "scan-length", "scan-centers")}
+# (still in the population for `scores`) would only crowd the plots. Some figures still hold 6 or 7 agents (a warning above 5; the palette has 8).
+FIGURE_OMITS = {name: ("nearest", "oracle") for name in POPULATIONS if name.startswith(("scan-", "explore-", "delta-", "critic-")) or name == "learners"}
 KINDS = ("reward", "advantage", "interlude")
 
 
@@ -167,9 +187,6 @@ def run_battery(agents, battery, tag, seeds=None, store=None, progress=print):
     """Run `agents` ({label: factory}) through every session of `battery`, recording each (agent, session) under the tag
     `<tag>/<session>`. Sessions are the outer loop so each Interlude is generated once per seed and shared by all agents. Returns
     {session: [RunReport per agent]}."""
-    for label, factory in agents.items():
-        if getattr(getattr(factory(), "actor", None), "deadline_dependent", False):
-            raise ValueError(f"agent '{label}' plans for the end of the session, so it cannot be checkpointed (see CLAUDE.md, checkpoint Interludes)")
     seeds = list(battery.seeds if seeds is None else seeds)
     if store is None:
         with results.Store() as own:

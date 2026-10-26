@@ -21,6 +21,7 @@ TURN_OVERHEAD = 0.17     # seconds to start and settle a turn, whatever its size
 TURN_DEADBAND = 5.0      # degrees: an implicit turn (before a walk) smaller than this is not needed
 WALK_PRESS_TIME = 0.2    # seconds to press W and start moving
 HARVEST_PRESS_TIME = 0.3  # seconds to press Space once the bush is in reach and in view
+RANGE_TOL = 1e-6        # world units: a bush this close to (or inside) its harvest range needs no walk (rounding after a walk leaves ~1e-13)
 DEFAULT_MAX_ANGLE = 35.0  # harvest cone half-angle for toy worlds whose params lack harvest_max_angle (SessionConfig has it)
 
 
@@ -61,7 +62,7 @@ def approach(pos, heading, targets, radius, reach, speed, max_angle):
     The seconds before the first fruit are turn + press + walking."""
     d = np.asarray(targets, dtype=float) - np.asarray(pos, dtype=float)
     dist = np.hypot(d[..., 0], d[..., 1])
-    walk = np.maximum(0.0, dist - reach)
+    walk = np.where(dist - reach > RANGE_TOL, dist - reach, 0.0)
     brg = np.where(dist > 0.0, bearing(d[..., 0], d[..., 1]), heading)
     delta = np.abs(wrap(brg - heading))
     with np.errstate(divide="ignore", invalid="ignore"):

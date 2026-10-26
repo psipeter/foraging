@@ -9,7 +9,7 @@ from agents import (REGISTRY, Actor, ComposedAgent, GreedyAgent, Harvest, Neares
                     oracle_agent)
 import sim
 from sim import run_episode, run_n
-from world import World, load_session, make_world
+from world import World, load_session
 
 
 def tiny_world(pos, rewards, duration=60.0, speed=5.0, fd=0.5, radius=1.0, gap=7.0):
@@ -409,14 +409,12 @@ def test_checkpoints_after_the_agent_stops_get_its_final_state_and_none_means_no
     assert run_episode(NearestAgent(whole_map=True), tiny_world([[3, 0]], [[1, 1]])).snapshots == {}
 
 
-def test_checkpoints_must_be_inside_the_session_and_not_for_deadline_planners():
+def test_checkpoints_must_be_inside_the_session_and_deadline_dependent_agents_get_within_session_snapshots():
     w = tiny_world([[3, 0]], [[1, 1]], duration=30.0)
     for bad in ([-1], [31]):
         with pytest.raises(ValueError, match="within the session"):
             run_episode(NearestAgent(whole_map=True), w, checkpoints=bad)
-    with pytest.raises(ValueError, match="plan for the end"):
-        run_episode(PlannerAgent("beam"), w, checkpoints=[10])
-    run_episode(PlannerAgent("beam"), w)                                          # fine without checkpoints
+    assert sorted(run_episode(PlannerAgent("beam"), w, checkpoints=[10]).snapshots) == [10.0]       # allowed: the plan is for this session
 
 
 @pytest.mark.motor_costs
@@ -537,3 +535,32 @@ def test_occluded_percept_never_sees_more_than_the_cone_in_a_real_world():
         pos, heading = w.start + rng.uniform(-60, 60, 2), rng.uniform(0, 360)
         seen, all_in_cone = set(occ.observe(w, pos, heading, dep).ids), set(cone.observe(w, pos, heading, dep).ids)
         assert seen <= all_in_cone and len(seen) < len(all_in_cone)
+
+
+# ---- range tolerance and the average rate -----------------------------------------------------------------------------
+
+@pytest.mark.motor_costs
+def test_returning_to_a_bush_left_early_costs_only_the_harvest_press():
+    import costs
+    for x, z in np.random.default_rng(1).uniform(-60, 60, (30, 2)):         # about half of such walks used to end a rounding error short
+        w = tiny_world([[x, z]], [[1, 2, 3, 4]])
+        r = run_episode(Fixed([0, 0], take=1), w)
+        assert r.press_time == pytest.approx(costs.WALK_PRESS_TIME + 2 * costs.HARVEST_PRESS_TIME)
+
+
+class RateProbe(FixedActor):
+    def __init__(self, order, take=None):
+        super().__init__(order, take)
+        self.seen = []
+
+    def act(self, view):
+        self.seen.append((view.average_rate(), view.body.total / view.time_elapsed if view.time_elapsed > 0 else 0.0))
+        return super().act(view)
+
+
+def test_the_average_rate_from_memory_is_the_score_over_the_time_elapsed():
+    w = tiny_world([[20, 0], [20, 30]], [[1, 2, 3, 4], [9, 9, 9, 9]])
+    actor = RateProbe([0, 1], take=2)
+    run_episode(oracle_agent(actor), w)
+    assert len(actor.seen) == 3 and actor.seen[0] == (0.0, 0.0)
+    assert actor.seen[1][0] > 0 and all(a == pytest.approx(b) for a, b in actor.seen)

@@ -37,7 +37,7 @@ def test_the_spec_is_plain_json_with_defaults_resolved():
     assert specs.canonical_json(spec) == specs.canonical_json(__import__("json").loads(specs.canonical_json(spec)))
     assert spec["critic"] == {"type": "DeltaRuleCritic", "alpha": 0.5,
                               "features": {"type": "RBFFeatures", "length_scale": 0.3, "n_centers": 8, "additive": True},
-                              "prior": {"type": "ConstantPrior", "level": 0.1}, "gain": 1}
+                              "prior": {"type": "ConstantPrior", "level": 0.1}}
     assert spec["actor"]["choice"] == {"type": "Argmax"}                     # the actor's default choice rule is reported
     assert spec["percept"] is None and spec["memory"] == {"type": "FullMemory"}
 

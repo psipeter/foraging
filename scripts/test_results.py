@@ -7,7 +7,7 @@ import pytest
 import fingerprint
 import results
 import sim
-from agents import ComposedAgent, DeltaRuleCritic, FullKnowledge, FullMemory, OracleCritic, UtilityActor, REGISTRY
+from agents import ComposedAgent, DeltaRuleCritic, FullMemory, UtilityActor, REGISTRY
 from perception import ConePercept
 from results import Store, record_run
 
@@ -328,16 +328,12 @@ def test_checkpoint_scores_are_stored_per_episode_and_the_last_one_is_the_sessio
 
 
 @pytest.mark.slow
-def test_an_agent_that_does_not_learn_scores_the_same_at_every_checkpoint_and_a_planner_is_refused(store):
+def test_an_agent_that_does_not_learn_scores_the_same_at_every_checkpoint(store):
     kw = dict(kind="interlude", n_samples=5, interlude_mode="random", overrides={"session_duration": 30, "interlude_trial_count": 6},
               checkpoints=[0, 15, 30], store=store)
     report = record_run("greedy_rate_10", "P", [0], "oracle", **kw)
     accuracies = {c["interlude_accuracy"] for c in store.checkpoints(report.rows[0]["episode_id"])}
     assert len(accuracies) == 1
-    with pytest.raises(ValueError, match="plan for the end"):
-        record_run("plan_beam", "P", [0], "plan", **kw)
-    assert store.select("SELECT COUNT(*) AS n FROM runs WHERE tag = 'plan'")[0]["n"] == 1      # (the run row is kept, marked interrupted)
-    assert "interrupted" in store.select("SELECT note FROM runs WHERE tag = 'plan'")[0]["note"]
 
 
 def test_a_version_2_file_gains_the_checkpoint_table(tmp_path):

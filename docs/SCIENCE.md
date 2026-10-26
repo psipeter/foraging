@@ -682,7 +682,10 @@ pilot has been run, and no analyses exist. When analyses exist, reference
 them here (path to code/notebooks; abandoned analyses with a pointer to an
 `archive/HISTORY_*.md`-style entry, as in evidence_integration).
 
-Next steps and open TODOs (details in the sections they live in): restore the design session durations
+Next steps and open TODOs (details in the sections they live in): **re-run every peek-and-leave result (`peek`, `curious_peek`, `gp_peek`,
+`gp_curious_peek`, the `scan-peek` and `scan-delta-peek-margin` populations) on the fixed code: the first version walked back to the bush it had left, so the
+recorded results measured that loop and are invalid (DECISIONS, "Exploration policies"); re-record the roster, the scans and the matched-critic comparison on a clean
+tree and then write the results into this file;** restore the design session durations
 (temporarily 15 s) and retune them for the faster pace; rebalance rewards/world/timing so the blind `nearest` agent stays
 clearly worse than `greedy`/`plan_beam` in S3–S4; re-run the full-information reference baselines (the battery table above covers `nearest`, `oracle` and `learner`); revisit the moisture-to-height
 coupling; decide and build S5 (interacting pair plus additive feature); for the Interlude, the prediction (reward-estimate)
@@ -691,13 +694,25 @@ its generated files; a participant-ID screen; and writing the hypotheses down.
 
 ---
 
-## Agent ladder for calibrating the task (framework built; learning agents not yet)
+## Agent ladder for calibrating the task (framework, learners and exploration policies built; results provisional)
 
 Goal: find a task design where, in every session, learning pays and strategy pays, using simulated agents as a screen before (and
-alongside) a human pilot. **Built (v1):** the component framework in `scripts/agents.py` and the engine in `scripts/sim.py` (heading, view cone,
-Harvest / Explore / Look / Stop actions, Interlude evaluation with a frozen critic); `nearest`, `greedy_*` and `plan_*` are rebuilt on it
-with the oracle critic and full-knowledge memory and reproduce their pre-refactor results exactly. **First learner built:** `DeltaRuleCritic`
-(`delta_value_10`, `delta_rate_10` in the registry; see DECISIONS, "The first learner"). **Not built:** the kernel-regression (B) and Gaussian-process (E) critics, SSP features, exploring actors, limited memories, and the agent list. Agreed design:
+alongside) a human pilot. **Built:** the component framework in `scripts/agents.py` and the engine in `scripts/sim.py` (heading, view cone, Harvest / Explore / Look /
+Stop actions, Interlude evaluation with a frozen critic; checkpoints of an agent during a session); `nearest`, `greedy_*` and `plan_*` rebuilt on
+it with the oracle critic. **Learners and exploration policies built (docs/DECISIONS.md has the design, the defaults and the first numbers; the results are
+provisional dirty-tree runs and are not summarised here until they are re-recorded on a clean tree):**
+- **Critics** (value representation and learning rule): `DeltaRuleCritic` (TD(0) on additive RBF features with a swappable `Prior` and an optional swappable
+  `Replay`: `FullSweeps`, `SampledReplay`, `PrioritizedReplay`, which re-present stored bushes during the session) and `GPCritic` (Gaussian-process
+  regression with a swappable `Kernel`: additive or joint RBF, or `FeatureKernel`, the delta rule's own feature similarity, which makes it Bayesian
+  linear regression on the same features; prior mean, prior spread and noise estimated from the memory, each switchable to a fixed value; it reports
+  a posterior sd and can draw a joint sample). The two can be made to differ only in the update rule (exact fit against online steps).
+- **Actors** (policy): the rate utility within a 15 s walking window, which is the standard; random exploration (`SoftmaxActor`, with an optional horizon
+  that shrinks the temperature with the time left); attribute-space curiosity and peek-and-leave (`CuriousActor`); area-restricted search in attribute
+  space (`AreaRestrictedActor`); and the posterior-based UCB, Thompson sampling and hybrid (`PosteriorActor`, which need the GP critic's uncertainty).
+- **Evaluation:** the assessment battery (`scripts/battery.py`; the `long` session durations are the default) records populations of agents, with their
+  paired reward lead over `nearest`, final Interlude accuracy and learning-curve area; the Interlude choice is greedy for every actor, and a checkpoint is
+  the agent as it stood at that time of a full-length session. **Not built:** SSP features, a recency-weighted replay (it needs the memory to record the order
+  of visits), limited or forgetful memories, and the agent list. Agreed design:
 
 - **Ladder:** `nearest` (floor, learns nothing) < simple learner < ideal learner < full-information `greedy`/`plan_beam`. The full-information
   agents are not reachable by any learner; they are a benchmark, and the gap to them is the unavoidable cost of learning, not a tuning target.
@@ -718,11 +733,19 @@ with the oracle critic and full-knowledge memory and reproduce their pre-refacto
   actor, with time costs from `scripts/costs.py`: turning the view (`0.17 s + angle / 480 deg/s`, before a walk to face the way, before a harvest to bring the bush into the harvest cone, the view then ending at the cone's edge, not facing the bush; under 5 degrees it is free), pressing W to walk (0.2 s) and Space to harvest (0.3 s). The values are provisional, fitted to the developer's debug sessions (91 turns, 58 Space presses; the W press is a guess) and to be recalibrated from participants' logs. Every action costs time and a no-op (`Look(0)`, `Explore` of 0) is refused. These costs change every simulated total: the agent baselines below were computed without them and are stale.
 - **Interludes:** after a session the critic is frozen and carried over (no outcomes are shown in an Interlude, so humans do not learn there either), the
   agent starts a fresh memory for the Interlude's own bushes, and both bushes of each trial are shown to it as observed, whatever its sensor (the trials are
-  built so both are in view; the Interlude tests what was learned, not perception). The actor's choice rule then picks between them, repeated enough times to
+  built so both are in view; the Interlude tests what was learned, not perception). The actor then picks between them greedily by its own utility (whatever its choice rule), repeated enough times to
   estimate accuracy; scored by a separate function (correct choices
   overall and by trial type, and the hidden bonus). The Interlude an agent faces is generated by `scripts/interlude.py` for the same world seed
   (`generate_interlude(..., seed=)`), with the same search and trials the game uses, so it is what a human sees on that world; if more or different
   trials are needed to separate agents, the change belongs in the human Interludes as well, not in a simulation-only variant.
+- **What the critic and actor components are for (questions, not results):** the learners separate three sources of improvement that a human
+  comparison can tell apart: the *representation* (what generalises across attributes: additive against joint, the kernel width), the *update rule*
+  (an online step against an exact or replayed fit; how many passes over what is stored), and *exploration* (random noise, an attribute-space novelty
+  bonus, a posterior-based bonus or sample, a leave rule). Their human signatures, all derivable from the logs: generalisation (attribute distance
+  between consecutive harvests and the previous reward, and the Interlude accuracy by pair type), learning dynamics and order or recency effects (the
+  amount of replay as a fitted quantity), choice noise against uncertainty (the bias and slope of the choice curve, directed against random
+  exploration), the effect of time left on choices, leaving times against the average rate, and revisits. No model comparison in the literature covers
+  continuous navigation with travel cost, a view cone and occlusion, which is where participants' data would be new.
 - **Robustness:** the ordering of agents must hold across a variety of agents (learner and policy parameter sweeps), worlds and reward functions,
   not for one tuned learner.
 - **TODO(PI): design a good agent/human performance metric** (candidate: (score - nearest) / (oracle - nearest) per session, plus choice-quality
@@ -732,6 +755,13 @@ with the oracle critic and full-knowledge memory and reproduce their pre-refacto
 ---
 
 ## Open questions and known limitations
+
+- **Exploration and learning (agents).** (a) Peek-and-leave has no valid result yet (see the TODO above). (b) Whether any exploration policy helps once the critic
+  fits the data well is open: the first runs show little benefit beyond an attribute-space curiosity bonus, and the learner with the most headroom was
+  tested only at a few parameter values. (c) Replay amount, kernel width and the GP's regularisation are free parameters that should be fitted to people, not
+  tuned for reward. (d) The learning curves of an agent that depends on the session's length (a horizon softmax, a planner) are within-session curves,
+  not what a shorter session would give. (e) A recency-weighted replay and a forgetful memory need the memory to keep the order of visits. (f) The
+  simulated observer sees every bush in its cone; `OccludedConePercept` (terrain and bush occlusion) exists but no result is recorded with it.
 
 - **TODO(PI): rebalance so `nearest` stays clearly worse than `greedy`/`plan_beam` in every
   session.** In the baselines below the blind nearest-bush forager reaches a large share
@@ -843,6 +873,62 @@ from [text] sources.
   Generalization guides human exploration in vast decision spaces. *Nature
   Human Behaviour, 2*(12), 915–924. doi:10.1038/s41562-018-0467-4 (a 2021
   correction exists) **[abstract]**
+
+**Exploration strategies (computational and behavioural), added with the exploration-policy work.** Marks: **[read]** = full text read, **[abstract]** =
+abstract or metadata only (the two literature reviews are in the session notes; only Gershman 2018, Hills et al. 2013 and Wu et al. 2018 were read in full)
+- Auer, P., Cesa-Bianchi, N., & Fischer, P. (2002). Finite-time analysis of the multiarmed bandit problem. *Machine Learning, 47*, 235–256.
+  doi:10.1023/A:1013689704352 **[abstract]**
+- Srinivas, N., Krause, A., Kakade, S., & Seeger, M. (2010). Gaussian process optimization in the bandit setting: no regret and experimental design.
+  *ICML*. arXiv:0912.3995 **[abstract]**
+- Chowdhury, S. R., & Gopalan, A. (2017). On kernelized multi-armed bandits. *ICML*. arXiv:1704.00445 **[abstract]**
+- Li, L., Chu, W., Langford, J., & Schapire, R. E. (2010). A contextual-bandit approach to personalized news article recommendation. *WWW*.
+  arXiv:1003.0146 **[abstract]**
+- Russo, D., Van Roy, B., Kazerouni, A., Osband, I., & Wen, Z. (2018). A tutorial on Thompson sampling. *Foundations and Trends in Machine
+  Learning, 11*(1). arXiv:1707.02038 **[abstract]**
+- Agrawal, S., & Goyal, N. (2012). Analysis of Thompson sampling for the multi-armed bandit problem. *COLT / PMLR 23*. arXiv:1111.1797 **[abstract]**
+- Frazier, P. I., Powell, W. B., & Dayanik, S. (2008). A knowledge-gradient policy for sequential information collection. *SIAM Journal on Control
+  and Optimization, 47*(5), 2410–2439. **[abstract]**
+- Russo, D., & Van Roy, B. (2014). Learning to optimize via information-directed sampling. *NIPS*. arXiv:1403.5556 **[abstract]**
+- Bubeck, S., Munos, R., & Stoltz, G. (2009). Pure exploration in multi-armed bandits problems. *ALT*. arXiv:0802.2655 **[abstract]** (explore to
+  earn against explore to learn)
+- Lam, R., Willcox, K., & Wolpert, D. H. (2016). Bayesian optimization with a finite budget: an approximate dynamic programming approach. *NIPS*.
+  **[abstract]** (finite horizons)
+- Guez, A., Silver, D., & Dayan, P. (2012). Efficient Bayes-adaptive reinforcement learning using sample-based search. *NIPS*. arXiv:1205.3109 **[abstract]**
+- Houlsby, N., Huszár, F., Ghahramani, Z., & Lengyel, M. (2011). Bayesian active learning for classification and preference learning. arXiv:1112.5745
+  **[abstract]**
+- Osband, I., Blundell, C., Pritzel, A., & Van Roy, B. (2016). Deep exploration via bootstrapped DQN. *NIPS*. arXiv:1602.04621 **[abstract]**
+- Bellemare, M., et al. (2016). Unifying count-based exploration and intrinsic motivation. *NIPS*. arXiv:1606.01868 **[abstract]**
+- Burda, Y., Edwards, H., Pathak, D., Storkey, A., Darrell, T., & Efros, A. A. (2019). Large-scale study of curiosity-driven learning. *ICLR*.
+  arXiv:1808.04355 **[abstract]** (the noisy-TV problem)
+- Wilson, R. C., Geana, A., White, J. M., Ludvig, E. A., & Cohen, J. D. (2014). Humans use directed and random exploration to solve the
+  explore–exploit dilemma. *Journal of Experimental Psychology: General, 143*(6), 2074–2081. **[abstract]**
+- Wilson, R. C., Bonawitz, E., Costa, V. D., & Ebitz, R. B. (2021). Balancing exploration and exploitation with information and randomization.
+  *Current Opinion in Behavioral Sciences, 38*, 49–56. **[abstract]**
+- Gershman, S. J. (2018). Deconstructing the human algorithms for exploration. *Cognition, 173*, 34–42. PMC5801139 **[read]** (a hybrid of UCB and
+  Thompson sampling fits two-armed bandit choices best)
+- Gershman, S. J., & Niv, Y. (2015). Novelty and inductive generalization in human reinforcement learning. *Topics in Cognitive Science, 7*(3),
+  391–415. PMC4537661 **[abstract]**
+- Wu, C. M., Schulz, E., Speekenbrink, M., Nelson, J. D., & Meder, B. (2018): the main text and the CogSci 2017 version were read in full (a Gaussian
+  process with an upper-confidence-bound rule, locality, fitted length scales below the true ones); the Nature supplementary information could not
+  be accessed, so the per-condition parameter table was taken from the authors' code **[read, supplement not]**
+- Schulz, E., Wu, C. M., Ruggeri, A., & Meder, B. (2019). Searching for rewards like a child means less generalization and more directed
+  exploration. *Psychological Science, 30*(11), 1561–1572. doi:10.1177/0956797619863663 **[abstract]**
+- Giron, A. P., et al. (2023). Developmental changes in exploration resemble stochastic optimization. *Nature Human Behaviour, 7*(11), 1955–1967.
+  **[abstract]**
+- Wu, C. M., Schulz, E., Pleskac, T. J., & Speekenbrink, M. (2022). Time pressure changes how people explore and respond to uncertainty. *Scientific
+  Reports*. PMC8904509 **[abstract]**
+- Mehlhorn, K., et al. (2015). Unpacking the exploration–exploitation tradeoff: a synthesis of human and animal literatures. *Decision, 2*(3),
+  191–215. doi:10.1037/dec0000033 **[abstract]**
+- Constantino, S. M., & Daw, N. D. (2015). *Cognitive, Affective, & Behavioral Neuroscience, 15*, 837–853 (already cited above) and Hayden, B. Y.,
+  Pearson, J. M., & Platt, M. L. (2011). Neuronal basis of sequential foraging decisions in a patchy environment. *Nature Neuroscience, 14*,
+  933–939. **[abstract]**
+- Hills, T. T., Kalff, C., & Wiener, J. M. (2013). Adaptive Lévy processes and area-restricted search in human foraging. *PLoS ONE, 8*, e60488.
+  PMC3618454 **[read]** (post-find turning in a virtual patchy world; step lengths are not diagnostic)
+- Edwards, A. M., et al. (2007). Revisiting Lévy flight search patterns of wandering albatrosses, bumblebees and deer. *Nature, 449*, 1044–1048;
+  Raichlen, D. A., et al. (2014). Evidence of Lévy walk foraging patterns in human hunter-gatherers. *PNAS, 111*, 728–733. **[abstract]**
+- Sharma, S., Curtis, A., Kryven, M., Tenenbaum, J., & Fiete, I. (2022). *ICLR*. arXiv:2110.12301 (an information-seeking account of human
+  exploration of a 3D environment; title not recorded in the review notes) **[abstract]**
+- Kidd, C., & Hayden, B. Y. (2015). The psychology and neuroscience of curiosity. *Neuron, 88*, 449–460. PMC4635443 **[abstract]**
 
 **Related naturalistic paradigms — identified, not read**
 - "A naturalistic reinforcement learning task uncovers historical neural

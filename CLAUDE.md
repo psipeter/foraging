@@ -385,9 +385,10 @@ database. Design rationale and rejected alternatives: `docs/DECISIONS.md` ("Resu
 - `episode_checkpoints` (schema v3): for a run recorded with `--checkpoints T1,T2,...` (kind interlude), the Interlude score (trials,
   accuracy, bonus) of a deep copy of the agent as it was at each session time. The copy is taken just before the first update to the agent
   after that time, so it equals the agent of a session that really ended there; the episode's own Interlude columns are the score after the whole
-  session, equal to the checkpoint at the session's length. **A shortcut for agents that do not plan for the end of the session:** actors with
-  `deadline_dependent = True` (the planners) are refused, and any new actor whose choices depend on the time left must set it. The checkpoint
-  times are part of the environment hash.
+  session, equal to the checkpoint at the session's length. **For an agent whose behavior does not depend on the session's length this
+  equals a shorter session; for one that does (`deadline_dependent = True`: the planners, a horizon softmax; any new actor whose choices depend on
+  the time left must set it) the checkpoint is the agent as it stood at that time of a session of the battery's length, which is what a participant
+  has at that moment, not what a shorter session would give** (such actors used to be refused). The checkpoint times are part of the environment hash.
 - `episode_fruits` (schema v2): one row per fruit taken in the session (`t` in session seconds, `bush`, `k`, `reward`, `running_total`),
   the agent's counterpart of the human `fruit` events in `events.csv`; read with `Store.fruits(episode_id)` or
   `analysis.fruit_events(store, sel, agent, seed)`. No positions, headings or other actions.
@@ -433,7 +434,7 @@ random stream comes from the world seed, so a result is reproducible from its ke
   curves (`plots.long_form`): mean and 95% bootstrap interval across seeds, `hue` = agent name, the same colour for the same agent in every
   panel, one shared legend, one linestyle per agent as well as one colour (`plots.SERIES`, `plots.STYLES`), at most 8 agents per figure (the palette) and a warning above 5 (`plots.MAX_DISTINCT`). The advantage figure uses the **lowest-performing agent of each session**
   as its baseline (`cumulative_curve(..., baseline="lowest")`, `curve --baseline lowest`). For the battery, `battery.py plot --tag T --population P [--kinds reward,advantage,interlude]` saves one figure per kind as
-  `results/<tag>_<population>_<kind>.png`; each population (all including `nearest`; more than 5 agents warns) is one figure group, except that the `scan-*` figures leave out `nearest` and `oracle` (`battery.FIGURE_OMITS`; they stay in the population for `scores`), so their advantage baseline is the lowest learner.
+  `results/<tag>_<population>_<kind>.png`; each population (all including `nearest`; more than 5 agents warns) is one figure group, except that the `scan-*`, `explore-*`, `delta-*` and `learners` figures leave out `nearest` and `oracle` (`battery.FIGURE_OMITS`; the figure then holds up to 6 or 7 agents, past the 5-agent warning and within the palette's 8; they stay in the population for `scores`), so their advantage baseline is the lowest learner.
 - **Figure size and font conventions** (`plots.MODES`, from the evidence_integration project's `utils/plot_style.py` / `make_figures.py`): `mode="paper"`
   (default; `battery.py plot --mode`) is 6.5 in wide (a letter-page `\textwidth`) with 9 pt text (axis titles 10, ticks and legend 8, axes 0.8 pt,
   lines 2 pt, 300 dpi); `mode="presentation"` is 10.6 in wide with 15 pt text (labels 17, titles 18, ticks 13, legend 14, axes 1.2 pt, 200 dpi). Height is
@@ -447,17 +448,17 @@ random stream comes from the world seed, so a result is reproducible from its ke
 
 **The assessment battery** (`scripts/battery.py`; "battery" because "test suite" already means pytest). One definition of how agents are compared:
 S1 to S4 at the durations of the default `long` battery (120, 120, 180, 180 s, passed as `session_duration` overrides because the assets carry a temporary 15 s; `--battery standard` is the shorter 90, 120, 120, 150 s one that older records used), each
-followed by its random Interlude (50 trials, **one pick per trial** so the spread between seeds has the same source as a person's), with a copy of the
+followed by its random Interlude (50 trials, **one pick per trial** (the Interlude choice is greedy for every actor, so a pick has no noise of its own; one pick keeps the cost of a battery low)), with a copy of the
 agent scored at 0, 0.1, 0.2, 0.35, 0.5, 0.75 and 1.0 of each session; 10 seeds by default; each agent starts fresh in every session.
 ```bash
 ./venv/bin/python scripts/battery.py list
 ./venv/bin/python scripts/battery.py run --population main --tag <name> [--agents a,b,...] [--seeds 0-9] [--db PATH]   # records <name>/<session> runs
 ```
 It is just `record_run` (kind interlude) per agent per session, sessions as the outer loop so each Interlude is generated once per (session, seed)
-and shared by all agents. Populations (`POPULATIONS`: `main` = `nearest`, `oracle`, `learner`, the standard agents; `learner-parameters`, `choice-noise` and `knowledge` are
+and shared by all agents. Populations (`POPULATIONS`: `main` = `nearest`, `oracle`, `learner`, the standard agents; the GP critic (`gp_mean`) and the exploration policies are in `learners`, `explore-noise`, `explore-bonus` and `explore-posterior` (GP critic), `delta-noise` and `delta-bonus` (the same actors on the delta-rule critic) and the one-parameter `scan-*` populations (each includes `gp_mean` as its reference); `learner-parameters`, `choice-noise` and `knowledge` are
 the investigations; names are labels, identity is the spec hash) live in `battery.py`, not `agents.py`, so editing them does not move the agents-code hash.
 **Standard agents:** the actor is the rate utility within 15 s of walking and the map comes from the view cone (`FullMemory`); `whole_map=True` gives the
-full-information variant, and the registry's `greedy_*` entries stay full-information benchmarks. Planners are refused (not checkpointable). **Scores and plots are deliberately not part of the run**: they are
+full-information variant, and the registry's `greedy_*` entries stay full-information benchmarks. **Scores and plots are deliberately not part of the run**: they are
 computed from the database afterwards: `battery.py scores --tag T --population P` prints, per session and agent, the paired reward lead over `nearest`
 (in reward points, with its standard error), its split into **quality** (picks better bushes) and **efficiency** (takes more fruits) with fruits and reward per fruit,
 the final Interlude accuracy, and the learning-curve area (`auc`, chance-corrected) and time to 0.8 accuracy (`t80`, fraction of the session). There is no

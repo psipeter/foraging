@@ -29,7 +29,7 @@ so every agent faces identical rewards on a given seed, and comparisons between 
 
 An Interlude is evaluated after a session (evaluate_interlude): the critic is frozen and carried over, the agent starts a fresh
 memory for the Interlude's own bushes, both bushes of each trial are shown to it as observed (whatever its sensor), and the actor's
-choice rule picks between them, on the very trials the game shows (interlude.generate_interlude for the same world seed).
+choice (greedy: the highest utility) picks between them, on the very trials the game shows (interlude.generate_interlude for the same world seed).
 
 Usage as a library:
     from sim import run_n, compare, get_worlds
@@ -282,14 +282,12 @@ def run_episode(agent, world, agent_rng=None, percept=None, checkpoints=()):
     """Run one session. Returns a Result. `percept` is the sensor for this run (see perception.py for how it is resolved).
 
     `checkpoints` are session times (seconds, 0 to the session's length): the Result's `snapshots` maps each to a deep copy of the agent
-    as it was then, to be scored later (an Interlude, say) as if the session had ended there. That is the same as running a shorter
-    session only when the agent's behavior does not depend on how long the session is, so an actor that plans for the deadline
-    (`deadline_dependent`) is refused: run sessions of different lengths instead."""
+    as it was then, to be scored later (an Interlude, say) as if the session had ended there. For an agent whose behavior does not depend on
+    how long the session is (`deadline_dependent` False) that is the same as running a shorter session; for one that does (a horizon
+    softmax, a planner) it is the agent as it stood at time t of a session of this length, which is what a participant has at that moment, and
+    not what a shorter session would have given."""
     cp = None
     if len(checkpoints):
-        if agent.actor.deadline_dependent:
-            raise ValueError("checkpoints are a shortcut for agents that do not plan for the end of the session; "
-                             "run sessions of different lengths for this one")
         cp = _Checkpoints(checkpoints, world.session_duration)
     if agent_rng is None:
         agent_rng = np.random.default_rng(np.random.SeedSequence([world.seed, AGENT_STREAM]))
@@ -384,7 +382,7 @@ def evaluate_interlude(agent, sidecar, bonus_per_correct=5.0, practice=False, n_
     """Score an agent on an Interlude, after its session. The critic is frozen and the agent starts a fresh memory for the
     Interlude's own bushes (`ComposedAgent.begin_interlude`; an omniscient component is granted that table). At each trial the
     agent stands at the spawn point facing the pair and is shown both bushes as observed, whatever its sensor (the trials are
-    built so both are in view); the actor then picks one with its own utility and choice rule, `n_samples` times from `rng`, and
+    built so both are in view); the actor then picks one greedily by its own utility (whatever its choice rule), `n_samples` times from `rng`, and
     a pick is correct when it is the higher-reward bush (or the pair is a tie). No outcome is shown or learned from."""
     if rng is None:
         rng = np.random.default_rng(np.random.SeedSequence([int(sidecar["seed"]), AGENT_STREAM, 1]))
@@ -497,7 +495,7 @@ def main():
     ap.add_argument("--n-samples", type=int, default=200, help="repeated choices per Interlude trial (with --interlude)")
     ap.add_argument("--checkpoints", default=None, metavar="T1,T2,...",
                     help="with --interlude: also score a copy of each agent as it was at these session times (seconds), a learning "
-                         "curve from one session per seed (not for agents that plan for the end of the session)")
+                         "curve from one session per seed (for an agent that plans for the end of the session, the agent as it stood at that time of a session of this length)")
     ap.add_argument("--interlude-mode", default=None, choices=["designed", "random"],
                     help="with --interlude: which trials (default: the Interlude asset's own interludeMode, designed). Set the trial "
                          "count with --set interlude_trial_count=N")

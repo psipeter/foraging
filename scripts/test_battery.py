@@ -3,7 +3,7 @@ import pytest
 import analysis
 import battery
 import results
-from agents import REGISTRY, PlannerAgent
+from agents import REGISTRY
 from battery import Battery, run_battery, session_readout
 
 TINY = Battery("tiny", {"P": 20, "S1": 30}, (0.0, 0.5, 1.0), seeds=(0, 1), interlude_trials=6)
@@ -27,7 +27,7 @@ def test_the_long_battery_has_longer_sessions_and_the_same_design_otherwise():
 
 def test_every_population_builds_round_trips_and_fits_a_figure():
     from agents import build_agent
-    assert {n: len(m()) for n, m in battery.POPULATIONS.items()} == {"main": 3, "scan-alpha": 6, "scan-length": 6, "scan-centers": 6, "scan-gain": 6, "scan-prior": 6, "scan-window": 4, "choice-noise": 7, "knowledge": 5}
+    assert {n: len(m()) for n, m in battery.POPULATIONS.items()} == {"main": 3, "scan-alpha": 6, "scan-length": 6, "scan-centers": 6, "scan-prior": 6, "scan-window": 4, "choice-noise": 7, "knowledge": 5, "explore-posterior": 7, "delta-noise": 5, "delta-bonus": 7, "learners": 5, "explore-noise": 6, "explore-bonus": 8, "scan-gp-kernel": 7, "scan-gp-prior": 7, "scan-ucb-beta": 7, "scan-ucb-temp": 6, "scan-hybrid-beta": 7, "scan-softmax-temp": 7, "scan-horizon-temp": 7, "scan-curious-beta": 7, "scan-curious-high": 7, "scan-delta-horizon-temp": 7, "scan-delta-curious-beta": 7, "scan-delta-peek-margin": 7, "scan-peek": 7, "scan-ars-radius": 6, "scan-ars-growth": 6, "critic-ladder": 8, "scan-matched-noise": 7, "scan-replay-epochs": 8, "scan-replay-policy": 8}
     for name, make in battery.POPULATIONS.items():
         pop = make()
         assert "nearest" in pop and len(pop) <= 8                                          # the floor is in every figure; the palette holds 8
@@ -38,27 +38,27 @@ def test_every_population_builds_round_trips_and_fits_a_figure():
 
 
 def test_the_standard_agents_share_one_actor_and_see_through_the_view_cone():
-    main = battery.main_population()
+    main = battery.POPULATIONS["main"]()
     specs = {name: factory().spec() for name, factory in main.items()}
     assert specs["oracle"]["actor"] == specs["learner"]["actor"] == {"type": "UtilityActor", "utility": "rate", "max_walk_time": 15,
                                                                       "choice": {"type": "Argmax"}}
     assert specs["nearest"]["actor"]["utility"] == "nearest" and specs["nearest"]["actor"]["max_walk_time"] is None
     assert {s["memory"]["type"] for s in specs.values()} == {"FullMemory"}                  # the cone is the default for all three
     assert specs["oracle"]["critic"]["type"] == "OracleCritic" and specs["learner"]["critic"]["type"] == "DeltaRuleCritic"
-    knowledge = {name: factory().spec() for name, factory in battery.knowledge_population().items()}
+    knowledge = {name: factory().spec() for name, factory in battery.POPULATIONS["knowledge"]().items()}
     assert knowledge["oracle_fullmap"]["memory"]["type"] == knowledge["learner_fullmap"]["memory"]["type"] == "FullKnowledge"
     assert knowledge["oracle_fullmap"]["actor"] == specs["oracle"]["actor"]
-    prior = {n: f().spec()["critic"]["prior"] for n, f in battery.scan_prior_population().items() if n.startswith("learner")}
+    prior = {n: f().spec()["critic"]["prior"] for n, f in battery.POPULATIONS["scan-prior"]().items() if n.startswith("learner")}
     assert prior["learner"] == {"type": "ConstantPrior", "level": 0.1} and prior["learner_meanprior"] == {"type": "NeutralPrior", "initial": 1}
     assert prior["learner_prior1"] == {"type": "ConstantPrior", "level": 1} and prior["learner_prior2"] == {"type": "ConstantPrior", "level": 2}
-    window = {n: f().spec() for n, f in battery.scan_window_population().items()}
+    window = {n: f().spec() for n, f in battery.POPULATIONS["scan-window"]().items()}
     assert window["learner_window15"]["actor"]["max_walk_time"] == 15 and window["learner_window60"]["actor"]["max_walk_time"] == 60
     assert window["learner_window15"] == specs["learner"]                                    # the 15 s learner is the standard learner
-    noise = battery.choice_noise_population()
+    noise = battery.POPULATIONS["choice-noise"]()
     assert noise["learner_softmax0.3"]().spec()["actor"]["choice"] == {"type": "Softmax", "temperature": 0.3}
-    for scan, key, levels in ((battery.scan_alpha_population(), "alpha", [0.1, 0.3, 0.5, 0.8]),
-                              (battery.scan_length_population(), "features", [0.1, 0.3, 0.5, 0.7]),
-                              (battery.scan_centers_population(), "features", [4, 8, 12, 16])):
+    for scan, key, levels in ((battery.POPULATIONS["scan-alpha"](), "alpha", [0.1, 0.3, 0.5, 0.8]),
+                              (battery.POPULATIONS["scan-length"](), "features", [0.1, 0.3, 0.5, 0.7]),
+                              (battery.POPULATIONS["scan-centers"](), "features", [4, 8, 12, 16])):
         learners = [f().spec()["critic"] for n, f in scan.items() if n.startswith("learner")]
         got = [c[key] if key == "alpha" else c[key]["length_scale" if levels[0] < 1 else "n_centers"] for c in learners]
         assert got == levels and all(f().spec()["actor"] == specs["oracle"]["actor"] for f in scan.values() if f is not scan["nearest"])
@@ -90,13 +90,6 @@ def test_a_battery_run_records_every_session_with_its_checkpoints_and_reuses_the
         assert all(r.n_computed == 0 and r.n_reused == 2 for rs in again.values() for r in rs)
         text = session_readout(store, "t", TINY, {r.agent_id: "nearest-alias" for r in reports["S1"][:1]})
         assert "P: total reward" in text and "S1: Interlude accuracy" in text and "nearest-alias" in text
-
-
-def test_an_agent_that_plans_for_the_deadline_is_refused_before_anything_runs(tmp_path):
-    with results.Store(tmp_path / "r.sqlite") as store:
-        with pytest.raises(ValueError, match="cannot be checkpointed"):
-            run_battery({"planner": lambda: PlannerAgent("beam")}, TINY, "t", store=store, progress=None)
-        assert store.select("SELECT COUNT(*) AS n FROM runs")[0]["n"] == 0
 
 
 def test_the_command_line_lists_and_runs(tmp_path, capsys, monkeypatch):

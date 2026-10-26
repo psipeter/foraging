@@ -426,12 +426,12 @@ def test_interlude_scoring_with_a_value_based_actor():
     assert practice.bonus == 0.0
 
 
-def test_interlude_scoring_chance_and_softmax():
+def test_interlude_scoring_chance_and_a_softmax_actor_is_greedy_there():
     nearest = evaluate_interlude(session_agent(UtilityActor("nearest")), toy_interlude(), n_samples=2000)
     assert abs(nearest.by_type["contrast"] - 0.5) < 0.05                  # equal distances, random ties: chance
-    soft_hot = evaluate_interlude(session_agent(UtilityActor("value", choice=Softmax(100.0))), toy_interlude(), n_samples=2000)
-    soft_cold = evaluate_interlude(session_agent(UtilityActor("value", choice=Softmax(0.02))), toy_interlude(), n_samples=2000)
-    assert abs(soft_hot.by_type["contrast"] - 0.5) < 0.06 and soft_cold.by_type["contrast"] > 0.98
+    for temperature in (100.0, 0.02):                                     # the Interlude is greedy whatever the actor's choice rule (PI decision)
+        soft = evaluate_interlude(session_agent(UtilityActor("value", choice=Softmax(temperature))), toy_interlude(), n_samples=200)
+        assert soft.by_type["contrast"] == 1.0
 
 
 @pytest.mark.slow
@@ -1044,20 +1044,6 @@ def test_nearest_is_at_chance_on_a_random_interlude_where_shape_is_rewarded():
     assert abs(score.accuracy - 0.5) < 0.05
 
 
-def test_the_gain_scales_the_learned_deviation_at_read_out_and_leaves_learning_alone():
-    rows = [[0.1, 0.5, 0.5], [0.9, 0.5, 0.5], [0.5, 0.5, 0.5]]
-    plain, gained = DeltaRuleCritic(alpha=0.5), DeltaRuleCritic(alpha=0.5, gain=4.0)
-    memory = learner_memory(rows, [[1.0] * 4, [9.0] * 4, []])
-    fitted(plain, memory)
-    fitted(gained, memory)
-    assert np.allclose(plain.w, gained.w)                                     # the same learning
-    v1, v4 = plain.value(np.array(rows))[0], gained.value(np.array(rows))[0]
-    base = plain._baseline
-    assert np.allclose(v4 - base, 4.0 * (v1 - base)) and np.all(np.argsort(v1) == np.argsort(v4))      # the same ranking, spread four times wider
-    assert gained.spec()["gain"] == 4 and plain.spec()["gain"] == 1
-    assert ComposedAgent(UtilityActor(), DeltaRuleCritic(gain=2.0), FullMemory()).spec_hash() != ComposedAgent(UtilityActor(), DeltaRuleCritic(), FullMemory()).spec_hash()
-
-
 def test_a_constant_prior_never_moves_and_the_weights_then_carry_the_whole_level():
     rows = [[0.1, 0.5, 0.5], [0.9, 0.5, 0.5]]
     memory = learner_memory(rows, [[4.0] * 4, [6.0] * 4])
@@ -1068,3 +1054,318 @@ def test_a_constant_prior_never_moves_and_the_weights_then_carry_the_whole_level
     mean = critic.value(np.array(rows))[0]
     assert mean.min() > 3.0                                                       # the weights learned the level (the bushes paid 4 and 6), not only a deviation
     assert DeltaRuleCritic(prior=ConstantPrior(0.1)).spec()["prior"] == {"type": "ConstantPrior", "level": 0.1}
+
+
+# ---- the GP critic, its kernels and the exploring actors ----------------------------------------------------------------
+
+from agents import (GPAgent, GPCritic, PosteriorActor, RBFKernel, RelativeSoftmax, build_agent)
+
+
+def memory_with(attrs, rewards):
+    """A FullMemory that knows these bushes (attrs (n, 3)) and holds `rewards[j]` (a list of fruit rewards) for each."""
+    m = FullMemory()
+    m.begin(SimpleNamespace(n_bushes=len(attrs), fruit_count=10))
+    m.known[:] = True
+    m.attrs[:] = attrs
+    for j, rs in enumerate(rewards):
+        for r in rs:
+            m.record_reward(j, r)
+    return m
+
+
+def gp_fitted(critic, attrs, rewards):
+    m = memory_with(attrs, rewards)
+    critic.begin(None)
+    critic.update(m)
+    return critic
+
+
+def test_kernels_are_one_at_zero_and_additive_shares_what_the_other_attributes_do_not_change():
+    a, b = np.array([[0.2, 0.5, 0.5]]), np.array([[0.6, 0.5, 0.5]])
+    ell = 0.3
+    far = np.exp(-0.4 ** 2 / (2 * ell ** 2))
+    assert RBFKernel(ell).matrix(a, a)[0, 0] == pytest.approx(1.0) and RBFKernel(ell, additive=False).matrix(a, a)[0, 0] == pytest.approx(1.0)
+    assert RBFKernel(ell).matrix(a, b)[0, 0] == pytest.approx((2 + far) / 3)       # two attributes agree exactly
+    assert RBFKernel(ell, additive=False).matrix(a, b)[0, 0] == pytest.approx(far)
+
+
+def test_gp_posterior_matches_the_closed_form():
+    X = np.array([[0.1, 0.2, 0.3], [0.8, 0.7, 0.6]])
+    critic = gp_fitted(GPCritic(RBFKernel(0.4, additive=False), prior_mean=0.2, initial_std=0.7, initial_noise_std=0.3), X, [[2.0], [4.0]])
+    Z = np.array([[0.15, 0.2, 0.3], [0.5, 0.5, 0.5]])
+    k = RBFKernel(0.4, additive=False)
+    K = 0.7 ** 2 * k.matrix(X, X) + 0.3 ** 2 * np.eye(2)
+    Ks = 0.7 ** 2 * k.matrix(Z, X)
+    mean, sd = critic.value(Z)
+    assert mean == pytest.approx(0.2 + Ks @ np.linalg.solve(K, np.array([2.0, 4.0]) - 0.2))
+    assert sd ** 2 == pytest.approx(0.7 ** 2 - np.einsum("ij,ij->i", Ks, np.linalg.solve(K, Ks.T).T))
+
+
+def test_gp_is_unsure_far_from_what_it_has_seen_and_sure_near_it():
+    X = np.array([[0.1, 0.1, 0.1]])
+    critic = gp_fitted(GPCritic(prior_mean=0.5, initial_std=1.0, initial_noise_std=0.05), X, [[3.0, 3.0]])
+    (near, far), (sd_near, sd_far) = critic.value(np.array([[0.1, 0.1, 0.1], [0.95, 0.95, 0.95]]))
+    assert near > 2.0 and sd_near < 0.2 and sd_far > 0.9 and far < near
+
+
+def test_gp_estimates_its_prior_and_noise_from_memory_and_falls_back_before_it_can():
+    empty = gp_fitted(GPCritic(initial_mean=0.1, initial_std=1.0, initial_noise_std=0.3), np.zeros((3, 3)), [[], [], []])
+    assert (empty._m0, empty._s0, empty._noise2) == (0.1, 1.0, pytest.approx(0.09))
+    X = np.array([[0.1, 0.1, 0.1], [0.5, 0.5, 0.5], [0.9, 0.9, 0.9]])
+    critic = gp_fitted(GPCritic(), X, [[1.0, 3.0], [2.0, 2.0, 2.0], [6.0, 6.0]])      # bush means 2, 2, 6; within-bush variances 2, 0, 0
+    assert critic._noise2 == pytest.approx((1 * 2.0 + 2 * 0.0 + 1 * 0.0) / 4)         # pooled over the bushes with two or more fruits
+    assert critic._m0 == pytest.approx(10 / 3)
+    n = np.array([2, 3, 2])
+    assert critic._s0 == pytest.approx(np.sqrt(np.var([2.0, 2.0, 6.0], ddof=1) - np.mean(critic._noise2 / n)))
+    assert gp_fitted(GPCritic(prior_mean=0.7), X, [[1.0], [2.0], [6.0]])._m0 == 0.7
+
+
+def test_gp_sample_is_a_joint_draw_from_the_posterior():
+    X = np.array([[0.1, 0.1, 0.1], [0.9, 0.9, 0.9]])
+    critic = gp_fitted(GPCritic(RBFKernel(0.3), prior_mean=1.0, initial_std=1.0, initial_noise_std=0.3), X, [[2.0], [0.5]])
+    Z = np.array([[0.4, 0.4, 0.4], [0.45, 0.45, 0.45], [0.6, 0.6, 0.6]])
+    rng = np.random.default_rng(0)
+    draws = np.array([critic.sample(Z, rng) for _ in range(4000)])
+    mean, sd = critic.value(Z)
+    assert draws.mean(axis=0) == pytest.approx(mean, abs=0.05) and draws.std(axis=0) == pytest.approx(sd, abs=0.05)
+    r = np.corrcoef(draws.T)
+    assert r[0, 1] > 0.95 and r[0, 1] > r[0, 2]            # neighbouring bushes move together: a draw is one function, not independent guesses
+
+
+def three_bush_agent(actor, first_reward, seed=0):
+    """Bush 0 (depleted, attributes A) and bush 1 (a clone of it) lie 30 away on one side, bush 2 (attributes B, never tried) 30 away on the
+    other; the critic has seen bush 0 return `first_reward`. Returns (agent, body)."""
+    w = world_with([[30, 0], [0, 30], [-30, 0]], attrs=[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.9, 0.9, 0.9]])
+    agent = GPAgent(actor, prior_mean=1.0, initial_std=1.0)
+    agent.begin_session(w, np.random.default_rng(seed))
+    agent.observe(Observation(np.arange(3), w.pos, w.canopy_radius, np.column_stack([w.shape, w.color, w.moisture]), np.zeros(3, dtype=bool)))
+    agent.record_reward(0, first_reward)
+    agent.mark_depleted(0)
+    agent.end_visit(0)
+    return agent, Body(np.zeros(2), 0.0, 60.0, 0.0)
+
+
+def test_ucb_goes_for_the_uncertain_bush_only_when_the_bonus_is_large():
+    greedy, body = three_bush_agent(PosteriorActor(0.0, temperature=0.001), 9.0)
+    bold, body2 = three_bush_agent(PosteriorActor(20.0, temperature=0.001), 9.0)
+    assert greedy.act(body) == Harvest(1) and bold.act(body2) == Harvest(2)       # the clone of the rich bush against the unknown one
+
+
+def test_thompson_sampling_chooses_the_uncertain_bush_in_proportion_to_the_uncertainty():
+    agent, body = three_bush_agent(PosteriorActor(0.0, sample=True), 1.2)
+    picks = [agent.act(body).bush for _ in range(300)]
+    assert 0.25 < np.mean(np.array(picks) == 2) < 0.75
+    confident, body = three_bush_agent(PosteriorActor(0.0, sample=True), 9.0)
+    assert {confident.act(body).bush for _ in range(100)} == {1}                  # certain and far better: never gambles
+
+
+def test_the_hybrid_adds_the_bonus_to_the_draw():
+    agent, body = three_bush_agent(PosteriorActor(20.0, sample=True), 9.0)
+    assert {agent.act(body).bush for _ in range(100)} == {2}
+
+
+def test_relative_softmax_is_scale_free_and_unscaled_when_nothing_is_positive():
+    rule = RelativeSoftmax(0.1)
+    u = np.array([1.0, 0.8, 0.2, -np.inf])
+    assert rule.probs(u) == pytest.approx(rule.probs(10 * u)) and rule.probs(u)[3] == 0
+    assert rule.probs(np.array([1.0, 0.8])) == pytest.approx(np.exp(np.array([0.0, -2.0])) / np.exp(np.array([0.0, -2.0])).sum())
+    assert rule.probs(np.array([-1.0, -2.0])) == pytest.approx(Softmax(0.1).probs(np.array([-1.0, -2.0])))
+
+
+def test_gp_agents_run_and_round_trip_through_their_specs():
+    spec = GPAgent(PosteriorActor(0.3, temperature=0.2), kernel=RBFKernel(0.2, additive=False), prior_mean=0.5).spec()
+    assert build_agent(spec).spec() == spec and spec["critic"]["kernel"]["additive"] is False
+    w = world_with([[30, 0], [0, 30], [-30, 0]], rewards=[[2] * 10, [5] * 10, [1] * 10], attrs=[[0.1] * 3, [0.5] * 3, [0.9] * 3], duration=60.0)
+    for name in ("gp_mean", "gp_ucb", "gp_thompson", "gp_hybrid"):
+        assert run_episode(REGISTRY[name](), w).total > 0
+
+
+# ---- softmax with a horizon, curiosity and peek-and-leave, area-restricted search -------------------------------------------
+
+from agents import AreaRestrictedActor, CuriousActor, LearnerAgent, SoftmaxActor
+
+
+def table_agent(actor, values, attrs, pos=None, duration=60.0):
+    """An agent that knows every bush (FullKnowledge) and values them from a table, in a toy world."""
+    pos = pos if pos is not None else [[20, 0], [0, 20], [-20, 0], [0, -20]][:len(values)]
+    agent = ComposedAgent(actor, TableCritic(values), FullKnowledge())
+    agent.begin_session(world_with(pos, attrs=attrs, duration=duration), np.random.default_rng(0))
+    return agent
+
+
+def test_softmax_actor_noise_shrinks_with_the_time_left_only_when_asked():
+    values, attrs = [3.0, 2.5, 2.0], [[0.1] * 3, [0.5] * 3, [0.9] * 3]
+    share = {}
+    for horizon in (True, False):
+        for left in (60.0, 0.01):
+            agent = table_agent(SoftmaxActor(0.3, horizon=horizon), values, attrs)
+            share[horizon, left] = np.mean([agent.act(Body(np.zeros(2), 0.0, left, 0.0)).bush == 0 for _ in range(300)])
+    assert share[True, 60.0] < 0.8 and share[True, 0.01] == 1.0       # loose at the start, greedy at the end
+    assert share[False, 60.0] < 0.8 and share[False, 0.01] < 0.8      # without a horizon the temperature is constant
+    assert SoftmaxActor(horizon=True).deadline_dependent and not SoftmaxActor().deadline_dependent
+
+
+def test_curiosity_bonus_is_larger_for_unfamiliar_attributes_scales_with_the_mean_reward_and_is_off_at_zero():
+    attrs = [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.9, 0.9, 0.9], [0.5, 0.5, 0.5]]
+    bonuses = {}
+    for reward in (2.0, 4.0):
+        actor = CuriousActor(beta=0.5)
+        agent = table_agent(actor, [1.0] * 4, attrs)
+        agent.record_reward(0, reward)
+        agent.end_visit(0)
+        bonuses[reward] = actor._bonus(agent.view(Body(np.zeros(2), 0.0, 30.0, reward)))
+    b = bonuses[2.0]
+    assert b[2] > b[3] > b[1] and b[1] == pytest.approx(b[0])        # novel > partly familiar > a clone of what was harvested
+    assert bonuses[4.0] == pytest.approx(2 * b)                       # in units of the running mean value
+    agent = table_agent(CuriousActor(beta=0.0), [1.0] * 4, attrs)
+    assert CuriousActor(beta=0.0)._bonus(agent.view(Body(np.zeros(2), 0.0, 30.0, 0.0))) == 0.0
+
+
+def test_peek_and_leave_leaves_poor_bushes_after_the_peek_and_stays_on_rich_ones():
+    def keep(first, peek, margin=1.0):
+        actor = CuriousActor(beta=0.0, peek_fruits=peek, margin=margin)
+        agent = table_agent(actor, [1.0] * 3, [[0.1] * 3, [0.5] * 3, [0.9] * 3])
+        for _ in range(10):
+            agent.record_reward(2, 3.0)                  # elsewhere: 30 reward so far, 1 reward per second at 30 s
+        for r in first:
+            agent.record_reward(0, r)
+        return agent.keep_harvesting(Body(np.zeros(2), 0.0, 30.0, 30.0), 0, first[-1])
+    assert keep([0.1, 0.1], peek=2) is False                  # 0.2 per fruit-second after two fruits: far below the average rate
+    assert keep([0.1], peek=2) is True                        # still peeking
+    assert keep([0.1, 0.1], peek=None) is True               # the default harvests to empty
+    assert keep([3.0, 3.0], peek=2) is True                  # rich bush: its rate beats the average
+    assert keep([1.0, 1.0], peek=2, margin=1.0) is True and keep([1.0, 1.0], peek=2, margin=5.0) is False
+
+
+def test_area_restricted_search_stays_near_a_hit_and_widens_after_misses():
+    attrs = [[0.5, 0.5, 0.5], [0.55, 0.5, 0.5], [0.9, 0.9, 0.9], [0.1, 0.1, 0.1]]
+    values = [9.0, 3.0, 6.0, 1.0]
+    actor = AreaRestrictedActor(radius=0.3, growth=2.0)
+    agent = table_agent(actor, values, attrs)
+    body = Body(np.zeros(2), 0.0, 60.0, 0.0)
+    agent.record_reward(3, 1.0)
+    agent.mark_depleted(3)
+    agent.end_visit(3)
+    assert agent.act(body) == Harvest(0)                      # no anchor yet: the best by the critic
+    agent.record_reward(0, 8.0)
+    agent.mark_depleted(0)
+    agent.end_visit(0)                                       # 8 beats the mean so far (4.5): a hit
+    assert agent.act(body) == Harvest(1)                      # bush 2 is worth more but lies far from the hit in attribute space
+    picks = []
+    for _ in range(2):                                       # misses: the radius doubles each time (0.3, 0.6, 1.2)
+        agent.record_reward(1, 0.1)
+        agent.end_visit(1)
+        picks.append((agent.act(body), actor._reach))
+    assert picks[0] == (Harvest(1), pytest.approx(0.6))       # 0.6 still excludes bush 2 (attribute distance about 0.69 from the hit)
+    assert picks[1] == (Harvest(2), pytest.approx(1.2))       # 1.2 includes it, and it is worth more
+
+
+def test_area_restricted_search_drops_the_restriction_when_nothing_is_inside_it():
+    actor = AreaRestrictedActor(radius=0.05, growth=2.0)
+    agent = table_agent(actor, [2.0, 5.0], [[0.1] * 3, [0.9] * 3], pos=[[20, 0], [0, 20]])
+    body = Body(np.zeros(2), 0.0, 60.0, 0.0)
+    agent.mark_depleted(0)
+    actor._anchor, actor._reach = np.array([0.1] * 3), 0.05
+    assert agent.act(body) == Harvest(1)                      # bush 1 is outside the radius but the only one left: the agent still moves
+
+
+def test_a_bush_left_by_peek_and_leave_is_not_returned_to():
+    w = tiny_world([[0, 20], [3, 23], [0, 60]], [[9] * 4, [0] * 4, [5] * 4], duration=60.0)       # a rich bush, a poor one beside it, a far fair one
+    r = run_episode(LearnerAgent(CuriousActor(beta=0.0, peek_fruits=2)), w)
+    assert [(v[0], v[1]) for v in r.trace] == [(0, 4), (1, 2), (2, 4)]       # the poor bush is peeked at once, not revisited a fruit at a time
+
+
+# ---- the matched GP: the feature kernel and the options that switch the GP's estimates off ----------------------------------
+
+from agents import FeatureKernel
+from specs import spec_hash
+
+
+def test_the_feature_kernel_is_the_feature_similarity_and_a_gp_on_it_is_ridge_regression_on_the_features():
+    feats = RBFFeatures(0.3, 8, additive=True)
+    X = np.array([[0.1, 0.2, 0.3], [0.8, 0.7, 0.6], [0.5, 0.1, 0.9]])
+    kernel = FeatureKernel(feats)
+    assert kernel.matrix(X, X) == pytest.approx(feats(X) @ feats(X).T) and np.diag(kernel.matrix(X, X)) == pytest.approx(1.0)
+    assert kernel.matrix(X[:0], X).shape == (0, 3) and kernel.matrix(X, X[:0]).shape == (3, 0)        # no data yet
+    critic = gp_fitted(GPCritic(kernel, prior_mean=0.1, weight_by_count=False, prior_std=1.0, noise_std=0.3), X, [[2.0, 2.0], [4.0], [1.0, 1.0, 1.0]])
+    Z = np.array([[0.15, 0.2, 0.3], [0.5, 0.5, 0.5]])
+    Phi, y = feats(X), np.array([2.0, 4.0, 1.0])
+    w = np.linalg.solve(Phi.T @ Phi + (0.3 / 1.0) ** 2 / 10 * np.eye(Phi.shape[1]), Phi.T @ (y - 0.1))   # weights of the Bayesian linear model (every bush a 10-fruit mean)
+    assert critic.value(Z)[0] == pytest.approx(0.1 + feats(Z) @ w)
+
+
+def test_the_gp_can_use_fixed_hyperparameters_and_weigh_every_bush_alike():
+    X = np.array([[0.1] * 3, [0.5] * 3, [0.9] * 3])
+    rewards = [[1.0, 3.0], [2.0, 2.0, 2.0], [6.0]]
+    fixed = gp_fitted(GPCritic(prior_std=0.8, noise_std=0.25), X, rewards)
+    assert (fixed._s0, fixed._noise2) == (0.8, pytest.approx(0.0625))               # not estimated from the memory
+    assert (gp_fitted(GPCritic(), X, rewards)._s0, gp_fitted(GPCritic(), X, rewards)._noise2) != (0.8, 0.0625)
+    empty = GPCritic(prior_std=0.8, noise_std=0.25)
+    empty.begin(None)
+    assert (empty._s0, empty._noise2) == (0.8, pytest.approx(0.0625))               # ... nor before any data
+    # two bushes at the same attributes, one measured with 1 fruit and one with 10: weighted by count the 10-fruit mean counts more,
+    # unweighted they count alike
+    same = np.array([[0.5] * 3, [0.5] * 3])
+    data = [[0.0], [4.0] * 10]
+    weighted = gp_fitted(GPCritic(prior_mean=0.0, prior_std=1.0, noise_std=1.0), same, data).value(same[:1])[0][0]
+    alike = gp_fitted(GPCritic(prior_mean=0.0, prior_std=1.0, noise_std=1.0, weight_by_count=False), same, data).value(same[:1])[0][0]
+    assert weighted == pytest.approx(40 / 12) and alike == pytest.approx(40 / 21)       # precision-weighted means at one point: (4/0.1) / (1 + 1 + 10) against (4/0.1) / (1 + 10 + 10), every bush a 10-fruit mean
+
+
+def test_the_ladder_agents_differ_from_the_gp_one_step_at_a_time_and_round_trip():
+    ladder = ["gp_mean", "gp_fixmean", "gp_equalw", "gp_fixhyper", "gp_matched"]
+    specs = [REGISTRY[n]().spec() for n in ladder]
+    assert len({spec_hash(s) for s in specs}) == 5
+    assert [s["critic"]["prior_mean"] for s in specs] == [None, 0.1, 0.1, 0.1, 0.1]
+    assert [s["critic"]["weight_by_count"] for s in specs] == [True, True, False, False, False]
+    assert [s["critic"]["prior_std"] for s in specs] == [None, None, None, 1.0, 1.0]
+    assert [s["critic"]["kernel"]["type"] for s in specs] == ["RBFKernel"] * 4 + ["FeatureKernel"]
+    assert all(build_agent(s).spec() == s for s in specs)
+
+
+# ---- replay in the delta-rule critic ------------------------------------------------------------------------------------------
+
+from agents import FullSweeps, PrioritizedReplay, SampledReplay
+
+
+def test_replay_policies_choose_which_stored_bushes_to_present_again():
+    errors = np.array([0.1, -2.0, 0.5, 2.0])
+    assert list(FullSweeps(2).indices(errors)) == [0, 1, 2, 3, 0, 1, 2, 3] and len(FullSweeps(0).indices(errors)) == 0
+    assert list(PrioritizedReplay(3).indices(errors)) == [1, 3, 2]                  # the largest errors first, ties in stored order
+    sampled = SampledReplay(steps=6, seed=4)
+    sampled.begin()
+    first = sampled.indices(errors)
+    sampled.begin()
+    assert list(first) == list(sampled.indices(errors)) and len(first) == 6 and first.min() >= 0 and first.max() < 4      # restarted each session
+    assert len(SampledReplay().indices(np.zeros(0))) == 0
+
+
+def test_a_delta_rule_critic_without_replay_has_the_same_spec_as_before_and_with_replay_a_new_one():
+    plain = REGISTRY["learner"]().spec()["critic"]
+    assert "replay" not in plain
+    replayed = LearnerAgent(UtilityActor(), replay=FullSweeps(3)).spec()
+    assert replayed["critic"]["replay"] == {"type": "FullSweeps", "epochs": 3}
+    assert build_agent(replayed).spec() == replayed and spec_hash(replayed) != spec_hash(REGISTRY["learner"]().spec())
+
+
+def test_many_sweeps_make_the_delta_rule_converge_to_the_exact_fit_of_the_same_features():
+    feats = RBFFeatures(0.3, 8, additive=True)
+    X = np.array([[0.1, 0.2, 0.3], [0.8, 0.7, 0.6], [0.5, 0.1, 0.9]])
+    rewards = [[2.0, 2.0], [4.0, 4.0], [1.0, 1.0]]
+    Z = np.array([[0.15, 0.2, 0.3], [0.5, 0.5, 0.5], [0.7, 0.6, 0.5]])
+    exact = gp_fitted(GPCritic(FeatureKernel(feats), prior_mean=0.1, prior_std=1.0, noise_std=1e-3, weight_by_count=False), X, rewards).value(Z)[0]
+    def delta(critic):
+        critic.begin(SimpleNamespace(n_bushes=3))
+        critic.update(memory_with(X, rewards))
+        return critic
+
+    online = delta(DeltaRuleCritic(features=feats)).value(Z)[0]
+    swept = delta(DeltaRuleCritic(features=feats, replay=FullSweeps(400)))
+    assert np.abs(swept.value(Z)[0] - exact).max() < 0.02 < np.abs(online - exact).max()       # one online pass is far from it; many passes are not
+    assert swept.value(X)[0] == pytest.approx([2.0, 4.0, 1.0], abs=0.02)                       # and interpolate the bushes it has seen
+
+
+def test_agents_with_replay_run_a_session():
+    w = world_with([[0, 20], [3, 23], [0, 60]], rewards=[[9] * 4, [1] * 4, [5] * 4], attrs=[[0.1] * 3, [0.5] * 3, [0.9] * 3], duration=60.0)
+    for replay in (FullSweeps(3), SampledReplay(10), PrioritizedReplay(2)):
+        assert run_episode(LearnerAgent(UtilityActor(), replay=replay), w).total > 0

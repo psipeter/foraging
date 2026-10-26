@@ -30,7 +30,6 @@ for the Interlude, freezes the critic and carries it over.
 
 import copy
 from dataclasses import dataclass
-from types import SimpleNamespace
 
 import numpy as np
 
@@ -184,6 +183,14 @@ class Memory(Component):
     def mark_depleted(self, bush):
         self.depleted[bush] = True
 
+    def total_reward(self):
+        return float(sum(map(sum, self.rewards)))
+
+    def mean_reward(self):
+        """Mean reward per fruit over every fruit taken so far (0 before the first)."""
+        taken = int(self.taken.sum())
+        return self.total_reward() / taken if taken else 0.0
+
     def experiences(self):
         """(attrs (m, 3), rewards (m,), ids (m,)): one row per fruit the agent has taken (and still remembers)."""
         ids = np.array([j for j in range(self.n) for _ in self.rewards[j]], dtype=int)
@@ -254,6 +261,11 @@ class Critic(Component):
 
     def value(self, attrs, ids=None):
         raise NotImplementedError
+
+    def sample(self, attrs, rng):
+        """One draw of the values of `attrs` from the critic's belief (a critic with no uncertainty reports its mean). The values of the
+        bushes in one draw are jointly consistent: a draw is one possible reward function, not independent guesses."""
+        return self.value(attrs)[0]
 
 
 class OracleCritic(Critic):
@@ -350,6 +362,55 @@ class RBFFeatures(Features):
         return np.exp(-d2 / s2)
 
 
+class Replay(Component):
+    """How a critic that learns online presents what memory holds again, after it has learned from the bush it just finished: `indices(errors)`
+    returns which stored bushes (indices into the stored-bush arrays, ordered by bush id, which the world shuffles, so the order carries no
+    structure) to learn from once more, in order. `errors` are the stored bushes' current prediction errors (bush mean minus value), which a
+    policy may use or ignore. Swappable, like Prior and Features; the delta-rule critic takes one (None: no replay, and no entry in its spec)."""
+
+    def begin(self):
+        """Called when a session starts (a policy with its own random stream restarts it here)."""
+
+    def indices(self, errors):
+        raise NotImplementedError
+
+
+class FullSweeps(Replay):
+    """`epochs` extra passes over every stored bush, in a fixed order. With many passes a fixed-step online rule converges to the least-squares
+    fit of its model; the number of passes then sets how far it is pulled to the data (early stopping acts as regularisation)."""
+
+    def __init__(self, epochs=1):
+        self.epochs = int(epochs)
+
+    def indices(self, errors):
+        return np.tile(np.arange(len(errors)), self.epochs)
+
+
+class SampledReplay(Replay):
+    """`steps` stored bushes drawn uniformly with replacement per update, from its own stream (restarted each session, so a run is reproducible
+    from `seed`)."""
+
+    def __init__(self, steps=20, seed=0):
+        self.steps, self.seed = int(steps), int(seed)
+        self._rng = np.random.default_rng(self.seed)
+
+    def begin(self):
+        self._rng = np.random.default_rng(self.seed)
+
+    def indices(self, errors):
+        return self._rng.integers(0, len(errors), self.steps) if len(errors) else np.zeros(0, dtype=int)
+
+
+class PrioritizedReplay(Replay):
+    """The `steps` stored bushes with the largest current prediction error, largest first: the ones the critic fits worst."""
+
+    def __init__(self, steps=5):
+        self.steps = int(steps)
+
+    def indices(self, errors):
+        return np.argsort(-np.abs(errors), kind="stable")[:self.steps]
+
+
 class DeltaRuleCritic(Critic):
     """TD(0) with nothing to bootstrap from (a bush's state does not change while it is harvested), i.e. the Rescorla-Wagner delta
     rule: value(x) = prior + w . phi(x), and after each bush, w += alpha * (bush mean reward - value(x_bush)) * phi(x_bush).
@@ -359,29 +420,31 @@ class DeltaRuleCritic(Critic):
     alternative: the features then learn deviations from a moving level, and the first bush harvested teaches the baseline and nothing
     else. Learns once per bush (a fruit
     list is summarized by its mean), from the bush's own fruits taken since the last update; a bush that is visited again is
-    learned from again, against its mean over all fruits taken. No uncertainty is reported (sd = 0).
-
-    `gain` multiplies the learned deviation at read-out only (value = baseline + gain * w . phi); learning is unchanged (the error is
-    computed without it), so a gain above 1 leaves the ranking of bushes alone and scales how far values sit from the baseline: a test of
-    whether under-scaled values, not wrong ones, are what holds an agent back."""
+    learned from again, against its mean over all fruits taken. No uncertainty is reported (sd = 0). (A read-out `gain` on the learned deviation
+    existed to test whether under-scaled values held the learner back; it was removed once replay showed the cause was convergence.)"""
     update_on = "bush"
 
-    def __init__(self, features=None, prior=None, alpha=0.5, gain=1.0):
+    def __init__(self, features=None, prior=None, alpha=0.5, replay=None):
         self.features = features if features is not None else RBFFeatures()
         self.prior = prior if prior is not None else ConstantPrior(0.1)
         self.alpha = float(alpha)
-        self.gain = float(gain)
+        self.replay = replay
         self.w = np.zeros(self.features.dim)
         self._baseline = None
         self._learned = np.zeros(0, dtype=int)
 
     def params(self):
-        return {"features": self.features, "prior": self.prior, "alpha": self.alpha, "gain": self.gain}
+        p = {"features": self.features, "prior": self.prior, "alpha": self.alpha}
+        if self.replay is not None:
+            p["replay"] = self.replay           # absent when there is none, so the spec (and hash) of a critic without replay is what it was
+        return p
 
     def begin(self, task):
         self.w = np.zeros(self.features.dim)
         self._baseline = None
         self._learned = np.zeros(task.n_bushes, dtype=int)
+        if self.replay is not None:
+            self.replay.begin()
 
     def _fit(self, memory):
         self._baseline = self.prior.value(memory)
@@ -392,11 +455,141 @@ class DeltaRuleCritic(Critic):
                 error = mean[i] - (self._baseline + self.w @ phi)
                 self.w = self.w + self.alpha * error * phi
                 self._learned[j] = n[i]
+        if self.replay is not None and len(ids):
+            phis = self.features(attrs)
+            for i in self.replay.indices(mean - (self._baseline + phis @ self.w)):
+                self.w = self.w + self.alpha * (mean[i] - (self._baseline + self.w @ phis[i])) * phis[i]
 
     def value(self, attrs, ids=None):
         attrs = np.asarray(attrs, dtype=float)
         base = self._baseline if self._baseline is not None else 0.0
-        return base + self.gain * (self.features(attrs) @ self.w), np.zeros(len(attrs))
+        return base + self.features(attrs) @ self.w, np.zeros(len(attrs))
+
+
+# --------------------------------------------------------------------------------------------------
+# A Bayesian critic: a Gaussian process over the attributes, with its uncertainty
+# --------------------------------------------------------------------------------------------------
+
+class Kernel(Component):
+    """Similarity of two sets of attributes (in [0, 1]^3), `matrix(a, b) -> (len(a), len(b))`, with k(x, x) = 1. Swappable for the GP critic."""
+
+    def matrix(self, a, b):
+        raise NotImplementedError
+
+
+class RBFKernel(Kernel):
+    """Gaussian kernel of width `length_scale` (attribute units). additive=True (default): the mean of one 1-D Gaussian kernel per
+    attribute, so the learned function is a sum of one smooth function per attribute (the structure of the reward function) and what is
+    learned about one attribute carries over to bushes that differ in the others; additive=False: one isotropic kernel on the three
+    attributes jointly (Wu et al. 2018), which can represent interactions but needs far more data."""
+
+    def __init__(self, length_scale=0.3, additive=True):
+        self.length_scale = float(length_scale)
+        self.additive = bool(additive)
+
+    def matrix(self, a, b):
+        d2 = (np.asarray(a, dtype=float)[:, None, :] - np.asarray(b, dtype=float)[None, :, :]) ** 2
+        s2 = 2.0 * self.length_scale ** 2
+        return np.exp(-d2 / s2).mean(axis=2) if self.additive else np.exp(-d2.sum(axis=2) / s2)
+
+
+class FeatureKernel(Kernel):
+    """The similarity of a set of `features` (default RBFFeatures): `phi(x) . phi(x')`, with unit-length features so that k(x, x) = 1. A GP with this
+    kernel is Bayesian linear regression on those features: the same model as the delta-rule critic with the same features, solved exactly."""
+
+    def __init__(self, features=None):
+        self.features = features if features is not None else RBFFeatures()
+
+    def matrix(self, a, b):
+        if len(a) == 0 or len(b) == 0:
+            return np.zeros((len(a), len(b)))          # no data yet
+        return self.features(np.asarray(a, dtype=float)) @ self.features(np.asarray(b, dtype=float)).T
+
+
+MIN_NOISE_VAR = 1e-4    # the GP critic's observation-noise variance never goes below this (Wu et al. 2018 fix 1e-4)
+
+
+class GPCritic(Critic):
+    """Gaussian-process regression of a bush's mean reward per fruit on its attributes, with `kernel`. Each bush is one observation, the
+    mean of the fruits taken from it, with noise variance sigma^2 / n (n fruits). Everything the prior and the noise need comes from
+    what the memory holds: the prior mean is the mean of the bush means so far (`prior_mean` fixes it instead), the prior sd is the
+    spread of the bush means beyond what the noise explains (at least `min_std`), and sigma^2 is the within-bush variance pooled over
+    the bushes with two or more fruits. Before there is enough to estimate them (no bush, fewer than three bushes, no bush with two
+    fruits) it uses `initial_mean`, `initial_std` and `initial_noise_std`. The value of an attribute vector is the posterior mean and
+    its uncertainty the posterior sd of the function (not of a fruit, so the reward noise does not look like something to explore).
+    `sample` draws a whole function from the posterior (one draw is jointly consistent across bushes), for Thompson sampling. Learns once
+    per bush, as the delta-rule critic.
+
+    The estimates can be switched off to match another critic: `prior_std` and `noise_std` fix the prior sd and the noise sd (the ratio is the
+    regularisation: how far a bush pulls the fit towards its own mean), and `weight_by_count=False` treats every bush as the mean of a full
+    bush's fruits (noise variance sigma^2 / fruit count) whatever the number actually taken, so what changes is the relative weight of a partly
+    harvested bush, not the overall noise scale."""
+    update_on = "bush"
+
+    def __init__(self, kernel=None, prior_mean=None, initial_mean=0.1, initial_std=1.0, initial_noise_std=0.3, min_std=0.1,
+                 weight_by_count=True, prior_std=None, noise_std=None):
+        self.kernel = kernel if kernel is not None else RBFKernel()
+        self.prior_mean = None if prior_mean is None else float(prior_mean)
+        self.initial_mean, self.initial_std = float(initial_mean), float(initial_std)
+        self.initial_noise_std, self.min_std = float(initial_noise_std), float(min_std)
+        self.weight_by_count = bool(weight_by_count)
+        self.prior_std = None if prior_std is None else float(prior_std)
+        self.noise_std = None if noise_std is None else float(noise_std)
+        self._reset()
+
+    def params(self):
+        return {"kernel": self.kernel, "prior_mean": self.prior_mean, "initial_mean": self.initial_mean, "initial_std": self.initial_std,
+                "initial_noise_std": self.initial_noise_std, "min_std": self.min_std, "weight_by_count": self.weight_by_count,
+                "prior_std": self.prior_std, "noise_std": self.noise_std}
+
+    def _reset(self):
+        self._X = np.zeros((0, 3))
+        self._m0 = self.initial_mean
+        self._s0 = self.prior_std if self.prior_std is not None else self.initial_std
+        self._noise2 = (self.noise_std if self.noise_std is not None else self.initial_noise_std) ** 2
+        self._L, self._alpha = np.zeros((0, 0)), np.zeros(0)       # no data: the posterior is the prior
+
+    def begin(self, task):
+        self._reset()
+
+    def _fit(self, memory):
+        _, X, n, mean, var = memory.bush_stats()
+        dof = n - 1
+        if self.noise_std is not None:
+            noise2 = self.noise_std ** 2
+        else:
+            noise2 = max(float((dof * var).sum() / dof.sum()), MIN_NOISE_VAR) if (dof > 0).any() else self.initial_noise_std ** 2
+        self._noise2 = noise2
+        observed = noise2 / n if self.weight_by_count else np.full(len(n), noise2 / memory.fruit_count)      # noise variance of each bush's mean
+        self._m0 = self.prior_mean if self.prior_mean is not None else (float(mean.mean()) if len(mean) else self.initial_mean)
+        if self.prior_std is not None:
+            self._s0 = self.prior_std
+        elif len(mean) >= 3:
+            self._s0 = float(np.sqrt(max(np.var(mean, ddof=1) - np.mean(observed), self.min_std ** 2)))
+        else:
+            self._s0 = self.initial_std
+        self._X = np.array(X, dtype=float)
+        K = self._s0 ** 2 * self.kernel.matrix(self._X, self._X) + np.diag(observed)
+        self._L = np.linalg.cholesky(K)
+        self._alpha = np.linalg.solve(self._L.T, np.linalg.solve(self._L, mean - self._m0))
+
+    def _posterior(self, attrs, full_cov=False):
+        attrs = np.asarray(attrs, dtype=float)
+        Ks = self._s0 ** 2 * self.kernel.matrix(attrs, self._X)
+        mean = self._m0 + Ks @ self._alpha
+        V = np.linalg.solve(self._L, Ks.T)
+        if full_cov:
+            return mean, self._s0 ** 2 * self.kernel.matrix(attrs, attrs) - V.T @ V
+        return mean, self._s0 ** 2 - (V * V).sum(axis=0)
+
+    def value(self, attrs, ids=None):
+        mean, var = self._posterior(attrs)
+        return mean, np.sqrt(np.maximum(var, 0.0))
+
+    def sample(self, attrs, rng):
+        mean, cov = self._posterior(attrs, full_cov=True)
+        w, v = np.linalg.eigh((cov + cov.T) / 2.0)
+        return mean + v @ (np.sqrt(np.maximum(w, 0.0)) * rng.standard_normal(len(mean)))
 
 
 # --------------------------------------------------------------------------------------------------
@@ -462,6 +655,19 @@ class Softmax(ChoiceRule):
         return p
 
 
+class RelativeSoftmax(Softmax):
+    """Softmax on utilities scaled by the best one (so the temperature means the same whatever the unit and size of the utilities: at
+    temperature 0.1 a bush with 80% of the best utility is picked with relative probability exp(-2)). If the best utility is not positive
+    the utilities are used as they are (the scale then changes when the best crosses zero). With no bush inside the walking window the actor passes
+    `-t` (minus the travel time), the best of which is negative, so the choice is then the quickest bush whatever the temperature."""
+
+    def probs(self, utilities, random_ties=False):
+        u = np.asarray(utilities, dtype=float)
+        ok = np.isfinite(u)
+        top = u[ok].max() if ok.any() else 0.0
+        return super().probs(u / top if top > 0.0 else u, random_ties)
+
+
 # --------------------------------------------------------------------------------------------------
 # What an actor sees
 # --------------------------------------------------------------------------------------------------
@@ -504,6 +710,11 @@ class View:
     @property
     def time_elapsed(self):
         return self.task.session_duration - self.body.time_left
+
+    def average_rate(self):
+        """The agent's average reward per second of the session so far, from the rewards its memory holds (0 before any time has passed):
+        what the marginal-value rule compares a bush with."""
+        return self.memory.total_reward() / self.time_elapsed if self.time_elapsed > 0.0 else 0.0
 
     def candidates(self):
         """Mask of bushes the agent knows about and has not seen spent."""
@@ -558,11 +769,16 @@ def utility_value(view):
     return mean * view.memory.fruits_left()
 
 
+def rate_of(view, value):
+    """Reward remaining per second of (walk + harvest) time for every bush, if each bush's reward per fruit is `value`."""
+    left = view.memory.fruits_left()
+    return value * left / (view.travel_times() + left * view.task.fruit_duration)
+
+
 def utility_rate(view):
     """Expected reward remaining per second of (walk + harvest) time."""
     mean, _ = view.values()
-    left = view.memory.fruits_left()
-    return mean * left / (view.travel_times() + left * view.task.fruit_duration)
+    return rate_of(view, mean)
 
 
 UTILITIES = {"nearest": utility_nearest, "value": utility_value, "rate": utility_rate}
@@ -578,7 +794,7 @@ class Actor(Component):
     Interlude evaluation). The default leaves a bush only when it is empty."""
 
     choice = Argmax()
-    deadline_dependent = False    # True for an actor whose choices depend on how much of the session is left (it plans for the end)
+    deadline_dependent = False    # True for an actor whose choices depend on how much of the session is left (it plans for the end): its checkpoints are within-session, not shorter sessions
 
     def begin(self, task, rng):
         self.task = task
@@ -591,9 +807,9 @@ class Actor(Component):
         return True
 
     def choose_between(self, view, candidates, rng):
-        """Index into `candidates` of the bush the actor prefers, from the critic's value (ties broken at random)."""
+        """Index into `candidates` of the bush the actor prefers, from the critic's value, greedily (ties broken at random)."""
         u = utility_value(view)[np.asarray(candidates)]
-        return self.choice.pick(u, rng, random_ties=True)
+        return Argmax().pick(u, rng, random_ties=True)
 
 
 class UtilityActor(Actor):
@@ -614,15 +830,30 @@ class UtilityActor(Actor):
             self.choice = choice
 
     def params(self):
-        if not isinstance(self._ctor["utility"], str):
+        """The constructor arguments, with the choice rule in effect (subclasses that fix the utility inherit this)."""
+        p = super().params()
+        if not isinstance(p.get("utility", ""), str):
             raise SpecError("a UtilityActor built from a function has no spec (use one of UTILITIES by name)")
-        return {"utility": self._ctor["utility"], "max_walk_time": self.max_walk_time, "choice": self.choice}
+        if "choice" in p:
+            p["choice"] = self.choice
+        return p
 
     def act(self, view):
-        t = view.travel_times()
+        t = self._times(view)
         if not np.isfinite(t).any():
             return None
-        u = np.asarray(self.utility(view), dtype=float)
+        return self._act_on(view, t, self._utilities(view, t))
+
+    def _times(self, view):
+        """Seconds until the first fruit of each bush (infinite for the ones this actor will not go to); a subclass removes bushes here."""
+        return view.travel_times()
+
+    def _utilities(self, view, t):
+        """The utility of every bush (t: seconds until its first fruit); a subclass changes what the actor optimises here."""
+        return np.asarray(self.utility(view), dtype=float)
+
+    def _act_on(self, view, t, u):
+        """The harvest of the best bush by utility `u` within the walking window (t: seconds until the first fruit of each bush)."""
         if self.max_walk_time is not None:
             in_range = t <= self.max_walk_time
             if not in_range.any():
@@ -637,7 +868,137 @@ class UtilityActor(Actor):
     def choose_between(self, view, candidates, rng):
         view = view.equalize_times(candidates, INTERLUDE_TIME_TIE)
         u = np.asarray(self.utility(view), dtype=float)[np.asarray(candidates)]
-        return self.choice.pick(u, rng, random_ties=True)
+        return Argmax().pick(u, rng, random_ties=True)       # greedy whatever the choice rule: the Interlude measures the critic, not the actor's noise
+
+
+class PosteriorActor(UtilityActor):
+    """The rate actor on a value per bush taken from the critic's posterior: `mean + beta * sd`, a bonus for what the critic is unsure of
+    (UCB, Wu et al. 2018, who fitted beta about 0.5); with `sample`, one joint posterior draw over the bushes in the walking window takes the
+    place of the mean (one possible reward function, not independent guesses): Thompson sampling at beta 0, the hybrid of Gershman 2018 (the
+    best account of human two-armed bandit choices) above it. `temperature` chooses by a RelativeSoftmax (random exploration; 0.05: 0.1 was
+    too loose in the softmax scan), None by a hard max (the sampling's noise shrinks as the critic learns)."""
+
+    def __init__(self, beta=0.5, sample=False, temperature=None, max_walk_time=15.0):
+        super().__init__("rate", max_walk_time, None if temperature is None else RelativeSoftmax(temperature))
+        self.beta, self.sample = float(beta), bool(sample)
+        self.temperature = None if temperature is None else float(temperature)
+
+    def _utilities(self, view, t):
+        mean, sd = view.values()
+        if self.sample:
+            # one draw over the bushes inside the walking window only: the eigen-decomposition over every known bush would be slow, and nothing
+            # outside the window is chosen unless the window is empty (then the quickest bush is, whatever its drawn value)
+            near = view.candidates() & (t <= (np.inf if self.max_walk_time is None else self.max_walk_time))
+            mean = np.array(mean, dtype=float)
+            if near.any():
+                mean[near] = view.critic.sample(view.memory.attrs[near], self.rng)
+        return rate_of(view, mean + self.beta * sd)
+
+
+class SoftmaxActor(UtilityActor):
+    """The standard rate actor with a softmax choice (random exploration): `RelativeSoftmax` at `temperature` on the utilities relative to
+    the best one. With `horizon` the temperature shrinks with the fraction of the session left (`temperature * time left / session`), so
+    choices are loose early and nearly greedy at the end, as people explore more with a longer horizon (Wilson et al. 2014); such an
+    actor depends on the session's length (`deadline_dependent`)."""
+
+    def __init__(self, temperature=0.05, horizon=False, max_walk_time=15.0):
+        super().__init__("rate", max_walk_time, RelativeSoftmax(temperature))
+        self.temperature = float(temperature)
+        self.horizon = bool(horizon)
+        self.deadline_dependent = self.horizon
+
+    def act(self, view):
+        if self.horizon:
+            self.choice = RelativeSoftmax(max(self.temperature * view.body.time_left / view.task.session_duration, 1e-3))
+        return super().act(view)
+
+
+class CuriousActor(UtilityActor):
+    """The rate actor with a curiosity bonus in attribute space and, optionally, a hedge. Each bush's value gets a bonus
+    `beta * m / sqrt(1 + n)`, where `m` is the mean reward per fruit so far (so `beta` is a fraction of the running mean value, whatever the
+    session's scale) and `n` is how many bushes the agent has harvested near it in attribute space (the sum of `kernel` between this bush
+    and every harvested bush): attributes it has little experience with look worth a visit, and the bonus fades as they are sampled.
+    `peek_fruits` (None = harvest every bush to empty) makes the agent leave a bush after that many fruits when the bush's own rate (its
+    mean reward per fruit over the fruit time) is below `margin` times the average rate so far (the marginal-value rule): a cheap look at an
+    unfamiliar bush, not a full harvest. `beta=0` with `peek_fruits` is the hedge alone."""
+
+    def __init__(self, beta=0.3, kernel=None, peek_fruits=None, margin=1.0, max_walk_time=15.0, choice=None):
+        super().__init__("rate", max_walk_time, choice)
+        self.beta = float(beta)
+        self.kernel = kernel if kernel is not None else RBFKernel()
+        self.peek_fruits = None if peek_fruits is None else int(peek_fruits)
+        self.margin = float(margin)
+
+    def params(self):
+        return {**super().params(), "kernel": self.kernel}
+
+    def begin(self, task, rng):
+        super().begin(task, rng)
+        self._left = set()
+
+    def _times(self, view):
+        t = view.travel_times()
+        t[list(self._left)] = np.inf          # a bush left early is not returned to: standing in its range it would cost only a key press and win every time
+        return t
+
+    def _bonus(self, view):
+        scale = view.memory.mean_reward()
+        if self.beta == 0.0 or scale <= 0.0:
+            return 0.0
+        harvested = view.memory.bush_stats()[1]
+        n = self.kernel.matrix(view.memory.attrs, harvested).sum(axis=1) if len(harvested) else 0.0
+        return self.beta * scale / np.sqrt(1.0 + n)
+
+    def _utilities(self, view, t):
+        return rate_of(view, view.values()[0] + self._bonus(view))
+
+    def keep_harvesting(self, view, bush, reward):
+        m = view.memory
+        if self.peek_fruits is None or m.taken[bush] < self.peek_fruits:
+            return True
+        if float(np.mean(m.rewards[bush])) / view.task.fruit_duration >= self.margin * view.average_rate():
+            return True
+        self._left.add(int(bush))
+        return False
+
+
+class AreaRestrictedActor(UtilityActor):
+    """Area-restricted search in attribute space. After each bush: if its mean reward per fruit beat the mean of everything harvested so far it
+    is a hit, and the agent restricts its next choices to bushes within attribute distance `radius` of it (Euclidean, attributes in
+    [0, 1]); a miss widens the restriction by the factor `growth`, until the radius covers everything. A new hit starts again at `radius`. If
+    no bush in the walking window lies inside the radius the restriction is dropped for that choice."""
+
+    def __init__(self, radius=0.5, growth=2.0, max_walk_time=15.0, choice=None):
+        super().__init__("rate", max_walk_time, choice)
+        self.radius, self.growth = float(radius), float(growth)
+
+    def begin(self, task, rng):
+        super().begin(task, rng)
+        self._anchor, self._reach, self._last = None, self.radius, None
+
+    def _after_visit(self, view):
+        m, j = view.memory, self._last
+        self._last = None
+        if j is None or not m.rewards[j]:
+            return
+        if float(np.mean(m.rewards[j])) > m.mean_reward():
+            self._anchor, self._reach = m.attrs[j].copy(), self.radius
+        elif self._anchor is not None:
+            self._reach *= self.growth
+
+    def act(self, view):
+        self._after_visit(view)
+        action = super().act(view)
+        self._last = None if action is None else action.bush
+        return action
+
+    def _utilities(self, view, t):
+        u = super()._utilities(view, t)
+        if self._anchor is None:
+            return u
+        window = np.inf if self.max_walk_time is None else self.max_walk_time
+        near = view.candidates() & (t <= window) & (np.linalg.norm(view.memory.attrs - self._anchor, axis=1) <= self._reach)
+        return np.where(near, u, -np.inf) if near.any() else u
 
 
 class PlannerActor(Actor):
@@ -983,9 +1344,45 @@ def DeltaRuleAgent(score="rate", max_walk_time=15.0, features=None, prior=None, 
     return ComposedAgent(UtilityActor(score, max_walk_time), DeltaRuleCritic(features, prior, alpha), FullMemory())
 
 
+def LearnerAgent(actor, **critic):
+    """The standard learner (delta-rule critic) with another actor: what changes is the policy only."""
+    return ComposedAgent(actor, DeltaRuleCritic(**critic), FullMemory())
+
+
+def GPAgent(actor=None, **critic):
+    """A learner whose critic is a Gaussian process (`GPCritic(**critic)`) and whose actor is `actor` (default: the standard rate actor
+    on the posterior mean); the map comes from the view cone."""
+    return ComposedAgent(actor if actor is not None else UtilityActor(), GPCritic(**critic), FullMemory())
+
+
 REGISTRY["nearest"] = NearestAgent
 REGISTRY["oracle"] = GreedyAgent                  # the standard actor (rate, 15 s), true values, map from the view cone
 REGISTRY["learner"] = DeltaRuleAgent              # the same actor with the delta-rule critic, map from the view cone
+REGISTRY["softmax"] = lambda: LearnerAgent(SoftmaxActor(0.05))                        # random exploration
+REGISTRY["softmax_horizon"] = lambda: LearnerAgent(SoftmaxActor(0.1, horizon=True))   # ... shrinking with the time left
+REGISTRY["curious"] = lambda: LearnerAgent(CuriousActor())                            # an attribute-space novelty bonus
+REGISTRY["peek"] = lambda: LearnerAgent(CuriousActor(beta=0.0, peek_fruits=2))        # leave a poor bush after two fruits (marginal value)
+REGISTRY["curious_peek"] = lambda: LearnerAgent(CuriousActor(peek_fruits=2))          # curiosity hedged by peeking
+REGISTRY["ars"] = lambda: LearnerAgent(AreaRestrictedActor())                         # area-restricted search in attribute space
+REGISTRY["gp_joint"] = lambda: GPAgent(kernel=RBFKernel(0.3, additive=False))        # the joint (isotropic 3-D) kernel instead of the additive one
+REGISTRY["gp_softmax"] = lambda: GPAgent(SoftmaxActor(0.05))                         # the GP critic with each exploration policy of the delta-rule agents
+REGISTRY["gp_softmax_horizon"] = lambda: GPAgent(SoftmaxActor(0.1, horizon=True))
+REGISTRY["gp_curious"] = lambda: GPAgent(CuriousActor())
+REGISTRY["gp_peek"] = lambda: GPAgent(CuriousActor(beta=0.0, peek_fruits=2))
+REGISTRY["gp_curious_peek"] = lambda: GPAgent(CuriousActor(peek_fruits=2))
+REGISTRY["gp_ars"] = lambda: GPAgent(AreaRestrictedActor())
+_MATCHED = dict(prior_mean=0.1, weight_by_count=False, prior_std=1.0, noise_std=0.3)
+REGISTRY["gp_fixmean"] = lambda: GPAgent(prior_mean=0.1)                                                   # the ladder from gp_mean to the delta rule: the
+REGISTRY["gp_equalw"] = lambda: GPAgent(prior_mean=0.1, weight_by_count=False)                             # reversion value fixed at the delta rule's 0.1,
+REGISTRY["gp_fixhyper"] = lambda: GPAgent(**_MATCHED)                                                      # every bush weighted alike, the prior and noise
+REGISTRY["gp_matched"] = lambda: GPAgent(kernel=FeatureKernel(RBFFeatures()), **_MATCHED)                  # fixed, then the delta rule's own features as the kernel
+REGISTRY["replay_len0_5"] = lambda: LearnerAgent(UtilityActor(), features=RBFFeatures(length_scale=0.5), replay=FullSweeps(100))     # the best replay delta rule
+REGISTRY["gp_matched_len0_5"] = lambda: GPAgent(kernel=FeatureKernel(RBFFeatures(length_scale=0.5)), prior_mean=0.1, weight_by_count=False,
+                                                prior_std=1.0, noise_std=0.1)       # ... and the GP with the same features, baseline and weights
+REGISTRY["gp_mean"] = GPAgent                                   # the GP critic with the standard actor (no exploration)
+REGISTRY["gp_ucb"] = lambda: GPAgent(PosteriorActor(0.5, temperature=0.05))                # UCB with a softmax (Wu et al. 2018)
+REGISTRY["gp_thompson"] = lambda: GPAgent(PosteriorActor(0.0, sample=True))      # Thompson sampling
+REGISTRY["gp_hybrid"] = lambda: GPAgent(PosteriorActor(0.5, sample=True))          # a posterior draw plus the UCB bonus (Gershman 2018)
 for _score in ("value", "rate"):
     REGISTRY[f"delta_{_score}_10"] = (lambda s: lambda: DeltaRuleAgent(s, 10.0))(_score)
 for _score in ("value", "rate"):
