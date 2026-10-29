@@ -39,7 +39,7 @@ human-facing description only. Read this file fully before making changes.
 - Unity **6000.3.12f1** (URP) — authoritative value is
   `ProjectSettings/ProjectVersion.txt`; C# 9.0
 - New Unity Input System (`PlayerInput`, Invoke Unity Events)
-- Targets PC (Linux/Windows standalone). Linux dev machine.
+- Targets PC (Linux/Windows standalone) and **WebGL** for online participants (`docs/ONLINE_DATA_PLAN.md`, "Deploying the game"). Linux dev machine.
 - Git/GitHub; single branch `main`.
 
 ---
@@ -87,6 +87,7 @@ Rules:
   named. Package changes alter `Packages/` — ask first.
 - **Temporary editor scripts** (large batch edits via `eval_file`/`create_script`)
   go in `Assets/Editor/TemporaryGeneratedScripts/` and are deleted at the end.
+- **A WebGL build switches the Editor's active build target** (`switch_build_target --target WebGL`; reimport, then the build takes minutes, release builds longer) and must be switched back (`StandaloneLinux64`) afterwards; check `list_open_scenes` for unsaved work first. Build with `build --target WebGL --options '["Development"]'` for a development build, none for release. Code under `#if UNITY_WEBGL` is not compiled by a Linux build: prefer runtime checks (`Application.platform`, `StreamingData.NeedsPreload`).
 - **Failures** (timeout, connection drop, Editor quit, never reaches `ready`):
   report what you ran and what failed; don't retry in a loop or fall back to
   editing YAML. Offer `unity bug` but never run it unasked (it sends logs).
@@ -167,7 +168,10 @@ Assets/
                RewardFunction / RewardComponent / BasisFunctionType
     UI/        HarvestUI (+X popups, score), SessionTimerUI (timer, bar, end screen), InstructionsPanel,
                FeedbackAudio (synthesized sound cues), AmbientAudio (footsteps, cicada bed, birds), HudWidgets (runtime plates/bars)
-    Data/      DataLogger (trajectory, events, harvests, manifest; see "Data logging")
+    Data/      DataLogger (the recorder: rows per frame/event/trial, batched), DataPipeline (DontDestroyOnLoad: starts the server run, owns the
+               sinks, the "saving" gate and the quit/leave drain), FileSink (local copy) and HttpSink (upload), TrajectoryCodec (chunk format),
+               PauseGate (the only writer of Time.timeScale), StreamingData (reads StreamingAssets; in a browser from memory, filled by the Boot scene), PointerLockGuard (browser: hold the game while the mouse capture is released), OnlineSettings (StreamingAssets/online.json + command line), DataRows, Json;
+               see "Data logging"
   ScriptableObjects/SessionConfig/   P (practice), S1-S4 (the experiment's sessions), and P/S1-S4_Interlude (their forced-choice Interludes)
   Audio/Ambient/                     CC0 recordings: Footsteps/ (Kenney Impact Sounds grass steps), Cicadas/ (BigSoundBank
                                      loop); each folder has licence/source notes
@@ -183,12 +187,16 @@ Assets/
              mesh vertex colors), VertexColorUnlit, FruitUnlit, CanopyRim (additive
              fresnel highlight overlay) and HarvestRing (clock-style progress ring)
   Materials/ Prefabs/ Resources/Textures
-docs/        SCIENCE.md, DECISIONS.md, REVIEW_POLICY.md (what code review optimizes; see "Adversarial review")
+supabase/    migrations/ (online database), functions/ (Edge Functions run-start, append, run-finish; _shared/), local/serve.ts (runs them
+             without Docker); deployed to the Supabase project emdgczidpqdhftzujyte; deploy with the CLI, see docs/ONLINE_DATA_PLAN.md
+docs/        SCIENCE.md, DECISIONS.md, ONLINE_DATA_PLAN.md (planned online data collection: schema, upload protocol, resume, build
+             phases; nothing built yet, the "Data logging" section below still describes the current logger), REVIEW_POLICY.md (what
+             code review optimizes; see "Adversarial review")
 .claude/     agents/ (simplifier, red-team, arbiter) and skills/adversarial-review/
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
              interlude.py (Interlude stimulus design + bush placement on the session's terrain), world.py (reads SessionConfig .asset YAML; generates worlds from one seed — mirrors the
              C# placement/attribute/reward rules; exports .npz), sim.py (fast session engine: actions, cone percept, Interlude
-             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent: `ConePercept` is the default, `OccludedConePercept` adds terrain and bush occlusion and holds the geometry `visibility.py` shares), costs.py (turning and key-press time costs and the `approach` arithmetic shared by the engine and the actors; provisional values fitted to debug logs), conftest.py (tests run with motor costs off unless marked `motor_costs`), agents.py (agent components memory / critic / actor, ComposedAgent, registry), battery.py (the assessment battery: every session S1-S4 plus its Interlude with checkpoints, populations of agents, a serial runner and command line), plots.py (matplotlib/seaborn figures for the results database, PNG into `results/`: a 2 x 2 grid of sessions, `sns.lineplot` per agent; colour-blind-safe `glasbey` colours plus a matplotlib linestyle per agent, warns above 5 agents), analysis.py (queries over the results database: `select`, `table`, `paired`, `component_effect`, `cumulative_curve`, `checkpoint_curve`, command line), results.py (the results database: schema, `Store`, `record_run`, `lookup`, `delete_run`), fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag), specs.py (agent specs: `Component` base that records constructor arguments, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), replay.py (loads a logged session, replays its harvests, resamples for agents), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), mutation_check.py (mutation testing of the changed lines in a scratch copy; see "Adversarial review"), test_*.py (pytest; run them with `scripts/run_tests.py`, which
+             evaluation; run_n / compare), perception.py (the sensor model: what the simulated observer sees; part of the environment, not the agent: `ConePercept` is the default, `OccludedConePercept` adds terrain and bush occlusion and holds the geometry `visibility.py` shares), costs.py (turning and key-press time costs and the `approach` arithmetic shared by the engine and the actors; provisional values fitted to debug logs), conftest.py (tests run with motor costs off unless marked `motor_costs`), agents.py (agent components memory / critic / actor, ComposedAgent, registry), battery.py (the assessment battery: every session S1-S4 plus its Interlude with checkpoints, populations of agents, a serial runner and command line), plots.py (matplotlib/seaborn figures for the results database, PNG into `results/`: a 2 x 2 grid of sessions, `sns.lineplot` per agent; colour-blind-safe `glasbey` colours plus a matplotlib linestyle per agent, warns above 5 agents), analysis.py (queries over the results database: `select`, `table`, `paired`, `component_effect`, `cumulative_curve`, `checkpoint_curve`, command line), results.py (the results database: schema, `Store`, `record_run`, `lookup`, `delete_run`), fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag), specs.py (agent specs: `Component` base that records constructor arguments, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), replay.py (loads a logged session, legacy or online layout, replays its harvests, resamples for agents), rundata.py (the online data layout: local mirror of the database tables, reader and writer), trajectory_codec.py (compact chunk format for trajectories; see docs/ONLINE_DATA_PLAN.md), convert_legacy.py (legacy DataLogger folder to the online layout), webgl_smoke.mjs (a WebGL build in headless Chromium: loads, plays, uploads; Playwright from evidence_integration) and deploy_webgl.sh (a WebGL build as one fresh commit in a GitHub Pages repository; never pushes), server_client.py (reference client of the online server's protocol), server_admin.py (register releases/worlds, list runs, pull a run into the local layout), server_smoke.py (one throwaway run through the deployed endpoints, with latencies), test_server.py (end to end: real Edge Functions under Deno over a real PostgreSQL via pgserver; skipped without deno/pgserver/psycopg), visibility.py (reconstructs which bushes were in view per step, with egocentric coordinates), mutation_check.py (mutation testing of the changed lines in a scratch copy; see "Adversarial review"), test_*.py (pytest; run them with `scripts/run_tests.py`, which
              runs only the test files the changed files can affect, or `--all` before committing; `--fast` skips `slow`-marked tests)
 ```
 
@@ -261,20 +269,25 @@ Basis functions: Linear, InvertedLinear, GaussianPeak, InvertedGaussian,
 Constant.
 
 ### Data logging
-`DataLogger` writes one folder per session under `<project root>/ForagingData/<sessionId>/`, so that a participant's
-actions can be replayed exactly in their world (and shown to agents):
-`trajectory.csv` (one row per rendered frame: `t, x, z, yaw, pitch, keys`; the same state `HarvestManager` reads that
-frame), `events.csv` (`t, real, type, tree_id, k, reward, running_total, note`: pause/resume, harvest press/release/
-pause/resume, every fruit, teleports, Interlude trials, focus changes, session start/end), `harvests.csv` (one row per
-harvest bout: a summary of the events plus the bush's attributes) and `manifest.json` (the full `SessionConfig`
-serialized, the world file's name and sha256, build commit, display, frame statistics, `participantId` placeholder).
-An Interlude writes the same plus `interlude.csv` (one row per forced-choice trial; see `docs/SCIENCE.md`).
-World files are archived once by hash in `ForagingData/_worlds/`. `scripts/replay.py` loads a folder, re-derives the
-harvests from the trajectory (mirroring `HarvestManager`) and checks them against the log: **change `HarvestManager`'s
-range/bearing/timer rules and `replay.py` together** (and the camera, canopy or terrain-sampling rules with `visibility.py`). The clock `t` is unpaused session seconds (stands still under an
-instruction screen). **The path and the column semantics are fixed once real data exists — changing them breaks
-downstream analysis and comparability.** Add columns only at the end, and say so. `Assets/Editor/BuildInfoWriter.cs`
-writes the gitignored `StreamingAssets/build_info.json` (git commit, dirty flag) that the manifest reads.
+**The online database is the default** (`docs/ONLINE_DATA_PLAN.md`, `docs/DECISIONS.md` "Online data collection"). `DataLogger` records
+rows (a trajectory frame per rendered frame: `t, x, z, yaw, pitch, keys`, the state `HarvestManager` reads that frame, quantized by
+`TrajectoryCodec`; events: pause/resume with a `reason`, harvest press/release/pause/resume, every fruit, teleports, Interlude trials,
+focus changes, session start/end, each with a JSON `payload`; the session row: the full `SessionConfig`, world hashes, camera, display,
+frame statistics, build; for an Interlude its shuffled trial order and one row per trial) and hands them in batches to `DataPipeline`.
+The pipeline always writes the **local copy** under `<project root>/ForagingData/<run id>/<session:00>/` (`events.csv`, `trajectory.csv`,
+`interlude_trials.csv`, `interlude_plan.json`, `session.json`, and `run.json` above them: the database's tables as files, read by
+`scripts/rundata.py`) and, when `StreamingAssets/online.json` is enabled (or `-onlineUrl`/`-onlineKey` are given), uploads the same rows to
+the Supabase project (off in the Editor unless `uploadInEditor`). Uploads are acknowledged: if the server leaves data unacknowledged
+longer than `SessionConfig.uploadGraceSeconds`, or cannot be reached, the game holds still behind a message (`PauseGate`; a `pause`
+event with reason `upload`) until it has stored everything; leaving a session or quitting waits for the drain. Only `PauseGate` may set
+`Time.timeScale`. `scripts/replay.py` loads a session folder, re-derives the harvests from the trajectory (mirroring `HarvestManager`)
+and checks them against the log: **change `HarvestManager`'s range/bearing/timer rules and `replay.py` together** (and the camera,
+canopy or terrain-sampling rules with `visibility.py`). The clock `t` is unpaused session seconds. Trajectory time is quantized to a
+microsecond because replay sums frame times (DECISIONS has the measurement). World files are archived once by hash in
+`ForagingData/_worlds/`. **The table columns and their meaning are fixed once real data exists — changing them breaks downstream
+analysis and comparability.** Add columns only at the end, and say so. `Assets/Editor/BuildInfoWriter.cs` writes the gitignored
+`StreamingAssets/build_info.json` (git commit, dirty flag) that the session row and `run-start` read; the server refuses a commit that
+is not registered (`server_admin.py register-release`). **Resume:** a participant who returns with the same Prolific ID (`-pid`) continues an unfinished run: `DataPipeline` reloads the scene for the session to continue and `DataLogger`/`InterludeManager` restore the clock, pose, score, fruits taken and Interlude order (`ResumeInfo`; `docs/ONLINE_DATA_PLAN.md`, section 4); the log gets a `session_resume` event, which `replay.py` treats as a discontinuity.
 
 ---
 
