@@ -16,7 +16,7 @@ public class PointerLockGuard : MonoBehaviour
     private static extern int IsPointerLocked();
 #endif
 
-    // The browser grants a capture request a few frames after the click; do not pause on that gap.
+    // The first capture request (the click in the Boot scene) is granted a few frames after the click; do not pause on that gap.
     private const float GraceSeconds = 0.5f;
 
     // Chrome refuses a capture request made within about a second of the participant leaving the capture (Escape): the request
@@ -93,9 +93,9 @@ public class PointerLockGuard : MonoBehaviour
         if (!held && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
             Time.unscaledTime - _unlockedAt >= RelockCooldownSeconds)
         {
+            // Ask for the capture and stay paused until the browser confirms it holds it (Held): resuming on the click itself, with a
+            // grace period, let the game run for a moment when the browser refused the request and then pause again.
             Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-            _graceUntil = Time.unscaledTime + GraceSeconds;
         }
     }
 }
