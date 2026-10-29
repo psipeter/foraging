@@ -30,7 +30,7 @@ INTERLUDE_COLUMNS = (
     "left_id", "left_shape", "left_color", "left_moisture", "left_value",
     "right_id", "right_shape", "right_color", "right_moisture", "right_value",
     "correct_side", "choice", "choice_correct", "timed_out", "response_time", "first_harvest_time", "first_harvest_side",
-    "left_fruits", "right_fruits", "bonus", "locked_at")
+    "left_fruits", "right_fruits", "bonus", "locked_at", "paused_seconds")
 _INTEGER = {"presented_order", "trial_index", "left_id", "right_id", "choice_correct", "timed_out", "left_fruits", "right_fruits"}
 _TEXT = {"type", "varied_feature", "correct_side", "choice", "first_harvest_side"}
 

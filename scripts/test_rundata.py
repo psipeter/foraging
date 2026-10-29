@@ -30,7 +30,7 @@ SESSION = {"name": "S1", "config": CFG, "world_file": "S1_seed1.world", "world_s
 
 def test_write_then_read_round_trips_every_stream(tmp_path):
     trials = [{"presented_order": 0, "trial_index": 4, "type": "t", "varied_feature": "shape", "stage_x": 1.5, "choice": "left",
-               "choice_correct": 1, "timed_out": 0, "response_time": 2.25, "first_harvest_time": None, "left_fruits": 10}]
+               "choice_correct": 1, "timed_out": 0, "response_time": 2.25, "first_harvest_time": None, "left_fruits": 10, "paused_seconds": 3.5}]
     folder = rundata.write_session(tmp_path, RUN, 3, SESSION, traj(), EVENTS, plan=[4, 2, 0], trials=trials)
     assert folder == tmp_path / RUN / "03"
     got = rundata.read_session(folder)
@@ -42,7 +42,7 @@ def test_write_then_read_round_trips_every_stream(tmp_path):
     assert math.isnan(e[0]["reward"]) and math.isnan(e[2]["running_total"])
     assert got["plan"] == [4, 2, 0]
     assert got["trials"][0]["trial_index"] == 4 and got["trials"][0]["first_harvest_time"] is None and got["trials"][0]["seq"] == 0
-    assert got["trials"][0]["choice"] == "left" and got["trials"][0]["left_fruits"] == 10
+    assert got["trials"][0]["choice"] == "left" and got["trials"][0]["left_fruits"] == 10 and got["trials"][0]["paused_seconds"] == 3.5
 
 
 def test_a_session_without_interlude_files_has_none(tmp_path):

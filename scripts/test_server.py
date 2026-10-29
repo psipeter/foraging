@@ -249,9 +249,11 @@ def test_interludes_carry_a_plan_and_trials_and_the_resume_state_has_them(env):
     c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start")]))
     interlude = session_row(1, is_interlude=True, interlude_file="S1_Interlude_seed1.interlude.json", interlude_sha256=INTERLUDE)
     trials = [{"seq": i, "presented_order": i, "trial_index": [4, 2, 0][i], "type": "t", "choice": "left", "choice_correct": 1, "timed_out": 0,
-               "left_id": 1, "right_id": 2, "response_time": 1.5} for i in range(2)]
+               "left_id": 1, "right_id": 2, "response_time": 1.5, "paused_seconds": 2.5} for i in range(2)]
     ack = c.append(1, session=interlude, events=event_rows([ev(0.0, "session_start")]), plan=[4, 2, 0], trials=trials)
     assert ack["trials_next"] == 2
+    assert env["db"].execute("select paused_seconds from public.interlude_trials where run_id = %s order by seq", (c.run_id,)).fetchall() == [
+        {"paused_seconds": 2.5}, {"paused_seconds": 2.5}]
     state = c.resume()["resume"]
     assert state["session_index"] == 1 and state["is_interlude"] is True and state["interlude_plan"] == [4, 2, 0]
     assert state["trial_rows"] == [{"correct": 1, "bonus": 0}, {"correct": 1, "bonus": 0}] and state["trials_next"] == 2

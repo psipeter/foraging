@@ -16,7 +16,7 @@ Edge Functions (service role) read or write.
 | `events` | event | `run_id`, `session_index`, `seq`, `t`, `real`, `type`, `tree_id`, `k`, `reward`, `running_total`, `payload` jsonb |
 | `trajectory` | chunk | `run_id`, `session_index`, `first_seq`, `n_frames`, `t_start`, `t_end`, `data` bytea |
 | `interlude_plan` | session | `run_id`, `session_index`, `order` (the shuffled trial list, written at the Interlude's start) |
-| `interlude_trials` | trial | the columns of today's `interlude.csv`, plus `run_id`, `session_index`, `seq` |
+| `interlude_trials` | trial | the columns of today's `interlude.csv`, plus `run_id`, `session_index`, `seq` and, at the end, `paused_seconds` (real seconds the game was held still while the trial was live) |
 | `worlds`, `releases` | registered world hash / allowed build commit | filled by a release script, read by `run-start` |
 
 Unique keys make every upload idempotent: `(run_id, session_index, seq)` for `events` and `interlude_trials`, `(run_id,

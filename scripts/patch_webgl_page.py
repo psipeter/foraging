@@ -2,11 +2,11 @@
 
 Resizing the canvas while the game runs (the page's fullscreen button, F11, a window resize, browser zoom) left the drawing black
 and unrecoverable in Chrome on Linux (docs/DECISIONS.md, "WebGL: no code-driven fullscreen"). Unity normally keeps the WebGL render
-target the size of the canvas element; this makes the render target a fixed WIDTH x HEIGHT (`matchWebGLToCanvasSize = false`) and lets
+target the size of the canvas element; this makes the render target a fixed WIDTH x HEIGHT (1920 x 1080 by default) (`matchWebGLToCanvasSize = false`) and lets
 CSS scale the canvas to the window with `object-fit: contain`, so Unity never sees a size change and every participant gets the same
 16:9 picture (field of view and resolution do not depend on the window). The Unity footer (title and fullscreen button) is hidden.
 
-    python3 scripts/patch_webgl_page.py <index.html> [--width 1280 --height 720]
+    python3 scripts/patch_webgl_page.py <index.html> [--width 1920 --height 1080]
 
 It fails loudly if the template no longer contains what it replaces (a Unity upgrade); it is idempotent.
 """
@@ -48,8 +48,8 @@ def patch(html, width, height):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("page")
-    parser.add_argument("--width", type=int, default=1280)
-    parser.add_argument("--height", type=int, default=720)
+    parser.add_argument("--width", type=int, default=1920)
+    parser.add_argument("--height", type=int, default=1080)
     args = parser.parse_args()
     with open(args.page, encoding="utf-8") as f:
         html = f.read()

@@ -86,6 +86,7 @@ public class InterludeManager : MonoBehaviour
     private int _position = -1;
     private Trial _trial;
     private float _clock;
+    private float _pausedSeconds;       // real seconds the game was held still during this trial (the trial clock stops)
     private readonly int[] _fruits = new int[2];
     private int _choice = -1;
     private bool _completed;
@@ -277,6 +278,7 @@ public class InterludeManager : MonoBehaviour
         _firstHarvestTime = -1f;
         _firstHarvestSide = -1;
         _clock = 0f;
+        _pausedSeconds = 0f;
 
         if (harvestUI != null)
         {
@@ -319,6 +321,7 @@ public class InterludeManager : MonoBehaviour
             case State.Running:
                 if (Time.timeScale <= 0f)
                 {
+                    _pausedSeconds += Time.unscaledDeltaTime;      // held still (mouse released, upload, ...) while the trial is live
                     break;
                 }
 
@@ -534,6 +537,7 @@ public class InterludeManager : MonoBehaviour
         cells.Add(_fruits[1].ToString());
         cells.Add(F(bonus));
         cells.Add(_lockTime < 0f ? "" : F(_lockTime));
+        cells.Add(F(_pausedSeconds));
         dataLogger.LogTrial(cells.ToArray());
     }
 

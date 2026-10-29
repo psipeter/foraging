@@ -1,14 +1,35 @@
+using System.Runtime.InteropServices;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
-// In a browser the mouse is captured (pointer lock) only after a click, and Escape releases it whenever the participant
-// presses it. While it is not held the game stands still behind "click to continue" (PauseGate), so looking around never
-// stops working silently. Created by the Bootstrap scene on WebGL only.
+// In a browser the mouse is captured (pointer lock) only after a click, and the browser releases it whenever the participant
+// presses Escape or leaves the tab or window. While it is not held the game is paused behind "Paused: click to continue" (PauseGate:
+// the clock stops, the sound is muted, the system cursor is shown so the participant can switch tabs or click away), and a click
+// captures the mouse again and resumes. Unity's own Cursor.lockState does not notice the browser releasing the capture, so the
+// state is read from the page (Plugins/WebGL/PointerLock.jslib). Created by the Bootstrap scene on WebGL only.
 public class PointerLockGuard : MonoBehaviour
 {
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [DllImport("__Internal")]
+    private static extern int IsPointerLocked();
+#endif
+
+    // The browser grants a capture request a few frames after the click; do not pause on that gap.
+    private const float GraceSeconds = 0.5f;
+
     private GameObject _overlay;
+    private float _graceUntil;
+
+    private static bool Held()
+    {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        return IsPointerLocked() == 1;
+#else
+        return Cursor.lockState == CursorLockMode.Locked;
+#endif
+    }
 
     private void Awake()
     {
@@ -40,23 +61,28 @@ public class PointerLockGuard : MonoBehaviour
         text.fontSize = 36f;
         text.color = Color.white;
         text.raycastTarget = false;
-        text.text = "Click to continue";
+        text.text = "Paused\n\n<size=60%>The timer is stopped. Click to continue.</size>";
         _overlay.SetActive(false);
+        _graceUntil = Time.unscaledTime + GraceSeconds;
     }
 
     private void Update()
     {
-        bool held = Cursor.lockState == CursorLockMode.Locked;
-        if (_overlay.activeSelf == held)
+        bool held = Held();
+        bool paused = !held && Time.unscaledTime > _graceUntil;
+        if (_overlay.activeSelf != paused)
         {
-            _overlay.SetActive(!held);
+            _overlay.SetActive(paused);
         }
 
-        PauseGate.Pointer = !held;
+        PauseGate.Pointer = paused;
+        AudioListener.pause = paused;
+        Cursor.visible = paused;
         if (!held && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+            _graceUntil = Time.unscaledTime + GraceSeconds;
         }
     }
 }

@@ -37,7 +37,7 @@ public class TrialRow
         ("left_id", 'I'), ("left_shape", 'F'), ("left_color", 'F'), ("left_moisture", 'F'), ("left_value", 'F'),
         ("right_id", 'I'), ("right_shape", 'F'), ("right_color", 'F'), ("right_moisture", 'F'), ("right_value", 'F'),
         ("correct_side", 'S'), ("choice", 'S'), ("choice_correct", 'I'), ("timed_out", 'I'), ("response_time", 'F'),
-        ("first_harvest_time", 'F'), ("first_harvest_side", 'S'), ("left_fruits", 'I'), ("right_fruits", 'I'), ("bonus", 'F'), ("locked_at", 'F'),
+        ("first_harvest_time", 'F'), ("first_harvest_side", 'S'), ("left_fruits", 'I'), ("right_fruits", 'I'), ("bonus", 'F'), ("locked_at", 'F'), ("paused_seconds", 'F'),
     };
 
     public string ToJson()
