@@ -43,6 +43,7 @@ git -C "$repo" checkout --orphan deploy-tmp >/dev/null 2>&1
 git -C "$repo" rm -rf --quiet . >/dev/null 2>&1 || true
 find "$repo" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 cp -R "$build"/. "$repo"/
+python3 "$(dirname "$0")/patch_webgl_page.py" "$repo/index.html"      # fixed drawing buffer: see that script
 touch "$repo/.nojekyll"
 git -C "$repo" add -A
 git -C "$repo" commit --quiet -m "$message"
