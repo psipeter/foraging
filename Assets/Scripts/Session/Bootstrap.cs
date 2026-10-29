@@ -6,8 +6,9 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 // The first scene of a build. On desktop it only hands over to the game scene. In a browser it first fetches the
-// StreamingAssets files into memory (StreamingData), then waits for a click: pointer lock, fullscreen and audio all need a
-// user gesture, and this is the one that starts them.
+// StreamingAssets files into memory (StreamingData), then waits for a click: pointer lock and audio need a user gesture, and this is the
+// one that starts them. It does not request fullscreen: changing the canvas size from inside the game left the picture black
+// (real browser, and a headless reproduction); the participant may use the page's own fullscreen button.
 public class Bootstrap : MonoBehaviour
 {
     [SerializeField] private string gameScene = "SampleScene";
@@ -41,11 +42,6 @@ public class Bootstrap : MonoBehaviour
         while (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame)
         {
             yield return null;
-        }
-
-        if (OnlineSettings.UrlParameter("fullscreen") != "0")        // ?fullscreen=0 keeps the page layout (testing)
-        {
-            Screen.fullScreen = true;
         }
 
         Cursor.lockState = CursorLockMode.Locked;
