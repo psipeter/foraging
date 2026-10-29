@@ -19,8 +19,14 @@ public class PointerLockGuard : MonoBehaviour
     // The browser grants a capture request a few frames after the click; do not pause on that gap.
     private const float GraceSeconds = 0.5f;
 
+    // Chrome refuses a capture request made within about a second of the participant leaving the capture (Escape): the request
+    // fails with a SecurityError, which Unity would surface as an error pop-up. Clicks in that window are ignored.
+    private const float RelockCooldownSeconds = 1.3f;
+
     private GameObject _overlay;
     private float _graceUntil;
+    private float _unlockedAt = float.NegativeInfinity;
+    private bool _wasHeld;
 
     private static bool Held()
     {
@@ -69,6 +75,12 @@ public class PointerLockGuard : MonoBehaviour
     private void Update()
     {
         bool held = Held();
+        if (_wasHeld && !held)
+        {
+            _unlockedAt = Time.unscaledTime;
+        }
+
+        _wasHeld = held;
         bool paused = !held && Time.unscaledTime > _graceUntil;
         if (_overlay.activeSelf != paused)
         {
@@ -78,7 +90,8 @@ public class PointerLockGuard : MonoBehaviour
         PauseGate.Pointer = paused;
         AudioListener.pause = paused;
         Cursor.visible = paused;
-        if (!held && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+        if (!held && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
+            Time.unscaledTime - _unlockedAt >= RelockCooldownSeconds)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;

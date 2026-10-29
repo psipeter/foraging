@@ -15,6 +15,16 @@ import argparse
 import sys
 
 MARKER = "<!-- patched by scripts/patch_webgl_page.py -->"
+SCRIPT = """  <script>
+    // Chrome rejects a pointer-lock request made right after the participant left the lock (Escape) with a SecurityError. The game
+    // just asks again on the next click; Unity would show this harmless rejection as an "error occurred" pop-up, so it is swallowed
+    // here, before Unity's own handler is registered.
+    window.addEventListener('unhandledrejection', function (e) {
+      var m = e.reason && (e.reason.message || String(e.reason));
+      if (m && /pointer ?lock/i.test(m)) { e.preventDefault(); e.stopImmediatePropagation(); }
+    });
+  </script>
+"""
 CSS = """  <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #000 }
     #unity-container.unity-desktop { position: fixed !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; transform: none !important }
@@ -35,7 +45,7 @@ def patch(html, width, height):
          "config.matchWebGLToCanvasSize = false;   // the render target stays the canvas's width x height attributes; CSS scales it"),
         ('canvas.style.width = "960px";\n        canvas.style.height = "600px";',
          f"// fixed {width}x{height} drawing buffer, scaled to the window by CSS (see the style block in <head>)"),
-        ("</head>", MARKER + "\n" + CSS + "</head>"),
+        ("</head>", MARKER + "\n" + SCRIPT + CSS + "</head>"),
     ]
     for old, new in swaps:
         if html.count(old) != 1:
