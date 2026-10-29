@@ -89,10 +89,17 @@ public class SessionTimerUI : MonoBehaviour
 
                     if (GameManager.IsLastSession)
                     {
-                        Application.Quit();
+                        if (StreamingData.NeedsPreload)
+                        {
+                            DataPipeline.ShowStudyComplete();       // a browser cannot close its page; quitting would leave it blank
+                        }
+                        else
+                        {
+                            Application.Quit();
 #if UNITY_EDITOR
-                        EditorApplication.isPlaying = false;
+                            EditorApplication.isPlaying = false;
 #endif
+                        }
                     }
                     else
                     {

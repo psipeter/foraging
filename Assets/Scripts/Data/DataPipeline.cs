@@ -103,6 +103,13 @@ public class DataPipeline : MonoBehaviour
         return false;
     }
 
+    // The study is finished and its data stored: a browser page cannot be closed by the game, so it says so and stays still.
+    public static void ShowStudyComplete()
+    {
+        Instance._notice = "Thank you! The study is complete. You can close this page.";
+        SceneSuperseded = true;
+    }
+
     // Called when the participant asks to leave the last session's end screen: true when the run is closed on the server
     // (everything stored, then run-finish answered); until then the game shows "saving" / "finishing up".
     public static bool TryFinish()

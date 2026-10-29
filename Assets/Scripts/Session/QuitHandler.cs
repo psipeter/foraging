@@ -8,6 +8,13 @@ public class QuitHandler : MonoBehaviour
 {
     private void Update()
     {
+        // In a browser Escape is the browser's: it releases the mouse capture (PointerLockGuard then asks for a click), and
+        // Application.Quit() would stop the whole runtime and leave a blank page.
+        if (Application.platform == RuntimePlatform.WebGLPlayer)
+        {
+            return;
+        }
+
         if (Keyboard.current == null || !Keyboard.current.escapeKey.wasPressedThisFrame)
         {
             return;
