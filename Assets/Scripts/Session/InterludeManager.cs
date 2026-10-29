@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -138,13 +139,23 @@ public class InterludeManager : MonoBehaviour
             return;
         }
 
-        // Presentation order is shuffled per participant; the file order is fixed.
-        _order = (Trial[])file.trials.Clone();
-        var rng = new System.Random();
-        for (int i = _order.Length - 1; i > 0; i--)
+        // Presentation order is shuffled per participant; the file order is fixed. A participant continuing an interrupted
+        // Interlude gets the order they had (from the server), and the trials they had finished are counted again.
+        ResumeReply resume = ResumeInfo.MidSession(GameManager.CurrentSessionIndex) ? ResumeInfo.Pending : null;
+        _order = resume != null ? OrderFromPlan(file.trials, resume.interlude_plan) : null;
+        if (_order == null)
         {
-            int j = rng.Next(i + 1);
-            (_order[i], _order[j]) = (_order[j], _order[i]);
+            resume = null;
+            _order = (Trial[])file.trials.Clone();
+            var rng = new System.Random();
+            for (int i = _order.Length - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                (_order[i], _order[j]) = (_order[j], _order[i]);
+            }
+
+            // The shuffled order is part of the data (and what a resume must restore).
+            dataLogger?.LogInterludePlan(Array.ConvertAll(_order, trial => trial.index));
         }
 
         Tree[] all = FindObjectsByType<Tree>(FindObjectsSortMode.None);
@@ -164,13 +175,61 @@ public class InterludeManager : MonoBehaviour
         }
 
         BuildFadeOverlay();
-        BeginTrial(0);
+        int first = 0;
+        if (resume != null)
+        {
+            first = Mathf.Min(resume.trial_rows.Length, _order.Length);
+            if (!sessionConfig.IsPractice)
+            {
+                foreach (TrialTally done in resume.trial_rows)
+                {
+                    GameManager.RecordInterludeTrial(done.correct == 1, done.bonus);
+                }
+            }
+        }
+
+        if (first >= _order.Length)
+        {
+            // Every trial was finished before the session was closed: show the end screen.
+            _position = _order.Length - 1;
+            _trial = _order[_position];
+            StartCoroutine(Complete());
+            return;
+        }
+
+        BeginTrial(first);
+    }
+
+    // The trials in the order of a logged plan (trial indices), or null when the plan does not match the trial file.
+    private static Trial[] OrderFromPlan(Trial[] trials, int[] plan)
+    {
+        if (plan == null || plan.Length != trials.Length)
+        {
+            return null;
+        }
+
+        var byIndex = new Dictionary<int, Trial>();
+        foreach (Trial trial in trials)
+        {
+            byIndex[trial.index] = trial;
+        }
+
+        var order = new Trial[plan.Length];
+        for (int i = 0; i < plan.Length; i++)
+        {
+            if (!byIndex.TryGetValue(plan[i], out order[i]))
+            {
+                return null;
+            }
+        }
+
+        return order;
     }
 
     private TrialFile LoadTrials()
     {
         string path = WorldData.InterludePathFor(sessionConfig);
-        if (!File.Exists(path))
+        if (!StreamingData.Exists(path))
         {
             Debug.LogError($"Interlude trial file not found: {path}");
             return null;
@@ -178,7 +237,7 @@ public class InterludeManager : MonoBehaviour
 
         try
         {
-            return JsonUtility.FromJson<TrialFile>(File.ReadAllText(path));
+            return JsonUtility.FromJson<TrialFile>(StreamingData.ReadText(path));
         }
         catch (Exception e)
         {
@@ -207,8 +266,8 @@ public class InterludeManager : MonoBehaviour
         cameraController.SetView(_trial.yaw, pitch);
         if (dataLogger != null)
         {
-            dataLogger.LogEvent("teleport", note: $"x={F(_trial.start[0])};z={F(_trial.start[1])};yaw={F(_trial.yaw)};pitch={F(pitch)}");
-            dataLogger.LogEvent("trial_start", note: $"order={position};trial={_trial.index};left={_trial.left.id};right={_trial.right.id}");
+            dataLogger.LogEvent("teleport", payload: Json.Obj(("x", _trial.start[0]), ("z", _trial.start[1]), ("yaw", _trial.yaw), ("pitch", pitch)));
+            dataLogger.LogEvent("trial_start", payload: Json.Obj(("order", position), ("trial", _trial.index), ("left", _trial.left.id), ("right", _trial.right.id)));
         }
 
         _fruits[0] = _fruits[1] = 0;
@@ -322,7 +381,7 @@ public class InterludeManager : MonoBehaviour
 
         if (dataLogger != null)
         {
-            dataLogger.LogEvent("choice_lock", tree.treeId, note: $"committed={tree.treeId};locked={otherId};policy={policy}");
+            dataLogger.LogEvent("choice_lock", tree.treeId, payload: Json.Obj(("committed", tree.treeId), ("locked", otherId), ("policy", policy.ToString())));
         }
     }
 
@@ -369,7 +428,7 @@ public class InterludeManager : MonoBehaviour
         if (dataLogger != null)
         {
             string side = _choice == 0 ? "left" : (_choice == 1 ? "right" : "none");
-            dataLogger.LogEvent("trial_end", note: $"choice={side};correct={(correct ? 1 : 0)};timed_out={(timedOut ? 1 : 0)}");
+            dataLogger.LogEvent("trial_end", payload: Json.Obj(("choice", side), ("correct", correct ? 1 : 0), ("timed_out", timedOut ? 1 : 0)));
         }
 
         // No harvest may start between trials (during the fade a press would take fruit outside any trial and the bout
@@ -447,49 +506,44 @@ public class InterludeManager : MonoBehaviour
         SetFade(0f);
     }
 
+    // One interlude_trials row, in TrialRow.Columns order.
     private void WriteRow(bool timedOut, bool correct, float bonus)
     {
-        string folder = dataLogger != null ? dataLogger.SessionDataPath : null;
-        if (string.IsNullOrEmpty(folder))
+        if (dataLogger == null)
         {
             return;
         }
 
-        try
+        string choice = _choice == 0 ? "left" : (_choice == 1 ? "right" : "none");
+        string firstSide = _firstHarvestSide == 0 ? "left" : (_firstHarvestSide == 1 ? "right" : "none");
+        float response = timedOut ? sessionConfig.InterludeTrialSeconds : _choiceTime;
+        var cells = new List<string>
         {
-            if (_csvPath == null)
-            {
-                _csvPath = Path.Combine(folder, "interlude.csv");
-                File.WriteAllText(_csvPath,
-                    "presented_order,trial_index,type,varied_feature,stage_x,stage_z," +
-                    "left_id,left_shape,left_color,left_moisture,left_value," +
-                    "right_id,right_shape,right_color,right_moisture,right_value," +
-                    "correct_side,choice,choice_correct,timed_out,response_time,first_harvest_time,first_harvest_side," +
-                    "left_fruits,right_fruits,bonus,locked_at\n", Encoding.UTF8);
-            }
-
-            string choice = _choice == 0 ? "left" : (_choice == 1 ? "right" : "none");
-            string firstSide = _firstHarvestSide == 0 ? "left" : (_firstHarvestSide == 1 ? "right" : "none");
-            float response = timedOut ? sessionConfig.InterludeTrialSeconds : _choiceTime;
-            var sb = new StringBuilder();
-            sb.Append(_position).Append(',').Append(_trial.index).Append(',').Append(_trial.type).Append(',').Append(_trial.varied).Append(',');
-            sb.Append(F(_trial.start[0])).Append(',').Append(F(_trial.start[1])).Append(',');
-            AppendBush(sb, _trial.left);
-            AppendBush(sb, _trial.right);
-            sb.Append(_trial.correct).Append(',').Append(choice).Append(',').Append(correct ? 1 : 0).Append(',').Append(timedOut ? 1 : 0).Append(',');
-            sb.Append(F(response)).Append(',').Append(_firstHarvestTime < 0f ? "" : F(_firstHarvestTime)).Append(',').Append(firstSide).Append(',');
-            sb.Append(_fruits[0]).Append(',').Append(_fruits[1]).Append(',').Append(F(bonus)).Append(',').Append(_lockTime < 0f ? "" : F(_lockTime)).Append('\n');
-            File.AppendAllText(_csvPath, sb.ToString(), Encoding.UTF8);
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"InterludeManager failed to write interlude.csv: {e}");
-        }
+            _position.ToString(), _trial.index.ToString(), _trial.type, _trial.varied, F(_trial.start[0]), F(_trial.start[1]),
+        };
+        AddBush(cells, _trial.left);
+        AddBush(cells, _trial.right);
+        cells.Add(_trial.correct);
+        cells.Add(choice);
+        cells.Add(correct ? "1" : "0");
+        cells.Add(timedOut ? "1" : "0");
+        cells.Add(F(response));
+        cells.Add(_firstHarvestTime < 0f ? "" : F(_firstHarvestTime));
+        cells.Add(firstSide);
+        cells.Add(_fruits[0].ToString());
+        cells.Add(_fruits[1].ToString());
+        cells.Add(F(bonus));
+        cells.Add(_lockTime < 0f ? "" : F(_lockTime));
+        dataLogger.LogTrial(cells.ToArray());
     }
 
-    private static void AppendBush(StringBuilder sb, Bush b)
+    private static void AddBush(List<string> cells, Bush b)
     {
-        sb.Append(b.id).Append(',').Append(F(b.shape)).Append(',').Append(F(b.color)).Append(',').Append(F(b.moisture)).Append(',').Append(F(b.value)).Append(',');
+        cells.Add(b.id.ToString());
+        cells.Add(F(b.shape));
+        cells.Add(F(b.color));
+        cells.Add(F(b.moisture));
+        cells.Add(F(b.value));
     }
 
     private static string F(float value)

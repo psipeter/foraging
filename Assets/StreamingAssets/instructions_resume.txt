@@ -1,0 +1,6 @@
+<size=28><b>Welcome back</b></size>
+
+Your session was interrupted. It continues from where you left off, with the time you had left.
+Anything you were in the middle of (a harvest, or a choice you had not yet made) starts again.
+
+<i>Press Enter to continue.</i>

@@ -74,6 +74,10 @@ public class SessionConfig : ScriptableObject
     [Tooltip("Frame rate cap (vsync is turned off so the cap applies). 120 matches common VR headset refresh rates and bounds the size of the per-frame trajectory log.")]
     [SerializeField] private int targetFrameRate = 120;
 
+    [Header("Data upload")]
+    [Tooltip("When online, seconds the server may leave recorded data unacknowledged before the game pauses behind a 'saving' message until it has been stored. Keep it above the server's normal response time (cold starts take about a second).")]
+    [SerializeField] private float uploadGraceSeconds = 4f;
+
     [Header("Player")]
     [SerializeField] private float playerMoveSpeed = 5f;
     [SerializeField] private float fruitHarvestDuration = 0.8f;
@@ -305,6 +309,7 @@ public class SessionConfig : ScriptableObject
     public int FruitCount => fruitCount;
     public float FruitRadius => fruitRadius;
     public int TargetFrameRate => targetFrameRate;
+    public float UploadGraceSeconds => uploadGraceSeconds;
     public float PlayerMoveSpeed => playerMoveSpeed;
     public float FruitHarvestDuration => fruitHarvestDuration;
     public float RewardStd => rewardStd;

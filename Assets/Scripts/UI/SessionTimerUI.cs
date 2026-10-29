@@ -80,6 +80,13 @@ public class SessionTimerUI : MonoBehaviour
                     (Keyboard.current.enterKey.wasPressedThisFrame ||
                      Keyboard.current.numpadEnterKey.wasPressedThisFrame))
                 {
+                    // Leave only once the server has stored everything (otherwise a "saving" screen shows until it has); after the last
+                    // session the run is also closed on the server.
+                    if (GameManager.IsLastSession ? !DataPipeline.TryFinish() : !DataPipeline.TryLeave())
+                    {
+                        return;
+                    }
+
                     if (GameManager.IsLastSession)
                     {
                         Application.Quit();

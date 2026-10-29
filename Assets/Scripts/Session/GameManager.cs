@@ -45,6 +45,23 @@ public class GameManager : MonoBehaviour
         ThisInterludeBonus = 0f;
     }
 
+    // Continuing an interrupted run: the running totals of the sessions already finished (as the end screens add them up).
+    public static void RestoreTotals(ResumeReply resume)
+    {
+        SessionScoreTotal = 0f;
+        foreach (PreviousSession s in resume.previous)
+        {
+            if (!s.is_practice && !s.is_interlude)
+            {
+                SessionScoreTotal += s.score;
+            }
+        }
+
+        InterludeTrialsScored = resume.previous_interlude.trials;
+        InterludeCorrectCount = resume.previous_interlude.correct;
+        InterludeBonus = resume.previous_interlude.bonus;
+    }
+
     public static void RecordInterludeTrial(bool correct, float bonus)
     {
         InterludeTrialsScored++;

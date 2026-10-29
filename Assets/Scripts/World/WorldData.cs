@@ -60,17 +60,18 @@ public class WorldData
     private string[] _checkNames;
     private float[] _checkValues;
 
-    // The world file supplying the terrain. An Interlude uses the terrain of the session it probes.
+    // The world file supplying the terrain, relative to StreamingAssets (read through StreamingData). An Interlude uses the
+    // terrain of the session it probes.
     public static string PathFor(SessionConfig config)
     {
         string owner = config.IsInterlude ? config.InterludeFor : config.name;
-        return System.IO.Path.Combine(Application.streamingAssetsPath, "Worlds", $"{owner}_seed{config.WorldSeed}.world");
+        return $"Worlds/{owner}_seed{config.WorldSeed}.world";
     }
 
-    // An Interlude's bush table and trial list (written by scripts/interlude.py).
+    // An Interlude's bush table and trial list (written by scripts/interlude.py), relative to StreamingAssets.
     public static string InterludePathFor(SessionConfig config)
     {
-        return System.IO.Path.Combine(Application.streamingAssetsPath, "Worlds", $"{config.name}_seed{config.WorldSeed}.interlude.json");
+        return $"Worlds/{config.name}_seed{config.WorldSeed}.interlude.json";
     }
 
     [Serializable]
@@ -90,13 +91,13 @@ public class WorldData
     private bool ApplyInterludeBushes(SessionConfig config)
     {
         string path = InterludePathFor(config);
-        if (!File.Exists(path))
+        if (!StreamingData.Exists(path))
         {
             Debug.LogError($"Interlude file not found: {path}. Generate it with: ./venv/bin/python scripts/interlude.py {config.name}");
             return false;
         }
 
-        InterludeBushes b = JsonUtility.FromJson<InterludeBushes>(File.ReadAllText(path));
+        InterludeBushes b = JsonUtility.FromJson<InterludeBushes>(StreamingData.ReadText(path));
         if (b == null || b.treePos == null || b.treePos.Length == 0)
         {
             Debug.LogError($"Interlude file has no bush table: {path}");
@@ -119,7 +120,7 @@ public class WorldData
     public static WorldData Load(SessionConfig config)
     {
         string path = PathFor(config);
-        if (!File.Exists(path))
+        if (!StreamingData.Exists(path))
         {
             Debug.LogError($"World file not found: {path}. Generate it with: ./venv/bin/python scripts/world.py {config.name} --unity");
             return null;
@@ -127,7 +128,7 @@ public class WorldData
 
         try
         {
-            byte[] bytes = File.ReadAllBytes(path);
+            byte[] bytes = StreamingData.ReadBytes(path);
             if (bytes.Length < 12 || Encoding.ASCII.GetString(bytes, 0, 4) != "FWLD")
             {
                 Debug.LogError($"Not a world file: {path}");

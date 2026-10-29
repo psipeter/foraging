@@ -66,6 +66,25 @@ public class HarvestManager : MonoBehaviour
 
     public bool IsHarvesting => _harvesting;
 
+    // Continuing an interrupted session: the fruits already taken per bush and the score so far (the open bout and the progress
+    // on a fruit being picked are not restored; they start over).
+    public void RestoreState(TreeCount[] taken, float runningTotal)
+    {
+        foreach (Tree tree in FindObjectsByType<Tree>(FindObjectsSortMode.None))
+        {
+            foreach (TreeCount count in taken)
+            {
+                if (count.tree == tree.treeId)
+                {
+                    tree.RestoreCollected(count.n);
+                }
+            }
+        }
+
+        _runningTotal = runningTotal;
+        OnScoreChanged?.Invoke(_runningTotal);
+    }
+
     // While blocked no bout can start and Space presses are discarded (the Interlude's gap between trials). The caller
     // ends any open bout first; replay mirrors the window with the trial_end / trial_go events.
     public void SetBlocked(bool blocked)

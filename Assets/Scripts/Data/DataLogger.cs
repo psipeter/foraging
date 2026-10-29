@@ -1,18 +1,19 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
-using System.Text;
 using UnityEngine;
 
-// Writes one folder per session under <project root>/ForagingData/<sessionId>/ with everything needed to replay the
-// participant's actions in their exact world (see docs/SCIENCE.md, "Data"):
-//   trajectory.csv    one row per rendered frame: t, x, z, yaw, pitch, keys (the state HarvestManager reads that frame)
-//   events.csv        sparse discrete events (pause, harvest press/release, every fruit, teleports, Interlude trials, ...)
-//   harvests.csv      one row per harvest bout (a derived summary of events.csv, with the bush's attributes)
-//   manifest.json     the full SessionConfig, the world file's hash, build info, display and frame statistics
-// The clock `t` is unpaused session seconds since the logger started (it stands still while an instruction screen holds
+// Records everything needed to replay the participant's actions in their exact world (docs/ONLINE_DATA_PLAN.md):
+//   trajectory   one row per rendered frame: t, x, z, yaw, pitch, keys (the state HarvestManager reads that frame), quantized
+//   events       sparse discrete events (pause, harvest press/release, every fruit, teleports, Interlude trials, ...)
+//   session row  the full SessionConfig, the world file's hash, build info, display and frame statistics
+//   Interlude    the shuffled trial order (logged when the Interlude starts) and one row per trial
+// Rows are batched (events within a second, trajectory every five seconds online, every second offline) and handed to the
+// DataPipeline, which writes the local copy under ForagingData/<run id>/<session>/ and uploads when online. The clock `t`
+// is unpaused session seconds since the logger started (it stands still while a screen or the data gate holds
 // Time.timeScale at 0). World files are archived once by content hash under ForagingData/_worlds/.
 [DefaultExecutionOrder(20)]
 public class DataLogger : MonoBehaviour
@@ -28,33 +29,23 @@ public class DataLogger : MonoBehaviour
     private const int KeyBack = 2;
     private const int KeyHarvest = 4;
 
-    private const float TrajectoryFlushSeconds = 1f;
+    private const float EventFlushSeconds = 1f;
+    private const float OnlineTrajectoryFlushSeconds = 5f;
+    private const float OfflineTrajectoryFlushSeconds = 1f;
 
-    [Serializable]
-    private class BuildInfo
-    {
-        public string commit;
-        public bool dirty;
-        public string unityVersion;
-    }
-
-    private string _sessionId;
-    private string _sessionDataPath;
-    private StreamWriter _trajectoryWriter;
-    private StreamWriter _eventWriter;
-    private StreamWriter _harvestWriter;
+    private int _sessionIndex;
     private CameraController _cameraController;
 
     private double _t;
     private int _lastRowFrame = -1;
     private float _realStart;
     private float _lastFlush;
+    private float _lastFrameFlush;
     private bool _paused;
     private bool _finalized;
     private string _startedAtUtc;
 
     private int _harvestIndex;
-    private double _boutStartT;
     private float _lastRunningTotal;
 
     private int _frames;
@@ -64,8 +55,14 @@ public class DataLogger : MonoBehaviour
     private string _worldHash;
     private string _interludeHash;
 
-    // Folder of this session's files (set in Start); the Interlude writes interlude.csv next to them.
-    public string SessionDataPath => _sessionDataPath;
+    // Rows since the last flush; the sequence numbers run on across flushes (a frame's is its index in the session).
+    private readonly List<EventRow> _events = new List<EventRow>();
+    private readonly List<FrameQ> _pendingFrames = new List<FrameQ>();
+    private readonly List<TrialRow> _trials = new List<TrialRow>();
+    private int _eventSeq, _frameSeq, _trialSeq;
+    private int[] _plan;
+    private string _sessionJson;
+    private ResumeReply _resume;        // the server's state when this session continues an interrupted one
 
     // Session clock now: this frame's value whether or not this frame's trajectory row has been written yet.
     private double Now => _lastRowFrame == Time.frameCount ? _t : _t + Time.deltaTime;
@@ -91,62 +88,105 @@ public class DataLogger : MonoBehaviour
 
     private void Start()
     {
-        _sessionId = Guid.NewGuid().ToString("N").Substring(0, 8);
-        string root = Path.Combine(Application.dataPath, "..", "ForagingData");
-        _sessionDataPath = Path.Combine(root, _sessionId);
+        _sessionIndex = GameManager.CurrentSessionIndex;
+        DataPipeline.SceneSuperseded = false;
         _startedAtUtc = DateTime.UtcNow.ToString("O");
         _realStart = Time.realtimeSinceStartup;
-        _lastFlush = Time.realtimeSinceStartup;
+        _lastFlush = _lastFrameFlush = Time.realtimeSinceStartup;
+        DataPipeline.Configure(sessionConfig != null ? sessionConfig.UploadGraceSeconds : 4f);
 
         if (playerController != null)
         {
             _cameraController = playerController.GetComponent<CameraController>();
         }
 
-        try
+        HashAndArchiveWorldFiles();
+        bool newRunStage = ResumeInfo.Pending != null && ResumeInfo.Pending.completed;      // the run continues at a session boundary
+        if (newRunStage)
         {
-            Directory.CreateDirectory(_sessionDataPath);
-
-            _trajectoryWriter = OpenWriter("trajectory.csv", "t,x,z,yaw,pitch,keys");
-            _eventWriter = OpenWriter("events.csv", "t,real,type,tree_id,k,reward,running_total,note");
-            _harvestWriter = OpenWriter("harvests.csv",
-                "harvest_index,t_start,t_end,tree_id,tree_x,tree_y,tree_z,shape,color,moisture,true_reward,total_received,running_total,fruit_rewards,fruits_collected,fruits_remaining,tree_exhausted");
-
-            HashAndArchiveWorldFiles();
-            WriteManifest(false);
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"DataLogger failed to initialize IO: {e}");
+            ResumeInfo.Pending = null;
         }
 
-        LogEvent("session_start", note: PoseNote());
+        if (ResumeInfo.MidSession(_sessionIndex))
+        {
+            BeginResumed(ResumeInfo.Pending);
+        }
+        else
+        {
+            _sessionJson = SessionJson(false);
+            LogEvent("session_start", payload: newRunStage ? Json.Obj(("resumed_run", true)) : PosePayload());
+        }
+
+        Flush();
     }
 
-    private StreamWriter OpenWriter(string fileName, string header)
+    // This session continues one the participant left: sequence numbers and the clock carry on from what the server holds, and
+    // the game's state is restored once the scene's trees exist. Rows logged while the scene was starting (the Interlude's first
+    // trial) are moved to the resume, after the session_resume event.
+    private void BeginResumed(ResumeReply r)
     {
-        var writer = new StreamWriter(Path.Combine(_sessionDataPath, fileName), false, new UTF8Encoding(false), 1 << 16);
-        writer.WriteLine(header);
-        writer.Flush();
-        return writer;
+        _resume = r;
+        _eventSeq = r.events_next;
+        _frameSeq = r.trajectory_next;
+        _trialSeq = r.trials_next;
+        _t = r.clock;
+        _lastRunningTotal = r.running_total;
+        if (!string.IsNullOrEmpty(r.started_at))
+        {
+            _startedAtUtc = r.started_at;
+        }
+
+        foreach (EventRow e in _events)
+        {
+            e.T = _t;
+        }
+
+        _events.Insert(0, new EventRow
+        {
+            T = _t, Real = Time.realtimeSinceStartup - _realStart, Type = "session_resume",
+            Payload = Json.Obj(("gap_s", r.gap_seconds), ("stale_s", r.clock - r.pose.t), ("open_bout_tree", r.open_bout_tree),
+                ("frames_held", r.trajectory_next), ("has_pose", r.has_pose)),
+        });
+        StartCoroutine(ApplyResume());
     }
 
-    private string PoseNote()
+    // Puts the player, the bushes' fruit, the score and the sun back where the server's data says they were.
+    private IEnumerator ApplyResume()
+    {
+        yield return null;
+        yield return null;          // the trees are generated and found by now
+        ResumeReply r = _resume;
+        if (sessionConfig != null && !sessionConfig.IsInterlude)
+        {
+            if (r.has_pose && playerController != null)
+            {
+                playerController.TeleportTo(r.pose.x, r.pose.z);
+                _cameraController?.SetView(r.pose.yaw, r.pose.pitch);
+            }
+
+            harvestManager?.RestoreState(r.fruits_taken, r.running_total);
+            sunController?.SetSessionTime((float)r.clock);
+        }
+
+        ResumeInfo.Pending = null;
+    }
+
+    private string PosePayload()
     {
         if (playerController == null)
         {
-            return "";
+            return null;
         }
 
         Vector3 p = playerController.transform.position;
         float yaw = _cameraController != null ? _cameraController.Yaw : 0f;
         float pitch = _cameraController != null ? _cameraController.Pitch : 0f;
-        return string.Format(CultureInfo.InvariantCulture, "x={0:F3};z={1:F3};yaw={2:F3};pitch={3:F3}", p.x, p.z, yaw, pitch);
+        return Json.Obj(("x", p.x), ("z", p.z), ("yaw", yaw), ("pitch", pitch));
     }
 
     private void Update()
     {
-        if (_finalized || _trajectoryWriter == null)
+        if (_finalized)
         {
             return;
         }
@@ -167,22 +207,22 @@ public class DataLogger : MonoBehaviour
             Vector2 move = playerController.MoveInput;
             int keys = (move.y > 0.01f ? KeyForward : 0) | (move.y < -0.01f ? KeyBack : 0) | (playerController.HarvestHeld ? KeyHarvest : 0);
 
-            _trajectoryWriter.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                "{0:F6},{1:F4},{2:F4},{3:F4},{4:F3},{5}",
-                _t, p.x, p.z, _cameraController.Yaw, _cameraController.Pitch, keys));
-
-            if (Time.realtimeSinceStartup - _lastFlush >= TrajectoryFlushSeconds)
-            {
-                _trajectoryWriter.Flush();
-                _lastFlush = Time.realtimeSinceStartup;
-            }
+            _pendingFrames.Add(FrameQ.From(_t, p.x, p.z, _cameraController.Yaw, _cameraController.Pitch, keys));
         }
 
         bool paused = Time.timeScale <= 0f;
         if (paused != _paused)
         {
             _paused = paused;
-            LogEvent(paused ? "pause" : "resume");
+            LogEvent(paused ? "pause" : "resume", payload: paused ? Json.Obj(("reason", PauseGate.Reason)) : null);
+        }
+
+        float now = Time.realtimeSinceStartup;
+        float frameInterval = DataPipeline.IsOnline ? OnlineTrajectoryFlushSeconds : OfflineTrajectoryFlushSeconds;
+        bool eventsDue = (_events.Count > 0 || _trials.Count > 0) && now - _lastFlush >= EventFlushSeconds;
+        if (eventsDue || (_pendingFrames.Count > 0 && now - _lastFrameFlush >= frameInterval))
+        {
+            Flush();
         }
     }
 
@@ -191,30 +231,72 @@ public class DataLogger : MonoBehaviour
         LogEvent(focused ? "focus_gained" : "focus_lost");
     }
 
-    // Appends one row to events.csv (flushed at once; events are rare). Missing numbers are left empty.
-    public void LogEvent(string type, int treeId = -1, int k = -1, float reward = float.NaN, float runningTotal = float.NaN, string note = "")
+    // Records one event; `payload` is a JSON object (Json.Obj) with the event's extra fields, or null.
+    public void LogEvent(string type, int treeId = -1, int k = -1, float reward = float.NaN, float runningTotal = float.NaN, string payload = null)
     {
-        if (_eventWriter == null)
+        if (_finalized && type != "session_end")
         {
             return;
         }
 
-        var sb = new StringBuilder();
-        sb.Append(Now.ToString("F6", CultureInfo.InvariantCulture)).Append(',');
-        sb.Append((Time.realtimeSinceStartup - _realStart).ToString("F3", CultureInfo.InvariantCulture)).Append(',');
-        sb.Append(type).Append(',');
-        sb.Append(treeId >= 0 ? treeId.ToString(CultureInfo.InvariantCulture) : "").Append(',');
-        sb.Append(k >= 0 ? k.ToString(CultureInfo.InvariantCulture) : "").Append(',');
-        sb.Append(float.IsNaN(reward) ? "" : reward.ToString("F0", CultureInfo.InvariantCulture)).Append(',');
-        sb.Append(float.IsNaN(runningTotal) ? "" : runningTotal.ToString("F0", CultureInfo.InvariantCulture)).Append(',');
-        sb.Append(note);
-        _eventWriter.WriteLine(sb.ToString());
-        _eventWriter.Flush();
+        _events.Add(new EventRow
+        {
+            T = Now, Real = Time.realtimeSinceStartup - _realStart, Type = type, TreeId = treeId, K = k,
+            Reward = reward, RunningTotal = runningTotal, Payload = payload,
+        });
+    }
+
+    // The Interlude's shuffled trial order (the trial indices in presentation order), logged once when it starts.
+    public void LogInterludePlan(int[] trialOrder)
+    {
+        _plan = trialOrder;
+    }
+
+    // One Interlude trial: its cells in TrialRow.Columns order, formatted, '' for a missing value.
+    public void LogTrial(string[] cells)
+    {
+        _trials.Add(new TrialRow { Cells = cells });
+    }
+
+    // Hands everything recorded since the last flush to the pipeline.
+    private void Flush()
+    {
+        // Nothing is sent before the run exists (online) and the pipeline has decided which session this scene plays.
+        if (!DataPipeline.IsReady || DataPipeline.SceneSuperseded)
+        {
+            return;
+        }
+
+        foreach (EventRow e in _events)
+        {
+            e.Seq = _eventSeq++;
+        }
+
+        foreach (TrialRow t in _trials)
+        {
+            t.Seq = _trialSeq++;
+        }
+
+        var batch = new DataBatch
+        {
+            SessionIndex = _sessionIndex, SessionJson = _sessionJson, Plan = _plan, FirstFrameSeq = _frameSeq,
+            Events = new List<EventRow>(_events), Frames = new List<FrameQ>(_pendingFrames), Trials = new List<TrialRow>(_trials),
+        };
+        _events.Clear();
+        _trials.Clear();
+        _frameSeq += _pendingFrames.Count;
+        _pendingFrames.Clear();
+        _sessionJson = null;
+        _plan = null;
+        _lastFlush = _lastFrameFlush = Time.realtimeSinceStartup;
+        if (!batch.IsEmpty)
+        {
+            DataPipeline.Submit(batch);
+        }
     }
 
     private void HandleBoutStarted(Tree tree)
     {
-        _boutStartT = Now;
         LogEvent("harvest_press", tree.treeId, runningTotal: _lastRunningTotal);
     }
 
@@ -229,48 +311,20 @@ public class DataLogger : MonoBehaviour
         LogEvent("fruit", tree.treeId, k, reward, runningTotal);
     }
 
-    // harvests.csv: total_received is this bout's reward; running_total is the session total after the bout;
-    // fruit_rewards lists this bout's fruits only.
+    // The bout's summary is no longer stored: it is derived from the events and the world file.
     private void HandleBoutEnded(HarvestBout bout)
     {
-        if (_harvestWriter == null || sessionConfig == null || bout == null || bout.tree == null)
+        if (sessionConfig == null || bout == null || bout.tree == null)
         {
             return;
         }
 
         Tree tree = bout.tree;
-        double endT = Now;
         LogEvent("harvest_release", tree.treeId, runningTotal: bout.runningTotal,
-            note: $"fruits={bout.fruitRewards.Count};remaining={bout.fruitsRemaining};exhausted={(bout.exhausted ? 1 : 0)}");
-
-        Vector3 treePos = tree.GetWorldCenter();
-        float trueReward = sessionConfig.EvaluateReward(tree.attributes);
-        string fruitRewards = string.Join(";", bout.fruitRewards.ConvertAll(v => v.ToString("F0", CultureInfo.InvariantCulture)));
-
-        string line = string.Format(CultureInfo.InvariantCulture,
-            "{0},{1:F6},{2:F6},{3},{4:F3},{5:F3},{6:F3},{7:F3},{8:F3},{9:F3},{10:F3},{11:F3},{12:F3},\"{13}\",{14},{15},{16}",
-            _harvestIndex,
-            _boutStartT,
-            endT,
-            tree.treeId,
-            treePos.x, treePos.y, treePos.z,
-            tree.attributes.shape,
-            tree.attributes.color,
-            tree.attributes.moisture,
-            trueReward,
-            bout.boutTotal,
-            bout.runningTotal,
-            fruitRewards,
-            bout.fruitRewards.Count,
-            bout.fruitsRemaining,
-            bout.exhausted ? 1 : 0);
-
-        _harvestWriter.WriteLine(line);
-        _harvestWriter.Flush();
+            payload: Json.Obj(("fruits", bout.fruitRewards.Count), ("remaining", bout.fruitsRemaining), ("exhausted", bout.exhausted ? 1 : 0)));
         _lastRunningTotal = bout.runningTotal;
         _harvestIndex++;
     }
-
     // HarvestManager's own session-end handler closes the open bout; finish after it has run (end of frame).
     private void HandleSessionEnd()
     {
@@ -290,42 +344,34 @@ public class DataLogger : MonoBehaviour
 
     private void FinalizeLog()
     {
-        if (_finalized || _sessionDataPath == null)
+        if (_finalized || _startedAtUtc == null)
         {
             return;
         }
 
-        _finalized = true;
-        LogEvent("session_end", runningTotal: _lastRunningTotal);
+        if (DataPipeline.SceneSuperseded)
+        {
+            _finalized = true;          // the scene is being replaced to continue another session: this one's rows are discarded
+            return;
+        }
 
+        LogEvent("session_end", runningTotal: _lastRunningTotal);
+        _finalized = true;
         try
         {
-            WriteManifest(true);
+            _sessionJson = SessionJson(true);
         }
         catch (Exception e)
         {
-            Debug.LogError($"DataLogger failed to write the final manifest: {e}");
+            Debug.LogError($"DataLogger failed to build the final session row: {e}");
         }
 
-        CloseWriter(ref _trajectoryWriter);
-        CloseWriter(ref _eventWriter);
-        CloseWriter(ref _harvestWriter);
+        Flush();
     }
 
-    private static void CloseWriter(ref StreamWriter writer)
-    {
-        try
-        {
-            writer?.Flush();
-            writer?.Close();
-        }
-        catch { }
-
-        writer = null;
-    }
-
-    // Hashes the world file(s) this session plays and copies each to ForagingData/_worlds/<hash8>_<name> once, so the
-    // manifest hash pins the log to the exact terrain, bushes and per-fruit rewards even after the files are regenerated.
+    // Hashes the world file(s) this session plays and, where there is a file system, copies each to
+    // ForagingData/_worlds/<hash8>_<name> once, so the session row's hash pins the log to the exact terrain, bushes and per-fruit
+    // rewards even after the files are regenerated.
     private void HashAndArchiveWorldFiles()
     {
         if (sessionConfig == null)
@@ -333,25 +379,29 @@ public class DataLogger : MonoBehaviour
             return;
         }
 
-        string archive = Path.Combine(Application.dataPath, "..", "ForagingData", "_worlds");
+        string archive = StreamingData.NeedsPreload ? null : Path.Combine(Application.dataPath, "..", "ForagingData", "_worlds");
         _worldHash = HashAndArchive(WorldData.PathFor(sessionConfig), archive);
         _interludeHash = sessionConfig.IsInterlude ? HashAndArchive(WorldData.InterludePathFor(sessionConfig), archive) : null;
     }
 
-    private static string HashAndArchive(string path, string archive)
+    private static string HashAndArchive(string relativePath, string archive)
     {
         try
         {
-            if (!File.Exists(path))
+            byte[] bytes = StreamingData.ReadBytes(relativePath);
+            if (bytes == null)
             {
                 return null;
             }
 
-            byte[] bytes = File.ReadAllBytes(path);
             string hash = Sha256Hex(bytes);
+            if (archive == null)
+            {
+                return hash;
+            }
 
             Directory.CreateDirectory(archive);
-            string copy = Path.Combine(archive, hash.Substring(0, 8) + "_" + Path.GetFileName(path));
+            string copy = Path.Combine(archive, hash.Substring(0, 8) + "_" + Path.GetFileName(relativePath));
 
             // An archive copy that is missing, or whose content no longer matches its name (a write cut short by a crash),
             // is replaced. The copy is written under a temporary name and moved into place, so a crash never leaves a
@@ -372,7 +422,7 @@ public class DataLogger : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"DataLogger could not hash/archive {path}: {e}");
+            Debug.LogError($"DataLogger could not hash/archive {relativePath}: {e}");
             return null;
         }
     }
@@ -385,89 +435,41 @@ public class DataLogger : MonoBehaviour
         }
     }
 
-    private static BuildInfo ReadBuildInfo()
-    {
-        try
-        {
-            string path = Path.Combine(Application.streamingAssetsPath, "build_info.json");
-            if (File.Exists(path))
-            {
-                return JsonUtility.FromJson<BuildInfo>(File.ReadAllText(path));
-            }
-        }
-        catch { }
-
-        return null;
-    }
-
-    private static string Q(string value)
-    {
-        return value == null ? "null" : "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
-    }
-
-    private static string N(float value)
-    {
-        return value.ToString("R", CultureInfo.InvariantCulture);
-    }
-
-    // Written at the start and rewritten at the end (adds endedAtUtc, completed, frame statistics, finalScore).
-    private void WriteManifest(bool final)
+    // The `sessions` row: the full SessionConfig, the world hashes, build, display and frame statistics. Sent when the
+    // session starts and again, with the end fields filled in, when it ends.
+    private string SessionJson(bool final)
     {
         if (sessionConfig == null || mainCamera == null)
         {
-            return;
+            return null;
         }
 
-        BuildInfo build = ReadBuildInfo();
-        var sb = new StringBuilder();
-        sb.AppendLine("{");
-        sb.AppendLine($"  \"sessionId\": {Q(_sessionId)},");
-        sb.AppendLine("  \"participantId\": null,");
-        sb.AppendLine($"  \"sessionName\": {Q(sessionConfig.name)},");
-        sb.AppendLine($"  \"sessionIndex\": {GameManager.CurrentSessionIndex},");
-        sb.AppendLine($"  \"isPractice\": {(sessionConfig.IsPractice ? "true" : "false")},");
-        sb.AppendLine($"  \"isInterlude\": {(sessionConfig.IsInterlude ? "true" : "false")},");
-        sb.AppendLine($"  \"startedAtUtc\": {Q(_startedAtUtc)},");
-        sb.AppendLine($"  \"endedAtUtc\": {(final ? Q(DateTime.UtcNow.ToString("O")) : "null")},");
-        sb.AppendLine($"  \"completed\": {(final && sunController != null && sunController.SessionComplete ? "true" : "false")},");
-        sb.AppendLine($"  \"finalScore\": {(final ? N(_lastRunningTotal) : "null")},");
-        sb.AppendLine("  \"build\": {");
-        sb.AppendLine($"    \"commit\": {Q(build?.commit)},");
-        sb.AppendLine($"    \"dirty\": {(build == null ? "null" : (build.dirty ? "true" : "false"))},");
-        sb.AppendLine($"    \"unityVersion\": {Q(Application.unityVersion)},");
-        sb.AppendLine($"    \"platform\": {Q(Application.platform.ToString())},");
-        sb.AppendLine($"    \"editor\": {(Application.isEditor ? "true" : "false")}");
-        sb.AppendLine("  },");
-        sb.AppendLine("  \"world\": {");
-        sb.AppendLine($"    \"seed\": {sessionConfig.WorldSeed},");
-        sb.AppendLine($"    \"file\": {Q(Path.GetFileName(WorldData.PathFor(sessionConfig)))},");
-        sb.AppendLine($"    \"sha256\": {Q(_worldHash)},");
-        sb.AppendLine($"    \"interludeFile\": {(sessionConfig.IsInterlude ? Q(Path.GetFileName(WorldData.InterludePathFor(sessionConfig))) : "null")},");
-        sb.AppendLine($"    \"interludeSha256\": {Q(_interludeHash)}");
-        sb.AppendLine("  },");
-        sb.AppendLine("  \"display\": {");
-        sb.AppendLine($"    \"width\": {Screen.width},");
-        sb.AppendLine($"    \"height\": {Screen.height},");
-        sb.AppendLine($"    \"fullscreen\": {(Screen.fullScreen ? "true" : "false")},");
-        sb.AppendLine($"    \"targetFrameRate\": {Application.targetFrameRate},");
-        sb.AppendLine($"    \"vSyncCount\": {QualitySettings.vSyncCount}");
-        sb.AppendLine("  },");
-        sb.AppendLine("  \"frames\": {");
-        sb.AppendLine($"    \"count\": {_frames},");
-        sb.AppendLine($"    \"meanMs\": {N(_frames > 0 ? (float)(_dtSum / _frames * 1000.0) : 0f)},");
-        sb.AppendLine($"    \"maxMs\": {N(_dtMax * 1000f)},");
-        sb.AppendLine($"    \"fixedDeltaTime\": {N(Time.fixedDeltaTime)}");
-        sb.AppendLine("  },");
-        sb.AppendLine("  \"camera\": {");
-        sb.AppendLine($"    \"fieldOfView\": {N(mainCamera.fieldOfView)},");
-        sb.AppendLine($"    \"localHeight\": {N(mainCamera.transform.localPosition.y)},");
-        sb.AppendLine($"    \"nearClipPlane\": {N(mainCamera.nearClipPlane)},");
-        sb.AppendLine($"    \"farClipPlane\": {N(mainCamera.farClipPlane)}");
-        sb.AppendLine("  },");
-        // Every serialized SessionConfig field (reward function, look, harvest and sun parameters, ...), so nothing is forgotten.
-        sb.AppendLine($"  \"config\": {JsonUtility.ToJson(sessionConfig, true)}");
-        sb.AppendLine("}");
-
-        File.WriteAllText(Path.Combine(_sessionDataPath, "manifest.json"), sb.ToString());
+        BuildInfo build = BuildInfo.Read();
+        string camera = Json.Obj(("fieldOfView", mainCamera.fieldOfView), ("localHeight", mainCamera.transform.localPosition.y),
+            ("nearClipPlane", mainCamera.nearClipPlane), ("farClipPlane", mainCamera.farClipPlane));
+        string display = Json.Obj(("width", Screen.width), ("height", Screen.height), ("fullscreen", Screen.fullScreen),
+            ("targetFrameRate", Application.targetFrameRate), ("vSyncCount", QualitySettings.vSyncCount),
+            ("platform", Application.platform.ToString()), ("unityVersion", Application.unityVersion),
+            ("buildCommit", build?.commit), ("buildDirty", build != null ? (object)build.dirty : null));
+        string frameStats = Json.Obj(("count", _frames), ("meanMs", _frames > 0 ? _dtSum / _frames * 1000.0 : 0.0), ("maxMs", _dtMax * 1000f),
+            ("fixedDeltaTime", Time.fixedDeltaTime));
+        return Json.Obj(
+            ("session_index", _sessionIndex),
+            ("name", sessionConfig.name),
+            ("is_practice", sessionConfig.IsPractice),
+            ("is_interlude", sessionConfig.IsInterlude),
+            ("world_seed", sessionConfig.WorldSeed),
+            ("world_file", Path.GetFileName(WorldData.PathFor(sessionConfig))),
+            ("world_sha256", _worldHash),
+            ("interlude_file", sessionConfig.IsInterlude ? Path.GetFileName(WorldData.InterludePathFor(sessionConfig)) : null),
+            ("interlude_sha256", _interludeHash),
+            ("config", new Json.Raw(JsonUtility.ToJson(sessionConfig))),
+            ("camera", new Json.Raw(camera)),
+            ("display", new Json.Raw(display)),
+            ("frame_stats", final ? new Json.Raw(frameStats) : null),
+            ("started_at", _startedAtUtc),
+            ("ended_at", final ? DateTime.UtcNow.ToString("O") : null),
+            ("completed", final && sunController != null && sunController.SessionComplete),
+            ("final_score", final ? (object)_lastRunningTotal : null));
     }
 }

@@ -54,7 +54,7 @@ public class InstructionsPanel : MonoBehaviour
         _firstHarvestShown = true;
         bodyText.text = sessionConfig.FirstHarvestMessage.Replace("{points}", bout.boutTotal.ToString("0")) + ContinuePrompt;
         panel.SetActive(true);
-        Time.timeScale = 0f;
+        PauseGate.Instructions = true;
     }
 
     private void Start()
@@ -76,7 +76,7 @@ public class InstructionsPanel : MonoBehaviour
             panel.SetActive(true);
         }
 
-        Time.timeScale = 0f;
+        PauseGate.Instructions = true;
 
         CreateControlsReminder();
     }
@@ -84,13 +84,16 @@ public class InstructionsPanel : MonoBehaviour
     private string LoadInstructions()
     {
         string file = sessionConfig != null ? sessionConfig.InstructionsFile : "instructions.txt";
-        string path = Path.Combine(Application.streamingAssetsPath, file);
+        if (ResumeInfo.MidSession(GameManager.CurrentSessionIndex))
+        {
+            file = "instructions_resume.txt";       // the participant is coming back to an interrupted session
+        }
         string text = FallbackInstructions;
         try
         {
-            if (File.Exists(path))
+            if (StreamingData.Exists(file))
             {
-                text = File.ReadAllText(path);
+                text = StreamingData.ReadText(file);
             }
         }
         catch (IOException)
@@ -149,7 +152,7 @@ public class InstructionsPanel : MonoBehaviour
             Keyboard.current.numpadEnterKey.wasPressedThisFrame)
         {
             panel.SetActive(false);
-            Time.timeScale = 1f;
+            PauseGate.Instructions = false;
         }
     }
 }

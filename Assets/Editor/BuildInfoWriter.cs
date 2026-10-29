@@ -52,7 +52,32 @@ public class BuildInfoWriter : IPreprocessBuildWithReport
     public void OnPreprocessBuild(BuildReport report)
     {
         Write();
+        WriteStreamingFileList();
         AssetDatabase.ImportAsset("Assets/StreamingAssets/build_info.json");
+        AssetDatabase.ImportAsset("Assets/StreamingAssets/streaming_files.txt");
+    }
+
+    // A browser cannot list a directory: the Bootstrap scene fetches the files named here (StreamingData.Preload).
+    private static void WriteStreamingFileList()
+    {
+        string folder = Path.Combine(Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, "..")), "Assets", "StreamingAssets");
+        var names = new System.Collections.Generic.List<string>();
+        foreach (string file in Directory.GetFiles(folder, "*", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(folder, file).Replace('\\', '/');
+            if (!relative.EndsWith(".meta") && relative != "streaming_files.txt")
+            {
+                names.Add(relative);
+            }
+        }
+
+        names.Sort(StringComparer.Ordinal);
+        string text = string.Join("\n", names) + "\n";
+        string path = Path.Combine(folder, "streaming_files.txt");
+        if (!File.Exists(path) || File.ReadAllText(path) != text)
+        {
+            File.WriteAllText(path, text);
+        }
     }
 
     private static void Write()

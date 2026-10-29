@@ -46,6 +46,12 @@ public class SunController : MonoBehaviour
 
     public float SessionTimeRemaining => Mathf.Max(0f, SessionDuration - sessionTime);
 
+    // Continuing an interrupted session: the clock (and so the sun) picks up where the data says it stopped.
+    public void SetSessionTime(float seconds)
+    {
+        sessionTime = Mathf.Max(0f, seconds);
+    }
+
     // Ends the session now (the Interlude ends when its trials are done, not at a fixed time).
     public void EndSession()
     {

@@ -497,6 +497,27 @@ public class Tree : MonoBehaviour
         }
     }
 
+    // Continuing an interrupted session: marks `count` fruits as already taken, without the pop or the burst (which fruits is
+    // not recorded, only how many). A bush left with none turns spent.
+    public void RestoreCollected(int count)
+    {
+        for (int i = 0; i < _fruits.Count && count > 0; i++)
+        {
+            if (!_collected[i])
+            {
+                _collected[i] = true;
+                _fruits[i]?.SetActive(false);
+                count--;
+            }
+        }
+
+        if (FruitsRemaining == 0)
+        {
+            PartialProgress = 0f;
+            MarkSpent();
+        }
+    }
+
     // A few small spheres in the fruit's own (unlit) material fly outward and shrink away.
     private void SpawnBurst(GameObject fruit)
     {
