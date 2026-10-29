@@ -38,7 +38,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from perception import canopy_height_of, hidden_by_bushes, hidden_by_terrain, sample_grid, unit_directions
-from replay import load_session_log, parse_note
+from replay import fields, load_session_log
 
 HIDE_SECONDS = 0.4      # InterludeManager.hideSeconds: how long the unchosen bush takes to shrink away under policy Hide
 
@@ -126,14 +126,14 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
     # Which bushes exist when (an Interlude shows only the trial's pair).
     trials = [e for e in log.events if e["type"] == "trial_start"]
     trial_t = np.array([e["t"] for e in trials])
-    trial_pair = [(int(parse_note(e["note"])["left"]), int(parse_note(e["note"])["right"])) for e in trials]
+    trial_pair = [(int(fields(e)["left"]), int(fields(e)["right"])) for e in trials]
 
     hide_locks = []
     for e in log.events:
         if e["type"] == "choice_lock":
-            note = parse_note(e["note"])
-            if note.get("policy") == "Hide":
-                hide_locks.append((e["t"], int(note["locked"])))
+            lock = fields(e)
+            if lock.get("policy") == "Hide":
+                hide_locks.append((e["t"], int(lock["locked"])))
 
     tr = log.traj
     if dt is None:
@@ -218,7 +218,7 @@ def main():
     log = load_session_log(args.session)
     vis = visible_bushes(log, dt=args.dt, min_angular_deg=args.min_angular, bush_occlusion=not args.no_bush_occlusion)
     counts = vis.counts()
-    print(f"{log.manifest['sessionName']} ({log.manifest['sessionId']}): {len(vis.t)} steps of {args.dt} s; "
+    print(f"{log.name} ({log.session_id}): {len(vis.t)} steps of {args.dt} s; "
           f"visible bushes per step: mean {counts.mean():.1f}, min {counts.min()}, max {counts.max()}")
     if args.csv:
         with open(args.csv, "w", newline="") as f:

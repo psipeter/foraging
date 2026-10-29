@@ -42,6 +42,11 @@ def _is_world_file(path):
     return path.startswith("Assets/StreamingAssets/Worlds/") and path.endswith(".world")
 
 
+def _is_server_file(path):
+    # the Edge Functions, local server and migrations that test_server.py runs end to end
+    return path.startswith("supabase/") and (path.endswith((".ts", ".sql")))
+
+
 # test file -> what it depends on: exact paths, and predicates over a repo-relative path.
 # (The Python code reads the SessionConfig .asset YAML; test_world also reads WorldData.cs and the generated .world files.)
 DEPENDENCIES = {
@@ -84,11 +89,23 @@ DEPENDENCIES = {
         "match": [_is_session_asset, _is_interlude_asset],
     },
     "scripts/test_replay.py": {
-        "paths": {"scripts/replay.py", "scripts/world.py"},
+        "paths": {"scripts/replay.py", "scripts/rundata.py", "scripts/trajectory_codec.py", "scripts/world.py"},
         "match": [_is_session_asset],
     },
+    "scripts/test_trajectory_codec.py": {
+        "paths": {"scripts/trajectory_codec.py"},
+        "match": [],
+    },
+    "scripts/test_rundata.py": {
+        "paths": {"scripts/rundata.py", "scripts/convert_legacy.py", "scripts/trajectory_codec.py", "scripts/replay.py", "scripts/world.py"},
+        "match": [_is_session_asset],
+    },
+    "scripts/test_server.py": {       # skipped when deno, pgserver or psycopg is missing
+        "paths": {"scripts/server_client.py", "scripts/server_admin.py", "scripts/rundata.py", "scripts/trajectory_codec.py", "scripts/replay.py"},
+        "match": [_is_server_file],
+    },
     "scripts/test_visibility.py": {
-        "paths": {"scripts/visibility.py", "scripts/replay.py", "scripts/world.py"},
+        "paths": {"scripts/visibility.py", "scripts/replay.py", "scripts/rundata.py", "scripts/world.py"},
         "match": [],
     },
     "scripts/test_mutation_check.py": {       # run_tests.py is a path because mutation_check imports it

@@ -463,3 +463,54 @@ def test_a_bad_line_in_the_middle_is_still_an_error(tmp_path, monkeypatch):
     bad = "t,x,z,yaw,pitch,keys\n0.01,0,0,0,0,0\n0.02,oops\n0.03,0,0,0,0,0\n"
     with pytest.raises(ValueError):
         _folder(tmp_path, monkeypatch, bad, EVENTS)
+
+
+# --- a session continued after an interruption (session_resume) ------------------------------------------------------
+
+def test_a_resume_forgets_the_open_bout_and_the_progress_on_the_fruit_being_picked():
+    # 0.5 s harvested, then the game restarts at t = 1.0 and Space is held from the first frame after: progress on the first fruit
+    # starts again from zero, so the fruit arrives 0.8 s after the resume, not 0.3 s.
+    frames = [(0, 7.0, 0.0, 4)] * 50
+    log = toy_log(frames)
+    after = np.array([[1.0 + (i + 1) / HZ, 0.0, 7.0, 0.0, 0.0, 4] for i in range(100)])
+    log.traj = np.vstack([log.traj, after])
+    log.events = [dict(type="session_resume", t=1.0, real=0.0, tree_id=-1, k=-1, reward=float("nan"), running_total=float("nan"), payload={})]
+    got = fruits(replay_harvests(log))
+    assert len(got) == 1 and abs(got[0]["t"] - (1.0 + 0.8)) < 2 / HZ and got[0]["k"] == 0
+
+
+def test_fruits_taken_before_the_resume_count_even_when_their_frames_were_never_uploaded():
+    # Fruits 0 and 1 were taken at t = 0.8 and 1.6, but the last uploaded frame is at 0.5: they are only in the log. After the
+    # resume the next fruit is number 2 and the running total continues.
+    log = toy_log([(0, 7.0, 0.0, 4)] * 50)
+    log.traj = np.vstack([log.traj, np.array([[2.0 + (i + 1) / HZ, 0.0, 7.0, 0.0, 0.0, 4] for i in range(100)])])
+    nan = float("nan")
+    log.events = [dict(type="fruit", t=0.8, real=0.0, tree_id=0, k=0, reward=1.0, running_total=1.0, payload={}),
+                  dict(type="fruit", t=1.6, real=0.0, tree_id=0, k=1, reward=2.0, running_total=3.0, payload={}),
+                  dict(type="session_resume", t=2.0, real=0.0, tree_id=-1, k=-1, reward=nan, running_total=nan, payload={})]
+    got = fruits(replay_harvests(log))
+    assert [(e["k"], e["reward"], e["running_total"]) for e in got] == [(2, 3.0, 6.0)]
+
+
+def test_verify_leaves_out_the_events_of_the_gap_and_still_checks_the_rest():
+    log = toy_log([(0, 7.0, 0.0, 4)] * 50)
+    log.traj = np.vstack([log.traj, np.array([[2.0 + (i + 1) / HZ, 0.0, 7.0, 0.0, 0.0, 4] for i in range(100)])])
+    nan = float("nan")
+    gap = [dict(type="fruit", t=0.8, real=0.0, tree_id=0, k=0, reward=1.0, running_total=1.0, payload={}),
+           dict(type="fruit", t=1.6, real=0.0, tree_id=0, k=1, reward=2.0, running_total=3.0, payload={}),
+           dict(type="session_resume", t=2.0, real=0.0, tree_id=-1, k=-1, reward=nan, running_total=nan, payload={})]
+    after = [dict(e, real=0.0, k=e.get("k", -1), reward=e.get("reward", nan), running_total=e.get("running_total", nan), payload={})
+             for e in replay_harvests(dict_log(log, gap))]
+    log.events = sorted(gap + after, key=lambda e: e["t"])
+    log.manifest["finalScore"] = 6.0
+    assert verify(log)[0] == []
+    after[-1]["reward"] += 1.0                          # a wrong reward after the resume is still caught
+    log.manifest["finalScore"] = 7.0
+    assert any(p.startswith("fruit") for p in verify(log)[0])
+
+
+def dict_log(log, events):
+    import copy
+    other = copy.copy(log)
+    other.events = list(events)
+    return other
