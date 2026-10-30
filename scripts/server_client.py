@@ -49,11 +49,13 @@ class Client:
         self.token = result.get("token", self.token)
         return result
 
-    def start(self, prolific_pid=None):
-        """A new run, or the continuation of the Prolific ID's run."""
+    def start(self, prolific_pid=None, consent=None):
+        """A new run, or the continuation of the Prolific ID's run. `consent` is {version, signature, at}."""
         body = {"build": self.build}
         if prolific_pid is not None:
             body["prolific_pid"] = prolific_pid
+        if consent is not None:
+            body["consent"] = consent
         return self._take(self._post("run-start", body))
 
     def resume(self, run_id=None, token=None):

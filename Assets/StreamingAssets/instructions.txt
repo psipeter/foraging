@@ -1,4 +1,4 @@
-<size=28><b>Practice round</b></size>
+<size=125%><b>Practice round</b></size>
 
 Collect as many points as you can before time runs out.
 Different bushes give different points.

@@ -124,11 +124,11 @@ public class InstructionsPanel : MonoBehaviour
         rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0f);
         rect.pivot = new Vector2(0.5f, 0f);
         rect.anchoredPosition = new Vector2(0f, 24f);
-        rect.sizeDelta = new Vector2(900f, 40f);
+        rect.sizeDelta = new Vector2(1400f, 48f);
 
         TextMeshProUGUI text = go.AddComponent<TextMeshProUGUI>();
         text.font = bodyText.font;
-        text.fontSize = 22f;
+        UiStyle.Apply(text, UiStyle.Hint);
         text.alignment = TextAlignmentOptions.Center;
         text.color = new Color(1f, 1f, 1f, sessionConfig.ControlsReminderOpacity);
         text.raycastTarget = false;

@@ -38,6 +38,11 @@ public class OnlineSettings
     public bool uploadInEditor;
 
     [NonSerialized] public string prolificPid;
+    [NonSerialized] public ConsentRecord consent;
+
+    // What the opening screen collected (Bootstrap sets these before the game scene loads; Load applies them).
+    public static string EnteredId;
+    public static ConsentRecord EnteredConsent;
 
     public bool Active =>
         enabled && !string.IsNullOrEmpty(url) && !string.IsNullOrEmpty(apikey) && (!Application.isEditor || uploadInEditor);
@@ -84,6 +89,12 @@ public class OnlineSettings
             settings.url = UrlParameter("onlineUrl");
             settings.apikey = UrlParameter("onlineKey") ?? settings.apikey;
             settings.enabled = settings.uploadInEditor = true;
+        }
+
+        if (EnteredId != null)
+        {
+            settings.prolificPid = EnteredId;
+            settings.consent = EnteredConsent;
         }
 
         return settings;

@@ -347,7 +347,7 @@ def test_preflight_and_cors_headers(env):
 def test_the_public_roles_can_read_nothing_and_call_nothing(env, role):
     with psycopg.connect(env["dburl"], autocommit=True) as conn:
         conn.execute(f"set role {role}")
-        for statement in ("select * from public.runs", "select * from public.events", "insert into public.releases (build_commit) values ('x')",
+        for statement in ("select * from public.runs", "select * from public.events", "select * from public.consents", "insert into public.releases (build_commit) values ('x')",
                           "select server.stream_state('00000000-0000-0000-0000-000000000000', 0)"):
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
                 conn.execute(statement)
@@ -384,3 +384,13 @@ def test_a_completed_latest_session_is_reported_as_completed(env):
     c.append(0, session=session_row(0, completed=True, final_score=7.0, ended_at="2026-10-29T12:00:00Z"), events=event_rows([ev(0.0, "session_end")]))
     state = c.resume()["resume"]
     assert state["completed"] is True and state["final_score"] == 7.0 and [p["index"] for p in state["previous"]] == [0]
+
+
+def test_consent_is_recorded_each_visit_and_validated(env):
+    consent = {"version": "v1", "signature": "Ada Lovelace", "at": "2026-10-31T12:00:00Z"}
+    first = client(env).start(prolific_pid="PID_consent", consent=consent)
+    client(env).start(prolific_pid="PID_consent", consent=dict(consent, at="2026-10-31T13:00:00Z"))      # the same person signs again
+    rows = env["db"].execute("select version, signature from public.consents where run_id = %s order by consent_id", (first["run_id"],)).fetchall()
+    assert [(r["version"], r["signature"]) for r in rows] == [("v1", "Ada Lovelace")] * 2
+    with pytest.raises(ServerError):
+        client(env)._post("run-start", {"build": BUILD, "prolific_pid": "PID_bad", "consent": {"version": "v1"}})

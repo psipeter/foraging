@@ -302,7 +302,9 @@ public class DataPipeline : MonoBehaviour
     {
         string body = Json.Obj(("build", new Json.Raw(Json.Obj(("commit", _build?.commit), ("dirty", _build != null ? (object)_build.dirty : false),
             ("platform", Application.platform.ToString()), ("unity_version", Application.unityVersion)))),
-            ("prolific_pid", _settings.prolificPid));
+            ("prolific_pid", _settings.prolificPid),
+            ("consent", _settings.consent != null ? new Json.Raw(Json.Obj(("version", _settings.consent.version),
+                ("signature", _settings.consent.signature), ("at", _settings.consent.at))) : null));
         float backoff = 0f;
         while (true)
         {
@@ -413,7 +415,7 @@ public class DataPipeline : MonoBehaviour
         canvas.sortingOrder = 5000;
         var scaler = _overlay.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.referenceResolution = UiStyle.ReferenceResolution;
 
         var dim = new GameObject("Dim", typeof(RectTransform), typeof(Image));
         dim.transform.SetParent(_overlay.transform, false);
@@ -428,7 +430,7 @@ public class DataPipeline : MonoBehaviour
         rect.offsetMin = rect.offsetMax = Vector2.zero;
         _message = label.GetComponent<TextMeshProUGUI>();
         _message.alignment = TextAlignmentOptions.Center;
-        _message.fontSize = 36f;
+        UiStyle.Apply(_message, UiStyle.Body * 1.1f);
         _message.color = Color.white;
         _message.raycastTarget = false;
         _overlay.SetActive(false);

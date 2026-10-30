@@ -3,7 +3,7 @@
 Resizing the canvas while the game runs (the page's fullscreen button, F11, a window resize, browser zoom) left the drawing black
 and unrecoverable in Chrome on Linux (docs/DECISIONS.md, "WebGL: no code-driven fullscreen"). Unity normally keeps the WebGL render
 target the size of the canvas element; this makes the render target a fixed WIDTH x HEIGHT (1920 x 1080 by default) (`matchWebGLToCanvasSize = false`) and lets
-CSS scale the canvas to the window with `object-fit: contain`, so Unity never sees a size change and every participant gets the same
+CSS scale the canvas to the window with a box of the same shape as the picture, so Unity never sees a size change and every participant gets the same
 16:9 picture (field of view and resolution do not depend on the window). The Unity footer (title and fullscreen button) is hidden.
 
     python3 scripts/patch_webgl_page.py <index.html> [--width 1920 --height 1080]
@@ -25,11 +25,14 @@ SCRIPT = """  <script>
     });
   </script>
 """
-CSS = """  <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #000 }
-    #unity-container.unity-desktop { position: fixed !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; transform: none !important }
-    #unity-canvas { display: block; width: 100vw !important; height: 100vh !important; object-fit: contain; background: #000 }
-    #unity-footer { display: none }
+def css(width, height):
+    # The canvas element is sized to the picture (the largest width x height-shaped box that fits the window, centred), not stretched
+    # over the window with object-fit: Unity maps the mouse from the element's box, so a letterboxed picture would offset every click.
+    return f"""  <style>
+    html, body {{ margin: 0; height: 100%; overflow: hidden; background: #000 }}
+    #unity-container.unity-desktop {{ position: fixed !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; transform: none !important; display: flex; align-items: center; justify-content: center }}
+    #unity-canvas {{ display: block; flex: none; width: min(100vw, calc(100vh * {width} / {height})) !important; height: min(100vh, calc(100vw * {height} / {width})) !important; background: #000 }}
+    #unity-footer {{ display: none }}
   </style>
 """
 
@@ -45,7 +48,7 @@ def patch(html, width, height):
          "config.matchWebGLToCanvasSize = false;   // the render target stays the canvas's width x height attributes; CSS scales it"),
         ('canvas.style.width = "960px";\n        canvas.style.height = "600px";',
          f"// fixed {width}x{height} drawing buffer, scaled to the window by CSS (see the style block in <head>)"),
-        ("</head>", MARKER + "\n" + SCRIPT + CSS + "</head>"),
+        ("</head>", MARKER + "\n" + SCRIPT + css(width, height) + "</head>"),
     ]
     for old, new in swaps:
         if html.count(old) != 1:

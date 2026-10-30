@@ -46,7 +46,7 @@ public class PointerLockGuard : MonoBehaviour
         canvas.sortingOrder = 5100;
         var scaler = _overlay.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.referenceResolution = UiStyle.ReferenceResolution;
 
         var dim = new GameObject("Dim", typeof(RectTransform), typeof(Image));
         dim.transform.SetParent(_overlay.transform, false);
@@ -64,7 +64,7 @@ public class PointerLockGuard : MonoBehaviour
         rect.offsetMin = rect.offsetMax = Vector2.zero;
         var text = label.GetComponent<TextMeshProUGUI>();
         text.alignment = TextAlignmentOptions.Center;
-        text.fontSize = 36f;
+        UiStyle.Apply(text, UiStyle.Body * 1.1f);
         text.color = Color.white;
         text.raycastTarget = false;
         text.text = "Paused\n\n<size=60%>The timer is stopped. Click to continue.</size>";

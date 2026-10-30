@@ -81,7 +81,7 @@ export function fromDbError(e: DbError): HttpError {
   return new HttpError(500, 'internal');
 }
 
-// {build: {commit, dirty, platform, unity_version}, prolific_pid?} starts or (with a Prolific ID the server knows) continues
+// {build: {commit, dirty, platform, unity_version}, prolific_pid?, consent?: {version, signature, at}} starts or (with a Prolific ID the server knows) continues
 // a run; {run_id, token, build} continues an anonymous run. Returns {run_id, token, status, resume}; a finished run has no token.
 export function runStart(db: Db, body: Body) {
   return guarded(async () => {
@@ -102,7 +102,15 @@ export function runStart(db: Db, body: Body) {
     } else {
       const pid = str(body, 'prolific_pid', 64, false);
       if (pid !== null && !PID.test(pid)) bad('prolific_pid has unexpected characters');
-      result = await db.call('server.start_run', [hash, clean, pid]);
+      let consent = null;
+      if (body.consent !== undefined && body.consent !== null) {
+        const c = body.consent as Body;
+        if (typeof c !== 'object' || Array.isArray(c)) bad('consent must be an object');
+        const at = str(c, 'at', 40, false);
+        if (at !== null && Number.isNaN(Date.parse(at))) bad('consent.at is not a time');
+        consent = { version: str(c, 'version', 100), signature: str(c, 'signature', 200), at };
+      }
+      result = await db.call('server.start_run', [hash, clean, pid, consent]);
     }
     return result.status === 'in_progress' ? { ...result, token, has_resume: result.resume != null } : result;
   });

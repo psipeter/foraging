@@ -119,7 +119,8 @@ history would grow by that much per deploy).
    the page. `node scripts/webgl_smoke.mjs <build dir> --release --pid X` checks a build locally (patch the copy of `online.json` in the
    build directory to point at a test server).
 6. Prolific study URL: `https://<user>.github.io/<repo>/index.html?PROLIFIC_PID={{%PROLIFIC_PID%}}`. The completion code and
-   redirect back to Prolific are not built yet (`run-finish` answers `{ok, problems}` only), nor is a consent screen.
+   redirect back to Prolific are not built yet (`run-finish` answers `{ok, problems}` only).
+   A consent / participant-ID screen (`ConsentScreen`, in Unity, text in `StreamingAssets/consent.txt`: **placeholder, replace with the IRB-approved text and bump its `version:` line**) opens every online build; a typed ID is a Prolific-style ID (same registry, so a returning ID resumes) and each visit's signature is stored in `consents` (migration `20261031000000_consent`: apply with `supabase db push`, then `supabase functions deploy run-start`).
 
 ### Running the server tests locally (no Docker)
 

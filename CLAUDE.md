@@ -164,9 +164,9 @@ Assets/
                valley + mountain-band mesh from the world's grids; sampling, walkable mask),
                TreeGenerator (instantiates bushes from the world file)
     Session/   SessionConfig (ScriptableObject — ALL parameters),
-               GameManager, InterludeManager (between-session forced-choice trials), HarvestManager, SunController, QuitHandler,
+               GameManager, ConsentScreen (online opening screen: consent text, participant ID, signature), InterludeManager (between-session forced-choice trials), HarvestManager, SunController, QuitHandler,
                RewardFunction / RewardComponent / BasisFunctionType
-    UI/        HarvestUI (+X popups, score), SessionTimerUI (timer, bar, end screen), InstructionsPanel,
+    UI/        HarvestUI (+X popups, score), SessionTimerUI (timer, bar, end screen), InstructionsPanel, UiStyle (typeface and sizes),
                FeedbackAudio (synthesized sound cues), AmbientAudio (footsteps, cicada bed, birds), HudWidgets (runtime plates/bars)
     Data/      DataLogger (the recorder: rows per frame/event/trial, batched), DataPipeline (DontDestroyOnLoad: starts the server run, owns the
                sinks, the "saving" gate and the quit/leave drain), FileSink (local copy) and HttpSink (upload), TrajectoryCodec (chunk format),
