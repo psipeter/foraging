@@ -17,11 +17,14 @@ export class DbError extends Error {
 
 let shared: ReturnType<typeof postgres> | null = null;
 
-export function getDb(url = Deno.env.get('SUPABASE_DB_URL') ?? Deno.env.get('FORAGING_DB_URL')): Db {
+export function getDb(url = Deno.env.get('FORAGING_POOLER_URL') ?? Deno.env.get('SUPABASE_DB_URL') ?? Deno.env.get('FORAGING_DB_URL')): Db {
   // Without a URL the libpq variables (PGHOST, PGUSER, PGDATABASE, ...) are used; the local tests reach a unix socket that way.
   if (!url && !Deno.env.get('PGHOST')) throw new Error('SUPABASE_DB_URL is not set');
-  // prepare: false because the pooled connection is in transaction mode; max 1 because each isolate serves one request at a time.
-  const options = { max: 1, prepare: false, onnotice: () => {} };
+  // prepare: false because the pooled connection is in transaction mode; max 1 because each isolate serves one request at a time;
+  // idle_timeout so a warm isolate does not hold a database connection between requests (the direct connection limit is 60, and a
+  // load test with 20 participants left 48 idle ones open and made requests fail). FORAGING_POOLER_URL (a secret: the project's
+  // transaction pooler connection string, port 6543) takes precedence over the direct connection when set.
+  const options = { max: 1, prepare: false, idle_timeout: 2, onnotice: () => {} };
   shared ??= url ? postgres(url, options) : postgres(options);
   const sql = shared;
   return {
