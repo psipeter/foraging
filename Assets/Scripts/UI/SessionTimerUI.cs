@@ -62,6 +62,8 @@ public class SessionTimerUI : MonoBehaviour
         HarvestManager.OnScoreChanged -= HandleHarvestComplete;
     }
 
+    private bool _leaveRequested;
+
     private void Update()
     {
         if (timerText == null || sunController == null || sessionConfig == null)
@@ -80,6 +82,12 @@ public class SessionTimerUI : MonoBehaviour
                     (Keyboard.current.enterKey.wasPressedThisFrame ||
                      Keyboard.current.numpadEnterKey.wasPressedThisFrame))
                 {
+                    _leaveRequested = true;
+                }
+
+                // A request made while data was still being saved stands: the participant is not asked to press Enter a second time.
+                if (_leaveRequested)
+                {
                     // Leave only once the server has stored everything (otherwise a "saving" screen shows until it has); after the last
                     // session the run is also closed on the server.
                     if (GameManager.IsLastSession ? !DataPipeline.TryFinish() : !DataPipeline.TryLeave())
@@ -87,6 +95,7 @@ public class SessionTimerUI : MonoBehaviour
                         return;
                     }
 
+                    _leaveRequested = false;
                     if (GameManager.IsLastSession)
                     {
                         if (StreamingData.NeedsPreload)
