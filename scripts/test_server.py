@@ -272,7 +272,7 @@ def test_finish_lists_what_is_missing_and_a_finished_run_accepts_no_more(env):
              events=event_rows([ev(1.0, "session_end", running_total=0.0)], first_seq=1))
     c.append(1, session=session_row(1, completed=True, ended_at="2026-10-29T12:05:00Z", final_score=3.0),
              events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end")]), frames=frames(20))
-    assert c.finish() == {"ok": True, "problems": []}
+    assert c.finish() == {"ok": True, "problems": [], "completion_code": "DUMMY-COMPLETION-CODE"}
     with raises(401, "unauthorized"):
         c.append(1, events=event_rows([ev(2.0, "late")], first_seq=2))
     again = client(env).start(prolific_pid="PID_finish")

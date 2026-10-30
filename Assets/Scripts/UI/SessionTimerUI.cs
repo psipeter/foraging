@@ -171,38 +171,38 @@ public class SessionTimerUI : MonoBehaviour
 
         if (sessionCompleteText != null)
         {
-            sessionCompleteText.text = isLast ? "Experiment Complete"
-                : isInterlude ? "Interlude Complete"
-                : isPractice ? "Practice Complete"
-                : "Session Complete";
+            sessionCompleteText.text = isLast ? "Experiment complete"
+                : isInterlude ? "Interlude complete"
+                : isPractice ? "Practice session complete"
+                : "Session complete";
         }
 
         if (nextSessionPromptText != null)
         {
             nextSessionPromptText.gameObject.SetActive(true);
             nextSessionPromptText.text = isLast
-                ? "Press Enter to exit"
-                : $"Press Enter to continue to {GameManager.NextStageLabel()}";
+                ? $"Press {UiStyle.Chip("Enter")} to exit"
+                : $"Press {UiStyle.Chip("Enter")} to continue";
         }
 
         if (finalScoreText != null)
         {
             // An Interlude shows only its own count correct and bonus (never which trials, nor the reward
-            // function); the practice Interlude shows nothing. The final screen adds the totals.
-            finalScoreText.gameObject.SetActive(isLast || !isInterlude || !sessionConfig.IsPractice);
+            // function); The final screen adds the totals.
+            finalScoreText.gameObject.SetActive(true);
             if (isInterlude && !isLast)
             {
-                finalScoreText.text = $"{GameManager.ThisInterludeCorrect} / {GameManager.ThisInterludeTrials} correct\nBonus: +{GameManager.ThisInterludeBonus:F0}";
+                finalScoreText.text = $"+{GameManager.ThisInterludeBonus:F0} points";
             }
             else if (isLast)
             {
                 float total = GameManager.SessionScoreTotal + GameManager.InterludeBonus;
-                string thisInterlude = isInterlude ? $"This Interlude: {GameManager.ThisInterludeCorrect} / {GameManager.ThisInterludeTrials} correct, +{GameManager.ThisInterludeBonus:F0}\n" : "";
-                finalScoreText.text = $"{thisInterlude}Total Score: {total:F0}\nSessions {GameManager.SessionScoreTotal:F0}  +  Interlude bonus {GameManager.InterludeBonus:F0} ({GameManager.InterludeCorrectCount}/{GameManager.InterludeTrialsScored} correct)";
+                string thisInterlude = isInterlude ? $"This interlude: +{GameManager.ThisInterludeBonus:F0} points\n" : "";
+                finalScoreText.text = $"{thisInterlude}Total: +{total:F0} points";
             }
             else
             {
-                finalScoreText.text = $"Final Score: {_lastTotalScore:F1}";
+                finalScoreText.text = $"+{_lastTotalScore:F0} points";
             }
         }
     }

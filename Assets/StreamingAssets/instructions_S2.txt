@@ -1,7 +1,7 @@
+<i>Press Enter to begin.</i>
+
 <size=125%><b>Session {session} of {total}</b></size>
 
-This is a new world.
-The features of the trees that determine reward are now more complicated.
-Continue to explore and collect as many points as you can.
-
-<i>Press Enter to begin.</i>
+This is a new area.
+The features that determine points are now more complicated.
+Collect as many points as you can.

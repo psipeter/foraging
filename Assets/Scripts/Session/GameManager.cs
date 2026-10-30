@@ -29,19 +29,13 @@ public class GameManager : MonoBehaviour
 
     // Running totals for the final screen. Practice sessions and practice Interludes are excluded.
     public static float SessionScoreTotal = 0f;
-    public static int InterludeTrialsScored = 0;
-    public static int InterludeCorrectCount = 0;
     public static float InterludeBonus = 0f;
 
-    // Tally for the Interlude currently being played (shown on its end screen); reset when it starts.
-    public static int ThisInterludeTrials = 0;
-    public static int ThisInterludeCorrect = 0;
+    // Points of the Interlude currently being played (shown on its end screen); reset when it starts.
     public static float ThisInterludeBonus = 0f;
 
     public static void BeginInterludeTally()
     {
-        ThisInterludeTrials = 0;
-        ThisInterludeCorrect = 0;
         ThisInterludeBonus = 0f;
     }
 
@@ -57,21 +51,11 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        InterludeTrialsScored = resume.previous_interlude.trials;
-        InterludeCorrectCount = resume.previous_interlude.correct;
         InterludeBonus = resume.previous_interlude.bonus;
     }
 
-    public static void RecordInterludeTrial(bool correct, float bonus)
+    public static void RecordInterludeTrial(float bonus)
     {
-        InterludeTrialsScored++;
-        ThisInterludeTrials++;
-        if (correct)
-        {
-            InterludeCorrectCount++;
-            ThisInterludeCorrect++;
-        }
-
         InterludeBonus += bonus;
         ThisInterludeBonus += bonus;
     }
@@ -124,24 +108,6 @@ public class GameManager : MonoBehaviour
             if (IsAnalyzedSession(AllSessionConfigs[i])) number++;
         }
         return number;
-    }
-
-    // Name of the stage after the current one, for the end-screen prompt ("Session 2/4", "Interlude 1/4").
-    public static string NextStageLabel()
-    {
-        int next = CurrentSessionIndex + 1;
-        if (AllSessionConfigs == null || next < 0 || next >= AllSessionConfigs.Count || AllSessionConfigs[next] == null)
-        {
-            return "the next stage";
-        }
-
-        SessionConfig config = AllSessionConfigs[next];
-        if (config.IsInterlude)
-        {
-            return config.IsPractice ? "the Interlude" : $"Interlude {InterludeNumber(next)}/{ExperimentSessionCount}";
-        }
-
-        return config.IsPractice ? "the practice session" : $"Session {ExperimentSessionNumber(next)}/{ExperimentSessionCount}";
     }
 
     private void Awake()

@@ -18,6 +18,12 @@ public static class UiStyle
     public static readonly Color Panel = new Color(0.10f, 0.11f, 0.14f);
     public static readonly Color Field = new Color(0.17f, 0.19f, 0.23f);
 
+    // A key or mouse name on a highlighted chip (TextMeshPro rich text); `alpha` is the chip's background opacity (hex, 00-FF).
+    public static string Chip(string key, string alpha = "55")
+    {
+        return $"<mark=#FFFFFF{alpha} padding=\"18,18,6,6\"><b>{key}</b></mark>";
+    }
+
     private static TMP_FontAsset _font;
 
     // Null when the font asset is missing, which leaves TextMeshPro's default.

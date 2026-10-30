@@ -164,7 +164,7 @@ Assets/
                valley + mountain-band mesh from the world's grids; sampling, walkable mask),
                TreeGenerator (instantiates bushes from the world file)
     Session/   SessionConfig (ScriptableObject — ALL parameters),
-               GameManager, ConsentScreen (online opening screen: consent text, participant ID, signature), InterludeManager (between-session forced-choice trials), HarvestManager, SunController, QuitHandler,
+               GameManager, ConsentScreen (browser opening screen: consent text, participant ID, signature), InterludeManager (between-session forced-choice trials), HarvestManager, SunController, QuitHandler,
                RewardFunction / RewardComponent / BasisFunctionType
     UI/        HarvestUI (+X popups, score), SessionTimerUI (timer, bar, end screen), InstructionsPanel, UiStyle (typeface and sizes),
                FeedbackAudio (synthesized sound cues), AmbientAudio (footsteps, cicada bed, birds), HudWidgets (runtime plates/bars)
@@ -287,7 +287,7 @@ microsecond because replay sums frame times (DECISIONS has the measurement). Wor
 `ForagingData/_worlds/`. **The table columns and their meaning are fixed once real data exists — changing them breaks downstream
 analysis and comparability.** Add columns only at the end, and say so. `Assets/Editor/BuildInfoWriter.cs` writes the gitignored
 `StreamingAssets/build_info.json` (git commit, dirty flag) that the session row and `run-start` read; the server refuses a commit that
-is not registered (`server_admin.py register-release`). **Resume:** a participant who returns with the same Prolific ID (`-pid`) continues an unfinished run: `DataPipeline` reloads the scene for the session to continue and `DataLogger`/`InterludeManager` restore the clock, pose, score, fruits taken and Interlude order (`ResumeInfo`; `docs/ONLINE_DATA_PLAN.md`, section 4); the log gets a `session_resume` event, which `replay.py` treats as a discontinuity.
+is not registered (`server_admin.py register-release`). `run-finish` returns the Prolific `completion_code` (secret `PROLIFIC_COMPLETION_CODE`), which the last screen shows before redirecting Prolific participants. **Resume:** a participant who returns with the same Prolific ID (`-pid`) continues an unfinished run: `DataPipeline` reloads the scene for the session to continue and `DataLogger`/`InterludeManager` restore the clock, pose, score, fruits taken and Interlude order (`ResumeInfo`; `docs/ONLINE_DATA_PLAN.md`, section 4); the log gets a `session_resume` event, which `replay.py` treats as a discontinuity.
 
 ---
 

@@ -148,6 +148,9 @@ export function append(db: Db, body: Body) {
 export function runFinish(db: Db, body: Body) {
   return guarded(async () => {
     const hash = await sha256Hex(str(body, 'token', 100) as string);
-    return await db.call('server.finish_run', [runId(body), hash]);
+    const result = await db.call('server.finish_run', [runId(body), hash]);
+    // The study's Prolific completion code (a secret of the project; the default is a dummy until the study has a real one). Given even when
+    // `ok` is false: missing data is the researcher's problem to look into, not a reason to withhold the participant's payment.
+    return { ...result, completion_code: Deno.env.get('PROLIFIC_COMPLETION_CODE') ?? 'DUMMY-COMPLETION-CODE' };
   });
 }

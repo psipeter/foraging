@@ -12,6 +12,7 @@ Edge Functions (service role) read or write.
 |---|---|---|
 | `runs` | participant run | `run_id`, `token_hash`, `platform`, `build_commit`, `build_dirty`, `unity_version`, `started_at`, `finished_at`, `status` |
 | `pid_registry` | participant | `prolific_pid`, `run_id` (kept apart from analysis tables) |
+| `consents` | signed consent (every visit) | `run_id`, `version` (consent text), `signature` (typed name), `client_time`, `recorded_at` (kept apart from analysis tables) |
 | `sessions` | session in a run | `run_id`, `session_index`, `name`, `world_sha256`, `interlude_sha256`, `config` jsonb (the full `SessionConfig`), `display` jsonb, `frame_stats`, `started_at`, `ended_at`, `completed`, `final_score` |
 | `events` | event | `run_id`, `session_index`, `seq`, `t`, `real`, `type`, `tree_id`, `k`, `reward`, `running_total`, `payload` jsonb |
 | `trajectory` | chunk | `run_id`, `session_index`, `first_seq`, `n_frames`, `t_start`, `t_end`, `data` bytea |
@@ -118,9 +119,9 @@ history would grow by that much per deploy).
 5. Allow only that origin to call the functions: `supabase secrets set ALLOWED_ORIGIN=https://<user>.github.io` (no path), then test
    the page. `node scripts/webgl_smoke.mjs <build dir> --release --pid X` checks a build locally (patch the copy of `online.json` in the
    build directory to point at a test server).
-6. Prolific study URL: `https://<user>.github.io/<repo>/index.html?PROLIFIC_PID={{%PROLIFIC_PID%}}`. The completion code and
-   redirect back to Prolific are not built yet (`run-finish` answers `{ok, problems}` only).
-   A consent / participant-ID screen (`ConsentScreen`, in Unity, text in `StreamingAssets/consent.txt`: **placeholder, replace with the IRB-approved text and bump its `version:` line**) opens every online build; a typed ID is a Prolific-style ID (same registry, so a returning ID resumes) and each visit's signature is stored in `consents` (migration `20261031000000_consent`: apply with `supabase db push`, then `supabase functions deploy run-start`).
+6. Prolific study URL: `https://<user>.github.io/<repo>/index.html?PROLIFIC_PID={{%PROLIFIC_PID%}}`.
+   **Completion:** after the last session the game closes the run (`run-finish`), which returns `completion_code` (the secret `PROLIFIC_COMPLETION_CODE`, dummy by default); the final screen shows it and, when the address carried `PROLIFIC_PID`, goes to `https://app.prolific.com/submissions/complete?cc=<code>` six seconds later (`DataPipeline.ShowComplete`; `RedirectTo` in `Assets/Plugins/WebGL/PointerLock.jslib`). Other participants see the code and "You can close this page." Set Prolific's completion URL accordingly.
+   A consent / participant-ID screen (`ConsentScreen`, in Unity, browser builds only (desktop builds are for lab use and take `-pid`), text in `StreamingAssets/consent.txt`: **placeholder, replace with the IRB-approved text and bump its `version:` line**) opens every online build; a typed ID is a Prolific-style ID (same registry, so a returning ID resumes) and each visit's signature is stored in `consents` (migration `20261031000000_consent`: apply with `supabase db push`, then `supabase functions deploy run-start`).
 
 ### Running the server tests locally (no Docker)
 
@@ -229,5 +230,6 @@ count of `session_resume` events are what to apply them to.
 - Yaw/pitch quantization step: derive from `lookDegreesPerCount` x `lookSensitivity` (the PI accepted "no coarser than one count").
 - Grace window length before a pause (a `SessionConfig` field).
 - Resume limits (maximum gap, number of resumes): deferred, set from pilot experience.
-- Consent screen, participant-ID entry for the non-Prolific path, minimum-performance gate for the browser: before the first pilot.
+- Minimum-performance gate for the browser (a frame-rate or GPU check before the study starts): before the first pilot.
+- Prolific: the completion code is a dummy (`DUMMY-COMPLETION-CODE`) until the study exists; then `supabase secrets set PROLIFIC_COMPLETION_CODE=<code>` (no redeploy of the game; `run-finish` reads it on each call). Not built: a flush when the tab is closed mid-upload.
 - Where the release script runs and who registers world hashes and commits.

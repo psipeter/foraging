@@ -170,7 +170,7 @@ an oversight.
   ahead, none past 45°; yaw only, after subtracting the bush's angular radius). The glow
   never reveals reward. A bush becomes harvestable within 7 units of its
   canopy edge and within 35° of straight ahead; the best such bush (closest to
-  center) is shown as selected, and a "Hold SPACE to harvest" hint appears.
+  center) is shown as selected, and a "Hold Space to harvest" hint appears.
   A clock-style progress ring floats above every bush in harvest range (constant
   apparent size, camera-facing): a faint full track with the bright arc erased clockwise
   from 12 o'clock as fruits are collected, so you can see how much is left even if
@@ -328,11 +328,10 @@ explored and planned. Flow: P → Interlude (practice) → S1 → Interlude 1 �
   biasing the choice by shape. The wide separation (bushes about 28 apart, a walk of about 2 s) is what makes two-level
   moisture differences available.
 - **Scoring:** a choice is correct if it is the bush with the higher true reward, or if the true rewards are
-  within 0.05 (either answer). Each correct choice adds a hidden bonus (`interludeBonusPerCorrect`, 5 points); trials with no
-  commitment before the time limit, and practice-Interlude trials, earn none (a committed choice still counts if the limit runs out before the bush is finished). After each (non-practice) Interlude the end panel shows that Interlude's own
-  "x / n correct" and "Bonus: +y" (never which trials, nor anything about the reward function; the practice Interlude shows no
-  score); the final screen adds the totals ("Total Score" = sessions + Interlude bonus, with n correct). Practice sessions are
-  excluded from the total. Instruction text: `instructions_interlude_P.txt` (practice) and `instructions_interlude.txt` (1-4), terse, mentioning that good choices earn a bonus.
+  within 0.05 (either answer). Each correct choice adds hidden points (`interludeBonusPerCorrect`, 5 points); trials with no
+  commitment before the time limit, and practice-Interlude trials, earn none (a committed choice still counts if the limit runs out before the bush is finished). After each Interlude the end panel shows only that Interlude's points
+  ("+y points"; never which trials, how many were correct, nor anything about the reward function); the final screen adds the total ("Total: +n points" = sessions +
+  Interlude points). Practice sessions are excluded from the total. Participants only ever see "points" (never "reward" or "bonus") and "bushes" (never "trees"). Instruction text: `instructions_interlude_P.txt` (practice) and `instructions_interlude.txt` (1-4), terse, saying that correct choices earn hidden points.
 - **Data:** `interlude.csv` in the Interlude's own folder (it also writes trajectory.csv, events.csv, harvests.csv and
   manifest.json like any session, with `trial_start`/`teleport`/`trial_end`/`trial_go` events (`trial_go` ends the harvest block that starts at `trial_end`: no bout can start in between), with `sessionName` e.g. `S1_Interlude` and `isInterlude`; `world.file` in the manifest is the
   session world file whose terrain was used): one row per trial with presented order, the design id, type, varied feature,
@@ -532,21 +531,27 @@ the table above (P is 60 s); S5 is not built.
 ## Data
 
 The logs are designed so that a participant's session can be **replayed exactly** (path, camera angle, every
-harvest) in the world they played, and fed to mathematical or neural agents as trajectories. Per session,
-`ForagingData/<sessionId>/` holds:
+harvest) in the world they played, and fed to mathematical or neural agents as trajectories. Online participants' data go to a
+Supabase (Postgres) database through three Edge Functions; every run also writes a local copy under
+`ForagingData/<run id>/<session:00>/`, the same tables as files. The schema, the upload protocol and the resume rules are in
+`docs/ONLINE_DATA_PLAN.md`; the tables are:
 
-| File | Content |
+| Table (local file) | Content |
 |---|---|
-| `trajectory.csv` | One row per rendered frame: `t` (unpaused session seconds), `x, z`, `yaw`, `pitch` (degrees), `keys` (bitfield: 1 W, 2 S, 4 Space held). Height is the terrain's at (x, z); eye height is in the config. The pose is what `HarvestManager` reads that frame (interpolated player position, camera yaw). |
-| `events.csv` | `t, real, type, tree_id, k, reward, running_total, note`. `real` is unscaled seconds (so pauses, such as reading the instructions, have a duration). Types: `session_start` (start pose in `note`), `pause`/`resume`, `focus_lost`/`focus_gained`, `harvest_press`, `harvest_pause`/`harvest_resume` (target left/re-entered the range-and-cone mid-bout, which stops/restarts the fruit timer), `fruit` (one per fruit: bush, `k` = its index among the fruits taken from that bush, reward, running total), `harvest_release` (`note`: fruits, remaining, exhausted), `teleport` (Interlude trial change; new pose in `note`), `trial_start`/`trial_end`, `trial_go` (the between-trial harvest block lifts; presses from `trial_end` up to this frame are discarded), `choice_lock` (Interlude commitment: `note` has `committed`, `locked` and `policy`), `session_end`. |
-| `harvests.csv` | One row per harvest bout (summary of the events plus the bush's attributes and true reward); times are `t_start`, `t_end` on the same clock. |
-| `manifest.json` | The full `SessionConfig` (`config`, every serialized field), `world` (file, seed, sha256; for an Interlude also `interludeFile` and `interludeSha256`, the name and hash of its bush-table file), `build` (git commit and a `dirty` flag for logic-relevant files), `display`, `frames` (count, mean/max frame ms), `finalScore`, `completed`, and a `participantId` placeholder (null until participant IDs are collected). |
-| `interlude.csv` | Interlude sessions only (columns in the "Interlude" section). |
+| `trajectory` (`trajectory.csv`) | One row per rendered frame: `t` (unpaused session seconds), `x, z`, `yaw`, `pitch` (degrees), `keys` (bitfield: 1 W, 2 S, 4 Space held), quantized (time 1 microsecond, position 0.01, angles 0.02 degrees) and stored as compressed chunks. Height is the terrain's at (x, z); eye height is in the config. The pose is what `HarvestManager` reads that frame (interpolated player position, camera yaw). |
+| `events` (`events.csv`) | `seq, t, real, type, tree_id, k, reward, running_total, payload` (JSON; `tree_id` is the bush's id). `real` is unscaled seconds. Types: `session_start`/`session_end`, `pause`/`resume` (payload `reason`: instructions, upload or pointer), `focus_lost`/`focus_gained`, `harvest_press`, `harvest_pause`/`harvest_resume` (target left/re-entered the range-and-cone mid-bout), `fruit` (one per fruit: bush, `k` = its index among the fruits taken from that bush, reward, running total), `harvest_release`, `teleport` (Interlude trial change), `trial_start`/`trial_end`, `trial_go`, `choice_lock`, `session_resume` (the participant came back to an interrupted session). |
+| `sessions` (`session.json`) | The full `SessionConfig`, world file and sha256 (for an Interlude also the bush-table file), build commit and a `dirty` flag, camera, display, frame statistics, `final_score`, `completed`. |
+| `interlude_plan`, `interlude_trials` (`interlude_plan.json`, `interlude_trials.csv`) | The shuffled trial order, and one row per trial (columns in the "Interlude" section, plus `paused_seconds`: real seconds the game was held still while the trial was live). |
+| `runs`, `pid_registry`, `consents` | The run (platform, build commits, status), the participant's ID (kept apart from every analysis table) and the signed consent of each visit (text version, typed name, time). |
+
+Harvest bouts are derived (`scripts/replay.py`), not stored. Data from before the online system (one folder of `trajectory.csv`,
+`events.csv`, `harvests.csv`, `manifest.json` and `interlude.csv` per session) can still be read by `replay.py` and converted with
+`scripts/convert_legacy.py`.
 
 **Why this set is sufficient.** Harvest outcomes are a deterministic function of (trajectory, world): the fruit timer,
 range/bearing cone and per-bush carry-over use only position, yaw and `t`, and each fruit's reward is the pre-drawn
 `fruit_reward[bush][k]` in the world file. The world is pinned by sha256 and archived by the logger in
-`ForagingData/_worlds/`. `scripts/replay.py` re-derives every `fruit` event from the trajectory and checks it against
+`ForagingData/_worlds/` (and registered on the server). `scripts/replay.py` re-derives every `fruit` event from the trajectory and checks it against
 the log (`./venv/bin/python scripts/replay.py <folder or id>`); it also resamples a session to a uniform time grid
 (`steps`) for agents. Logging state per frame rather than inputs avoids having to reproduce Unity's physics. **What the participant could see**
 is derived, not logged: `scripts/visibility.py` (`visible_bushes(log, dt=0.1)`, or the CLI) rebuilds it per step from the trajectory,
@@ -559,11 +564,9 @@ the trial's pair exists.
 World files are written by `scripts/world.py`, so regenerating them gives a new hash; old logs keep their archived copy.
 Format notes live in `CLAUDE.md` ("Data logging") and `docs/DECISIONS.md`.
 
-State of the data: everything currently in `ForagingData/` (~395 session
-folders) is **debugging output**. No dev or participant data has been
-collected, and collection is a long way off. There is no participant-ID entry
-yet (planned). Once real collection begins, this section should say which
-sessions are real and how they map to participants.
+State of the data: no participant data has been collected. The live database holds only test runs (builds being tried in a
+browser), and `ForagingData/` only holds worlds archived by hashes. Once real collection begins, this section should say which runs are
+real.
 
 ---
 

@@ -29,10 +29,12 @@ public class DataPipeline : MonoBehaviour
     {
         public bool ok;
         public string[] problems;
+        public string completion_code;
     }
 
     private static DataPipeline _instance;
     private static float _graceSeconds = 4f;
+    private const string ProlificCompletionUrl = "https://app.prolific.com/submissions/complete?cc=";
 
     private OnlineSettings _settings;
     private BuildInfo _build;
@@ -44,6 +46,8 @@ public class DataPipeline : MonoBehaviour
     private bool _leaving;
     private string _token;
     private string _notice;
+    private string _completionCode;
+    private bool _redirecting;
     private bool _finishing;
     private bool _finished;
     private bool _quitRequested;
@@ -106,9 +110,37 @@ public class DataPipeline : MonoBehaviour
     // The study is finished and its data stored: a browser page cannot be closed by the game, so it says so and stays still.
     public static void ShowStudyComplete()
     {
-        Instance._notice = "Thank you! The study is complete. You can close this page.";
+        Instance.ShowComplete();
         SceneSuperseded = true;
     }
+
+    // The final message: the completion code and, for a participant who arrived from Prolific (the address carries PROLIFIC_PID), a return to
+    // Prolific's completion page a few seconds later.
+    private void ShowComplete()
+    {
+        bool fromProlific = _completionCode != null && OnlineSettings.UrlParameter("PROLIFIC_PID") != null;
+        _notice = "Thank you! The study is complete." +
+            (_completionCode != null ? $"\n\nYour completion code is {_completionCode}" : "") +
+            (fromProlific ? "\n\n<size=65%>You will be returned to Prolific in a few seconds.</size>" : "\n\n<size=65%>You can close this page.</size>");
+        if (fromProlific && !_redirecting)
+        {
+            _redirecting = true;
+            StartCoroutine(RedirectToProlific());
+        }
+    }
+
+    private IEnumerator RedirectToProlific()
+    {
+        yield return new WaitForSecondsRealtime(6f);
+#if UNITY_WEBGL && !UNITY_EDITOR
+        RedirectTo(ProlificCompletionUrl + System.Uri.EscapeDataString(_completionCode));
+#endif
+    }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [System.Runtime.InteropServices.DllImport("__Internal")]
+    private static extern void RedirectTo(string url);
+#endif
 
     // Called when the participant asks to leave the last session's end screen: true when the run is closed on the server
     // (everything stored, then run-finish answered); until then the game shows "saving" / "finishing up".
@@ -237,7 +269,7 @@ public class DataPipeline : MonoBehaviour
                 SceneSuperseded = true;
                 _finishing = true;
                 _notice = "You have already completed every session. Thank you!";
-                StartCoroutine(FinishRun());
+                StartCoroutine(FinishRun(true));
             }
             else
             {
@@ -259,7 +291,7 @@ public class DataPipeline : MonoBehaviour
 
     // run-finish: the server checks that every session is there and complete and closes the run. Retried on network errors; any
     // other answer ends the attempt (the participant must not be trapped on a screen for a problem retrying cannot fix).
-    private IEnumerator FinishRun()
+    private IEnumerator FinishRun(bool showComplete = false)
     {
         byte[] body = System.Text.Encoding.UTF8.GetBytes(Json.Obj(("run_id", RunId), ("token", _token)));
         float backoff = 0f;
@@ -276,6 +308,7 @@ public class DataPipeline : MonoBehaviour
                 if (request.result == UnityWebRequest.Result.Success)
                 {
                     FinishReply reply = JsonUtility.FromJson<FinishReply>(request.downloadHandler.text);
+                    _completionCode = reply.completion_code;
                     if (!reply.ok)
                     {
                         Debug.LogWarning("run-finish found problems: " + string.Join("; ", reply.problems));
@@ -296,6 +329,10 @@ public class DataPipeline : MonoBehaviour
 
         _finishing = false;
         _finished = true;
+        if (showComplete)
+        {
+            ShowComplete();
+        }
     }
 
     private IEnumerator StartRun()
@@ -430,7 +467,7 @@ public class DataPipeline : MonoBehaviour
         rect.offsetMin = rect.offsetMax = Vector2.zero;
         _message = label.GetComponent<TextMeshProUGUI>();
         _message.alignment = TextAlignmentOptions.Center;
-        UiStyle.Apply(_message, UiStyle.Body * 1.1f);
+        UiStyle.Apply(_message, UiStyle.Title);
         _message.color = Color.white;
         _message.raycastTarget = false;
         _overlay.SetActive(false);

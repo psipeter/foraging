@@ -107,7 +107,7 @@ public class HarvestUI : MonoBehaviour
 
     private void ShowScore()
     {
-        totalScoreText.text = _progressText ?? $"Score: {Mathf.RoundToInt(_scoreShown)}";
+        totalScoreText.text = _progressText ?? $"Points: {Mathf.RoundToInt(_scoreShown)}";
     }
 
     private void HandleFruitCollected(float amount, Vector3 worldPos)
@@ -218,7 +218,7 @@ public class HarvestUI : MonoBehaviour
         switch (hint)
         {
             case HarvestHint.Available:
-                hintText.text = "Hold SPACE to harvest";
+                hintText.text = "Hold Space to harvest";
                 hintText.gameObject.SetActive(true);
                 break;
             case HarvestHint.Paused:

@@ -29,10 +29,7 @@ MonoBehaviour:
   interludeMinElevationDifference: 0
   instructionsFile: instructions.txt
   controlsReminder: 'Mouse: look. W / S: walk. Hold Space: harvest. Escape: pause.'
-  firstHarvestMessage: 'Harvesting this bush earned {points} points
-
-    Explore
-    which tree features earn points by harvesting different bushes'
+  firstHarvestMessage: This harvest earned {points} points
   controlsReminderOpacity: 0.35
   rewardFunction:
     shapeComponent:

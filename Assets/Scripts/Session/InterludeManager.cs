@@ -184,7 +184,7 @@ public class InterludeManager : MonoBehaviour
             {
                 foreach (TrialTally done in resume.trial_rows)
                 {
-                    GameManager.RecordInterludeTrial(done.correct == 1, done.bonus);
+                    GameManager.RecordInterludeTrial(done.bonus);
                 }
             }
         }
@@ -424,7 +424,7 @@ public class InterludeManager : MonoBehaviour
         float bonus = correct && !sessionConfig.IsPractice ? sessionConfig.InterludeBonusPerCorrect : 0f;
         if (!sessionConfig.IsPractice)
         {
-            GameManager.RecordInterludeTrial(correct, bonus);
+            GameManager.RecordInterludeTrial(bonus);
         }
 
         WriteRow(timedOut, correct, bonus);

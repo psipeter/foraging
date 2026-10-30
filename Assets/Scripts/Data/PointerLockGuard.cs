@@ -64,10 +64,10 @@ public class PointerLockGuard : MonoBehaviour
         rect.offsetMin = rect.offsetMax = Vector2.zero;
         var text = label.GetComponent<TextMeshProUGUI>();
         text.alignment = TextAlignmentOptions.Center;
-        UiStyle.Apply(text, UiStyle.Body * 1.1f);
+        UiStyle.Apply(text, UiStyle.Title);
         text.color = Color.white;
         text.raycastTarget = false;
-        text.text = "Paused\n\n<size=60%>The timer is stopped. Click to continue.</size>";
+        text.text = "Paused\n\n<size=65%>The timer is stopped. Click to continue.</size>";
         _overlay.SetActive(false);
         _graceUntil = Time.unscaledTime + GraceSeconds;
     }

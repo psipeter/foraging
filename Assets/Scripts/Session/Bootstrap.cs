@@ -5,7 +5,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-// The first scene of a build. On desktop it hands over to the game scene (after the consent screen, when the build uploads). In a browser it first fetches the
+// The first scene of a build. On desktop it hands over to the game scene. In a browser it first fetches the
 // StreamingAssets files into memory (StreamingData), then, when the build uploads (online.json), shows the consent / participant ID screen (ConsentScreen), then waits for a click: pointer lock and audio need a user gesture, and this is the
 // one that starts them. It does not request fullscreen: changing the canvas size from inside the game left the picture black
 // (real browser, and a headless reproduction); the participant may use the page's own fullscreen button.
@@ -36,35 +36,19 @@ public class Bootstrap : MonoBehaviour
             }
         }
 
-        OnlineSettings settings = OnlineSettings.Load();
-        if (settings.Active)
+        // Consent and an ID are collected in a browser only: desktop builds are for lab use (-pid on the command line).
+        if (browser && OnlineSettings.Load().Active)
         {
-            string signature = browser ? null : CommandLineValue("-signature");
-            if (signature != null && settings.prolificPid != null)
+            _text.gameObject.SetActive(false);
+            ConsentScreen screen = ConsentScreen.Show(OnlineSettings.Load().prolificPid);
+            while (!screen.Done)
             {
-                OnlineSettings.EnteredId = settings.prolificPid;
-                OnlineSettings.EnteredConsent = new ConsentRecord { version = "command line", signature = signature, at = System.DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ") };
+                yield return null;
             }
-            else
-            {
-                if (browser)
-                {
-                    _text.gameObject.SetActive(false);
-                }
 
-                ConsentScreen screen = ConsentScreen.Show(settings.prolificPid);
-                while (!screen.Done)
-                {
-                    yield return null;
-                }
-
-                OnlineSettings.EnteredId = screen.ParticipantId;
-                OnlineSettings.EnteredConsent = screen.Consent;
-                if (browser)
-                {
-                    _text.gameObject.SetActive(true);
-                }
-            }
+            OnlineSettings.EnteredId = screen.ParticipantId;
+            OnlineSettings.EnteredConsent = screen.Consent;
+            _text.gameObject.SetActive(true);
         }
 
         if (!browser)
@@ -73,7 +57,7 @@ public class Bootstrap : MonoBehaviour
             yield break;
         }
 
-        _text.text = "Click anywhere to begin.\n\n<size=60%>The mouse will be captured by the game. Press Escape to release it.</size>";
+        _text.text = "Click anywhere to begin.\n\n<size=65%>The mouse will be captured by the game. Press Escape to release it.</size>";
         yield return null;
         while (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame)
         {
@@ -85,20 +69,6 @@ public class Bootstrap : MonoBehaviour
         var guard = new GameObject("PointerLockGuard", typeof(PointerLockGuard));
         DontDestroyOnLoad(guard);
         SceneManager.LoadScene(gameScene);
-    }
-
-    private static string CommandLineValue(string flag)
-    {
-        string[] args = System.Environment.GetCommandLineArgs();
-        for (int i = 0; i + 1 < args.Length; i++)
-        {
-            if (args[i] == flag)
-            {
-                return args[i + 1];
-            }
-        }
-
-        return null;
     }
 
     private void BuildUi()
@@ -118,7 +88,7 @@ public class Bootstrap : MonoBehaviour
         rect.offsetMin = rect.offsetMax = Vector2.zero;
         _text = label.GetComponent<TextMeshProUGUI>();
         _text.alignment = TextAlignmentOptions.Center;
-        UiStyle.Apply(_text, UiStyle.Body * 1.1f);
+        UiStyle.Apply(_text, UiStyle.Title);
         _text.color = Color.white;
         _text.raycastTarget = false;
     }
