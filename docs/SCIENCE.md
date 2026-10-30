@@ -145,8 +145,7 @@ an oversight.
 
 ## Task design
 
-- **Session:** fixed duration per session (design values P 60 s, S1 90 s, S2/S3 120 s, S4 150 s; **temporarily 15 s for
-  testing**, see "Session configurations"), the
+- **Session:** fixed duration per session (design values P 60 s, S1 90 s, S2/S3 120 s, S4 150 s), the
   second part of a day cycle: the session starts when the sun is `sunStartElevation` (30°) above the horizon on the morning
   side and ends at dusk, when it is `sunEndElevation` (10°) on the afternoon side (same calculation for both; the mountain
   skyline is about 3–22° from the valley, median 9°; the 30°/10° pair is a tuned-by-eye trial, since equal values did not look symmetric). The sun follows a real solar path (`sunLatitude` 40°,
@@ -414,9 +413,8 @@ running score.
 
 ### Session configurations
 
-**TEMPORARY (testing): `sessionDuration` is 15 s on P and S1–S4. The design values are P 60, S1 90, S2 120, S3 120, S4 150
-(as in the table below); restore them before piloting.** The Interlude assets' `sessionDuration` is only a cap (they end when the
-trials are done; 150 s, 60 s for the practice one).
+`sessionDuration` is the design value on P and S1–S4 (the table below; restored from a temporary 15 s on 2026-10-31). The Interlude assets' `sessionDuration` is only a cap (they end when the
+trials are done; 150 s, 60 s for the practice one). The simulated battery still runs S1–S4 at 120, 120, 180, 180 s (`--battery long`), longer than the participants' sessions.
 
 All five sessions: `rewardStd` 0.3, 10 fruit/tree, speed 7.5, `fruitHarvestDuration` 0.2 (0.05 in the Interludes), first-person camera, `worldHalfExtent` 350,
 `terrainMeshResolution` 449, ~685–695 trees

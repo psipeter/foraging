@@ -20,7 +20,7 @@ from test_agents import Script
 def test_params_hash_is_stable_and_follows_simulation_parameters_only():
     base = params_hash("S1")
     assert base == params_hash("S1") and re.fullmatch(r"[0-9a-f]{12}", base)
-    assert params_hash("S1", {"session_duration": 90}) != base
+    assert params_hash("S1", {"session_duration": 45}) != base
     assert params_hash("S1", {"tree_spacing": 30.0}) != base
     assert params_hash("S1", {"player_move_speed": 8.0}) != base
     # audio, visuals, UI text and the per-episode world seed are not part of what an agent plays in

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: P
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
-  sessionDuration: 15
+  sessionDuration: 60
   worldSeed: 100
   isPractice: 1
   isInterlude: 0

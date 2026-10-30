@@ -12,18 +12,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: S1
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
-  sessionDuration: 15
+  sessionDuration: 90
   worldSeed: 1
   isPractice: 0
   isInterlude: 0
   interludeFor: 
+  interludeMode: 0
   interludeTrialCount: 10
   interludeTrialSeconds: 7
   interludeHarvestFruits: 10
+  interludeSwitchPolicy: 3
   interludeBonusPerCorrect: 5
   freezeSun: 0
   interludeBushDistance: 24.4
   interludeBushBearing: 31.5
+  interludeMinElevationDifference: 0
   instructionsFile: instructions_S1.txt
   controlsReminder: 
   firstHarvestMessage: 
@@ -46,6 +49,7 @@ MonoBehaviour:
       width: 0
   rewardStd: 0.3
   targetFrameRate: 120
+  uploadGraceSeconds: 4
   playerMoveSpeed: 7.5
   fruitHarvestDuration: 0.2
   eyeHeight: 5.1

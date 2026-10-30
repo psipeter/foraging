@@ -231,5 +231,6 @@ count of `session_resume` events are what to apply them to.
 - Grace window length before a pause (a `SessionConfig` field).
 - Resume limits (maximum gap, number of resumes): deferred, set from pilot experience.
 - Minimum-performance gate for the browser (a frame-rate or GPU check before the study starts): before the first pilot.
+- Load test: `scripts/load_test.py` (N participants in real time at the game's upload cadence; usage in its docstring; register its commit as a release with `n_sessions` 1 and delete its rows afterwards). Built and passing against the local server (3 participants); **not yet run against the project**: choose the number of participants first.
 - Prolific: the completion code is a dummy (`DUMMY-COMPLETION-CODE`) until the study exists; then `supabase secrets set PROLIFIC_COMPLETION_CODE=<code>` (no redeploy of the game; `run-finish` reads it on each call). Not built: a flush when the tab is closed mid-upload.
 - Where the release script runs and who registers world hashes and commits.

@@ -90,7 +90,7 @@ def main():
     timed("append (session end)", lambda: c.append(0, session={**row, "completed": True, "ended_at": "2026-10-29T12:00:00Z", "final_score": 2.0},
                                                    events=event_rows([{"t": 2.0, "type": "session_end", "running_total": 2.0}], first_seq=3)), t)
     result = timed("run-finish (complete)", c.finish, t)
-    check("finish accepts a complete run", result == {"ok": True, "problems": []}, result)
+    check("finish accepts a complete run", result.get("ok") is True and result.get("problems") == [], result)
 
     print("latency (ms)")
     for label, ms in t:

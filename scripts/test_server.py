@@ -12,6 +12,7 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -394,3 +395,14 @@ def test_consent_is_recorded_each_visit_and_validated(env):
     assert [(r["version"], r["signature"]) for r in rows] == [("v1", "Ada Lovelace")] * 2
     with pytest.raises(ServerError):
         client(env)._post("run-start", {"build": BUILD, "prolific_pid": "PID_bad", "consent": {"version": "v1"}})
+
+
+def test_the_load_test_script_runs_clean_against_the_local_server(env):
+    import hashlib
+    world = ROOT / "Assets" / "StreamingAssets" / "Worlds" / "S1_seed1.world"
+    env["db"].execute("insert into public.worlds (sha256, name) values (%s, 'S1_seed1.world') on conflict do nothing", (hashlib.sha256(world.read_bytes()).hexdigest(),))
+    server_admin.register_release(env["db"], "load-test", 1)
+    done = subprocess.run([sys.executable, str(ROOT / "scripts" / "load_test.py"), "--url", env["url"], "--participants", "3", "--seconds", "6",
+                           "--ramp", "1"], capture_output=True, text=True, env={**os.environ, "FORAGING_API_KEY": APIKEY}, timeout=120)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert env["db"].execute("select count(*) as n from public.runs where build_commit = 'load-test' and status = 'finished'").fetchone()["n"] == 3
