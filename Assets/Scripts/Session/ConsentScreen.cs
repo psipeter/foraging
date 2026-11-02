@@ -156,6 +156,7 @@ public class ConsentScreen : MonoBehaviour
         input.textComponent = shown;
         input.targetGraphic = background;
         input.lineType = TMP_InputField.LineType.SingleLine;
+        UiStyle.StyleInput(input, background);
         input.text = text;
         return input;
     }

@@ -22,7 +22,7 @@ public class FeedbackScreen : MonoBehaviour
         var screen = new GameObject("Feedback", typeof(RectTransform)).AddComponent<FeedbackScreen>();
         screen.transform.SetParent(canvas, false);
         // The data gate's canvas is built for reading only: it needs a raycaster and an event system before anything on it can be clicked.
-        Canvas root = canvas.GetComponentInParent<Canvas>();
+        Canvas root = canvas.GetComponentInParent<Canvas>(true);    // the gate may still be inactive: it is shown on the next frame
         if (root.GetComponent<GraphicRaycaster>() == null)
         {
             root.gameObject.AddComponent<GraphicRaycaster>();
@@ -63,6 +63,7 @@ public class FeedbackScreen : MonoBehaviour
         _input.targetGraphic = background;
         _input.lineType = TMP_InputField.LineType.MultiLineNewline;
         _input.characterLimit = MaxLength;
+        UiStyle.StyleInput(_input, background);
 
         _send = Button(background.transform.parent, "Send", "Send", new Vector2(0.64f, 0.11f), new Vector2(0.8f, 0.18f), Send);
         _status = UiStyle.Label(transform, "Status", "", UiStyle.Small, TextAlignmentOptions.MidlineLeft,

@@ -50,14 +50,10 @@ MonoBehaviour:
       peak: 0
       width: 0
     bumps:
-    - centerShape: 0.79
-      centerColor: 0.36
+    - centerShape: 0.26
+      centerColor: 0.32
       width: 0.2
-      height: 2.8
-    - centerShape: 0.22
-      centerColor: 0.81
-      width: 0.2
-      height: 2.8
+      height: 3
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -136,6 +132,9 @@ MonoBehaviour:
   harvestRangeGapBase: 7
   harvestRangeGapPerRadius: 0
   fruitColorPreservation: 0.5
+  fruitShadingFloor: 0.65
+  fruitBrightness: 1.2
+  fruitExposureCompensation: 1
   terrainNoiseFrequency: 2
   terrainNoiseOctaves: 1
   terrainMaxElevation: 12

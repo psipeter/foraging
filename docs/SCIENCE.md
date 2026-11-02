@@ -507,7 +507,7 @@ Session lengths target learning taking ~35–50% of the stops.
 | S2 | one feature Gaussian peak, others 0 | non-monotonic value | 120 s (~13) | 7–10 |
 | S3 | two features linear, third irrelevant | integrating two features, relative weights | 120 s (~13) | 7–10 |
 | S4 | all three non-zero, additive, monotonic, unequal weights, at least one inverted | integration over all three; "higher is better" is not a safe default | 150 s (~16) | 10–14 |
-| S5 | two Gaussian bumps over (shape, colour) of equal height (two equally good optima, so finding one is not enough) plus one linear moisture term | interactions no sum of one-feature terms can express; exploration against exploitation | 180 s | not estimated |
+| S5 | one Gaussian bump over (shape, colour) plus one linear moisture term | an interaction no sum of one-feature terms can express (a nonlinear peak, learned by trial and error) | 180 s | not estimated |
 
 Stops-to-learn figures are guesses, to be calibrated by a model-based learner
 agent and then by pilots. Durations are likewise provisional. P–S4 are implemented as
@@ -520,18 +520,18 @@ the table above (P is 60 s); S5 is 180 s.
 - **S4 is the first all-three-relevant session** and is deliberately additive
   and monotonic. It may already be hard enough; S5 should not be committed until
   S4 pilot data exist.
-- **S5 (built 2026-11-02, in the game's session sequence since the same day): two bumps plus moisture.** `R = A·G(shape, colour; cA) + B·G(shape, colour; cB) + w·f(moisture)`,
-  `G` a circular Gaussian (the same width σ on both axes), the terms summed. σ 0.2, both heights 2.8 (first piloted with 2.8 and 1.8: the lower bump was barely found), moisture weight 1.2
-  (linear or inverted, drawn), so the best bush pays about 4. The centres are drawn at random at least 3σ (0.6) apart inside [0.15, 0.85]² (a bump leaks
-  about 1% of its height into the other's centre), and are in the assets and the gitignored `results/reward_key_S5_2026-11-02.json`, not here. Chosen from
-  simulated random bushes (the S3 world's moisture): about 17% of bushes lie above half a bump's height at σ 0.2 (a σ of 0.15 gives 10%), so trial and
-  error can find a centre; the nearest of ~700 bushes to a centre is about 0.04 away in shape x colour. The 1.0-point gap between the peaks is about five
-  standard errors of a 10-fruit harvest mean. Shape and colour are the interacting pair because moisture is harder to judge visually. Additive learners
-  (the delta-rule critic and the GP critic's additive kernel) cannot represent the bumps; the joint-kernel GP can. Code: `RewardBump` (C#), the `bumps`
-  list of the reward function in `SessionConfig`, `bush_value` and `check_values` in `world.py` (a test pins the formula; C# and Python agree to 1e-7 on
-  sample points), `relevant_features` in `interlude.py` (a bump makes shape and colour relevant; designed-mode Interludes are refused for a reward
-  function with bumps). The Interlude is Hybrid like the others (20 trials). Wired into the `GameManager` list (12 entries: P, its Interlude, S1-S5 with theirs). Not done: instructions text beyond a copy of S4's,
-  server registration of the S5 worlds and a 12-session release, the simulated battery, play-testing of the bump widths.
+- **S5 (built 2026-11-02, in the game's session sequence since the same day): one bump plus moisture.** `R = H·G(shape, colour; c) + w·f(moisture)`,
+  `G` a circular Gaussian (the same width σ on both axes). σ 0.2, height 3.0, moisture weight 1.2 (linear or inverted, drawn), so the best bush pays
+  about 4. The centre is drawn at random inside [0.2, 0.8]² and is in the assets and the gitignored `results/reward_key_S5_2026-11-02.json`, not here.
+  History: S5 began as two bumps (heights 2.8 and 1.8, then both 2.8). In two pilots (one participant, the PI) the learner found only one of the two
+  bumps each time (the other got 9% and then under 3% of the fruits) and the S5 Interlude was at 75% and then 55% (chance is 50%), so S5 was too large a step
+  from S4; it became a single bump plus moisture, a smaller step (see DECISIONS, "S5: one bump"). About 17% of random bushes lie above half the bump's
+  height at σ 0.2, so trial and error can find the centre. Shape and colour are the interacting pair because moisture is harder to judge visually.
+  Additive learners (the delta-rule critic and the GP critic's additive kernel) cannot represent the bump; the joint-kernel GP can. Code: `RewardBump`
+  (C#), the `bumps` list of the reward function in `SessionConfig`, `bush_value` and `check_values` in `world.py` (a test pins the formula; C# and Python
+  agree to 1e-7 on sample points), `relevant_features` in `interlude.py` (a bump makes shape and colour relevant; designed-mode Interludes are refused
+  for a reward function with bumps). The Interlude is Hybrid like the others (20 trials). Wired into the `GameManager` list (12 entries: P, its Interlude,
+  S1-S5 with theirs). Not done: the simulated battery for the single-bump S5; play-testing of the single bump with people.
 - **Instructions must not imply monotonicity** ("reward depends on the tree's
   features", not "higher is better").
 - **Extra difficulty knobs:** raising `rewardStd` further (≈1.0) in later sessions slows

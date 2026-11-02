@@ -84,6 +84,24 @@ public static class UiStyle
         plate.rectTransform.SetSiblingIndex(rect.GetSiblingIndex());
     }
 
+    // A text field that shows which one has focus (an accent outline and a lighter fill) and where the cursor is (a thick white caret,
+    // a visible selection); TextMeshPro's defaults are a hairline caret in the text colour and no focus cue.
+    public static void StyleInput(TMP_InputField input, Image background)
+    {
+        input.customCaretColor = true;
+        input.caretColor = Color.white;
+        input.caretWidth = 3;
+        input.caretBlinkRate = 1.1f;
+        input.selectionColor = new Color(Accent.r, Accent.g, Accent.b, 0.5f);
+        var outline = background.gameObject.AddComponent<Outline>();
+        outline.effectColor = Accent;
+        outline.effectDistance = new Vector2(3f, -3f);
+        outline.enabled = false;
+        Color focused = new Color(0.23f, 0.27f, 0.34f);
+        input.onSelect.AddListener(_ => { outline.enabled = true; background.color = focused; });
+        input.onDeselect.AddListener(_ => { outline.enabled = false; background.color = Field; });
+    }
+
     public static void SetAnchors(RectTransform rect, Vector2 min, Vector2 max, Vector2 offsetMin, Vector2 offsetMax)
     {
         rect.anchorMin = min;

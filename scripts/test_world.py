@@ -83,19 +83,19 @@ def test_s4_all_features_additive_with_one_inverted():
     assert np.allclose(w.value, _expected(w))
 
 
-def test_s5_two_gaussian_bumps_over_shape_and_color_plus_linear_moisture():
+def test_s5_one_gaussian_bump_over_shape_and_color_plus_linear_moisture():
     w = make_world("S5", 1)
     shape, color, moisture = _weights(w)
     bumps = w.params.reward_function["bumps"]
     assert shape["weight"] == 0 and color["weight"] == 0 and moisture["weight"] != 0 and moisture["basisFunctionType"] in (0, 1)
-    assert len(bumps) == 2 and bumps[0]["height"] == bumps[1]["height"]                      # two equally good optima
+    assert len(bumps) == 1                                                                    # a single optimum (two bumps were too hard in the pilots)
     centres = np.array([[b["centerShape"], b["centerColor"]] for b in bumps])
-    assert np.hypot(*(centres[0] - centres[1])) >= 3 * bumps[0]["width"] - 1e-9 and ((0.1 <= centres) & (centres <= 0.9)).all()
+    assert ((0.1 <= centres) & (centres <= 0.9)).all()
     expected = _basis(moisture, w.moisture)
     for b in bumps:
         expected = expected + b["height"] * np.exp(-((w.shape - b["centerShape"]) ** 2 + (w.color - b["centerColor"]) ** 2) / (2 * b["width"] ** 2))
     assert np.allclose(w.value, expected)
-    assert 3.0 < w.value.max() < 4.2                                                          # the best bush pays about 4, as in the other sessions
+    assert 3.0 < w.value.max() < 4.4                                                          # the best bush pays about 4, as in the other sessions
 
 
 def test_bush_value_adds_the_bumps_to_the_component_terms():
