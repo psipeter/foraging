@@ -22,11 +22,13 @@ MonoBehaviour:
   interludeTrialSeconds: 10
   interludeHarvestFruits: 10
   interludeSwitchPolicy: 3
-  interludeBonusPerCorrect: 5
+  interludeBonusPerCorrect: 10
   freezeSun: 1
   interludeBushDistance: 22.6
   interludeBushBearing: 31.5
   interludeMinElevationDifference: 0
+  interludeMinRewardGap: 0.25
+  interludeMinFeatureGap: 0.1
   instructionsFile: instructions_interlude_P.txt
   controlsReminder: 'Mouse: look. W / S: walk. Space: hold to harvest. Escape: pause.'
   firstHarvestMessage: 
@@ -47,10 +49,11 @@ MonoBehaviour:
       weight: 0
       peak: 0
       width: 0
+    bumps: []
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
-  playerMoveSpeed: 7.5
+  playerMoveSpeed: 15
   fruitHarvestDuration: 0.05
   eyeHeight: 5.1
   cameraFieldOfView: 75
@@ -96,9 +99,29 @@ MonoBehaviour:
   placementJitter: 0.5
   startClearingRadius: 8
   fruitCount: 10
-  fruitRadius: 0.6
-  fruitColorLow: {r: 0, g: 0.2, b: 1, a: 1}
-  fruitColorHigh: {r: 1, g: 0.4, b: 0, a: 1}
+  fruitRadius: 0.7
+  fruitColorRamp:
+  - {r: 0.267, g: 0.0049, b: 0.3294, a: 1}
+  - {r: 0.2804, g: 0.0751, b: 0.3985, a: 1}
+  - {r: 0.2826, g: 0.1409, b: 0.4575, a: 1}
+  - {r: 0.2731, g: 0.2042, b: 0.5015, a: 1}
+  - {r: 0.254, g: 0.265, b: 0.5299, a: 1}
+  - {r: 0.2295, g: 0.3229, b: 0.5458, a: 1}
+  - {r: 0.2038, g: 0.3785, b: 0.5537, a: 1}
+  - {r: 0.1799, g: 0.4322, b: 0.5573, a: 1}
+  - {r: 0.1583, g: 0.4848, b: 0.558, a: 1}
+  - {r: 0.1383, g: 0.5364, b: 0.5549, a: 1}
+  - {r: 0.1224, g: 0.587, b: 0.5461, a: 1}
+  - {r: 0.1233, g: 0.636, b: 0.5291, a: 1}
+  - {r: 0.157, g: 0.6828, b: 0.5024, a: 1}
+  - {r: 0.2229, g: 0.7268, b: 0.4649, a: 1}
+  - {r: 0.3111, g: 0.7675, b: 0.4161, a: 1}
+  - {r: 0.4164, g: 0.8039, b: 0.3556, a: 1}
+  - {r: 0.5331, g: 0.8348, b: 0.2846, a: 1}
+  - {r: 0.6547, g: 0.8593, b: 0.2071, a: 1}
+  - {r: 0.7741, g: 0.8778, b: 0.1331, a: 1}
+  - {r: 0.8875, g: 0.8925, b: 0.0977, a: 1}
+  - {r: 0.9932, g: 0.9062, b: 0.1439, a: 1}
   shapeRange: {x: 0, y: 1}
   canopyWidthRange: {x: 1, y: 6}
   canopyHeightRange: {x: 1, y: 15}

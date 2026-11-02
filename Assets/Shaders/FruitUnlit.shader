@@ -8,6 +8,8 @@ Shader "Foraging/FruitUnlit"
         _Tiling ("Tiling", Float) = 4.0
         _NormalStrength ("Normal Strength", Float) = 0.5
         _ColorPreservation ("Color Preservation", Range(0,1)) = 0.5
+        _ShadingFloor ("Shading Floor", Range(0,1)) = 0.3
+        _Brightness ("Brightness", Float) = 1
     }
 
     SubShader
@@ -49,7 +51,12 @@ Shader "Foraging/FruitUnlit"
                 float _Tiling;
                 float _NormalStrength;
                 float _ColorPreservation;
+                float _ShadingFloor;
+                float _Brightness;
             CBUFFER_END
+
+            // Set each frame by SunController: the inverse of the post-exposure, so fruit keep their brightness through the day (0 = never set).
+            float _FruitExposureComp;
 
             struct Attributes
             {
@@ -103,7 +110,7 @@ Shader "Foraging/FruitUnlit"
                 float3 viewDir = normalize(GetWorldSpaceViewDir(i.positionWS));
 
                 half NdotL = saturate(dot((half3)normalWS, (half3)lightDir));
-                half diffuse = 0.3h + 0.7h * NdotL * mainLight.shadowAttenuation;
+                half diffuse = (half)_ShadingFloor + (1.0h - (half)_ShadingFloor) * NdotL * mainLight.shadowAttenuation;
 
                 float3 halfDir = normalize(lightDir + viewDir);
                 half specTerm = pow(saturate(dot((half3)normalWS, (half3)halfDir)), 64.0h) * 0.5h * mainLight.shadowAttenuation;
@@ -117,7 +124,8 @@ Shader "Foraging/FruitUnlit"
                 half3 fullyLit = albedo * diffuse + specular;
                 half3 colorPreserved = (half3)_Color.rgb * ambient;
                 half3 lit = lerp(fullyLit, colorPreserved, (half)_ColorPreservation);
-                half4 color = half4(lit, _Color.a);
+                half exposureComp = _FruitExposureComp > 0.0 ? (half)_FruitExposureComp : 1.0h;
+                half4 color = half4(lit * (half)_Brightness * exposureComp, _Color.a);
                 color.rgb = MixFog(color.rgb, i.fogCoord);
                 return color;
             }

@@ -238,9 +238,7 @@ public class Tree : MonoBehaviour
             fruitRadius / Mathf.Max(canopyScale.z, 0.0001f));
 
         // Deterministic distribution per tree.
-        Color lowColor = sessionConfig != null ? sessionConfig.FruitColorLow : ColorLow;
-        Color highColor = sessionConfig != null ? sessionConfig.FruitColorHigh : ColorHigh;
-        Color fruitColor = Color.Lerp(lowColor, highColor, attributes.color);
+        Color fruitColor = sessionConfig != null ? sessionConfig.FruitColor(attributes.color) : Color.Lerp(ColorLow, ColorHigh, attributes.color);
         System.Random rng = new System.Random(fruitSeed);
         float goldenAngle = Mathf.PI * (3f - Mathf.Sqrt(5f));
 

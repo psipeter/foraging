@@ -179,10 +179,9 @@ public class SessionTimerUI : MonoBehaviour
 
         if (finalScoreText != null)
         {
-            // An Interlude's points are hidden until the last screen (the practice Interlude shows what it would have paid, and never
-            // which choices were right); the last screen adds the totals.
-            bool showPoints = !isInterlude || isPractice || isLast;
-            finalScoreText.gameObject.SetActive(showPoints);
+            // An Interlude's points appear only on its end screen, never trial by trial (the practice Interlude shows what it would have
+            // paid, and never which choices were right); the last screen adds the totals.
+            finalScoreText.gameObject.SetActive(true);
             float points = isInterlude ? (interludeManager != null ? interludeManager.Points : 0f) : _lastTotalScore;
             finalScoreText.text = !isLast ? $"+{points:F0} points"
                 : (isInterlude ? $"This interlude: +{points:F0} points\n" : "")

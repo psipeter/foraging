@@ -88,7 +88,7 @@ def test_s5_two_gaussian_bumps_over_shape_and_color_plus_linear_moisture():
     shape, color, moisture = _weights(w)
     bumps = w.params.reward_function["bumps"]
     assert shape["weight"] == 0 and color["weight"] == 0 and moisture["weight"] != 0 and moisture["basisFunctionType"] in (0, 1)
-    assert len(bumps) == 2 and bumps[0]["height"] > bumps[1]["height"]                       # a global bump and a lower local one
+    assert len(bumps) == 2 and bumps[0]["height"] == bumps[1]["height"]                      # two equally good optima
     centres = np.array([[b["centerShape"], b["centerColor"]] for b in bumps])
     assert np.hypot(*(centres[0] - centres[1])) >= 3 * bumps[0]["width"] - 1e-9 and ((0.1 <= centres) & (centres <= 0.9)).all()
     expected = _basis(moisture, w.moisture)

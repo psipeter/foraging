@@ -259,6 +259,9 @@ public class SunController : MonoBehaviour
 
     private void SetPostExposure(float ev)
     {
+        // Fruit undo (some of) the exposure so their brightness does not follow the sun (FruitUnlit.shader).
+        float strength = sessionConfig != null ? sessionConfig.FruitExposureCompensation : 1f;
+        Shader.SetGlobalFloat("_FruitExposureComp", Mathf.Pow(2f, -ev * strength));
         if (_colorAdjustments != null && !Mathf.Approximately(ev, _lastPostExposure))
         {
             _lastPostExposure = ev;

@@ -9,12 +9,11 @@ public static class FruitMaterialManager
     public static void SetSessionConfig(SessionConfig config)
     {
         _sessionConfig = config;
-        float preservation = config != null ? config.FruitColorPreservation : 0.5f;
         foreach (Material mat in Cache.Values)
         {
             if (mat != null)
             {
-                mat.SetFloat("_ColorPreservation", preservation);
+                ApplySettings(mat);
             }
         }
     }
@@ -58,9 +57,16 @@ public static class FruitMaterialManager
             Debug.LogWarning("FruitMaterialManager: Textures/Fruits/PaintedPlaster017_NormalGL not found in Resources.");
         }
 
-        mat.SetFloat("_ColorPreservation", _sessionConfig != null ? _sessionConfig.FruitColorPreservation : 0.5f);
+        ApplySettings(mat);
 
         Cache[color] = mat;
         return mat;
+    }
+
+    private static void ApplySettings(Material mat)
+    {
+        mat.SetFloat("_ColorPreservation", _sessionConfig != null ? _sessionConfig.FruitColorPreservation : 0.5f);
+        mat.SetFloat("_ShadingFloor", _sessionConfig != null ? _sessionConfig.FruitShadingFloor : 0.3f);
+        mat.SetFloat("_Brightness", _sessionConfig != null ? _sessionConfig.FruitBrightness : 1f);
     }
 }

@@ -136,8 +136,8 @@ been done.
 
 **A built-in tension.** Wise et al. note lab tasks often prevent prior
 knowledge from helping. We partly do the same on purpose: attributes are
-chosen to carry weak priors (constant fruit count; blue→orange rather than
-red/green), so learning of the reward function is attributable to experience.
+chosen to carry weak priors (constant fruit count; a purple-to-yellow colour ramp
+with no red; see "Fruit colour ramp" in DECISIONS), so learning of the reward function is attributable to experience.
 That trades some naturalism for interpretability — a deliberate position, not
 an oversight.
 
@@ -395,7 +395,7 @@ Each tree has three attributes in [0, 1], each on its own visual channel:
 | Attribute | Visual channel | Ecological level | Prior strength |
 |---|---|---|---|
 | **Shape** | Canopy aspect ratio (squat/wide → tall/narrow) | Tree | Weak |
-| **Color** | Fruit hue (blue → orange, abstract axis) | Fruit | Weak |
+| **Color** | Fruit colour (viridis ramp: purple → teal → yellow, equal perceptual steps) | Fruit | Weak |
 | **Moisture** | Ground color + terrain elevation | Environment | Weak–moderate |
 
 - `shape` and `color` are drawn independently and uniformly per tree.
@@ -407,8 +407,8 @@ Each tree has three attributes in [0, 1], each on its own visual channel:
   hills and almost no relief in P/S1/S2, where moisture earns nothing; terraced
   plateaus and valleys in S3/S4, where it does.
 - **Prior management:** fruit count is constant across bushes (no count-based
-  prior); fruit color uses an abstract blue→orange axis (avoids red/green
-  ripeness associations). Fruits are unlit so hue is always readable;
+  prior); fruit colour uses the viridis ramp (purple, teal, yellow; no red, which
+  avoids the strongest ripeness association; the green-to-yellow part keeps a weak one, see DECISIONS, "Fruit colour ramp"). Fruits are unlit so hue is always readable;
   canopy and terrain respond to the day/night lighting.
 - Fruits are distributed over the canopy with a Fibonacci/sunflower spiral
   with per-tree seeded jitter.
@@ -507,7 +507,7 @@ Session lengths target learning taking ~35–50% of the stops.
 | S2 | one feature Gaussian peak, others 0 | non-monotonic value | 120 s (~13) | 7–10 |
 | S3 | two features linear, third irrelevant | integrating two features, relative weights | 120 s (~13) | 7–10 |
 | S4 | all three non-zero, additive, monotonic, unequal weights, at least one inverted | integration over all three; "higher is better" is not a safe default | 150 s (~16) | 10–14 |
-| S5 | two Gaussian bumps over (shape, colour) of unequal height (a global and a local optimum) plus one linear moisture term | interactions no sum of one-feature terms can express; exploration against exploitation | 180 s | not estimated |
+| S5 | two Gaussian bumps over (shape, colour) of equal height (two equally good optima, so finding one is not enough) plus one linear moisture term | interactions no sum of one-feature terms can express; exploration against exploitation | 180 s | not estimated |
 
 Stops-to-learn figures are guesses, to be calibrated by a model-based learner
 agent and then by pilots. Durations are likewise provisional. P–S4 are implemented as
@@ -521,7 +521,7 @@ the table above (P is 60 s); S5 is 180 s.
   and monotonic. It may already be hard enough; S5 should not be committed until
   S4 pilot data exist.
 - **S5 (built 2026-11-02, in the game's session sequence since the same day): two bumps plus moisture.** `R = A·G(shape, colour; cA) + B·G(shape, colour; cB) + w·f(moisture)`,
-  `G` a circular Gaussian (the same width σ on both axes), the terms summed. σ 0.2, heights 2.8 (global bump) and 1.8 (local bump), moisture weight 1.2
+  `G` a circular Gaussian (the same width σ on both axes), the terms summed. σ 0.2, both heights 2.8 (first piloted with 2.8 and 1.8: the lower bump was barely found), moisture weight 1.2
   (linear or inverted, drawn), so the best bush pays about 4. The centres are drawn at random at least 3σ (0.6) apart inside [0.15, 0.85]² (a bump leaks
   about 1% of its height into the other's centre), and are in the assets and the gitignored `results/reward_key_S5_2026-11-02.json`, not here. Chosen from
   simulated random bushes (the S3 world's moisture): about 17% of bushes lie above half a bump's height at σ 0.2 (a σ of 0.15 gives 10%), so trial and

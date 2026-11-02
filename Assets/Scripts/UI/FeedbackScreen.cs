@@ -1,6 +1,8 @@
 using System;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 // The optional box for free-text feedback on a browser's final screen, drawn on the data gate's canvas below the completion code, with
@@ -19,6 +21,18 @@ public class FeedbackScreen : MonoBehaviour
     {
         var screen = new GameObject("Feedback", typeof(RectTransform)).AddComponent<FeedbackScreen>();
         screen.transform.SetParent(canvas, false);
+        // The data gate's canvas is built for reading only: it needs a raycaster and an event system before anything on it can be clicked.
+        Canvas root = canvas.GetComponentInParent<Canvas>();
+        if (root.GetComponent<GraphicRaycaster>() == null)
+        {
+            root.gameObject.AddComponent<GraphicRaycaster>();
+        }
+
+        if (FindAnyObjectByType<EventSystem>() == null)
+        {
+            new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
+        }
+
         UiStyle.SetAnchors((RectTransform)screen.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
         screen.Build(message, withReturn, onSend, onReturn);
         return screen;
