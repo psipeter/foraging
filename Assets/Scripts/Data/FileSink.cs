@@ -7,7 +7,7 @@ using System.Text;
 // The local copy of a run: the database's tables as files, <root>/<run_id>/<session:00>/ (scripts/rundata.py reads this
 // layout; docs/ONLINE_DATA_PLAN.md, section 2b). Always written, so a participant's computer keeps a backup of what was
 // uploaded and an offline run is complete on its own.
-public class FileSink : IDataSink, IDisposable
+public class FileSink : IDisposable
 {
     private class SessionFiles
     {

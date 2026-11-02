@@ -7,7 +7,6 @@ public class PoseReply
 {
     public double t;
     public float x, z, yaw, pitch;
-    public int keys;
 }
 
 [Serializable]
@@ -27,7 +26,6 @@ public class TrialTally
 [Serializable]
 public class PreviousSession
 {
-    public int index;
     public bool is_practice;
     public bool is_interlude;
     public float score;
@@ -36,8 +34,6 @@ public class PreviousSession
 [Serializable]
 public class InterludeTotals
 {
-    public int trials;
-    public int correct;
     public float bonus;
 }
 
@@ -45,15 +41,10 @@ public class InterludeTotals
 public class ResumeReply
 {
     public int session_index;
-    public string name;
-    public bool is_practice;
-    public bool is_interlude;
     public bool completed;                  // the latest session was finished: continue with the next one
-    public float final_score;
     public string started_at;
     public bool has_pose;
     public PoseReply pose;
-    public double last_event_t;
     public double clock;                    // the session clock to continue from (later than every stored frame and event)
     public float running_total;
     public TreeCount[] fruits_taken;        // fruits already taken per bush

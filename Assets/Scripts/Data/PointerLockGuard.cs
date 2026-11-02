@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.UI;
 
 // In a browser the mouse is captured (pointer lock) only after a click, and the browser releases it whenever the participant
 // presses Escape or leaves the tab or window. While it is not held the game is paused behind "Paused: click to continue" (PauseGate:
@@ -23,6 +22,12 @@ public class PointerLockGuard : MonoBehaviour
     // fails with a SecurityError, which Unity would surface as an error pop-up. Clicks in that window are ignored.
     private const float RelockCooldownSeconds = 1.3f;
 
+    // True on the final screen, where the participant types and clicks: the mouse is released and not captured again.
+    public static bool Suspended { get; set; }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void Reset() => Suspended = false;
+
     private GameObject _overlay;
     private float _graceUntil;
     private float _unlockedAt = float.NegativeInfinity;
@@ -39,34 +44,10 @@ public class PointerLockGuard : MonoBehaviour
 
     private void Awake()
     {
-        _overlay = new GameObject("PointerGate", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
-        _overlay.transform.SetParent(transform, false);
-        var canvas = _overlay.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 5100;
-        var scaler = _overlay.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = UiStyle.ReferenceResolution;
-
-        var dim = new GameObject("Dim", typeof(RectTransform), typeof(Image));
-        dim.transform.SetParent(_overlay.transform, false);
-        RectTransform dimRect = dim.GetComponent<RectTransform>();
-        dimRect.anchorMin = Vector2.zero;
-        dimRect.anchorMax = Vector2.one;
-        dimRect.offsetMin = dimRect.offsetMax = Vector2.zero;
-        dim.GetComponent<Image>().color = Color.black;
-
-        var label = new GameObject("Message", typeof(RectTransform), typeof(TextMeshProUGUI));
-        label.transform.SetParent(_overlay.transform, false);
-        RectTransform rect = label.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0.2f, 0.3f);
-        rect.anchorMax = new Vector2(0.8f, 0.7f);
-        rect.offsetMin = rect.offsetMax = Vector2.zero;
-        var text = label.GetComponent<TextMeshProUGUI>();
-        text.alignment = TextAlignmentOptions.Center;
-        UiStyle.Apply(text, UiStyle.Title);
-        text.color = Color.white;
-        text.raycastTarget = false;
+        // Overlay sort orders: this one (4900) sits below the data gate (5000) so that the completion code and errors stay readable;
+        // the consent screen (6000) is above both.
+        TextMeshProUGUI text = UiStyle.MessageScreen("PointerGate", transform, 4900, true);
+        _overlay = text.canvas.gameObject;
         text.text = "Paused\n\n<size=65%>The timer is stopped. Click to continue.</size>";
         _overlay.SetActive(false);
         _graceUntil = Time.unscaledTime + GraceSeconds;
@@ -74,6 +55,16 @@ public class PointerLockGuard : MonoBehaviour
 
     private void Update()
     {
+        if (Suspended)
+        {
+            _overlay.SetActive(false);
+            PauseGate.Pointer = false;
+            AudioListener.pause = false;
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+            return;
+        }
+
         bool held = Held();
         if (_wasHeld && !held)
         {
@@ -82,11 +73,7 @@ public class PointerLockGuard : MonoBehaviour
 
         _wasHeld = held;
         bool paused = !held && Time.unscaledTime > _graceUntil;
-        if (_overlay.activeSelf != paused)
-        {
-            _overlay.SetActive(paused);
-        }
-
+        _overlay.SetActive(paused);
         PauseGate.Pointer = paused;
         AudioListener.pause = paused;
         Cursor.visible = paused;

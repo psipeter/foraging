@@ -68,8 +68,3 @@ public class DataBatch
 
     public bool IsEmpty => SessionJson == null && Events.Count == 0 && Frames.Count == 0 && Plan == null && Trials.Count == 0;
 }
-
-public interface IDataSink
-{
-    void Write(DataBatch batch);
-}

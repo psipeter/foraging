@@ -17,8 +17,15 @@ public class SessionTimerUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI sessionCompleteText;
     [SerializeField] private TextMeshProUGUI nextSessionPromptText;
 
+    [Header("Timer display")]
+    [SerializeField] private float timerFontSize = 32f;
+    [SerializeField] private Vector2 timerPosition = new Vector2(150f, -44f);
+    [SerializeField] private Vector2 timerPlateSize = new Vector2(230f, 60f);
+    [SerializeField] private Color plateColor = new Color(0f, 0f, 0f, 0.38f);
+
     private float _lastTotalScore;
     private bool _sessionEndHandled;
+    private bool _leaveRequested;
 
     private void Awake()
     {
@@ -28,12 +35,6 @@ public class SessionTimerUI : MonoBehaviour
         }
     }
 
-    [Header("Timer display")]
-    [SerializeField] private float timerFontSize = 32f;
-    [SerializeField] private Vector2 timerPosition = new Vector2(150f, -44f);
-    [SerializeField] private Vector2 timerPlateSize = new Vector2(230f, 60f);
-    [SerializeField] private Color plateColor = new Color(0f, 0f, 0f, 0.38f);
-
     private void Start()
     {
         if (timerText == null)
@@ -41,28 +42,20 @@ public class SessionTimerUI : MonoBehaviour
             return;
         }
 
-        RectTransform rect = timerText.rectTransform;
-        rect.anchoredPosition = timerPosition;
-        rect.sizeDelta = timerPlateSize - new Vector2(20f, 10f);
-        timerText.fontSize = timerFontSize;
-        timerText.fontStyle = FontStyles.Bold;
-        timerText.alignment = TextAlignmentOptions.Center;
-        HudWidgets.CreatePlate(rect, timerPlateSize, plateColor, "TimerPlate");
+        UiStyle.HudPlate(timerText, timerPosition, timerPlateSize, timerFontSize, plateColor, "TimerPlate");
     }
 
     private void OnEnable()
     {
         SunController.OnSessionEnd += HandleSessionEnd;
-        HarvestManager.OnScoreChanged += HandleHarvestComplete;
+        HarvestManager.OnScoreChanged += HandleScoreChanged;
     }
 
     private void OnDisable()
     {
         SunController.OnSessionEnd -= HandleSessionEnd;
-        HarvestManager.OnScoreChanged -= HandleHarvestComplete;
+        HarvestManager.OnScoreChanged -= HandleScoreChanged;
     }
-
-    private bool _leaveRequested;
 
     private void Update()
     {
@@ -121,15 +114,10 @@ public class SessionTimerUI : MonoBehaviour
             return;
         }
 
-        // An Interlude shows the per-trial countdown here instead of the session clock.
-        if (sessionConfig.IsInterlude && interludeManager != null && interludeManager.Active)
-        {
-            timerText.text = interludeManager.TimerLabel;
-            return;
-        }
-
-        float remaining = sunController.SessionTimeRemaining;
-        remaining = Mathf.Max(0f, remaining);
+        // An Interlude shows the trial's countdown (whole seconds, rounded up) instead of the session clock.
+        float remaining = sessionConfig.IsInterlude && interludeManager != null && interludeManager.Active
+            ? Mathf.Ceil(interludeManager.TrialSecondsLeft)
+            : Mathf.Max(0f, sunController.SessionTimeRemaining);
 
         int minutes = Mathf.FloorToInt(remaining / 60f);
         int seconds = Mathf.FloorToInt(remaining % 60f);
@@ -137,7 +125,7 @@ public class SessionTimerUI : MonoBehaviour
         timerText.text = $"{minutes:D2}:{seconds:D2}";
     }
 
-    private void HandleHarvestComplete(float runningTotal)
+    private void HandleScoreChanged(float runningTotal)
     {
         _lastTotalScore = runningTotal;
     }
@@ -161,8 +149,6 @@ public class SessionTimerUI : MonoBehaviour
                 input.enabled = false;
             }
         }
-
-        GameManager.LastSessionScore = _lastTotalScore;
 
         bool isInterlude = sessionConfig != null && sessionConfig.IsInterlude;
         bool isPractice = sessionConfig != null && sessionConfig.IsPractice;
@@ -188,31 +174,19 @@ public class SessionTimerUI : MonoBehaviour
 
         if (nextSessionPromptText != null)
         {
-            nextSessionPromptText.gameObject.SetActive(true);
-            nextSessionPromptText.text = isLast
-                ? $"Press {UiStyle.Chip("Enter")} to exit"
-                : $"Press {UiStyle.Chip("Enter")} to continue";
+            nextSessionPromptText.text = $"Press {UiStyle.Chip("Enter")} to {(isLast ? "exit" : "continue")}";
         }
 
         if (finalScoreText != null)
         {
-            // An Interlude shows only its own count correct and bonus (never which trials, nor the reward
-            // function); The final screen adds the totals.
-            finalScoreText.gameObject.SetActive(true);
-            if (isInterlude && !isLast)
-            {
-                finalScoreText.text = $"+{GameManager.ThisInterludeBonus:F0} points";
-            }
-            else if (isLast)
-            {
-                float total = GameManager.SessionScoreTotal + GameManager.InterludeBonus;
-                string thisInterlude = isInterlude ? $"This interlude: +{GameManager.ThisInterludeBonus:F0} points\n" : "";
-                finalScoreText.text = $"{thisInterlude}Total: +{total:F0} points";
-            }
-            else
-            {
-                finalScoreText.text = $"+{_lastTotalScore:F0} points";
-            }
+            // An Interlude's points are hidden until the last screen (the practice Interlude shows what it would have paid, and never
+            // which choices were right); the last screen adds the totals.
+            bool showPoints = !isInterlude || isPractice || isLast;
+            finalScoreText.gameObject.SetActive(showPoints);
+            float points = isInterlude ? (interludeManager != null ? interludeManager.Points : 0f) : _lastTotalScore;
+            finalScoreText.text = !isLast ? $"+{points:F0} points"
+                : (isInterlude ? $"This interlude: +{points:F0} points\n" : "")
+                  + $"Total: +{GameManager.SessionScoreTotal + GameManager.InterludeBonus:F0} points";
         }
     }
 }

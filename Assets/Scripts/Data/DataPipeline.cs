@@ -1,12 +1,10 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.IO;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 // Owns where recorded data goes, across the scene reloads between sessions: the local copy (FileSink) always, and the
 // server (HttpSink) when online.json says so. It starts the run on the server, holds the game still behind a message
@@ -20,8 +18,9 @@ public class DataPipeline : MonoBehaviour
         public string run_id;
         public string token;
         public string status;
-        public bool has_resume;
+        public bool has_resume;           // `resume` is a nested object, which JsonUtility cannot leave null: this says whether it was sent
         public ResumeReply resume;
+        public string completion_code;
     }
 
     [Serializable]
@@ -48,11 +47,11 @@ public class DataPipeline : MonoBehaviour
     private string _notice;
     private string _completionCode;
     private bool _redirecting;
+    private FeedbackScreen _feedback;
     private bool _finishing;
     private bool _finished;
     private bool _quitRequested;
     private float _quitRequestedAt;
-    private readonly List<DataBatch> _held = new List<DataBatch>();
     private GameObject _overlay;
     private TextMeshProUGUI _message;
 
@@ -108,30 +107,50 @@ public class DataPipeline : MonoBehaviour
     }
 
     // The study is finished and its data stored: a browser page cannot be closed by the game, so it says so and stays still.
-    public static void ShowStudyComplete()
-    {
-        Instance.ShowComplete();
-        SceneSuperseded = true;
-    }
+    public static void ShowStudyComplete() => Instance.ShowComplete();
 
-    // The final message: the completion code and, for a participant who arrived from Prolific (the address carries PROLIFIC_PID), a return to
-    // Prolific's completion page a few seconds later.
+    // The final message: the completion code and, for a participant who arrived from Prolific (the address carries PROLIFIC_PID), a way
+    // back to Prolific's completion page. A run this page holds the token of also gets the optional feedback box, and then the
+    // participant returns by a button (typing takes longer than a timer); otherwise Prolific is opened a few seconds later.
     private void ShowComplete()
     {
+        SceneSuperseded = true;
         bool fromProlific = _completionCode != null && OnlineSettings.UrlParameter("PROLIFIC_PID") != null;
+        bool feedback = _token != null && _online;
         _notice = "Thank you! The study is complete." +
             (_completionCode != null ? $"\n\nYour completion code is {_completionCode}" : "") +
-            (fromProlific ? "\n\n<size=65%>You will be returned to Prolific in a few seconds.</size>" : "\n\n<size=65%>You can close this page.</size>");
-        if (fromProlific && !_redirecting)
+            (fromProlific && !feedback ? "\n\n<size=65%>You will be returned to Prolific in a few seconds.</size>" : "") +
+            (fromProlific && feedback ? "\n\n<size=65%>Press \"Return to Prolific\" when you are done.</size>" : "") +
+            (!fromProlific ? "\n\n<size=65%>You can close this page.</size>" : "");
+        if (feedback && _feedback == null)
+        {
+            PointerLockGuard.Suspended = true;
+            _feedback = FeedbackScreen.Show(_overlay.transform, _message, fromProlific, text => StartCoroutine(SendFeedback(text)), RedirectToProlificNow);
+        }
+        else if (fromProlific && !feedback && !_redirecting)
         {
             _redirecting = true;
             StartCoroutine(RedirectToProlific());
         }
     }
 
+    private IEnumerator SendFeedback(string text)
+    {
+        byte[] body = System.Text.Encoding.UTF8.GetBytes(Json.Obj(("run_id", RunId), ("token", _token), ("text", text)));
+        yield return HttpSink.Call(_settings.url, _settings.apikey, "feedback", body, request =>
+            _feedback.SetStatus(request.result == UnityWebRequest.Result.Success
+                ? "Thank you, your feedback was saved."
+                : "Your feedback could not be sent. You can try again.", false));
+    }
+
     private IEnumerator RedirectToProlific()
     {
         yield return new WaitForSecondsRealtime(6f);
+        RedirectToProlificNow();
+    }
+
+    private void RedirectToProlificNow()
+    {
 #if UNITY_WEBGL && !UNITY_EDITOR
         RedirectTo(ProlificCompletionUrl + System.Uri.EscapeDataString(_completionCode));
 #endif
@@ -152,13 +171,7 @@ public class DataPipeline : MonoBehaviour
             return true;
         }
 
-        if (!p.Drained)
-        {
-            p._leaving = true;
-            return false;
-        }
-
-        if (!p._finishing)
+        if (TryLeave() && !p._finishing)
         {
             p._finishing = true;
             p.StartCoroutine(p.FinishRun());
@@ -175,14 +188,17 @@ public class DataPipeline : MonoBehaviour
         SceneSuperseded = false;
     }
 
-    private bool Drained => _held.Count == 0 && (_http == null || _http.Failed || _http.Pending == 0);
+    private bool Drained => _http == null || _http.Pending == 0;
 
+    // Touch Instance first in the game scene: its resume path reloads the active scene.
     private void Awake()
     {
         _settings = OnlineSettings.Load();
         _build = BuildInfo.Read();
         _online = _settings.Active;
-        BuildOverlay();
+        _message = UiStyle.MessageScreen("DataGate", transform, 5000, true);
+        _overlay = _message.canvas.gameObject;
+        _overlay.SetActive(false);
         Application.wantsToQuit += OnWantsToQuit;
         if (StreamingData.NeedsPreload && !_online)
         {
@@ -208,12 +224,6 @@ public class DataPipeline : MonoBehaviour
 
     private void Dispatch(DataBatch batch)
     {
-        if (!_ready)
-        {
-            _held.Add(batch);
-            return;
-        }
-
         try
         {
             _file?.Write(batch);       // no local copy in a browser
@@ -255,7 +265,6 @@ public class DataPipeline : MonoBehaviour
         {
             // Continue the interrupted run: what the scene recorded so far belongs to the wrong session, so drop it and
             // reload the scene for the session to continue (the logger and InterludeManager restore the state).
-            _held.Clear();
             if (!resume.completed)
             {
                 _file?.PrepareResume(resume.session_index, resume.events_next, resume.trajectory_next, resume.trials_next);
@@ -278,15 +287,7 @@ public class DataPipeline : MonoBehaviour
                 SceneManager.LoadScene(SceneManager.GetActiveScene().name);
             }
 
-            return;
         }
-
-        foreach (DataBatch batch in _held)
-        {
-            Dispatch(batch);
-        }
-
-        _held.Clear();
     }
 
     // run-finish: the server checks that every session is there and complete and closes the run. Retried on network errors; any
@@ -294,38 +295,18 @@ public class DataPipeline : MonoBehaviour
     private IEnumerator FinishRun(bool showComplete = false)
     {
         byte[] body = System.Text.Encoding.UTF8.GetBytes(Json.Obj(("run_id", RunId), ("token", _token)));
-        float backoff = 0f;
-        while (true)
+        yield return HttpSink.Call(_settings.url, _settings.apikey, "run-finish", body, request =>
         {
-            if (backoff > 0f)
+            if (request.result == UnityWebRequest.Result.Success)
             {
-                yield return new WaitForSecondsRealtime(backoff);
-            }
-
-            using (UnityWebRequest request = HttpSink.Post(_settings.url, _settings.apikey, "run-finish", body))
-            {
-                yield return HttpSink.Send(request, 20f);
-                if (request.result == UnityWebRequest.Result.Success)
+                FinishReply reply = JsonUtility.FromJson<FinishReply>(request.downloadHandler.text);
+                _completionCode = reply.completion_code;
+                if (!reply.ok)
                 {
-                    FinishReply reply = JsonUtility.FromJson<FinishReply>(request.downloadHandler.text);
-                    _completionCode = reply.completion_code;
-                    if (!reply.ok)
-                    {
-                        Debug.LogWarning("run-finish found problems: " + string.Join("; ", reply.problems));
-                    }
-
-                    break;
+                    Debug.LogWarning("run-finish found problems: " + string.Join("; ", reply.problems));
                 }
-
-                Debug.LogWarning($"run-finish failed: {HttpSink.Describe(request)}");
-                if (!HttpSink.Retriable(request))
-                {
-                    break;
-                }
-
-                backoff = backoff == 0f ? 1f : Mathf.Min(backoff * 2f, 8f);
             }
-        }
+        });
 
         _finishing = false;
         _finished = true;
@@ -342,48 +323,30 @@ public class DataPipeline : MonoBehaviour
             ("prolific_pid", _settings.prolificPid),
             ("consent", _settings.consent != null ? new Json.Raw(Json.Obj(("version", _settings.consent.version),
                 ("signature", _settings.consent.signature), ("at", _settings.consent.at))) : null));
-        float backoff = 0f;
-        while (true)
+        yield return HttpSink.Call(_settings.url, _settings.apikey, "run-start", System.Text.Encoding.UTF8.GetBytes(body), request =>
         {
-            if (backoff > 0f)
+            if (request.result != UnityWebRequest.Result.Success)
             {
-                yield return new WaitForSecondsRealtime(backoff);
+                _fatal = "The server did not accept this version of the game (" + HttpSink.Describe(request) + ").";
+                return;
             }
 
-            using (UnityWebRequest request = HttpSink.Post(_settings.url, _settings.apikey, "run-start", System.Text.Encoding.UTF8.GetBytes(body)))
+            StartReply reply = JsonUtility.FromJson<StartReply>(request.downloadHandler.text);
+            if (reply.status == "in_progress" && !string.IsNullOrEmpty(reply.token))
             {
-                yield return HttpSink.Send(request, 20f);
-                if (request.result == UnityWebRequest.Result.Success)
-                {
-                    StartReply reply = JsonUtility.FromJson<StartReply>(request.downloadHandler.text);
-                    if (reply.status == "in_progress" && !string.IsNullOrEmpty(reply.token))
-                    {
-                        BecomeReady(reply.run_id, reply.token, reply.has_resume ? reply.resume : null);
-                    }
-                    else
-                    {
-                        SceneSuperseded = true;
-                        _notice = "This study has already been completed on this ID. Thank you!";
-                    }
-
-                    yield break;
-                }
-
-                Debug.LogWarning($"run-start failed: {HttpSink.Describe(request)}");
-                if (!HttpSink.Retriable(request))
-                {
-                    _fatal = "The server did not accept this version of the game (" + HttpSink.Describe(request) + ").";
-                    yield break;
-                }
-
-                backoff = backoff == 0f ? 1f : Mathf.Min(backoff * 2f, 8f);
+                BecomeReady(reply.run_id, reply.token, reply.has_resume ? reply.resume : null);
             }
-        }
+            else
+            {
+                _completionCode = reply.completion_code;
+                ShowComplete();
+            }
+        });
     }
 
     private bool OnWantsToQuit()
     {
-        if (Drained || !_online || _fatal != null || (_quitRequested && Time.realtimeSinceStartup - _quitRequestedAt > 15f))
+        if (Drained || _fatal != null || (_quitRequested && Time.realtimeSinceStartup - _quitRequestedAt > 15f))
         {
             return true;
         }
@@ -403,7 +366,7 @@ public class DataPipeline : MonoBehaviour
         string text = null;
         if (_fatal != null)
         {
-            text = _fatal + "\n\nPlease contact the researcher. What you did so far is saved on this computer.";
+            text = _fatal + "\n\nPlease contact the researcher.";
         }
         else if (_notice != null)
         {
@@ -432,51 +395,11 @@ public class DataPipeline : MonoBehaviour
         }
 
         PauseGate.Upload = text != null;
-        if (_overlay.activeSelf != (text != null))
-        {
-            _overlay.SetActive(text != null);
-        }
+        _overlay.SetActive(text != null);
 
         if (text != null)
         {
             _message.text = text;
         }
-    }
-
-    private void BuildOverlay()
-    {
-        _overlay = new GameObject("DataGate", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
-        _overlay.transform.SetParent(transform, false);
-        var canvas = _overlay.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 5000;
-        var scaler = _overlay.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = UiStyle.ReferenceResolution;
-
-        var dim = new GameObject("Dim", typeof(RectTransform), typeof(Image));
-        dim.transform.SetParent(_overlay.transform, false);
-        Stretch(dim.GetComponent<RectTransform>());
-        dim.GetComponent<Image>().color = Color.black;
-
-        var label = new GameObject("Message", typeof(RectTransform), typeof(TextMeshProUGUI));
-        label.transform.SetParent(_overlay.transform, false);
-        RectTransform rect = label.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0.2f, 0.3f);
-        rect.anchorMax = new Vector2(0.8f, 0.7f);
-        rect.offsetMin = rect.offsetMax = Vector2.zero;
-        _message = label.GetComponent<TextMeshProUGUI>();
-        _message.alignment = TextAlignmentOptions.Center;
-        UiStyle.Apply(_message, UiStyle.Title);
-        _message.color = Color.white;
-        _message.raycastTarget = false;
-        _overlay.SetActive(false);
-    }
-
-    private static void Stretch(RectTransform rect)
-    {
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = rect.offsetMax = Vector2.zero;
     }
 }

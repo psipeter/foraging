@@ -9,7 +9,7 @@ using UnityEngine.Networking;
 // order. A batch leaves the queue only when the server answers 2xx, which means every row of it is stored; connection
 // errors, timeouts and 5xx are retried with backoff; any other error is the client's or the study's problem (a bad token,
 // an unknown world, a sequence gap) and stops uploading (OnFatal), because retrying cannot fix it.
-public class HttpSink : IDataSink
+public class HttpSink
 {
     private class Item
     {
@@ -43,7 +43,7 @@ public class HttpSink : IDataSink
     public HttpSink(MonoBehaviour host, string url, string apikey, string runId, string token)
     {
         _host = host;
-        _url = url.TrimEnd('/');
+        _url = url;
         _apikey = apikey;
         _runId = runId;
         _token = token;
@@ -105,40 +105,57 @@ public class HttpSink : IDataSink
 
     private IEnumerator Upload()
     {
-        float backoff = 0f;
         while (_queue.Count > 0)
+        {
+            bool stored = false;
+            yield return Call(_url, _apikey, "append", _queue.Peek().Body, request =>
+            {
+                stored = request.result == UnityWebRequest.Result.Success;
+                LastError = stored ? null : Describe(request);
+            }, error => LastError = error);
+            if (!stored)
+            {
+                Failed = true;
+                _queue.Clear();
+                OnFatal?.Invoke(LastError);
+                break;
+            }
+
+            _queue.Dequeue();
+        }
+
+        _running = false;
+    }
+
+    // Posts until the server answers for good: a connection error, a timeout, 5xx, 408 and 429 are retried after 1, 2, 4, 8, 8...
+    // seconds (`retrying` gets each such failure); `answered` gets the request that succeeded or failed in a way retrying cannot fix.
+    public static IEnumerator Call(string url, string apikey, string function, byte[] body, Action<UnityWebRequest> answered,
+        Action<string> retrying = null)
+    {
+        for (float backoff = 0f; ; backoff = backoff == 0f ? 1f : Mathf.Min(backoff * 2f, 8f))
         {
             if (backoff > 0f)
             {
                 yield return new WaitForSecondsRealtime(backoff);
             }
 
-            using (UnityWebRequest request = Post(_url, _apikey, "append", _queue.Peek().Body))
+            using (UnityWebRequest request = Post(url, apikey, function, body))
             {
                 yield return Send(request, RequestTimeoutSeconds);
-                if (request.result == UnityWebRequest.Result.Success)
+                if (request.result != UnityWebRequest.Result.Success)
                 {
-                    _queue.Dequeue();
-                    backoff = 0f;
-                    LastError = null;
-                    continue;
+                    Debug.LogWarning($"{function} failed: {Describe(request)}");
                 }
 
-                LastError = Describe(request);
-                Debug.LogWarning($"upload failed: {LastError}");
-                if (!Retriable(request))
+                if (request.result == UnityWebRequest.Result.Success || !Retriable(request))
                 {
-                    Failed = true;
-                    _queue.Clear();
-                    OnFatal?.Invoke(LastError);
-                    break;
+                    answered(request);
+                    yield break;
                 }
 
-                backoff = backoff == 0f ? 1f : Mathf.Min(backoff * 2f, 8f);
+                retrying?.Invoke(Describe(request));
             }
         }
-
-        _running = false;
     }
 
     public static UnityWebRequest Post(string url, string apikey, string function, byte[] body)

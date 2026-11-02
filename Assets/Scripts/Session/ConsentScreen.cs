@@ -22,6 +22,7 @@ public class ConsentScreen : MonoBehaviour
 {
     public const string File = "consent.txt";
 
+    // Mirror of PID in supabase/functions/_shared/handlers.ts.
     private static readonly Regex IdPattern = new Regex("^[A-Za-z0-9_-]{1,64}$");
 
     public bool Done { get; private set; }
@@ -37,8 +38,9 @@ public class ConsentScreen : MonoBehaviour
 
     public static ConsentScreen Show(string presetId)
     {
-        var go = new GameObject("ConsentScreen", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-        var screen = go.AddComponent<ConsentScreen>();
+        Canvas canvas = UiStyle.Canvas("ConsentScreen", null, 6000);
+        canvas.gameObject.AddComponent<GraphicRaycaster>();
+        var screen = canvas.gameObject.AddComponent<ConsentScreen>();
         screen.Build(presetId);
         return screen;
     }
@@ -49,13 +51,6 @@ public class ConsentScreen : MonoBehaviour
         {
             new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
         }
-
-        var canvas = GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 6000;
-        var scaler = GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = UiStyle.ReferenceResolution;
 
         string title = "Consent to participate", body = "Consent text not found (StreamingAssets/" + File + ").";
         if (StreamingData.Exists(File))
@@ -75,23 +70,23 @@ public class ConsentScreen : MonoBehaviour
             }
         }
 
-        MakeImage(transform, "Background", UiStyle.Panel, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        MakeLabel(transform, "Title", title, UiStyle.Title, TextAlignmentOptions.Left, new Vector2(0.1f, 0.88f), new Vector2(0.9f, 0.97f));
+        UiStyle.Image(transform, "Background", UiStyle.Panel, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        UiStyle.Label(transform, "Title", title, UiStyle.Title, TextAlignmentOptions.Left, new Vector2(0.1f, 0.88f), new Vector2(0.9f, 0.97f));
         BuildScroll(body);
 
-        bool locked = !string.IsNullOrEmpty(presetId);
-        MakeLabel(transform, "IdLabel", locked ? "Your Prolific ID" : "Participant ID", UiStyle.Small, TextAlignmentOptions.Left,
+        bool locked = !string.IsNullOrEmpty(presetId) && IdPattern.IsMatch(presetId);   // a malformed ID from the address can be corrected
+        UiStyle.Label(transform, "IdLabel", locked ? "Your Prolific ID" : "Participant ID", UiStyle.Small, TextAlignmentOptions.Left,
             new Vector2(0.1f, 0.255f), new Vector2(0.45f, 0.295f), UiStyle.Muted);
-        _id = Field("IdField", locked ? presetId : "", new Vector2(0.1f, 0.19f), new Vector2(0.45f, 0.25f));
+        _id = Field("IdField", presetId ?? "", new Vector2(0.1f, 0.19f), new Vector2(0.45f, 0.25f));
         _id.characterLimit = 64;
         _id.interactable = !locked;
-        MakeLabel(transform, "SignatureLabel", "Type your full name to sign", UiStyle.Small, TextAlignmentOptions.Left,
+        UiStyle.Label(transform, "SignatureLabel", "Type your full name to sign", UiStyle.Small, TextAlignmentOptions.Left,
             new Vector2(0.5f, 0.255f), new Vector2(0.9f, 0.295f), UiStyle.Muted);
         _signature = Field("SignatureField", "", new Vector2(0.5f, 0.19f), new Vector2(0.9f, 0.25f));
         _signature.characterLimit = 120;
 
         _agree = Checkbox("I have read this form and agree to take part", new Vector2(0.1f, 0.115f), new Vector2(0.62f, 0.175f));
-        _problem = MakeLabel(transform, "Problem", "", UiStyle.Small, TextAlignmentOptions.Left, new Vector2(0.1f, 0.04f), new Vector2(0.62f, 0.1f),
+        _problem = UiStyle.Label(transform, "Problem", "", UiStyle.Small, TextAlignmentOptions.Left, new Vector2(0.1f, 0.04f), new Vector2(0.62f, 0.1f),
             new Color(0.95f, 0.55f, 0.45f));
         _continue = ContinueButton(new Vector2(0.7f, 0.05f), new Vector2(0.9f, 0.14f));
 
@@ -113,14 +108,14 @@ public class ConsentScreen : MonoBehaviour
     private void Accept()
     {
         ParticipantId = _id.text.Trim();
-        Consent = new ConsentRecord { version = _version, signature = _signature.text.Trim(), at = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ") };
+        Consent = new ConsentRecord { version = _version, signature = _signature.text.Trim(), at = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture) };
         Done = true;
         Destroy(gameObject);
     }
 
     private void BuildScroll(string body)
     {
-        GameObject view = MakeImage(transform, "ConsentText", UiStyle.Field, new Vector2(0.1f, 0.32f), new Vector2(0.9f, 0.86f), Vector2.zero, Vector2.zero).gameObject;
+        GameObject view = UiStyle.Image(transform, "ConsentText", UiStyle.Field, new Vector2(0.1f, 0.32f), new Vector2(0.9f, 0.86f), Vector2.zero, Vector2.zero).gameObject;
         view.AddComponent<RectMask2D>();
         var scroll = view.AddComponent<ScrollRect>();
         scroll.horizontal = false;
@@ -147,7 +142,7 @@ public class ConsentScreen : MonoBehaviour
 
     private TMP_InputField Field(string name, string text, Vector2 min, Vector2 max)
     {
-        Image background = MakeImage(transform, name, UiStyle.Field, min, max, Vector2.zero, Vector2.zero);
+        Image background = UiStyle.Image(transform, name, UiStyle.Field, min, max, Vector2.zero, Vector2.zero);
         var area = new GameObject("Text Area", typeof(RectTransform), typeof(RectMask2D));
         area.transform.SetParent(background.transform, false);
         var areaRect = area.GetComponent<RectTransform>();
@@ -155,7 +150,7 @@ public class ConsentScreen : MonoBehaviour
         areaRect.anchorMax = Vector2.one;
         areaRect.offsetMin = new Vector2(16f, 4f);
         areaRect.offsetMax = new Vector2(-16f, -4f);
-        TextMeshProUGUI shown = MakeLabel(area.transform, "Text", "", UiStyle.Body, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.one);
+        TextMeshProUGUI shown = UiStyle.Label(area.transform, "Text", "", UiStyle.Body, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.one);
         var input = background.gameObject.AddComponent<TMP_InputField>();
         input.textViewport = areaRect;
         input.textComponent = shown;
@@ -169,10 +164,10 @@ public class ConsentScreen : MonoBehaviour
     {
         var go = new GameObject("Agree", typeof(RectTransform), typeof(Toggle));
         go.transform.SetParent(transform, false);
-        SetAnchors(go.GetComponent<RectTransform>(), min, max, Vector2.zero, Vector2.zero);
-        var box = MakeImage(go.transform, "Box", UiStyle.Field, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, -22f), new Vector2(44f, 22f));
-        var tick = MakeImage(box.transform, "Tick", UiStyle.Accent, Vector2.zero, Vector2.one, new Vector2(8f, 8f), new Vector2(-8f, -8f));
-        MakeLabel(go.transform, "Caption", caption, UiStyle.Small, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.one, UiStyle.Ink)
+        UiStyle.SetAnchors(go.GetComponent<RectTransform>(), min, max, Vector2.zero, Vector2.zero);
+        var box = UiStyle.Image(go.transform, "Box", UiStyle.Field, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, -22f), new Vector2(44f, 22f));
+        var tick = UiStyle.Image(box.transform, "Tick", UiStyle.Accent, Vector2.zero, Vector2.one, new Vector2(8f, 8f), new Vector2(-8f, -8f));
+        UiStyle.Label(go.transform, "Caption", caption, UiStyle.Small, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.one, UiStyle.Ink)
             .rectTransform.offsetMin = new Vector2(64f, 0f);
         var toggle = go.GetComponent<Toggle>();
         toggle.targetGraphic = box;
@@ -183,8 +178,8 @@ public class ConsentScreen : MonoBehaviour
 
     private Button ContinueButton(Vector2 min, Vector2 max)
     {
-        Image background = MakeImage(transform, "Continue", UiStyle.Accent, min, max, Vector2.zero, Vector2.zero);
-        MakeLabel(background.transform, "Text", "Continue", UiStyle.Body, TextAlignmentOptions.Center, Vector2.zero, Vector2.one, UiStyle.Panel);
+        Image background = UiStyle.Image(transform, "Continue", UiStyle.Accent, min, max, Vector2.zero, Vector2.zero);
+        UiStyle.Label(background.transform, "Text", "Continue", UiStyle.Body, TextAlignmentOptions.Center, Vector2.zero, Vector2.one, UiStyle.Panel);
         var button = background.gameObject.AddComponent<Button>();
         button.targetGraphic = background;
         ColorBlock colors = button.colors;
@@ -192,38 +187,5 @@ public class ConsentScreen : MonoBehaviour
         button.colors = colors;
         button.onClick.AddListener(Accept);
         return button;
-    }
-
-    private static void SetAnchors(RectTransform rect, Vector2 min, Vector2 max, Vector2 offsetMin, Vector2 offsetMax)
-    {
-        rect.anchorMin = min;
-        rect.anchorMax = max;
-        rect.offsetMin = offsetMin;
-        rect.offsetMax = offsetMax;
-    }
-
-    private static Image MakeImage(Transform parent, string name, Color color, Vector2 min, Vector2 max, Vector2 offsetMin, Vector2 offsetMax)
-    {
-        var go = new GameObject(name, typeof(RectTransform), typeof(Image));
-        go.transform.SetParent(parent, false);
-        SetAnchors(go.GetComponent<RectTransform>(), min, max, offsetMin, offsetMax);
-        var image = go.GetComponent<Image>();
-        image.color = color;
-        return image;
-    }
-
-    private static TextMeshProUGUI MakeLabel(Transform parent, string name, string text, float size, TextAlignmentOptions alignment,
-        Vector2 min, Vector2 max, Color? color = null)
-    {
-        var go = new GameObject(name, typeof(RectTransform), typeof(TextMeshProUGUI));
-        go.transform.SetParent(parent, false);
-        SetAnchors(go.GetComponent<RectTransform>(), min, max, Vector2.zero, Vector2.zero);
-        var label = go.GetComponent<TextMeshProUGUI>();
-        UiStyle.Apply(label, size);
-        label.alignment = alignment;
-        label.color = color ?? UiStyle.Ink;
-        label.raycastTarget = false;
-        label.text = text;
-        return label;
     }
 }

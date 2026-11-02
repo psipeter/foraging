@@ -32,7 +32,6 @@ public static class TrajectoryCodec
     public const double XzStep = 0.01;
     public const double AngleStep = 0.02;
 
-    private const int HeaderSize = 41;
     private const byte Version = 1;
     private const int MaxFrames = 200000;
     private static readonly uint[] CrcTable = BuildCrcTable();
@@ -90,60 +89,6 @@ public static class TrajectoryCodec
         }
     }
 
-    // Decodes a chunk (used to check the codec against Python's chunks; the client never reads one back).
-    public static FrameQ[] Decode(byte[] data, out uint firstSeq)
-    {
-        if (data.Length < HeaderSize || data[0] != 'F' || data[1] != 'T' || data[2] != 'R' || data[3] != 'J' || data[4] != Version)
-        {
-            throw new InvalidDataException("not a trajectory chunk of a known version");
-        }
-
-        var header = new BinaryReader(new MemoryStream(data, 5, HeaderSize - 5));
-        uint n = header.ReadUInt32();
-        firstSeq = header.ReadUInt32();
-        double tStep = header.ReadDouble(), xzStep = header.ReadDouble(), angleStep = header.ReadDouble();
-        uint crc = header.ReadUInt32();
-        if (n == 0 || n > MaxFrames || tStep != TStep || xzStep != XzStep || angleStep != AngleStep)
-        {
-            throw new InvalidDataException("chunk header is outside what this client reads");
-        }
-
-        byte[] raw;
-        using (var body = new MemoryStream(data, HeaderSize, data.Length - HeaderSize))
-        using (var inflate = new DeflateStream(body, CompressionMode.Decompress))
-        using (var output = new MemoryStream())
-        {
-            inflate.CopyTo(output);
-            raw = output.ToArray();
-        }
-
-        if (Crc32(raw) != crc)
-        {
-            throw new InvalidDataException("chunk checksum mismatch");
-        }
-
-        var frames = new FrameQ[n];
-        int pos = 0;
-        long t = 0, x = 0, z = 0, yaw = 0, pitch = 0, keys = 0;
-        for (int i = 0; i < n; i++)
-        {
-            t += ReadVarint(raw, ref pos);
-            x += ReadVarint(raw, ref pos);
-            z += ReadVarint(raw, ref pos);
-            yaw += ReadVarint(raw, ref pos);
-            pitch += ReadVarint(raw, ref pos);
-            keys += ReadVarint(raw, ref pos);
-            frames[i] = new FrameQ(t, x, z, yaw, pitch, keys);
-        }
-
-        if (pos != raw.Length)
-        {
-            throw new InvalidDataException("chunk body has extra bytes");
-        }
-
-        return frames;
-    }
-
     private static void WriteVarint(Stream stream, long value)
     {
         ulong v = (ulong)((value << 1) ^ (value >> 63));       // zigzag
@@ -154,27 +99,6 @@ public static class TrajectoryCodec
         }
 
         stream.WriteByte((byte)v);
-    }
-
-    private static long ReadVarint(byte[] data, ref int pos)
-    {
-        ulong v = 0;
-        for (int shift = 0; ; shift += 7)
-        {
-            if (pos >= data.Length || shift > 63)
-            {
-                throw new InvalidDataException("truncated or oversized varint");
-            }
-
-            byte b = data[pos++];
-            v |= (ulong)(b & 0x7F) << shift;
-            if ((b & 0x80) == 0)
-            {
-                break;
-            }
-        }
-
-        return (long)(v >> 1) ^ -(long)(v & 1);
     }
 
     private static uint[] BuildCrcTable()

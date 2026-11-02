@@ -9,23 +9,14 @@ public static class PauseGate
     private static bool _upload;
     private static bool _pointer;
 
-    public static bool Instructions
-    {
-        set { _instructions = value; Apply(); }
-    }
+    public static bool Instructions { set { _instructions = value; Apply(); } }
 
-    public static bool Upload
-    {
-        set { _upload = value; Apply(); }
-    }
+    public static bool Upload { set { _upload = value; Apply(); } }
 
     // In a browser: the mouse is not captured (the participant pressed Escape), so looking around would not work.
-    public static bool Pointer
-    {
-        set { _pointer = value; Apply(); }
-    }
+    public static bool Pointer { get => _pointer; set { _pointer = value; Apply(); } }
 
-    // Why the game is held, for the `pause` event ("instructions", "upload", "instructions+upload"); "" when running.
+    // Why the game is held, for the `pause` event ("instructions", "upload", "pointer", joined by "+"); "" when running.
     public static string Reason
     {
         get

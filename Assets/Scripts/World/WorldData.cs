@@ -251,6 +251,14 @@ public class WorldData
         AddReward(current, "shape", config.RewardFunction.ShapeComponent);
         AddReward(current, "color", config.RewardFunction.ColorComponent);
         AddReward(current, "moisture", config.RewardFunction.MoistureComponent);
+        RewardBump[] bumps = config.RewardFunction.Bumps;
+        for (int i = 0; i < bumps.Length; i++)
+        {
+            current[$"reward.bump{i}.centerShape"] = bumps[i].CenterShape;
+            current[$"reward.bump{i}.centerColor"] = bumps[i].CenterColor;
+            current[$"reward.bump{i}.width"] = bumps[i].Width;
+            current[$"reward.bump{i}.height"] = bumps[i].Height;
+        }
 
         var mismatches = new List<string>();
         for (int i = 0; i < _checkNames.Length; i++)

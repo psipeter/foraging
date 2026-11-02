@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using UnityEngine;
@@ -30,7 +29,7 @@ public class DataLogger : MonoBehaviour
     private const int KeyHarvest = 4;
 
     private const float EventFlushSeconds = 1f;
-    private const float OnlineTrajectoryFlushSeconds = 5f;
+    private const float OnlineTrajectoryFlushSeconds = 5f;     // fewer, larger uploads for the server; the local copy flushes often so a crash loses little
     private const float OfflineTrajectoryFlushSeconds = 1f;
 
     private int _sessionIndex;
@@ -45,7 +44,6 @@ public class DataLogger : MonoBehaviour
     private bool _finalized;
     private string _startedAtUtc;
 
-    private int _harvestIndex;
     private float _lastRunningTotal;
 
     private int _frames;
@@ -234,7 +232,7 @@ public class DataLogger : MonoBehaviour
     // Records one event; `payload` is a JSON object (Json.Obj) with the event's extra fields, or null.
     public void LogEvent(string type, int treeId = -1, int k = -1, float reward = float.NaN, float runningTotal = float.NaN, string payload = null)
     {
-        if (_finalized && type != "session_end")
+        if (_finalized)
         {
             return;
         }
@@ -311,7 +309,6 @@ public class DataLogger : MonoBehaviour
         LogEvent("fruit", tree.treeId, k, reward, runningTotal);
     }
 
-    // The bout's summary is no longer stored: it is derived from the events and the world file.
     private void HandleBoutEnded(HarvestBout bout)
     {
         if (sessionConfig == null || bout == null || bout.tree == null)
@@ -323,7 +320,6 @@ public class DataLogger : MonoBehaviour
         LogEvent("harvest_release", tree.treeId, runningTotal: bout.runningTotal,
             payload: Json.Obj(("fruits", bout.fruitRewards.Count), ("remaining", bout.fruitsRemaining), ("exhausted", bout.exhausted ? 1 : 0)));
         _lastRunningTotal = bout.runningTotal;
-        _harvestIndex++;
     }
     // HarvestManager's own session-end handler closes the open bout; finish after it has run (end of frame).
     private void HandleSessionEnd()

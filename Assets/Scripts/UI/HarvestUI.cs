@@ -62,13 +62,7 @@ public class HarvestUI : MonoBehaviour
 
         if (totalScoreText != null)
         {
-            RectTransform rect = totalScoreText.rectTransform;
-            rect.anchoredPosition = scorePosition;
-            rect.sizeDelta = scorePlateSize - new Vector2(20f, 10f);
-            totalScoreText.fontSize = scoreFontSize;
-            totalScoreText.fontStyle = FontStyles.Bold;
-            totalScoreText.alignment = TextAlignmentOptions.Center;
-            HudWidgets.CreatePlate(rect, scorePlateSize, plateColor, "ScorePlate");
+            UiStyle.HudPlate(totalScoreText, scorePosition, scorePlateSize, scoreFontSize, plateColor, "ScorePlate");
             ShowScore();
         }
     }
@@ -218,7 +212,7 @@ public class HarvestUI : MonoBehaviour
         switch (hint)
         {
             case HarvestHint.Available:
-                hintText.text = "Hold Space to harvest";
+                hintText.text = $"Hold {UiStyle.Chip("Space")} to harvest";
                 hintText.gameObject.SetActive(true);
                 break;
             case HarvestHint.Paused:

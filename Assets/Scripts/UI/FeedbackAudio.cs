@@ -5,7 +5,7 @@ using UnityEngine;
 // synthesizer for it in BuildClips, and a call to Play from whatever event should trigger it.
 public class FeedbackAudio : MonoBehaviour
 {
-    public enum Cue
+    private enum Cue
     {
         FruitPick,
         BushExhausted,
@@ -69,7 +69,7 @@ public class FeedbackAudio : MonoBehaviour
         Play(Cue.BushExhausted, 1f);
     }
 
-    public void Play(Cue cue, float pitch)
+    private void Play(Cue cue, float pitch)
     {
         if (!_clips.TryGetValue(cue, out AudioClip clip))
         {
@@ -95,9 +95,10 @@ public class FeedbackAudio : MonoBehaviour
         // Interlude pick: a very short, soft, low "bloop" that falls in pitch (the main pick blip is bright and has a
         // fixed upward contour), so it cannot be mistaken for the reward cue. At the Interlude's fast per-fruit rate it
         // reads as a quick run of ticks.
-        _clips[Cue.InterludePick] = Synthesize("InterludePick", 0.045f, (t) =>
+        const float length = 0.045f;
+        _clips[Cue.InterludePick] = Synthesize("InterludePick", length, (t) =>
         {
-            const float f0 = 480f, f1 = 300f, length = 0.045f;
+            const float f0 = 480f, f1 = 300f;
             float phase = 2f * Mathf.PI * (f0 * t + (f1 - f0) * t * t / (2f * length));
             return Mathf.Sin(phase) * Mathf.Exp(-t * 55f);
         });

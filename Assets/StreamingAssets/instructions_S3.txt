@@ -1,7 +1,7 @@
-<i>Press Enter to begin.</i>
-
-<size=125%><b>Session {session} of {total}</b></size>
+<b>Session {session} of {total}</b>
 
 This is a new area.
 The features that determine points are now even more complicated.
 Collect as many points as you can.
+
+Press [Enter] to begin

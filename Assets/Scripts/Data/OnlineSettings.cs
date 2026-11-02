@@ -8,7 +8,6 @@ public class BuildInfo
 {
     public string commit;
     public bool dirty;
-    public string unityVersion;
 
     public static BuildInfo Read()
     {
@@ -88,7 +87,7 @@ public class OnlineSettings
         {
             settings.url = UrlParameter("onlineUrl");
             settings.apikey = UrlParameter("onlineKey") ?? settings.apikey;
-            settings.enabled = settings.uploadInEditor = true;
+            settings.enabled = true;
         }
 
         if (EnteredId != null)

@@ -4,7 +4,7 @@ using UnityEngine;
 [DefaultExecutionOrder(-20)]
 public class GameManager : MonoBehaviour
 {
-    [SerializeField] public List<SessionConfig> sessionConfigs;
+    [SerializeField] private List<SessionConfig> sessionConfigs;
 
     [SerializeField] private SunController sunController;
     [SerializeField] private HarvestManager harvestManager;
@@ -20,24 +20,12 @@ public class GameManager : MonoBehaviour
     [SerializeField] private InstructionsPanel instructionsPanel;
     [SerializeField] private InterludeManager interludeManager;
 
-    public static GameManager Instance { get; private set; }
-
     public static int CurrentSessionIndex = 0;
     public static List<SessionConfig> AllSessionConfigs;
-
-    public static float LastSessionScore = 0f;
 
     // Running totals for the final screen. Practice sessions and practice Interludes are excluded.
     public static float SessionScoreTotal = 0f;
     public static float InterludeBonus = 0f;
-
-    // Points of the Interlude currently being played (shown on its end screen); reset when it starts.
-    public static float ThisInterludeBonus = 0f;
-
-    public static void BeginInterludeTally()
-    {
-        ThisInterludeBonus = 0f;
-    }
 
     // Continuing an interrupted run: the running totals of the sessions already finished (as the end screens add them up).
     public static void RestoreTotals(ResumeReply resume)
@@ -54,66 +42,37 @@ public class GameManager : MonoBehaviour
         InterludeBonus = resume.previous_interlude.bonus;
     }
 
-    public static void RecordInterludeTrial(float bonus)
-    {
-        InterludeBonus += bonus;
-        ThisInterludeBonus += bonus;
-    }
-
     public static int TotalSessions => AllSessionConfigs?.Count ?? 0;
     public static bool IsLastSession => TotalSessions == 0 || CurrentSessionIndex >= TotalSessions - 1;
 
-    // Practice sessions and Interludes are excluded from the "Session x/N" numbering.
-    private static bool IsAnalyzedSession(SessionConfig config)
+    // "Session x of N" and "Interlude x of N" count only analyzed sessions (not practice, not Interludes).
+    private static bool IsAnalyzed(int index)
     {
+        SessionConfig config = AllSessionConfigs[index];
         return config != null && !config.IsPractice && !config.IsInterlude;
     }
 
-    public static int ExperimentSessionCount
+    private static int AnalyzedBefore(int index)
     {
-        get
-        {
-            int count = 0;
-            if (AllSessionConfigs != null)
-            {
-                foreach (SessionConfig config in AllSessionConfigs)
-                {
-                    if (IsAnalyzedSession(config)) count++;
-                }
-            }
-            return count;
-        }
-    }
-
-    // 1-based number of the config at `index` among analyzed sessions; 0 for a practice session or an Interlude.
-    public static int ExperimentSessionNumber(int index)
-    {
-        if (AllSessionConfigs == null || index < 0 || index >= AllSessionConfigs.Count) return 0;
-        if (!IsAnalyzedSession(AllSessionConfigs[index])) return 0;
-        int number = 0;
-        for (int i = 0; i <= index; i++)
-        {
-            if (IsAnalyzedSession(AllSessionConfigs[i])) number++;
-        }
-        return number;
-    }
-
-    // Number of an Interlude: how many analyzed sessions come before it (so the Interlude after S1 is 1).
-    public static int InterludeNumber(int index)
-    {
-        if (AllSessionConfigs == null || index < 0 || index >= AllSessionConfigs.Count) return 0;
-        int number = 0;
+        int count = 0;
         for (int i = 0; i < index; i++)
         {
-            if (IsAnalyzedSession(AllSessionConfigs[i])) number++;
+            if (IsAnalyzed(i)) count++;
         }
-        return number;
+        return count;
     }
+
+    public static int ExperimentSessionCount => AnalyzedBefore(TotalSessions);
+
+    // 1-based number of the session at `index`; 0 for a practice session or an Interlude.
+    public static int ExperimentSessionNumber(int index) =>
+        index >= 0 && index < TotalSessions && IsAnalyzed(index) ? AnalyzedBefore(index) + 1 : 0;
+
+    // Number of the Interlude at `index`: the analyzed sessions before it (so the Interlude after S1 is 1).
+    public static int InterludeNumber(int index) => index >= 0 && index < TotalSessions ? AnalyzedBefore(index) : 0;
 
     private void Awake()
     {
-        Instance = this;
-
         if (AllSessionConfigs == null || AllSessionConfigs.Count == 0)
         {
             AllSessionConfigs = sessionConfigs != null

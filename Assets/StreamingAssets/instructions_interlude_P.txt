@@ -1,6 +1,6 @@
-<i>Press Enter to begin.</i>
-
-<size=125%><b>Practice interlude</b></size>
+<b>Practice interlude</b>
 
 Choose the better bush based on what you learned in this session.
 Correct choices will earn hidden points.
+
+Press [Enter] to begin

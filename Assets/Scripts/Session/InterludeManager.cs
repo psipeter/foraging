@@ -2,8 +2,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -14,9 +12,9 @@ using UnityEngine.UI;
 // harvest the player starts is the choice from that moment (commitment) and the other bush is taken away (Hide, the default),
 // spent (Exhaust) or locked, so the player cannot switch; the trial still ends when the chosen bush has been harvested (or on
 // the time limit). With Allow the first bush to reach the fruit count is the choice. Outcomes are never
-// shown (HarvestManager suppresses reward feedback in an Interlude). A trial ends on a
-// choice or after interludeTrialSeconds, and every choice is logged to interlude.csv. Correct choices add a hidden
-// bonus that is shown only on the final screen.
+// shown (HarvestUI, FeedbackAudio and InstructionsPanel hide them in an Interlude). A trial ends on a
+// choice or after interludeTrialSeconds, and every trial is logged as an interlude_trials row. Correct choices add
+// hidden points, shown only as a total on the Interlude's end screen.
 //
 // An Interlude is an ordinary session kind (SessionConfig.isInterlude), so the sun, terrain, bushes, harvesting,
 // instruction screen, data logger and end screen all run as in any session; this component only drives the trials.
@@ -95,20 +93,13 @@ public class InterludeManager : MonoBehaviour
     private float _firstHarvestTime = -1f;
     private int _firstHarvestSide = -1;
     private Image _fade;
-    private string _csvPath;
 
-    // True once the trials are loaded and running; SessionTimerUI shows TimerLabel instead of the session clock.
+    // True once the trials are loaded and running; SessionTimerUI then shows the trial's time left instead of the session clock.
     public bool Active => _order != null && _state != State.Finished;
+    public float TrialSecondsLeft => Mathf.Max(0f, sessionConfig.InterludeTrialSeconds - _clock);
 
-    public string TimerLabel
-    {
-        get
-        {
-            float total = sessionConfig != null ? sessionConfig.InterludeTrialSeconds : 7f;
-            int seconds = Mathf.CeilToInt(Mathf.Clamp(total - _clock, 0f, total));
-            return $"00:{seconds:D2}";
-        }
-    }
+    // Hidden points earned in this Interlude so far (in practice, what the choices would have earned); its end screen shows them.
+    public float Points { get; private set; }
 
     private void OnEnable()
     {
@@ -130,8 +121,6 @@ public class InterludeManager : MonoBehaviour
             return;
         }
 
-        GameManager.BeginInterludeTally();
-
         TrialFile file = LoadTrials();
         if (file == null || file.trials == null || file.trials.Length == 0)
         {
@@ -140,22 +129,15 @@ public class InterludeManager : MonoBehaviour
             return;
         }
 
-        // Presentation order is shuffled per participant; the file order is fixed. A participant continuing an interrupted
-        // Interlude gets the order they had (from the server), and the trials they had finished are counted again.
+        // Every participant sees the trials in the file's order (scripts/interlude.py chose it to avoid order effects). A participant
+        // continuing an interrupted Interlude gets the order they had (from the server), and the trials they had finished are counted again.
         ResumeReply resume = ResumeInfo.MidSession(GameManager.CurrentSessionIndex) ? ResumeInfo.Pending : null;
         _order = resume != null ? OrderFromPlan(file.trials, resume.interlude_plan) : null;
         if (_order == null)
         {
             resume = null;
             _order = (Trial[])file.trials.Clone();
-            var rng = new System.Random();
-            for (int i = _order.Length - 1; i > 0; i--)
-            {
-                int j = rng.Next(i + 1);
-                (_order[i], _order[j]) = (_order[j], _order[i]);
-            }
-
-            // The shuffled order is part of the data (and what a resume must restore).
+            // The order is part of the data (and what a resume must restore).
             dataLogger?.LogInterludePlan(Array.ConvertAll(_order, trial => trial.index));
         }
 
@@ -180,12 +162,10 @@ public class InterludeManager : MonoBehaviour
         if (resume != null)
         {
             first = Mathf.Min(resume.trial_rows.Length, _order.Length);
-            if (!sessionConfig.IsPractice)
+            foreach (TrialTally done in resume.trial_rows)
             {
-                foreach (TrialTally done in resume.trial_rows)
-                {
-                    GameManager.RecordInterludeTrial(done.bonus);
-                }
+                Points += done.bonus;
+                GameManager.InterludeBonus += done.bonus;
             }
         }
 
@@ -421,11 +401,10 @@ public class InterludeManager : MonoBehaviour
         bool correct = _choice >= 0 && (_trial.correct == "either"
                                         || (_choice == 0 && _trial.correct == "left")
                                         || (_choice == 1 && _trial.correct == "right"));
-        float bonus = correct && !sessionConfig.IsPractice ? sessionConfig.InterludeBonusPerCorrect : 0f;
-        if (!sessionConfig.IsPractice)
-        {
-            GameManager.RecordInterludeTrial(bonus);
-        }
+        float worth = correct ? sessionConfig.InterludeBonusPerCorrect : 0f;
+        float bonus = sessionConfig.IsPractice ? 0f : worth;     // the practice Interlude shows what its choices would have earned but pays nothing
+        Points += worth;
+        GameManager.InterludeBonus += bonus;
 
         WriteRow(timedOut, correct, bonus);
         if (dataLogger != null)

@@ -11,11 +11,14 @@ public enum InterludeSwitchPolicy
 }
 
 // Which trials scripts/interlude.py generates for an Interlude asset (the game only plays the generated file). The order is part of the
-// logged format (the manifest stores the number): Designed 0, Random 1.
+// logged format (the manifest stores the number): Designed 0, Random 1, RewardGap 2, FeatureGap 3, Hybrid 4.
 public enum InterludeMode
 {
     Designed,   // contrast / graded / extrapolation trials designed to probe the reward function's features
-    Random      // independent random shape and color for both bushes (a definite better side in every trial)
+    Random,     // independent random shape and color for both bushes (a definite better side in every trial)
+    RewardGap,  // one pair per bin of the true reward difference, evenly spread from interludeMinRewardGap to the largest the world offers
+    FeatureGap, // one pair per bin of the perceptual distance (shape, color, moisture) between the bushes, from interludeMinFeatureGap up
+    Hybrid      // both spreads at once: the reward gaps and the feature gaps of the trials are each evenly spread
 }
 
 [CreateAssetMenu(
@@ -54,6 +57,10 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float interludeBushBearing = 31.5f;
     [Tooltip("Random-mode Interludes only: the two bushes of every trial stand on ground that differs in elevation by at least this many world units (the valley's elevation is (1 - moisture) * terrainMaxElevation), so the terrain difference is clearly visible; 0 = no minimum. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
     [SerializeField] private float interludeMinElevationDifference = 0f;
+    [Tooltip("RewardGap / Hybrid Interludes only: the smallest true reward difference (points per fruit) between the two bushes of a trial; the trials are spread evenly from here to the largest difference the world offers. About one standard error of a 10-fruit harvest mean by default. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
+    [SerializeField] private float interludeMinRewardGap = 0.25f;
+    [Tooltip("FeatureGap / Hybrid Interludes only: the smallest perceptual distance between the two bushes of a trial (root mean square of the shape, color and moisture differences, each on its 0-1 scale); the trials are spread evenly from here to the largest the world offers. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
+    [SerializeField] private float interludeMinFeatureGap = 0.1f;
 
     [Header("Instructions")]
     [Tooltip("File in StreamingAssets shown before this session. '{session}' and '{total}' are replaced by this session's number and the count of non-practice sessions.")]
@@ -282,6 +289,8 @@ public class SessionConfig : ScriptableObject
     public float InterludeBushDistance => interludeBushDistance;
     public float InterludeBushBearing => interludeBushBearing;
     public float InterludeMinElevationDifference => interludeMinElevationDifference;
+    public float InterludeMinRewardGap => interludeMinRewardGap;
+    public float InterludeMinFeatureGap => interludeMinFeatureGap;
     public string InstructionsFile => instructionsFile;
     public string ControlsReminder => controlsReminder;
     public string FirstHarvestMessage => firstHarvestMessage;
