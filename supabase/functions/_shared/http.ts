@@ -1,4 +1,4 @@
-// http.ts -- the HTTP layer shared by the three functions: CORS on every response (a 500 without it looks like a network
+// http.ts -- the HTTP layer shared by the functions: CORS on every response (a 500 without it looks like a network
 // failure to a browser), the apikey filter, JSON in and out, and the error mapping. The functions are deployed with
 // verify_jwt = false (config.toml), as in evidence_integration; the apikey header only filters out callers that are not our
 // own client, the per-run token is what protects the data.

@@ -39,8 +39,9 @@ def test_rounding_is_half_to_even_like_math_round():
     assert got.tolist() == [[0.0, 2.0, 2.0, -0.0, -2.0, 0.0]]
 
 
-def test_empty_chunk_and_single_frame():
-    assert codec.decode(codec.encode(np.empty((0, 6))))[2].shape == (0, 6)
+def test_a_chunk_holds_at_least_one_frame():
+    with pytest.raises(ValueError):
+        codec.encode(np.empty((0, 6)))
     assert np.array_equal(codec.decode(codec.encode([[1.0, 2.0, 3.0, 4.0, 5.0, 6]]))[2],
                           codec.quantize([[1.0, 2.0, 3.0, 4.0, 5.0, 6]]))
 

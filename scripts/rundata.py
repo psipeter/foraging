@@ -4,7 +4,7 @@
     <root>/<run_id>/<session_index:02d>/
         session.json                               the `sessions` row (config, world hashes, camera, display, score, ...)
         events.csv                                 seq,t,real,type,tree_id,k,reward,running_total,payload
-        trajectory.csv                             seq,t,x,z,yaw,pitch,keys   (the quantized values the server would hold)
+        trajectory.csv                             seq,t,x,z,yaw,pitch,keys   (the quantized values the server holds)
         interlude_plan.json                        {"trial_order": [...]}     (Interludes only)
         interlude_trials.csv                       seq + the columns of the `interlude_trials` table
 
@@ -21,8 +21,6 @@ from pathlib import Path
 
 import numpy as np
 
-import trajectory_codec as codec
-
 EVENT_COLUMNS = ("seq", "t", "real", "type", "tree_id", "k", "reward", "running_total", "payload")
 TRAJECTORY_COLUMNS = ("seq", "t", "x", "z", "yaw", "pitch", "keys")
 INTERLUDE_COLUMNS = (
@@ -31,17 +29,8 @@ INTERLUDE_COLUMNS = (
     "right_id", "right_shape", "right_color", "right_moisture", "right_value",
     "correct_side", "choice", "choice_correct", "timed_out", "response_time", "first_harvest_time", "first_harvest_side",
     "left_fruits", "right_fruits", "bonus", "locked_at", "paused_seconds")
-_INTEGER = {"presented_order", "trial_index", "left_id", "right_id", "choice_correct", "timed_out", "left_fruits", "right_fruits"}
+_INTEGER = {"seq", "presented_order", "trial_index", "left_id", "right_id", "choice_correct", "timed_out", "left_fruits", "right_fruits"}
 _TEXT = {"type", "varied_feature", "correct_side", "choice", "first_harvest_side"}
-
-
-def session_dir(root, run_id, session_index):
-    return Path(root) / str(run_id) / f"{session_index:02d}"
-
-
-def _number(value):
-    """'' -> None, otherwise float."""
-    return float(value) if value != "" else None
 
 
 def _cell(value):
@@ -97,10 +86,10 @@ def _trial(row):
     for name, value in row.items():
         if name in _TEXT:
             out[name] = value
-        elif name == "seq" or name in _INTEGER:
+        elif name in _INTEGER:
             out[name] = int(value) if value != "" else None
         else:
-            out[name] = _number(value)
+            out[name] = float(value) if value != "" else None
     return out
 
 
@@ -111,11 +100,11 @@ def write_run(root, run_id, run):
     return folder
 
 
-def write_session(root, run_id, session_index, session, traj, events, plan=None, trials=None, steps=codec.DEFAULT_STEPS):
-    """Write one session. `traj` is (n, 6) t, x, z, yaw, pitch, keys (it is quantized, as it would be on the server),
+def write_session(root, run_id, session_index, session, traj, events, plan=None, trials=None):
+    """Write one session. `traj` is (n, 6) t, x, z, yaw, pitch, keys, already quantized (`trajectory_codec.quantize`),
     `events` a list of dicts (t, type and optionally real, tree_id, k, reward, running_total, payload), `plan` the
     shuffled Interlude trial order, `trials` Interlude trial dicts. `seq` is the position in the list."""
-    folder = session_dir(root, run_id, session_index)
+    folder = Path(root) / str(run_id) / f"{session_index:02d}"
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "session.json").write_text(json.dumps(dict(session, run_id=str(run_id), session_index=session_index), indent=2, sort_keys=True))
 
@@ -130,11 +119,10 @@ def write_session(root, run_id, session_index, session, traj, events, plan=None,
                         _cell(float(e.get("reward", math.nan))), _cell(float(e.get("running_total", math.nan))),
                         json.dumps(payload, separators=(",", ":"), sort_keys=True) if payload else ""])
 
-    frames = codec.quantize(traj, steps) if len(traj) else np.empty((0, 6))
     with open(folder / "trajectory.csv", "w", newline="") as f:
         w = csv.writer(f, lineterminator="\n")
         w.writerow(TRAJECTORY_COLUMNS)
-        for seq, row in enumerate(frames):
+        for seq, row in enumerate(traj):
             w.writerow([seq, *(format(float(v), ".10g") for v in row[:5]), int(row[5])])
 
     if plan is not None:
@@ -146,10 +134,6 @@ def write_session(root, run_id, session_index, session, traj, events, plan=None,
             for seq, t in enumerate(trials):
                 w.writerow([seq if c == "seq" else _cell(t.get(c)) for c in INTERLUDE_COLUMNS])
     return folder
-
-
-def read_run(root, run_id):
-    return json.loads((Path(root) / str(run_id) / "run.json").read_text())
 
 
 def read_session(folder):

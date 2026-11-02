@@ -1,6 +1,6 @@
-// serve.ts -- the three Edge Functions on a local port, without the Supabase platform (no Docker needed):
+// serve.ts -- the four Edge Functions on a local port, without the Supabase platform (no Docker needed):
 //   FORAGING_DB_URL=postgresql://... SUPABASE_ANON_KEY=testkey PORT=54399 deno run -A supabase/local/serve.ts
-// Paths /run-start, /append and /run-finish, as the deployed functions are under /functions/v1/.
+// Paths /run-start, /append, /run-finish and /feedback, as the deployed functions are under /functions/v1/.
 
 import { routes } from '../functions/_shared/routes.ts';
 

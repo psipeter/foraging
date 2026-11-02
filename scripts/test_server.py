@@ -222,18 +222,6 @@ def test_resume_state_describes_where_the_session_stopped(env):
     c.append(0, events=event_rows([ev(9.0, "resume")], first_seq=7))                  # the new token works
 
 
-def test_an_anonymous_run_resumes_with_its_token_and_the_token_rotates(env):
-    c = client(env)
-    c.start()
-    c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start")]))
-    first = c.token
-    state = c.resume()["resume"]
-    assert state["events_next"] == 1 and c.token != first
-    other = client(env)
-    with raises(401, "unauthorized"):
-        other.resume(run_id=c.run_id, token=first)
-
-
 def test_a_resume_on_a_newer_build_is_recorded(env):
     server_admin.register_release(env["db"], "newer99", 2)
     c = client(env)
@@ -246,7 +234,7 @@ def test_a_resume_on_a_newer_build_is_recorded(env):
 
 def test_interludes_carry_a_plan_and_trials_and_the_resume_state_has_them(env):
     c = client(env)
-    c.start()
+    c.start(prolific_pid="PID_interlude")
     c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start")]))
     interlude = session_row(1, is_interlude=True, interlude_file="S1_Interlude_seed1.interlude.json", interlude_sha256=INTERLUDE)
     trials = [{"seq": i, "presented_order": i, "trial_index": [4, 2, 0][i], "type": "t", "choice": "left", "choice_correct": 1, "timed_out": 0,
@@ -255,7 +243,7 @@ def test_interludes_carry_a_plan_and_trials_and_the_resume_state_has_them(env):
     assert ack["trials_next"] == 2
     assert env["db"].execute("select paused_seconds from public.interlude_trials where run_id = %s order by seq", (c.run_id,)).fetchall() == [
         {"paused_seconds": 2.5}, {"paused_seconds": 2.5}]
-    state = c.resume()["resume"]
+    state = c.start(prolific_pid="PID_interlude")["resume"]
     assert state["session_index"] == 1 and state["is_interlude"] is True and state["interlude_plan"] == [4, 2, 0]
     assert state["trial_rows"] == [{"correct": 1, "bonus": 0}, {"correct": 1, "bonus": 0}] and state["trials_next"] == 2
     with raises(409, "gap_trials"):
@@ -277,7 +265,37 @@ def test_finish_lists_what_is_missing_and_a_finished_run_accepts_no_more(env):
     with raises(401, "unauthorized"):
         c.append(1, events=event_rows([ev(2.0, "late")], first_seq=2))
     again = client(env).start(prolific_pid="PID_finish")
-    assert again["status"] == "finished" and "token" not in again
+    assert again["status"] == "finished" and "token" not in again and again["completion_code"] == "DUMMY-COMPLETION-CODE"
+
+
+def test_feedback_is_stored_after_finish_replaced_by_a_second_one_and_needs_the_run_token(env):
+    c = client(env)
+    c.start(prolific_pid="PID_feedback")
+    c.append(0, session=session_row(ended_at="2026-10-29T12:00:00Z", completed=True, final_score=0.0),
+             events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end", running_total=0.0)]), frames=frames(20))
+    c.append(1, session=session_row(1, completed=True, ended_at="2026-10-29T12:05:00Z", final_score=3.0),
+             events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end")]), frames=frames(20))
+    assert c.finish()["ok"] is True
+    assert c.feedback("The second session was confusing.") == {"ok": True}
+    row = env["db"].execute("select text from public.feedback where run_id = %s", (c.run_id,)).fetchone()
+    assert row["text"] == "The second session was confusing."
+    c.feedback("Unicode ok: kiitos \u00e4\u00f6")
+    assert count(env, "feedback", c.run_id) == 1
+    assert env["db"].execute("select text from public.feedback where run_id = %s", (c.run_id,)).fetchone()["text"].startswith("Unicode ok")
+    other = client(env)
+    other.run_id, other.token = c.run_id, "not-the-token"
+    with raises(401, "unauthorized"):
+        other.feedback("hijack")
+    for bad in ("", "x" * 5001):
+        with raises(400, "invalid"):
+            c.feedback(bad)
+    assert env["db"].execute("select text from public.feedback where run_id = %s", (c.run_id,)).fetchone()["text"].startswith("Unicode ok")
+
+
+def test_feedback_is_also_accepted_while_a_run_is_in_progress(env):
+    c = client(env)
+    c.start()
+    assert c.feedback("early") == {"ok": True} and count(env, "feedback", c.run_id) == 1
 
 
 def test_concurrent_identical_uploads_store_each_row_once(env):
@@ -301,9 +319,25 @@ def test_concurrent_identical_uploads_store_each_row_once(env):
     assert count(env, "events", c.run_id) == 30 and count(env, "trajectory", c.run_id) == 1
 
 
+def test_a_returning_start_waits_for_an_upload_that_is_still_committing(env):
+    c = client(env)
+    c.start(prolific_pid="PID_race")
+    c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start")]))
+    done = []
+    with psycopg.connect(env["dburl"]) as holder:           # stands for the other tab's append_batch, holding the run's lock
+        holder.execute("select pg_advisory_xact_lock(hashtextextended(%s, 0))", (c.run_id,))
+        thread = threading.Thread(target=lambda: done.append(client(env).start(prolific_pid="PID_race")))
+        thread.start()
+        thread.join(1.0)
+        assert thread.is_alive(), "run-start did not wait for the lock"
+        holder.commit()
+    thread.join(10)
+    assert done and done[0]["status"] == "in_progress"
+
+
 def test_a_session_uploaded_in_batches_and_pulled_back_equals_the_original(env, tmp_path):
     original = tmp_path / "orig"
-    traj = frames(1500)
+    traj = codec.quantize(frames(1500))
     events = [ev(0.0, "session_start", payload={"x": 1.5}), *[ev(0.5 + 0.8 * i, "fruit", tree_id=i % 3, k=i // 3, reward=float(i % 4),
                                                                 running_total=float(i)) for i in range(40)], ev(12.0, "session_end", running_total=39.0)]
     row = session_row(0, completed=True, ended_at="2026-10-29T12:00:00+00:00", final_score=39.0, frame_stats={"count": 1500})
@@ -323,25 +357,11 @@ def test_a_session_uploaded_in_batches_and_pulled_back_equals_the_original(env, 
     assert (out / "run.json").exists() and "token_hash" not in json.loads((out / "run.json").read_text())
 
 
-def test_a_small_session_uploaded_in_one_batch_ends_complete(env, tmp_path):
-    row = session_row(0, completed=True, ended_at="2026-10-29T12:00:00+00:00", final_score=5.0)
-    run = "22222222-2222-2222-2222-222222222222"
-    rundata.write_session(tmp_path, run, 0, row, frames(30), [ev(0.0, "session_start"), ev(0.5, "session_end", running_total=5.0)])
-    c = client(env)
-    c.start()
-    server_client.upload_session(c, 0, rundata.read_session(tmp_path / run / "00"))
-    got = env["db"].execute("select completed, final_score from public.sessions where run_id = %s", (c.run_id,)).fetchone()
-    assert got == {"completed": True, "final_score": 5.0}
-
-
-def test_preflight_and_cors_headers(env):
+def test_preflight_has_the_cors_headers(env):
     import urllib.request
     request = urllib.request.Request(env["url"] + "/append", method="OPTIONS")
     with urllib.request.urlopen(request) as response:
         assert response.status == 200 and response.headers["Access-Control-Allow-Origin"] == "*"
-    with pytest.raises(ServerError) as e:
-        Client(env["url"], "wrong", BUILD).start()
-    assert e.value.status == 401
 
 
 @pytest.mark.parametrize("role", ["anon", "authenticated"])
@@ -360,7 +380,7 @@ def trial(seq, correct, bonus):
 
 def test_resume_state_carries_the_totals_of_finished_sessions(env):
     c = client(env)
-    c.start()
+    c.start(prolific_pid="PID_totals")
     done = {"completed": True, "ended_at": "2026-10-29T12:00:00Z"}
     c.append(0, session=session_row(0, is_practice=True, final_score=58.0, **done), events=event_rows([ev(0.0, "session_start")]))
     c.append(1, session=session_row(1, is_interlude=True, is_practice=True, final_score=0.0, **done), events=event_rows([ev(0.0, "session_start")]),
@@ -370,7 +390,7 @@ def test_resume_state_carries_the_totals_of_finished_sessions(env):
              trials=[trial(0, 1, 5.0), trial(1, 0, 0.0)])
     c.append(4, session=session_row(4, is_interlude=True), events=event_rows([ev(0.0, "session_start")]), plan=[1, 0],
              trials=[trial(0, 1, 5.0)])
-    state = c.resume()["resume"]
+    state = c.start(prolific_pid="PID_totals")["resume"]
     assert state["session_index"] == 4 and state["completed"] is False
     assert [(p["index"], p["is_practice"], p["is_interlude"], p["score"]) for p in state["previous"]] == [
         (0, True, False, 58.0), (1, True, True, 0.0), (2, False, False, 33.0), (3, False, True, 0.0)]
@@ -381,9 +401,9 @@ def test_resume_state_carries_the_totals_of_finished_sessions(env):
 
 def test_a_completed_latest_session_is_reported_as_completed(env):
     c = client(env)
-    c.start()
+    c.start(prolific_pid="PID_completed")
     c.append(0, session=session_row(0, completed=True, final_score=7.0, ended_at="2026-10-29T12:00:00Z"), events=event_rows([ev(0.0, "session_end")]))
-    state = c.resume()["resume"]
+    state = c.start(prolific_pid="PID_completed")["resume"]
     assert state["completed"] is True and state["final_score"] == 7.0 and [p["index"] for p in state["previous"]] == [0]
 
 

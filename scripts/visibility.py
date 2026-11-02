@@ -38,7 +38,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from perception import canopy_height_of, hidden_by_bushes, hidden_by_terrain, sample_grid, unit_directions
-from replay import fields, load_session_log
+from replay import load_session_log
 
 HIDE_SECONDS = 0.4      # InterludeManager.hideSeconds: how long the unchosen bush takes to shrink away under policy Hide
 
@@ -126,12 +126,12 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
     # Which bushes exist when (an Interlude shows only the trial's pair).
     trials = [e for e in log.events if e["type"] == "trial_start"]
     trial_t = np.array([e["t"] for e in trials])
-    trial_pair = [(int(fields(e)["left"]), int(fields(e)["right"])) for e in trials]
+    trial_pair = [(int(e["payload"]["left"]), int(e["payload"]["right"])) for e in trials]
 
     hide_locks = []
     for e in log.events:
         if e["type"] == "choice_lock":
-            lock = fields(e)
+            lock = e["payload"]
             if lock.get("policy") == "Hide":
                 hide_locks.append((e["t"], int(lock["locked"])))
 

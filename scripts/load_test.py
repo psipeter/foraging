@@ -76,7 +76,6 @@ def participant(index, args, key, world_sha, start_delay):
         return
     row = {"name": "Load", "config": {"load_test": True}, "world_file": WORLD.name, "world_sha256": world_sha, "world_seed": 1}
     seq_events = seq_frames = 0
-    x = z = yaw = 0.0
     pending = []                                    # frames of the current chunk
     t0 = time.perf_counter()
     for tick in range(int(args.seconds)):
@@ -87,8 +86,8 @@ def participant(index, args, key, world_sha, start_delay):
         if tick == 0:
             events.insert(0, {"t": 0.0, "real": 0.0, "type": "session_start"})
         step = rng.normal(0, 0.05, (FPS, 2)).cumsum(axis=0)
-        frames = np.c_[tick + (np.arange(FPS) + 1) / FPS, x + step[:, 0] + 100, z + step[:, 1] + 50,
-                       yaw + rng.normal(0, 0.3, FPS).cumsum(), rng.normal(0, 2, FPS), rng.integers(0, 8, FPS)]
+        frames = np.c_[tick + (np.arange(FPS) + 1) / FPS, step[:, 0] + 100, step[:, 1] + 50,
+                       rng.normal(0, 0.3, FPS).cumsum(), rng.normal(0, 2, FPS), rng.integers(0, 8, FPS)]
         pending.append(frames)
         flush = (tick + 1) % CHUNK_SECONDS == 0 or tick == int(args.seconds) - 1
         rows = event_rows(events, first_seq=seq_events)

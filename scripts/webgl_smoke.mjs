@@ -1,12 +1,12 @@
 // Smoke test of a WebGL build in headless Chromium (software GL, so slow: it checks that the game loads, reaches the first
 // session and talks to the data server, not how it plays or looks at speed).
 //
-//   node scripts/webgl_smoke.mjs <build dir> [--server http://127.0.0.1:54399 --key testkey --pid WEB1 --out <dir> --seconds 60 --release]
+//   node scripts/webgl_smoke.mjs <build dir> [--server http://127.0.0.1:54399 --key testkey --pid WEB1 --out <dir> --seconds 60 --release --send-encoding]
 //
 // --release: a non-development build ignores the URL overrides for the server (by design), so the page is opened with only ?pid=
 // and the build's own StreamingAssets/online.json decides where it uploads (patch the copy in the build directory to test).
 //
-// Serves the build directory (with the Content-Encoding Unity's compressed files need), opens it with the development-build
+// Serves the build directory (like GitHub Pages, without Content-Encoding for .br/.gz unless --send-encoding), opens it with the development-build
 // URL overrides (?onlineUrl=...&onlineKey=...&pid=...), clicks to start, dismisses the instruction screen and records the console
 // and screenshots. Playwright comes from PLAYWRIGHT_DIR (default: evidence_integration's task_backend).
 import http from 'node:http';
@@ -31,14 +31,14 @@ const staticServer = http.createServer((req, res) => {
   let file = path.join(buildDir, decodeURIComponent(new URL(req.url, 'http://x').pathname));
   if (file.endsWith('/')) file += 'index.html';
   if (!file.startsWith(buildDir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end('not found'); return; }
-  let base = file;
+  let name = file;                  // the file name without a compression suffix, for the Content-Type
   const headers = {};
   // Like GitHub Pages: no Content-Encoding for Unity's compressed files (.br/.gz/.unityweb); the build's decompression fallback handles them.
   if (args.includes('--send-encoding')) {
-    if (base.endsWith('.br')) { headers['Content-Encoding'] = 'br'; base = base.slice(0, -3); }
-    else if (base.endsWith('.gz')) { headers['Content-Encoding'] = 'gzip'; base = base.slice(0, -3); }
+    if (name.endsWith('.br')) { headers['Content-Encoding'] = 'br'; name = name.slice(0, -3); }
+    else if (name.endsWith('.gz')) { headers['Content-Encoding'] = 'gzip'; name = name.slice(0, -3); }
   }
-  headers['Content-Type'] = types[path.extname(base)] ?? 'application/octet-stream';
+  headers['Content-Type'] = types[path.extname(name)] ?? 'application/octet-stream';
   res.writeHead(200, headers);
   fs.createReadStream(file).pipe(res);
 });
@@ -67,7 +67,6 @@ let clicked = false;
 for (let t = 0; t < seconds; t += 5) {
   await wait(5000);
   await shot(`t${String(t + 5).padStart(3, '0')}`);
-  const text = log.join('\n');
   if (!clicked && t >= 15) {          // the boot scene shows its prompt after the files are fetched (about 10 s with software GL)
     // the boot scene waits for a click; then the instruction screen waits for Enter
     await page.mouse.click(640, 360);

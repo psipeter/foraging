@@ -26,14 +26,16 @@ language sql stable as $$
         'trials_next',     (select coalesce(max(seq) + 1, 0) from public.interlude_trials where run_id = p_run and session_index = p_session));
 $$;
 
--- Everything a client needs to continue the run's latest session where it stopped (null before the first session).
+-- Everything a client needs to continue the run's latest session where it stopped (null before the first session): flat, no
+-- nulls (-1 for "none"), arrays of small objects, so the Unity client can read it with JsonUtility.
 create function server.resume_state(p_run uuid) returns jsonb
 language plpgsql stable as $$
 declare
     s public.sessions;
-    last_press public.events;
     last_chunk public.trajectory;
     last_bout public.events;
+    last_event double precision;
+    last_seen timestamptz;
 begin
     select * into s from public.sessions where run_id = p_run order by session_index desc limit 1;
     if not found then
@@ -42,27 +44,48 @@ begin
     select * into last_chunk from public.trajectory where run_id = p_run and session_index = s.session_index order by first_seq desc limit 1;
     select * into last_bout from public.events
         where run_id = p_run and session_index = s.session_index and type in ('harvest_press', 'harvest_release') order by seq desc limit 1;
+    select max(t), max(received_at) into last_event, last_seen from public.events where run_id = p_run and session_index = s.session_index;
+    last_seen := greatest(last_seen, last_chunk.received_at);
     return jsonb_build_object(
         'session_index', s.session_index,
         'name', s.name,
+        'is_practice', s.is_practice,
+        'is_interlude', s.is_interlude,
         'completed', s.completed,
-        'final_score', s.final_score,
-        'pose', last_chunk.last_frame,
-        'last_event_t', (select max(t) from public.events where run_id = p_run and session_index = s.session_index),
-        'running_total', (select running_total from public.events
-                          where run_id = p_run and session_index = s.session_index and type = 'fruit' order by seq desc limit 1),
+        'final_score', coalesce(s.final_score, 0),
+        'started_at', coalesce(s.started_at::text, ''),
+        'has_pose', last_chunk.run_id is not null,
+        'pose', coalesce(last_chunk.last_frame, jsonb_build_object('t', 0, 'x', 0, 'z', 0, 'yaw', 0, 'pitch', 0, 'keys', 0)),
+        'last_event_t', coalesce(last_event, 0),
+        -- the session clock to continue from: later than every frame and event the server holds
+        'clock', greatest(coalesce((last_chunk.last_frame ->> 't')::double precision, 0), coalesce(last_event, 0)),
+        'running_total', coalesce((select running_total from public.events
+                                   where run_id = p_run and session_index = s.session_index and type = 'fruit' order by seq desc limit 1), 0),
         -- fruits already taken per bush (the k-th fruit pays the pre-drawn fruit_reward[bush][k])
-        'fruits_taken', coalesce((select jsonb_object_agg(tree_id::text, n) from (
+        'fruits_taken', coalesce((select jsonb_agg(jsonb_build_object('tree', tree_id, 'n', n) order by tree_id) from (
                                      select tree_id, count(*) as n from public.events
-                                     where run_id = p_run and session_index = s.session_index and type = 'fruit' group by tree_id) f), '{}'::jsonb),
-        'open_bout_tree', case when last_bout.type = 'harvest_press' then last_bout.tree_id end,
-        'interlude_plan', (select trial_order from public.interlude_plan where run_id = p_run and session_index = s.session_index),
-        'interlude_trials_done', (select count(*) from public.interlude_trials where run_id = p_run and session_index = s.session_index))
+                                     where run_id = p_run and session_index = s.session_index and type = 'fruit' group by tree_id) f), '[]'::jsonb),
+        'open_bout_tree', coalesce(case when last_bout.type = 'harvest_press' then last_bout.tree_id end, -1),
+        'interlude_plan', coalesce((select trial_order from public.interlude_plan where run_id = p_run and session_index = s.session_index), '[]'::jsonb),
+        -- the current Interlude's finished trials, for its tally
+        'trial_rows', case when s.is_interlude and not s.completed then coalesce((select jsonb_agg(jsonb_build_object(
+                                 'correct', coalesce(choice_correct, 0), 'bonus', coalesce(bonus, 0)) order by seq)
+                             from public.interlude_trials where run_id = p_run and session_index = s.session_index), '[]'::jsonb)
+                          else '[]'::jsonb end,
+        -- earlier sessions, for the running totals on the final screen
+        'previous', coalesce((select jsonb_agg(jsonb_build_object('index', session_index, 'is_practice', is_practice,
+                                 'is_interlude', is_interlude, 'score', coalesce(final_score, 0)) order by session_index)
+                              from public.sessions where run_id = p_run and completed), '[]'::jsonb),
+        'previous_interlude', (select jsonb_build_object('trials', count(t.*), 'correct', coalesce(sum(coalesce(t.choice_correct, 0)), 0),
+                                                         'bonus', coalesce(sum(coalesce(t.bonus, 0)), 0))
+                               from public.interlude_trials t join public.sessions z using (run_id, session_index)
+                               where t.run_id = p_run and z.completed and z.is_interlude and not z.is_practice),
+        'gap_seconds', coalesce(extract(epoch from now() - last_seen), 0))
         || server.stream_state(p_run, s.session_index);
 end $$;
 
 -- A new run, or the continuation of an existing one: a returning Prolific ID gets a fresh token (the old one stops working).
-create function server.start_run(p_token_hash text, p_build jsonb, p_pid text) returns jsonb
+create function server.start_run(p_token_hash text, p_build jsonb, p_pid text, p_consent jsonb default null) returns jsonb
 language plpgsql as $$
 declare
     rid uuid;
@@ -77,6 +100,7 @@ begin
         select run_id into rid from public.pid_registry where prolific_pid = p_pid;
     end if;
     if rid is not null then
+        perform pg_advisory_xact_lock(hashtextextended(rid::text, 0));   -- wait for an upload of the run that is still committing
         select * into r from public.runs where run_id = rid for update;
         if r.status <> 'in_progress' then
             return jsonb_build_object('run_id', rid, 'status', r.status);
@@ -92,23 +116,11 @@ begin
             insert into public.pid_registry (prolific_pid, run_id) values (p_pid, rid);
         end if;
     end if;
-    return jsonb_build_object('run_id', rid, 'status', 'in_progress', 'resume', server.resume_state(rid));
-end $$;
-
--- Continue an anonymous run with its old token (browser storage), rotating the token.
-create function server.resume_run(p_run uuid, p_old_hash text, p_new_hash text, p_build jsonb) returns jsonb
-language plpgsql as $$
-declare
-    commit text := p_build ->> 'commit';
-begin
-    if commit is null or not exists (select 1 from public.releases where build_commit = commit) then
-        raise exception 'unknown_build' using errcode = 'P0001';
+    if p_consent is not null then
+        insert into public.consents (run_id, version, signature, client_time)
+            values (rid, p_consent ->> 'version', p_consent ->> 'signature', (p_consent ->> 'at')::timestamptz);
     end if;
-    perform server.check_run(p_run, p_old_hash);
-    update public.runs set token_hash = p_new_hash,
-        build_commits = case when commit = any (build_commits) then build_commits else array_append(build_commits, commit) end
-        where run_id = p_run;
-    return jsonb_build_object('run_id', p_run, 'status', 'in_progress', 'resume', server.resume_state(p_run));
+    return jsonb_build_object('run_id', rid, 'status', 'in_progress', 'resume', server.resume_state(rid));
 end $$;
 
 -- One upload: optional session row, events, trajectory chunks, Interlude plan and trials of one session. All or nothing;

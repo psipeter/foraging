@@ -72,8 +72,10 @@ when it runs under `/adversarial-review`).
 
 Re-raise one only with new evidence or because the code around it changed.
 
-- `replay.verify` compares float32 game timing against double replay: spurious one-frame fruit mismatches (about 0.1-0.3 per 1000
-  fruits) are possible; `TIME_TOL` is the only absorber.
+- `replay.verify` compares float32 game timing against double replay. Where the replayed fruit timer is within 10 microseconds of the
+  fruit time (a tie), the logged fruit decides which frame it falls on (`TIE`); without that, browser data (whole-millisecond frame
+  times) had about 98 per 1000 fruits one frame off. Outside a tie `TIME_TOL` is the only absorber. A game bug that moved fruits one
+  frame only at ties would go unseen, as it would be indistinguishable from float rounding.
 - `trial_start` is applied one frame early in `replay.py` and `visibility.py` (the row at that time still has the old pose).
 - `WorldKnowledge.from_sidecar` drops the reward function, so an oracle over a sidecar without a `value` entry cannot compute values.
 - Every S1/S2 Interlude has one free "either" trial, so chance accuracy there is 0.6, not 0.5 (matches the game's bonus rule).

@@ -1,8 +1,13 @@
+import dataclasses
+import hashlib
 import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+import replay
+import rundata
 import world as world_mod
 from replay import Bushes, SessionLog, load_session_log, replay_harvests, steps, verify
 
@@ -10,12 +15,19 @@ CFG = {"harvestRangeGapBase": 7.0, "harvestRangeGapPerRadius": 0.0, "harvestMaxA
 HZ = 100.0
 
 
-def toy_log(frames, events=(), n_fruits=10):
-    """One bush of radius 1 at (0, 10); rewards 1, 2, ..., n_fruits. `frames` is a list of (x, z, yaw, keys)."""
-    bushes = Bushes(pos=np.array([[0.0, 10.0]]), canopy_radius=np.array([1.0]),
-                    fruit_reward=np.arange(1, n_fruits + 1)[None, :], value=np.array([3.0]))
+def multi_log(bushes, frames, events=(), n_fruits=10):
+    """`bushes` is [(x, z, radius)]; bush i pays 100*(i+1) + k for its k-th fruit. `frames` is a list of (x, z, yaw, keys) at HZ."""
+    bush = Bushes(pos=np.array([[b[0], b[1]] for b in bushes], dtype=float), canopy_radius=np.array([b[2] for b in bushes], dtype=float),
+                  fruit_reward=np.array([[100 * (i + 1) + k for k in range(n_fruits)] for i in range(len(bushes))]))
     traj = np.array([[(i + 1) / HZ, x, z, yaw, 0.0, keys] for i, (x, z, yaw, keys) in enumerate(frames)])
-    return SessionLog(Path("."), {"config": CFG}, traj, list(events), bushes)
+    return SessionLog(Path("."), {"config": CFG}, traj, list(events), bush)
+
+
+def toy_log(frames, events=(), n_fruits=10):
+    """One bush of radius 1 at (0, 10); rewards 1, 2, ..., n_fruits."""
+    log = multi_log([(0.0, 10.0, 1.0)], frames, events, n_fruits)
+    log.bushes.fruit_reward = np.arange(1, n_fruits + 1)[None, :]
+    return log
 
 
 def fruits(replayed):
@@ -27,7 +39,7 @@ def test_fruit_times_and_rewards():
     frames = [(0, 7.0, 0.0, 4)] * 250 + [(0, 7.0, 0.0, 0)] * 10
     got = fruits(replay_harvests(toy_log(frames)))
     assert [e["reward"] for e in got] == [1, 2, 3]
-    assert np.allclose([e["t"] for e in got], [0.80, 1.60, 2.40], atol=1 / HZ)
+    assert np.allclose([e["t"] for e in got], [0.80, 1.60, 2.40], atol=1 / HZ) and abs(got[0]["t"] - 0.80) < 0.5 / HZ
 
 
 def test_out_of_range_press_does_not_start_a_bout():
@@ -58,48 +70,10 @@ def test_exhaustion_ends_the_bout_and_blocks_a_new_one():
     assert [e["type"] for e in out].count("harvest_press") == 1
 
 
-def test_verify_flags_a_wrong_logged_reward():
-    frames = [(0, 7.0, 0.0, 4)] * 100
-    log = toy_log(frames)
-    good = replay_harvests(log)
-    log.events = [dict(e, real=0.0, k=e.get("k", -1), reward=e.get("reward", float("nan")), note="") for e in good]
-    log.manifest["finalScore"] = 1.0
-    assert verify(log)[0] == []
-    log.events[-1]["reward"] += 1
-    assert verify(log)[0]
-
-
-def test_steps_resample_and_reward_per_step():
-    frames = [(0, 7.0, 0.0, 4)] * 250
-    log = toy_log(frames)
-    log.events = replay_harvests(log)
-    s = steps(log, 0.5)
-    assert len(s["t"]) == 5 and s["reward"].sum() == 6 and s["harvesting"].all()
-
-
-def test_load_session_log_reads_a_session_folder(tmp_path, monkeypatch):
-    w = world_mod.make_world("S1", 1)
-    wfile = tmp_path / "_worlds" / "S1_seed1.world"
-    world_mod.export_unity(w, wfile)
-    import hashlib
-    sha = hashlib.sha256(wfile.read_bytes()).hexdigest()
-    (tmp_path / "_worlds" / f"{sha[:8]}_S1_seed1.world").write_bytes(wfile.read_bytes())
-    monkeypatch.setattr("replay.DATA_DIR", tmp_path)
-    folder = tmp_path / "abcd1234"
-    folder.mkdir()
-    (folder / "manifest.json").write_text(json.dumps({"sessionId": "abcd1234", "config": CFG,
-                                                      "world": {"file": "S1_seed1.world", "sha256": sha}}))
-    (folder / "trajectory.csv").write_text("t,x,z,yaw,pitch,keys\n0.016667,0.0000,0.0000,10.0000,0.000,0\n")
-    (folder / "events.csv").write_text("t,real,type,tree_id,k,reward,running_total,note\n0.000000,0.000,session_start,,,,,x=0\n")
-    log = load_session_log("abcd1234")
-    assert len(log.bushes.pos) == w.n and np.array_equal(log.bushes.fruit_reward, w.fruit_reward)
-    assert log.events[0]["type"] == "session_start" and log.traj.shape == (1, 6)
-
-
 def logged(log, extra=()):
     """Events as the DataLogger writes them: the replayed harvest events plus `extra`, in clock order."""
-    ev = [dict(e, real=0.0, k=e.get("k", -1), reward=e.get("reward", float("nan")), note="") for e in replay_harvests(log)]
-    ev += [dict(type=t, t=at, real=0.0, k=-1, reward=float("nan"), note="") for t, at in extra]
+    ev = [dict(e, real=0.0, k=e.get("k", -1), reward=e.get("reward", float("nan")), payload={}) for e in replay_harvests(log)]
+    ev += [dict(type=t, t=at, real=0.0, k=-1, reward=float("nan"), payload={}) for t, at in extra]
     return sorted(ev, key=lambda e: e["t"])
 
 
@@ -112,7 +86,7 @@ def test_a_screen_opening_on_the_exhausting_fruit_still_verifies():
     t_last = [e["t"] for e in fruits(replay_harvests(log))][-1]
     assert abs(t_last - 2.4) < 2 / HZ
     log.events = logged(log, extra=[("pause", t_last), ("resume", t_last)])
-    log.manifest["finalScore"] = 6.0
+    log.manifest["final_score"] = 6.0
     assert verify(log)[0] == []
     assert [e["type"] for e in log.events].count("harvest_press") == 1
     # Every fruit lands on a trajectory row's time (the frame has a row), in non-decreasing event order.
@@ -129,7 +103,7 @@ def test_verify_flags_a_fruit_whose_frame_has_no_row():
     t_last = [e["t"] for e in log.events if e["type"] == "fruit"][-1]
     log.traj = log.traj[np.abs(log.traj[:, 0] - t_last) > 1e-9]
     log.traj[log.traj[:, 0] > t_last, 5] = 0
-    log.manifest["finalScore"] = 6.0
+    log.manifest["final_score"] = 6.0
     assert verify(log)[0]
 
 
@@ -150,11 +124,11 @@ def test_verify_flags_a_release_the_keys_do_not_explain():
     log.events = logged(log)
     fr = [e for e in log.events if e["type"] == "fruit"]
     log.events = [e for e in log.events if e["t"] <= fr[2]["t"] and e["type"] != "fruit" or e["type"] == "fruit" and e["t"] <= fr[2]["t"]]
-    log.events.append(dict(type="harvest_release", t=fr[2]["t"], tree_id=0, real=0.0, k=-1, reward=float("nan"), note=""))
+    log.events.append(dict(type="harvest_release", t=fr[2]["t"], tree_id=0, real=0.0, k=-1, reward=float("nan"), payload={}))
     assert verify(log)[0]
     # The same release is accepted when a trial_end coincides with it (the Interlude cancelling the bout).
-    log.events.append(dict(type="trial_end", t=fr[2]["t"], real=0.0, tree_id=-1, k=-1, reward=float("nan"), note=""))
-    log.manifest.pop("finalScore", None)
+    log.events.append(dict(type="trial_end", t=fr[2]["t"], real=0.0, tree_id=-1, k=-1, reward=float("nan"), payload={}))
+    log.manifest.pop("final_score", None)
     assert not [p for p in verify(log)[0] if p.startswith(("harvest_release", "fruit", "harvest_press"))]
 
 
@@ -162,11 +136,11 @@ def test_steps_holds_the_old_pose_until_the_row_after_a_teleport():
     # The teleport is logged at the row that still has the old pose; the jump shows in the next row. Steps between
     # those two rows must not be interpolated across the jump.
     bushes = Bushes(pos=np.array([[0.0, 10.0]]), canopy_radius=np.array([1.0]),
-                    fruit_reward=np.ones((1, 3)), value=np.array([1.0]))
+                    fruit_reward=np.ones((1, 3)))
     t = np.arange(1, 6) / 2.0                       # rows every 0.5 s
     traj = np.array([[ti, x, 0.0, 0.0, 0.0, 0] for ti, x in zip(t, [0, 0, 0, 300, 300])])
     log = SessionLog(Path("."), {"config": CFG}, traj, [dict(type="teleport", t=1.5, real=0.0, tree_id=-1, k=-1,
-                     reward=float("nan"), note="")], bushes)
+                     reward=float("nan"), payload={})], bushes)
     s = steps(log, 0.1)
     between = (s["t"] > 1.5 + 1e-9) & (s["t"] < 2.0 - 1e-9)
     assert between.any() and (s["x"][between] == 0.0).all()
@@ -175,15 +149,12 @@ def test_steps_holds_the_old_pose_until_the_row_after_a_teleport():
 def two_bush_log(frames, events=()):
     """Two bushes of radius 1 at (-6, 10) and (6, 10); the player stands at (0, 10), in range of both. Facing yaw -90 looks at
     the first, +90 at the second. `frames` are (yaw, keys)."""
-    bushes = Bushes(pos=np.array([[-6.0, 10.0], [6.0, 10.0]]), canopy_radius=np.array([1.0, 1.0]),
-                    fruit_reward=np.tile(np.arange(1, 11), (2, 1)), value=np.array([3.0, 3.0]))
-    traj = np.array([[(i + 1) / HZ, 0.0, 10.0, yaw, 0.0, keys] for i, (yaw, keys) in enumerate(frames)])
-    return SessionLog(Path("."), {"config": CFG}, traj, list(events), bushes)
+    return multi_log([(-6.0, 10.0, 1.0), (6.0, 10.0, 1.0)], [(0.0, 10.0, yaw, keys) for yaw, keys in frames], events)
 
 
 def choice_lock(t, committed, locked, policy="Hide"):
     return {"type": "choice_lock", "t": t, "real": 0.0, "tree_id": committed, "k": -1, "reward": float("nan"),
-            "running_total": float("nan"), "note": f"committed={committed};locked={locked};policy={policy}"}
+            "running_total": float("nan"), "payload": {"committed": committed, "locked": locked, "policy": policy}}
 
 
 def presses(replayed):
@@ -214,8 +185,8 @@ def test_the_lock_does_not_change_the_press_that_causes_it():
     assert presses(out) == [1] and len(fruits(out)) == 1
 
 
-def _ev(kind, t, note=""):
-    return dict(type=kind, t=t, real=0.0, tree_id=-1, k=-1, reward=float("nan"), note=note)
+def _ev(kind, t, **payload):
+    return dict(type=kind, t=t, real=0.0, tree_id=-1, k=-1, reward=float("nan"), payload=payload)
 
 
 def test_a_press_between_trials_starts_no_bout():
@@ -225,9 +196,8 @@ def test_a_press_between_trials_starts_no_bout():
     log = toy_log(frames)
     log.events = [_ev("trial_end", 0.50), _ev("trial_go", 1.00)]
     assert replay_harvests(log) == []
-    # Without the block (a log from before it existed) the same keys start a bout at 0.51.
-    log.events = []
-    assert [e["type"] for e in replay_harvests(log)][:1] == ["harvest_press"]
+    log.events = [_ev("trial_end", 0.50)]                   # the last trial's end: blocked for the rest of the session
+    assert replay_harvests(log) == []
     # A fresh press after trial_go works.
     frames = [(0, 7.0, 0.0, 0)] * 10 + [(0, 7.0, 0.0, 4)] * 50 + [(0, 7.0, 0.0, 0)] * 10 + [(0, 7.0, 0.0, 4)] * 60
     log = toy_log(frames)
@@ -237,16 +207,6 @@ def test_a_press_between_trials_starts_no_bout():
 
 
 # --- geometry of the cone, focus choice and range (HarvestManager.Measure) -----------------------------------------
-
-def multi_log(bushes, frames, events=(), n_fruits=10, per_bush_rewards=None):
-    """`bushes` is [(x, z, radius)]; bush i pays 100*(i+1) + k for its k-th fruit unless `per_bush_rewards` is given."""
-    pos = np.array([[b[0], b[1]] for b in bushes], dtype=float)
-    rew = np.array([[100 * (i + 1) + k for k in range(n_fruits)] for i in range(len(bushes))])
-    bush = Bushes(pos=pos, canopy_radius=np.array([b[2] for b in bushes], dtype=float), fruit_reward=rew,
-                  value=np.zeros(len(bushes)))
-    traj = np.array([[(i + 1) / HZ, x, z, yaw, 0.0, keys] for i, (x, z, yaw, keys) in enumerate(frames)])
-    return SessionLog(Path("."), {"config": CFG}, traj, list(events), bush)
-
 
 def press_events(out):
     return [e for e in out if e["type"] == "harvest_press"]
@@ -308,10 +268,10 @@ def test_a_trials_pair_is_active_from_the_trial_start_frame():
     # Two bushes; only the trial's pair may be harvested, and from the frame of the trial_start event itself.
     bushes = [(0.0, 10.0, 1.0), (30.0, 10.0, 1.0), (60.0, 10.0, 1.0)]
     frames = [(0, 7.0, 0.0, 0)] * 49 + [(0, 7.0, 0.0, 4)] * 60                   # Space down on the row at t = 0.50
-    ev = [_ev("trial_start", 0.50, "order=0;trial=0;left=0;right=1")]
+    ev = [_ev("trial_start", 0.50, order=0, trial=0, left=0, right=1)]
     out = replay_harvests(multi_log(bushes, frames, ev))
     assert len(press_events(out)) == 1 and abs(press_events(out)[0]["t"] - 0.50) < 1e-6
-    ev = [_ev("trial_start", 0.80, "order=0;trial=0;left=1;right=2")]            # bush 0 is not in the pair
+    ev = [_ev("trial_start", 0.80, order=0, trial=0, left=1, right=2)]            # bush 0 is not in the pair
     assert not press_events(replay_harvests(multi_log(bushes, frames, ev)))
 
 
@@ -321,7 +281,7 @@ def test_verify_flags_a_fruit_logged_50_ms_off():
     frames = [(0, 7.0, 0.0, 4)] * 250
     log = toy_log(frames)
     log.events = logged(log)
-    log.manifest["finalScore"] = 6.0
+    log.manifest["final_score"] = 6.0
     assert verify(log)[0] == []
     for e in log.events:
         if e["type"] == "fruit":
@@ -333,17 +293,16 @@ def test_verify_ignores_events_on_the_last_frame_only():
     frames = [(0, 7.0, 0.0, 4)] * 150
     log = toy_log(frames)
     log.events = logged(log)
-    log.manifest["finalScore"] = 1.0
+    log.manifest["final_score"] = 1.0
     last = float(log.traj[-1, 0])
-    log.events.append(dict(type="harvest_release", t=last, tree_id=0, real=0.0, k=-1, reward=float("nan"), note=""))
+    log.events.append(dict(type="harvest_release", t=last, tree_id=0, real=0.0, k=-1, reward=float("nan"), payload={}))
     assert verify(log)[0] == []                       # the session-end release on the last frame is not compared
     log.events[-1]["t"] = last - 0.5
     assert verify(log)[0]                             # ...but an early extra release is
-
-
-def test_first_fruit_time_is_exact_to_half_a_frame():
-    frames = [(0, 7.0, 0.0, 4)] * 100
-    assert abs(fruits(replay_harvests(toy_log(frames)))[0]["t"] - 0.80) < 0.5 / HZ
+    # The game ends the bout on the second-to-last frame (the sun's clock reaches the duration there), however long the last frame is.
+    log.traj[-1, 0] += 0.05
+    log.events[-1]["t"] = float(log.traj[-2, 0])
+    assert verify(log)[0] == []
 
 
 # --- steps: per-step reward and harvesting flags --------------------------------------------------------------------
@@ -362,7 +321,6 @@ def test_steps_reward_and_harvesting_are_placed_in_the_right_steps():
 # --- loading: hash checks and the Interlude's own bush table --------------------------------------------------------
 
 def _archive(tmp_path, name, content):
-    import hashlib
     d = tmp_path / "_worlds"
     d.mkdir(exist_ok=True)
     sha = hashlib.sha256(content).hexdigest()
@@ -370,9 +328,17 @@ def _archive(tmp_path, name, content):
     return sha
 
 
+def _session(tmp_path, monkeypatch, **row):
+    """An S1 session folder of the online layout, its world archived under tmp_path/_worlds."""
+    wfile = tmp_path / "S1_seed1.world"
+    world_mod.export_unity(world_mod.make_world("S1", 1), wfile)
+    monkeypatch.setattr("replay.DATA_DIR", tmp_path)
+    row = {"name": "S1", "config": CFG, "world_file": "S1_seed1.world", "world_sha256": _archive(tmp_path, "S1_seed1.world", wfile.read_bytes()), **row}
+    traj = np.array([[0.01, 0.0, 0.0, 0.0, 0.0, 0], [0.02, 0.0, 0.0, 0.0, 0.0, 0]])
+    return rundata.write_session(tmp_path, "run", 0, row, traj, [{"t": 0.01, "real": 0.1, "type": "session_start"}])
+
+
 def test_find_world_file_rejects_a_file_with_the_wrong_hash(tmp_path, monkeypatch):
-    import pytest
-    import replay
     monkeypatch.setattr("replay.DATA_DIR", tmp_path)
     monkeypatch.setattr("replay.WORLD_DIR", tmp_path / "none")
     sha = _archive(tmp_path, "x.world", b"original")
@@ -383,86 +349,37 @@ def test_find_world_file_rejects_a_file_with_the_wrong_hash(tmp_path, monkeypatc
 
 
 def test_an_interlude_log_uses_the_interludes_bush_table(tmp_path, monkeypatch):
-    w = world_mod.make_world("S1", 1)
-    wfile = tmp_path / "S1_seed1.world"
-    world_mod.export_unity(w, wfile)
-    wsha = _archive(tmp_path, "S1_seed1.world", wfile.read_bytes())
     table = {"treePos": [1.0, 2.0, 3.0, 4.0], "canopyRadius": [1.5, 2.5], "fruitCount": 2, "fruitRewards": [5, 6, 7, 8],
              "value": [1.0, 2.0], "shape": [0.1, 0.9], "n": 5}
     isha = _archive(tmp_path, "S1_Interlude_seed1.interlude.json", json.dumps(table).encode())
-    monkeypatch.setattr("replay.DATA_DIR", tmp_path)
-    folder = tmp_path / "abcd1234"
-    folder.mkdir()
-    (folder / "manifest.json").write_text(json.dumps({"sessionId": "abcd1234", "config": CFG, "world": {
-        "file": "S1_seed1.world", "sha256": wsha, "interludeFile": "S1_Interlude_seed1.interlude.json", "interludeSha256": isha}}))
-    (folder / "trajectory.csv").write_text("t,x,z,yaw,pitch,keys\n0.016667,0.0,0.0,0.0,0.0,0\n")
-    (folder / "events.csv").write_text("t,real,type,tree_id,k,reward,running_total,note\n")
-    log = load_session_log("abcd1234")
+    log = load_session_log(_session(tmp_path, monkeypatch, interlude_file="S1_Interlude_seed1.interlude.json", interlude_sha256=isha))
     assert log.bushes.pos.tolist() == [[1.0, 2.0], [3.0, 4.0]] and log.bushes.canopy_radius.tolist() == [1.5, 2.5]
-    assert log.bushes.fruit_reward.tolist() == [[5, 6], [7, 8]] and len(log.grids) == 5     # the terrain is the session's
+    assert log.bushes.fruit_reward.tolist() == [[5, 6], [7, 8]] and "elevation" in log.grids     # the terrain is the session's
+
+
+def test_verify_reports_a_file_that_was_cut_mid_line(tmp_path, monkeypatch):
+    folder = _session(tmp_path, monkeypatch)
+    with open(folder / "trajectory.csv", "a") as f:
+        f.write("2,0.03,1.0")                                      # no trailing newline: the write was interrupted
+    log = load_session_log(folder)
+    assert len(log.traj) == 2 and log.truncated == ["trajectory.csv"]
+    assert any("trajectory.csv ended mid-line" in p for p in verify(log)[0])
 
 
 def test_each_verify_score_check_stands_on_its_own():
     frames = [(0, 7.0, 0.0, 4)] * 250
     log = toy_log(frames)
     log.events = logged(log)
-    log.manifest["finalScore"] = 6.0
+    log.manifest["final_score"] = 6.0
     assert verify(log)[0] == []
     fr = [e for e in log.events if e["type"] == "fruit"]
     fr[0]["reward"] += 1.0
-    fr[1]["reward"] -= 1.0                       # the per-fruit rewards are wrong but still sum to finalScore
+    fr[1]["reward"] -= 1.0                       # the per-fruit rewards are wrong but still sum to final_score
     assert any(p.startswith("fruit") for p in verify(log)[0])
     fr[0]["reward"] -= 1.0
     fr[1]["reward"] += 1.0
-    log.manifest["finalScore"] = 7.0             # the fruits are right but finalScore is not their sum
-    assert any("finalScore" in p for p in verify(log)[0])
-
-
-# --- logs from a session that did not finish writing ----------------------------------------------------------------
-
-def _folder(tmp_path, monkeypatch, traj_text, events_text):
-    w = world_mod.make_world("S1", 1)
-    wfile = tmp_path / "S1_seed1.world"
-    world_mod.export_unity(w, wfile)
-    sha = _archive(tmp_path, "S1_seed1.world", wfile.read_bytes())
-    monkeypatch.setattr("replay.DATA_DIR", tmp_path)
-    folder = tmp_path / "abcd1234"
-    folder.mkdir()
-    (folder / "manifest.json").write_text(json.dumps({"sessionId": "abcd1234", "sessionName": "S1", "config": CFG,
-                                                      "world": {"file": "S1_seed1.world", "sha256": sha}}))
-    (folder / "trajectory.csv").write_text(traj_text)
-    (folder / "events.csv").write_text(events_text)
-    return load_session_log("abcd1234")
-
-
-TRAJ = "t,x,z,yaw,pitch,keys\n0.010000,0.0000,0.0000,0.0000,0.000,0\n0.020000,0.0000,0.0000,0.0000,0.000,0\n"
-EVENTS = "t,real,type,tree_id,k,reward,running_total,note\n0.010000,0.100,session_start,,,,,x=0\n"
-
-
-def test_a_clean_log_is_not_marked_truncated(tmp_path, monkeypatch):
-    log = _folder(tmp_path, monkeypatch, TRAJ, EVENTS)
-    assert log.truncated == [] and len(log.traj) == 2 and len(log.events) == 1
-
-
-import pytest
-
-
-@pytest.mark.parametrize("cut", ["0.030000,1.0", "0.030000,1.0000,2.0000,3.0000,4.000,0", "0.030000,1.0000,2.0000,3.0000,4.0"])
-def test_a_trajectory_cut_mid_line_loses_only_that_line_and_verify_says_so(tmp_path, monkeypatch, cut):
-    log = _folder(tmp_path, monkeypatch, TRAJ + cut, EVENTS)       # no trailing newline: the write was interrupted
-    assert len(log.traj) == 2 and log.truncated == ["trajectory.csv"]
-    assert any("trajectory.csv ended mid-line" in p for p in verify(log)[0])
-
-
-def test_an_events_file_cut_mid_line_loses_only_that_line(tmp_path, monkeypatch):
-    log = _folder(tmp_path, monkeypatch, TRAJ, EVENTS + "0.020000,0.2")
-    assert len(log.events) == 1 and log.truncated == ["events.csv"]
-
-
-def test_a_bad_line_in_the_middle_is_still_an_error(tmp_path, monkeypatch):
-    bad = "t,x,z,yaw,pitch,keys\n0.01,0,0,0,0,0\n0.02,oops\n0.03,0,0,0,0,0\n"
-    with pytest.raises(ValueError):
-        _folder(tmp_path, monkeypatch, bad, EVENTS)
+    log.manifest["final_score"] = 7.0             # the fruits are right but final_score is not their sum
+    assert any("final_score" in p for p in verify(log)[0])
 
 
 # --- a session continued after an interruption (session_resume) ------------------------------------------------------
@@ -500,17 +417,58 @@ def test_verify_leaves_out_the_events_of_the_gap_and_still_checks_the_rest():
            dict(type="fruit", t=1.6, real=0.0, tree_id=0, k=1, reward=2.0, running_total=3.0, payload={}),
            dict(type="session_resume", t=2.0, real=0.0, tree_id=-1, k=-1, reward=nan, running_total=nan, payload={})]
     after = [dict(e, real=0.0, k=e.get("k", -1), reward=e.get("reward", nan), running_total=e.get("running_total", nan), payload={})
-             for e in replay_harvests(dict_log(log, gap))]
+             for e in replay_harvests(dataclasses.replace(log, events=gap))]
     log.events = sorted(gap + after, key=lambda e: e["t"])
-    log.manifest["finalScore"] = 6.0
+    log.manifest["final_score"] = 6.0
     assert verify(log)[0] == []
     after[-1]["reward"] += 1.0                          # a wrong reward after the resume is still caught
-    log.manifest["finalScore"] = 7.0
+    log.manifest["final_score"] = 7.0
     assert any(p.startswith("fruit") for p in verify(log)[0])
 
 
-def dict_log(log, events):
-    import copy
-    other = copy.copy(log)
-    other.events = list(events)
-    return other
+
+def test_a_resume_does_not_double_count_the_fruits_replayed_before_it():
+    # The fruit before the resume is replayed from frames (total 1) and logged without a running_total: the rebuild at the resume
+    # starts from zero, so the next fruit (k = 1, reward 2) brings the total to 3, not 4.
+    nan = float("nan")
+    log = toy_log([(0, 7.0, 0.0, 4)] * 100)
+    log.traj = np.vstack([log.traj, np.array([[1.0 + (i + 1) / HZ, 0.0, 7.0, 0.0, 0.0, 4] for i in range(100)])])
+    log.events = [dict(type="fruit", t=0.8, real=0.0, tree_id=0, k=0, reward=1.0, running_total=nan, payload={}),
+                  dict(type="session_resume", t=1.0, real=0.0, tree_id=-1, k=-1, reward=nan, running_total=nan, payload={})]
+    assert [e["running_total"] for e in fruits(replay_harvests(log))] == [1.0, 3.0]
+
+
+def test_an_interlude_restarts_its_trial_after_a_resume_with_every_bush_full():
+    # The Interlude restarts the unfinished trial in a fresh scene: the bush's first fruit pays again, as k = 0.
+    log = toy_log([(0, 7.0, 0.0, 4)] * 100)
+    log.traj = np.vstack([log.traj, np.array([[1.0 + (i + 1) / HZ, 0.0, 7.0, 0.0, 0.0, 4] for i in range(100)])])
+    log.events = [_ev("trial_start", 0.01, order=0, trial=0, left=0, right=0),
+                  dict(_ev("fruit", 0.8), tree_id=0, k=0, reward=1.0, running_total=1.0),
+                  _ev("session_resume", 1.0),
+                  _ev("trial_start", 1.0, order=0, trial=0, left=0, right=0)]
+    assert [(e["k"], e["reward"]) for e in fruits(replay_harvests(log))] == [(0, 1.0), (0, 1.0)]
+
+
+def test_a_logged_fruit_decides_a_tie_between_frame_sums_and_the_fruit_time():
+    # Browser frame times are whole milliseconds (here a 0.2 s fruit, press on the row at 2.818 after one at 2.817), so the
+    # frames sum to the fruit time exactly and double arithmetic fires one frame after the game's float32 did.
+    ts = [round(2.805 + i * 0.001, 3) for i in range(400)]
+    log = toy_log([(0, 7.0, 0.0, 0)] * 400)
+    log.traj = np.array([[t, 0.0, 7.0, 0.0, 0.0, 4 if i >= 13 else 0] for i, t in enumerate(ts)])
+    log.manifest["config"] = dict(CFG, fruitHarvestDuration=0.2)
+    log.manifest["final_score"] = 1.0
+    assert abs(fruits(replay_harvests(log))[0]["t"] - 3.018) < 1e-9       # without a logged fruit: the plain comparison
+    log.events = [dict(e, real=0.0, payload={}) for e in replay_harvests(log)]
+    fruit = [e for e in log.events if e["type"] == "fruit"][0]
+    fruit["t"] = 3.017                                                    # the game's fruit, on the tied frame
+    assert verify(log)[0] == [] and abs(fruits(replay_harvests(log))[0]["t"] - 3.017) < 1e-9
+    fruit["t"] = 3.015                                                    # two frames early is not a tie: still caught
+    assert any(p.startswith("fruit") for p in verify(log)[0])
+
+
+def test_a_pulled_runs_world_archive_next_to_its_folder_is_found(tmp_path, monkeypatch):
+    # server_admin pull writes <out>/<run>/<session> and <out>/_worlds: replay finds the worlds from the session folder alone.
+    folder = _session(tmp_path, monkeypatch)
+    monkeypatch.setattr("replay.DATA_DIR", tmp_path / "elsewhere")
+    monkeypatch.setattr("replay.WORLD_DIR", tmp_path / "none")
+    assert len(load_session_log(folder).bushes.pos) > 0

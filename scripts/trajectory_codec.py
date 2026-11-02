@@ -103,16 +103,16 @@ def _read_varints(data, expected):
 
 
 def encode(frames, first_seq=0, steps=DEFAULT_STEPS):
-    """Bytes of one chunk (n may be 0)."""
+    """Bytes of one chunk of 1 to MAX_FRAMES frames."""
     q = _quantized(frames, steps)
     n = len(q)
-    if n > MAX_FRAMES:
-        raise ValueError(f"chunk of {n} frames exceeds {MAX_FRAMES}")
-    delta = np.diff(q, axis=0, prepend=np.zeros((1, 6), dtype=np.int64)) if n else q
+    if not 0 < n <= MAX_FRAMES:
+        raise ValueError(f"a chunk holds 1 to {MAX_FRAMES} frames, not {n}")
+    delta = np.diff(q, axis=0, prepend=np.zeros((1, 6), dtype=np.int64))
     zigzag = ((delta << 1) ^ (delta >> 63)).astype(np.uint64).ravel()
     deflate = zlib.compressobj(9, zlib.DEFLATED, -15)
-    raw = _write_varints(zigzag).tobytes() if n else b""
-    body = deflate.compress(raw) + deflate.flush() if n else b""
+    raw = _write_varints(zigzag).tobytes()
+    body = deflate.compress(raw) + deflate.flush()
     return HEADER.pack(MAGIC, VERSION, n, first_seq, steps.t, steps.xz, steps.angle, zlib.crc32(raw)) + body
 
 
@@ -124,16 +124,12 @@ def decode(data):
     magic, version, n, first_seq, t_step, xz_step, angle_step, crc = HEADER.unpack_from(data)
     if magic != MAGIC or version != VERSION:
         raise ValueError("not a trajectory chunk of a known version")
-    if n > MAX_FRAMES:
-        raise ValueError(f"chunk claims {n} frames (maximum {MAX_FRAMES})")
+    if not 0 < n <= MAX_FRAMES:
+        raise ValueError(f"chunk claims {n} frames (1 to {MAX_FRAMES} allowed)")
     steps = Steps(t_step, xz_step, angle_step)
     if not all(np.isfinite(v) and v > 0 for v in (t_step, xz_step, angle_step)):
         raise ValueError("quantization steps must be positive")
     body = data[HEADER.size:]
-    if n == 0:
-        if body or crc != zlib.crc32(b""):
-            raise ValueError("an empty chunk has no body")
-        return first_seq, steps, np.empty((0, 6))
     inflate = zlib.decompressobj(-15)
     limit = n * 6 * MAX_VARINT_BYTES
     try:

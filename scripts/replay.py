@@ -1,16 +1,9 @@
 """Load a logged session, replay its harvests from the raw trajectory, and resample it for agents.
 
-Two layouts are read. The online layout (rundata.py: <run>/<session>/session.json, events.csv with a `payload`,
-trajectory.csv with a `seq`) is the database's one-to-one local mirror. The legacy layout below is what the Unity
-DataLogger writes until the online recorder replaces it (docs/ONLINE_DATA_PLAN.md, phase 3); the legacy loader goes then.
-
-A legacy session folder (ForagingData/<sessionId>/, written by DataLogger) holds:
-    trajectory.csv  per rendered frame: t, x, z, yaw, pitch, keys (1 = W, 2 = S, 4 = Space held)
-    events.csv      t, real, type, tree_id, k, reward, running_total, note   (see docs/SCIENCE.md, "Data")
-    harvests.csv    one row per harvest bout (a summary of the events)
-    manifest.json   the full SessionConfig, the world file's sha256, build info, frame statistics
-The world (bush positions and radii, per-fruit rewards, terrain) is found by the manifest's sha256 in
-ForagingData/_worlds/ (archived by the logger) or, failing that, in Assets/StreamingAssets/Worlds/.
+A session folder is the local layout of rundata.py (<run>/<session>/: session.json, events.csv, trajectory.csv; keys are
+1 = W, 2 = S, 4 = Space held). The world (bush positions and radii, per-fruit rewards, terrain) is found by the session row's
+sha256 in the `_worlds` folder next to the run's folder (where `server_admin.py pull` puts the files it takes from git at the run's
+build commit), ForagingData/_worlds/ (archived by the Editor and standalone loggers) or, failing that, in Assets/StreamingAssets/Worlds/.
 
 A session that was interrupted and continued (docs/ONLINE_DATA_PLAN.md, section 4) has a `session_resume` event: the game restarted
 from the server's state, so the harvest state (open bout, per-bush progress on the fruit being picked) starts empty there, the
@@ -26,9 +19,7 @@ logs are a faithful, replayable record. `steps` resamples the trajectory onto a 
 """
 
 import argparse
-import csv
 import hashlib
-import io
 import json
 import math
 from dataclasses import dataclass, field
@@ -44,6 +35,7 @@ WORLD_DIR = PROJECT_ROOT / "Assets" / "StreamingAssets" / "Worlds"
 
 KEY_FORWARD, KEY_BACK, KEY_HARVEST = 1, 2, 4
 TIME_TOL = 2e-3     # seconds; logged times are F6, so replayed event times agree far inside this
+TIE = 1e-5          # seconds; a replayed fruit timer this close to the fruit time is a tie (see replay_harvests)
 
 
 @dataclass
@@ -52,21 +44,19 @@ class Bushes:
     pos: np.ndarray             # (n, 2)
     canopy_radius: np.ndarray   # (n,)
     fruit_reward: np.ndarray    # (n, fruit_count) reward of the k-th fruit taken from each bush
-    value: np.ndarray           # (n,) R_bush
     shape: np.ndarray = None    # (n,) shape attribute (sets the canopy height; see visibility.py)
 
 
 @dataclass
 class SessionLog:
     folder: Path
-    manifest: dict
+    manifest: dict              # the `sessions` row (session.json)
     traj: np.ndarray            # (frames, 6): t, x, z, yaw, pitch, keys
-    events: list                # dicts: t, real, type, tree_id, k, reward, running_total, note
+    events: list                # dicts: t, real, type, tree_id, k, reward, running_total, payload
     bushes: Bushes
     grids: dict = field(default_factory=dict)   # terrain grids: moisture, elevation, rock, snow, ramp; (res, res) [x, z]
     half_extent: float = 0.0                    # the grids span [-half_extent, half_extent] in x and z
     truncated: list = field(default_factory=list)   # files whose last line was cut short (a crash) and dropped on load
-    online: bool = False        # the manifest is a `sessions` row (snake_case) rather than the DataLogger's manifest.json
 
     @property
     def config(self):
@@ -74,16 +64,15 @@ class SessionLog:
 
     @property
     def name(self):
-        return self.manifest.get("name" if self.online else "sessionName")
+        return self.manifest.get("name")
 
     @property
     def session_id(self):
-        m = self.manifest
-        return f"{str(m.get('run_id'))[:8]}/{m.get('session_index')}" if self.online else m.get("sessionId")
+        return f"{str(self.manifest.get('run_id'))[:8]}/{self.manifest.get('session_index')}"
 
     @property
     def final_score(self):
-        return self.manifest.get("final_score" if self.online else "finalScore")
+        return self.manifest.get("final_score")
 
 
 # --------------------------------------------------------------------------------------------------
@@ -94,80 +83,13 @@ def _sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def find_world_file(name, sha):
-    """Path of the file with this name and sha256: the logger's archive first, then StreamingAssets."""
-    candidates = [DATA_DIR / "_worlds" / f"{sha[:8]}_{name}", WORLD_DIR / name]
+def find_world_file(name, sha, archive=None):
+    """Path of the file with this name and sha256: the archive `_worlds` folder given (a pulled run's), the logger's, then StreamingAssets."""
+    candidates = [*([Path(archive) / f"{sha[:8]}_{name}"] if archive else []), DATA_DIR / "_worlds" / f"{sha[:8]}_{name}", WORLD_DIR / name]
     for path in candidates:
         if path.exists() and _sha256(path) == sha:
             return path
     raise FileNotFoundError(f"no file named {name} with sha256 {sha[:12]}... in {DATA_DIR / '_worlds'} or {WORLD_DIR}")
-
-
-def _parse_event(row):
-    return {
-        "t": float(row["t"]), "real": float(row["real"]), "type": row["type"],
-        "tree_id": int(row["tree_id"]) if row["tree_id"] else -1,
-        "k": int(row["k"]) if row["k"] else -1,
-        "reward": float(row["reward"]) if row["reward"] else math.nan,
-        "running_total": float(row["running_total"]) if row["running_total"] else math.nan,
-        "note": row["note"],
-    }
-
-
-def _read_events(path):
-    """Events from events.csv. A crash can cut the last line short: only that line is dropped (and reported by returning
-    truncated=True); a bad line anywhere else is an error."""
-    with open(path, newline="") as f:
-        text = f.read()
-    # The logger ends every line with a newline, so a file that does not has a last line that was cut (maybe mid-number).
-    cut = bool(text) and not text.endswith("\n")
-    if cut:
-        text = text[:text.rfind("\n") + 1]
-    rows = list(csv.DictReader(io.StringIO(text, newline="")))
-    events, truncated = [], cut
-    for i, row in enumerate(rows):
-        try:
-            if None in row.values() or None in row:
-                raise ValueError("short or long row")
-            events.append(_parse_event(row))
-        except (ValueError, TypeError, KeyError):
-            if i != len(rows) - 1:
-                raise
-            truncated = True
-    return events, truncated
-
-
-def _read_trajectory(path):
-    """(frames, truncated): trajectory.csv as an (n, 6) array. A last line cut short by a crash (fewer than six numeric
-    fields) is dropped and reported; a bad line anywhere else is an error."""
-    with open(path) as f:
-        text = f.read()
-    cut = bool(text) and not text.endswith("\n")
-    if cut:
-        text = text[:text.rfind("\n") + 1]
-    lines = text.splitlines()[1:]
-    rows, truncated = [], cut
-    for i, line in enumerate(lines):
-        try:
-            values = [float(v) for v in line.split(",")]
-            if len(values) != 6:
-                raise ValueError("wrong number of fields")
-            rows.append(values)
-        except ValueError:
-            if i != len(lines) - 1:
-                raise
-            truncated = True
-    return np.array(rows, dtype=float).reshape(-1, 6), truncated
-
-
-def parse_note(note):
-    """'x=1;z=2' -> {'x': '1', 'z': '2'}"""
-    return dict(part.split("=", 1) for part in note.split(";") if "=" in part)
-
-
-def fields(event):
-    """An event's extra fields: its `payload` dict (online layout) or its parsed `note` string (legacy layout)."""
-    return event["payload"] if "payload" in event else parse_note(event["note"])
 
 
 def load_session_log(folder):
@@ -177,31 +99,20 @@ def load_session_log(folder):
         folder = PROJECT_ROOT / folder        # a path relative to the project root, from any working directory
     elif not folder.exists():
         folder = DATA_DIR / str(folder)
-    if (folder / "session.json").exists():
-        data = rundata.read_session(folder)
-        manifest, traj, events, truncated = data["session"], data["traj"], data["events"], data["truncated"]
-        world = {"file": manifest["world_file"], "sha256": manifest["world_sha256"],
-                 "interludeFile": manifest.get("interlude_file"), "interludeSha256": manifest.get("interlude_sha256")}
-    else:
-        manifest = json.loads((folder / "manifest.json").read_text())
-        traj, traj_cut = _read_trajectory(folder / "trajectory.csv")
-        events, events_cut = _read_events(folder / "events.csv")
-        truncated = [name for name, cut in (("trajectory.csv", traj_cut), ("events.csv", events_cut)) if cut]
-        world = manifest["world"]
-
-    header, grids = read_unity_world(find_world_file(world["file"], world["sha256"]))
+    data = rundata.read_session(folder)
+    row = data["session"]
+    archive = folder.resolve().parent.parent / "_worlds"          # <out>/<run>/<session>
+    header, grids = read_unity_world(find_world_file(row["world_file"], row["world_sha256"], archive))
     table = header
-    if world.get("interludeFile"):
+    if row.get("interlude_file"):
         # An Interlude plays a small bush table on its session's terrain.
-        table = json.loads(find_world_file(world["interludeFile"], world["interludeSha256"]).read_text())
+        table = json.loads(find_world_file(row["interlude_file"], row["interlude_sha256"], archive).read_text())
     n, fruits = len(table["canopyRadius"]), int(table["fruitCount"])   # (an Interlude file's "n" counts trials)
     bushes = Bushes(
         pos=np.asarray(table["treePos"], dtype=float).reshape(n, 2),
         canopy_radius=np.asarray(table["canopyRadius"], dtype=float),
-        fruit_reward=np.asarray(table["fruitRewards"], dtype=int).reshape(n, fruits),
-        value=np.asarray(table["value"], dtype=float), shape=np.asarray(table["shape"], dtype=float))
-    return SessionLog(folder, manifest, traj, events, bushes, grids, float(header["halfExtent"]), truncated,
-                      online=(folder / "session.json").exists())
+        fruit_reward=np.asarray(table["fruitRewards"], dtype=int).reshape(n, fruits), shape=np.asarray(table["shape"], dtype=float))
+    return SessionLog(folder, row, data["traj"], data["events"], bushes, grids, float(header["halfExtent"]), data["truncated"])
 
 
 # --------------------------------------------------------------------------------------------------
@@ -225,6 +136,14 @@ def _measure(bushes, idx, x, z, yaw):
     return dist - radius, np.maximum(0.0, np.abs(delta) - ang)
 
 
+def _last_frames_start(traj):
+    """Time from which the session's last two frames start. The sun's clock reaches the duration on the second-to-last frame, and
+    whether it or the harvest update ran first decides there whether the bout ended on that frame or the next, so a release is
+    honoured in these frames and events are not compared. (A median-frame-time window missed the release whenever the last
+    frame was long.)"""
+    return float(traj[-2, 0]) - 1e-6 if len(traj) > 1 else -np.inf
+
+
 def replay_harvests(log):
     """Re-derive the harvest events from the trajectory. Returns a list of event dicts in the logged vocabulary
     (harvest_press, harvest_pause/resume, fruit, harvest_release); a release the trajectory alone does not explain
@@ -240,25 +159,21 @@ def replay_harvests(log):
     ev = log.events
     # Releases the keys cannot explain are honoured only where the game itself ends a bout: the Interlude's trial end
     # and the session's last frames. Any other logged release must come from the replayed key rules, or verify flags it.
-    frame_dt = float(np.median(np.diff(log.traj[:, 0]))) if len(log.traj) > 2 else 0.0
-    t_final = float(log.traj[-1, 0]) if len(log.traj) else 0.0
+    tail = _last_frames_start(log.traj)
     cut_times = [e["t"] for e in ev if e["type"] == "trial_end"]
     forced_times = [e for e in ev if e["type"] == "harvest_release"
-                    and (e["t"] >= t_final - 1.5 * frame_dt or any(abs(e["t"] - c) < 1e-5 for c in cut_times))]
+                    and (e["t"] >= tail or any(abs(e["t"] - c) < TIE for c in cut_times))]   # a trial_end is logged on the frame it ends the bout
     trials = [e for e in ev if e["type"] == "trial_start"]
+    # The fruit a logged tie resolves to, by (bush, k): see the fruit timer below.
+    fruit_t = {(e["tree_id"], e["k"]): e["t"] for e in ev if e["type"] == "fruit"}
     # An Interlude commitment: from the frame after the press that started the chosen bush, the other bush can no longer be
     # harvested (hidden, spent or locked; the policy only changes how it looks).
     locks = [e for e in ev if e["type"] == "choice_lock"]
     next_lock = 0
     # HarvestManager discards presses between an Interlude trial's end and the following trial_go (rows after the
-    # trial_end up to and including the trial_go frame). Logs from before the block have no trial_go and no window.
+    # trial_end up to and including the trial_go frame); after the last trial's end there is no trial_go.
     go_times = [e["t"] for e in ev if e["type"] == "trial_go"]
-    blocks = []
-    if go_times:
-        for e in ev:
-            if e["type"] == "trial_end":
-                later = [g for g in go_times if g > e["t"] - 1e-9]
-                blocks.append((e["t"], min(later) if later else np.inf))
+    blocks = [(e["t"], min((g for g in go_times if g > e["t"] - 1e-9), default=np.inf)) for e in ev if e["type"] == "trial_end"]
     active = np.ones(n, dtype=bool)
     if trials:
         active[:] = False
@@ -291,8 +206,10 @@ def replay_harvests(log):
             target, timer, in_cone, held_prev, t_prev = -1, 0.0, True, False, at
             partial[:] = 0.0
             taken[:] = 0
+            total = 0.0
             for e in ev:
-                if e["type"] == "fruit" and e["t"] <= at + 1e-9:
+                # (An Interlude restarts the unfinished trial in a fresh scene with every bush full: nothing carries over.)
+                if e["type"] == "fruit" and e["t"] <= at + 1e-9 and not trials:
                     taken[e["tree_id"]] += 1
                     total = e["running_total"] if not math.isnan(e["running_total"]) else total + e["reward"]
             exhausted = taken >= n_fruits
@@ -304,14 +221,14 @@ def replay_harvests(log):
         if any(a + 1e-9 < t <= b + 1e-9 for a, b in blocks):
             pressed = False
 
-        while next_trial < len(trials) and trials[next_trial]["t"] <= t + 1e-4:
-            pair = fields(trials[next_trial])
+        while next_trial < len(trials) and trials[next_trial]["t"] <= t + 1e-4:     # (a trial_start takes effect on the frame at or just after its logged time)
+            pair = trials[next_trial]["payload"]
             active[:] = False
             active[[int(pair["left"]), int(pair["right"])]] = True
             next_trial += 1
 
         while next_lock < len(locks) and locks[next_lock]["t"] < t - 1e-9:
-            active[int(fields(locks[next_lock])["locked"])] = False
+            active[int(locks[next_lock]["payload"]["locked"])] = False
             next_lock += 1
 
         if target < 0:
@@ -338,7 +255,11 @@ def replay_harvests(log):
             in_cone = now_in
             if in_cone:
                 timer += dt
-                while timer >= per_fruit and target >= 0:
+                # Browsers hand Unity whole-millisecond frame times, so the frames' sum often equals the fruit time exactly, and
+                # which side the game's float32 sum fell on is not in the log: within TIE the logged fruit decides (about 98 of
+                # 1000 fruits are one frame off otherwise). Without a logged fruit (an agent) the plain comparison holds.
+                while target >= 0 and (timer >= per_fruit if abs(timer - per_fruit) >= TIE or (target, int(taken[target])) not in fruit_t
+                                       else abs(fruit_t[target, int(taken[target])] - t) < 1e-4):
                     timer -= per_fruit
                     k = int(taken[target])
                     reward = float(b.fruit_reward[target, k])
@@ -350,7 +271,7 @@ def replay_harvests(log):
                         release(t, False)
 
         # A bout the trajectory does not end by itself, but the log says ended on this frame.
-        if target >= 0 and any(abs(e["t"] - t) < 1e-5 and e["tree_id"] == target for e in forced_times):
+        if target >= 0 and any(abs(e["t"] - t) < TIE and e["tree_id"] == target for e in forced_times):
             release(t, True)
 
     return out
@@ -362,8 +283,7 @@ def verify(log):
     replayed = replay_harvests(log)
     problems = [f"{name} ended mid-line (the session did not finish writing): its last line was dropped"
                 for name in log.truncated]
-    t_end = float(log.traj[-1, 0]) if len(log.traj) else 0.0
-    frame_dt = float(np.median(np.diff(log.traj[:, 0]))) if len(log.traj) > 2 else 0.0
+    tail = _last_frames_start(log.traj)
     # Events logged in a resume's gap (after the last uploaded frame, up to the resume) have no frames to derive them from.
     gaps = []
     for r in (e for e in log.events if e["type"] == "session_resume"):
@@ -372,9 +292,8 @@ def verify(log):
     for kind in ("harvest_press", "harvest_pause", "harvest_resume", "fruit", "harvest_release"):
         a = [e for e in log.events if e["type"] == kind and not any(lo + 1e-9 < e["t"] <= hi + 1e-9 for lo, hi in gaps)]
         b = [e for e in replayed if e["type"] == kind]
-        # Events on the session's last frame depend on whether the sun clock ended before or after the harvest update.
-        a_core = [e for e in a if e["t"] < t_end - 1.5 * frame_dt]
-        b_core = [e for e in b if e["t"] < t_end - 1.5 * frame_dt]
+        a_core = [e for e in a if e["t"] < tail]
+        b_core = [e for e in b if e["t"] < tail]
         if len(a_core) != len(b_core):
             problems.append(f"{kind}: logged {len(a_core)} vs replayed {len(b_core)}")
         for j, (ea, eb) in enumerate(zip(a_core, b_core)):
@@ -387,7 +306,7 @@ def verify(log):
     fruit_sum = sum(e["reward"] for e in log.events if e["type"] == "fruit")
     final = log.final_score
     if final is not None and abs(fruit_sum - final) > 1e-6:
-        problems.append(f"finalScore {final} != sum of logged fruit rewards {fruit_sum}")
+        problems.append(f"final_score {final} != sum of logged fruit rewards {fruit_sum}")
     return problems, replayed
 
 
@@ -411,15 +330,16 @@ def steps(log, dt=0.1):
     tr = log.traj
     t = np.arange(0.0, tr[-1, 0], dt)
     frame = np.clip(np.searchsorted(tr[:, 0], t, side="right") - 1, 0, len(tr) - 1)
-    pose = {name: np.interp(t, tr[:, 0], tr[:, col]) for name, col in (("x", 1), ("z", 2), ("yaw", 3), ("pitch", 4))}
+    names = ("x", "z", "yaw", "pitch")             # trajectory columns 1 to 4
+    pose = {name: np.interp(t, tr[:, 0], tr[:, col]) for col, name in enumerate(names, 1)}
     for e in log.events:
         if e["type"] == "teleport":
             # The jump happens after the logger wrote the row at e["t"], so that row still has the old pose: hold it
             # until the next row, which is the first with the new one.
             nxt = np.searchsorted(tr[:, 0], e["t"], side="right")
             hold = (t >= e["t"] - 1e-9) & (t < (tr[nxt, 0] if nxt < len(tr) else np.inf))
-            for name in ("x", "z", "yaw", "pitch"):
-                pose[name] = np.where(hold, tr[frame, {"x": 1, "z": 2, "yaw": 3, "pitch": 4}[name]], pose[name])
+            for col, name in enumerate(names, 1):
+                pose[name] = np.where(hold, tr[frame, col], pose[name])
     keys = tr[frame, 5].astype(int)
 
     reward = np.zeros(len(t))
@@ -446,13 +366,13 @@ def steps(log, dt=0.1):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("session", help="session folder or session id under ForagingData/")
+    parser.add_argument("session", help="session folder, or <run id>/<session> under ForagingData/")
     parser.add_argument("--steps", type=float, default=None, help="also print the uniform-grid resample with this dt")
     args = parser.parse_args()
 
     log = load_session_log(args.session)
     print(f"{log.name} ({log.session_id}): {len(log.traj)} frames, {log.traj[-1, 0]:.1f} s, "
-          f"{sum(e['type'] == 'fruit' for e in log.events)} fruits, finalScore {log.final_score}")
+          f"{sum(e['type'] == 'fruit' for e in log.events)} fruits, final_score {log.final_score}")
     problems, replayed = verify(log)
     if problems:
         print("MISMATCH:")

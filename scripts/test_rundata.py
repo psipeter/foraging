@@ -1,11 +1,9 @@
 import hashlib
-import json
 import math
 
 import numpy as np
 import pytest
 
-import convert_legacy
 import replay
 import rundata
 import trajectory_codec as codec
@@ -17,7 +15,7 @@ RUN = "11111111-2222-3333-4444-555555555555"
 
 def traj(n=50):
     t = np.arange(1, n + 1) * 0.0083333
-    return np.c_[t, 0.5 * t + 1.23456, np.zeros(n) + 7.0, np.linspace(0, 20.0004, n), np.zeros(n), np.arange(n) % 5]
+    return codec.quantize(np.c_[t, 0.5 * t + 1.23456, np.zeros(n) + 7.0, np.linspace(0, 20.0004, n), np.zeros(n), np.arange(n) % 5])
 
 
 EVENTS = [
@@ -35,7 +33,7 @@ def test_write_then_read_round_trips_every_stream(tmp_path):
     assert folder == tmp_path / RUN / "03"
     got = rundata.read_session(folder)
     assert got["session"]["name"] == "S1" and got["session"]["run_id"] == RUN and got["session"]["session_index"] == 3
-    assert np.allclose(got["traj"], codec.quantize(traj()), atol=1e-9) and got["truncated"] == []
+    assert np.allclose(got["traj"], traj(), atol=1e-9) and got["truncated"] == []
     e = got["events"]
     assert [x["seq"] for x in e] == [0, 1, 2] and e[0]["payload"] == {"x": 1.5, "yaw": 20.0} and e[0]["tree_id"] == -1
     assert e[1]["tree_id"] == 3 and e[1]["k"] == 0 and e[1]["reward"] == 2.0 and e[1]["payload"] == {}
@@ -84,12 +82,6 @@ def test_a_wrong_header_or_a_gap_in_the_trajectory_seq_is_an_error(tmp_path):
         rundata.read_session(folder)
 
 
-def test_the_trajectory_mirror_holds_the_quantized_values(tmp_path):
-    folder = rundata.write_session(tmp_path, RUN, 0, SESSION, traj(), EVENTS)
-    first = (folder / "trajectory.csv").read_text().splitlines()[1].split(",")
-    assert first[0] == "0" and float(first[2]) == pytest.approx(round(traj()[0, 1] / 0.01) * 0.01) and first[-1] == "0"
-
-
 # --- the online layout through replay --------------------------------------------------------------------------------
 
 def _world(tmp_path, monkeypatch):
@@ -108,41 +100,9 @@ def test_load_session_log_reads_the_online_layout(tmp_path, monkeypatch):
     session = dict(SESSION, world_sha256=sha)
     rundata.write_session(tmp_path, RUN, 1, session, traj(), EVENTS)
     log = replay.load_session_log(tmp_path / RUN / "01")
-    assert log.online and log.name == "S1" and log.session_id == f"{RUN[:8]}/1" and log.final_score == 2.0
+    assert log.name == "S1" and log.session_id == f"{RUN[:8]}/1" and log.final_score == 2.0
     assert len(log.bushes.pos) == w.n and log.traj.shape == (50, 6) and log.events[1]["type"] == "fruit"
-    assert replay.fields(log.events[0]) == {"x": 1.5, "yaw": 20.0}
-
-
-def test_replay_verifies_a_converted_legacy_log(tmp_path, monkeypatch):
-    """A session played at the bush, written as the legacy DataLogger does, converts and still replays exactly."""
-    w, sha = _world(tmp_path, monkeypatch)
-    x, z = (float(v) for v in w.pos[0])
-    r = float(w.canopy_radius[0])
-    frames = [(x, z - r - 3.0, 0.0, 4)] * 300
-    legacy = tmp_path / "legacy"
-    legacy.mkdir()
-    rows = "\n".join(f"{(i + 1) / 100:.6f},{fx:.4f},{fz:.4f},{yaw:.4f},0.000,{k}" for i, (fx, fz, yaw, k) in enumerate(frames))
-    (legacy / "trajectory.csv").write_text("t,x,z,yaw,pitch,keys\n" + rows + "\n")
-    (legacy / "events.csv").write_text("t,real,type,tree_id,k,reward,running_total,note\n0.010000,0.100,session_start,,,,,x=1.5;policy=Hide\n")
-    manifest = {"sessionId": "abcd1234", "sessionName": "S1", "isPractice": False, "isInterlude": False, "config": CFG,
-                "world": {"seed": 1, "file": "S1_seed1.world", "sha256": sha}, "camera": {}, "display": {}, "frames": {},
-                "startedAtUtc": "a", "endedAtUtc": "b", "completed": True, "finalScore": 0.0,
-                "build": {"platform": "LinuxPlayer", "commit": "c", "dirty": False, "unityVersion": "6000"}}
-    (legacy / "manifest.json").write_text(json.dumps(manifest))
-    old = replay.load_session_log(legacy)
-    # The legacy events do not list the harvest; use the replayed ones as the "logged" events, as test_replay does.
-    legacy_events = [{"t": e["t"], "real": 0.0, "type": e["type"], "tree_id": e["tree_id"], "k": e.get("k", -1),
-                      "reward": e.get("reward", float("nan")), "running_total": float("nan"), "note": ""} for e in replay.replay_harvests(old)]
-    folder = convert_legacy.convert(legacy, tmp_path / "out", RUN, 0)
-    new = replay.load_session_log(folder)
-    new.events = [dict(e, payload={}) for e in legacy_events]
-    new.manifest["final_score"] = sum(e["reward"] for e in legacy_events if e["type"] == "fruit")
-    assert new.events and replay.verify(new)[0] == []
-
-
-def test_note_strings_become_typed_payloads():
-    assert convert_legacy.note_to_payload("x=1;z=2.5;policy=Hide;empty") == {"x": 1, "z": 2.5, "policy": "Hide"}
-    assert convert_legacy.note_to_payload("") == {}
+    assert log.events[0]["payload"] == {"x": 1.5, "yaw": 20.0}
 
 
 def test_a_local_copy_of_a_session_continued_elsewhere_may_start_after_seq_zero(tmp_path):
@@ -155,3 +115,15 @@ def test_a_local_copy_of_a_session_continued_elsewhere_may_start_after_seq_zero(
     (folder / "trajectory.csv").write_text("\n".join(shifted) + "\n")
     with pytest.raises(ValueError):
         rundata.read_session(folder)
+
+
+def test_archive_worlds_takes_the_files_from_git_at_the_build_commit(tmp_path, capsys):
+    import subprocess
+    import server_admin
+    name = "S1_seed1.world"
+    blob = subprocess.run(["git", "show", f"HEAD:Assets/StreamingAssets/Worlds/{name}"], cwd=server_admin.PROJECT_ROOT, capture_output=True, check=True).stdout
+    sha = hashlib.sha256(blob).hexdigest()
+    server_admin.archive_worlds("HEAD", [{"world_file": name, "world_sha256": sha}, {"world_file": name, "world_sha256": "0" * 64}], tmp_path)
+    assert (tmp_path / "_worlds" / f"{sha[:8]}_{name}").read_bytes() == blob
+    assert [p.name for p in (tmp_path / "_worlds").iterdir()] == [f"{sha[:8]}_{name}"]          # the file with a wrong sha is not written
+    assert "not in git" in capsys.readouterr().err

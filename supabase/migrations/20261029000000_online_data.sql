@@ -56,6 +56,7 @@ create table public.events (
     reward        double precision,
     running_total double precision,
     payload       jsonb,
+    received_at   timestamptz not null default now(),   -- when the server stored the row (a resume reports the time away)
     primary key (run_id, session_index, seq),
     foreign key (run_id, session_index) references public.sessions (run_id, session_index) on delete cascade
 );
@@ -70,6 +71,7 @@ create table public.trajectory (
     t_end         double precision not null,
     last_frame    jsonb not null,       -- t, x, z, yaw, pitch, keys of the chunk's last frame (the resume pose)
     data          bytea not null,
+    received_at   timestamptz not null default now(),
     primary key (run_id, session_index, first_seq),
     foreign key (run_id, session_index) references public.sessions (run_id, session_index) on delete cascade
 );
@@ -114,9 +116,21 @@ create table public.interlude_trials (
     right_fruits        integer,
     bonus               double precision,
     locked_at           double precision,
+    paused_seconds      double precision,   -- real seconds held still while the trial was live (the trial clock stops)
     primary key (run_id, session_index, seq),
     foreign key (run_id, session_index) references public.sessions (run_id, session_index) on delete cascade
 );
+
+-- One row per visit that ended in a signature; the typed name lives apart from every analysis table, like the Prolific ID.
+create table public.consents (
+    consent_id   bigint generated always as identity primary key,
+    run_id       uuid not null references public.runs (run_id) on delete cascade,
+    version      text not null,          -- the consent text's version line (StreamingAssets/consent.txt)
+    signature    text not null,          -- the name the participant typed
+    client_time  timestamptz,            -- the participant's clock when they agreed
+    recorded_at  timestamptz not null default now()
+);
+create index consents_run on public.consents (run_id);
 
 -- Registered at release time; run-start refuses a build that is not listed, and a session whose world or Interlude file
 -- hash is not in `worlds` (the hash of either kind of file).
@@ -142,7 +156,8 @@ alter table public.interlude_plan   enable row level security;
 alter table public.interlude_trials enable row level security;
 alter table public.worlds           enable row level security;
 alter table public.releases         enable row level security;
+alter table public.consents         enable row level security;
 
 revoke all on public.runs, public.pid_registry, public.sessions, public.events, public.trajectory,
-              public.interlude_plan, public.interlude_trials, public.worlds, public.releases
+              public.interlude_plan, public.interlude_trials, public.worlds, public.releases, public.consents
     from anon, authenticated;

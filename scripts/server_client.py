@@ -4,7 +4,8 @@ speak, in Python, so the server can be tested end to end and a stored session ca
     client = Client(url, apikey, build={"commit": "abc123", "dirty": False, "platform": "Test", "unity_version": "6000"})
     started = client.start()                       # {"run_id", "token", "status", "resume"}
     client.append(0, session=row, events=[...], frames=array, first_seq=0)
-    client.finish()                                # {"ok", "problems"}
+    client.finish()                                # {"ok", "problems", "completion_code"}
+    client.feedback("text")                        # {"ok"}
 
 `url` is the functions' base ("https://<ref>.supabase.co/functions/v1" deployed; "http://127.0.0.1:54399" for local/serve.ts).
 `upload_session` sends a session of the local layout (rundata.read_session) in batches, the way a recorder would.
@@ -58,10 +59,6 @@ class Client:
             body["consent"] = consent
         return self._take(self._post("run-start", body))
 
-    def resume(self, run_id=None, token=None):
-        """Continue an anonymous run with its token (the old token stops working)."""
-        return self._take(self._post("run-start", {"build": self.build, "run_id": run_id or self.run_id, "token": token or self.token}))
-
     def append(self, session_index, session=None, events=(), frames=None, first_seq=0, plan=None, trials=()):
         """One upload. `frames` is an (n, 6) array whose first frame has sequence number `first_seq`."""
         chunks = []
@@ -81,6 +78,10 @@ class Client:
     def finish(self):
         return self._post("run-finish", {"run_id": self.run_id, "token": self.token})
 
+    def feedback(self, text):
+        """The participant's free-text feedback (one per run; a second call replaces it). Allowed after finish()."""
+        return self._post("feedback", {"run_id": self.run_id, "token": self.token, "text": text})
+
 
 def event_rows(events, first_seq=0):
     """rundata-style event dicts as upload rows (JSON has no NaN: missing numbers are null)."""
@@ -94,20 +95,14 @@ def event_rows(events, first_seq=0):
 
 def upload_session(client, session_index, data, frames_per_chunk=600, events_per_batch=200):
     """Upload `rundata.read_session(...)`'s dict (session, traj, events, plan, trials) in batches, trajectory chunks of
-    `frames_per_chunk` frames. The first batch carries the session row as it stands at the start, the last one its
-    final fields (ended_at, completed, final_score, frame_stats) and the Interlude trials. Returns the last ack."""
+    `frames_per_chunk` frames. The first batch carries the session row as it stands at the start, the last one the Interlude
+    trials, and a final request the row's final fields (ended_at, completed, final_score, frame_stats). Returns its ack."""
     final = {k: v for k, v in data["session"].items() if k not in ("run_id", "session_index")}
     start = {**final, "ended_at": None, "completed": False, "final_score": None, "frame_stats": None}
     rows, traj = event_rows(data["events"]), data["traj"]
     n_batches = max(1, -(-len(traj) // frames_per_chunk), -(-len(rows) // events_per_batch))
-    ack = None
     for b in range(n_batches):
-        last = b == n_batches - 1
-        ack = client.append(
-            session_index, session=final if last and b > 0 else (start if b == 0 else None),
-            events=rows[b * events_per_batch:(b + 1) * events_per_batch],
-            frames=traj[b * frames_per_chunk:(b + 1) * frames_per_chunk], first_seq=b * frames_per_chunk,
-            plan=data["plan"] if b == 0 else None, trials=(data["trials"] or []) if last else ())
-    if n_batches == 1:       # the only batch carried the starting row: send the final fields too
-        ack = client.append(session_index, session=final)
-    return ack
+        client.append(session_index, session=start if b == 0 else None, events=rows[b * events_per_batch:(b + 1) * events_per_batch],
+                      frames=traj[b * frames_per_chunk:(b + 1) * frames_per_chunk], first_seq=b * frames_per_chunk,
+                      plan=data["plan"] if b == 0 else None, trials=(data["trials"] or []) if b == n_batches - 1 else ())
+    return client.append(session_index, session=final)

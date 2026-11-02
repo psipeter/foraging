@@ -12,10 +12,11 @@ ref (default HEAD; uncommitted and untracked files count) and runs the test file
     ./venv/bin/python scripts/run_tests.py --files scripts/world.py docs/SCIENCE.md   # decide for these paths instead
     ./venv/bin/python scripts/run_tests.py -- -k hump   # arguments after -- go to pytest
 
-When a new Python module or test file is added, add it to DEPENDENCIES below.
+A test file depends on the scripts it imports; anything else it reads goes in EXTRA below.
 """
 
 import argparse
+import ast
 import subprocess
 import sys
 from pathlib import Path
@@ -47,76 +48,45 @@ def _is_server_file(path):
     return path.startswith("supabase/") and (path.endswith((".ts", ".sql")))
 
 
-# test file -> what it depends on: exact paths, and predicates over a repo-relative path.
+# What a test file depends on besides the scripts it imports (found by `imports`, transitively; conftest.py counts for every
+# test): files it reads or runs, and predicates over a repo-relative path. A new test file is picked up by the glob.
 # (The Python code reads the SessionConfig .asset YAML; test_world also reads WorldData.cs and the generated .world files.)
-DEPENDENCIES = {
-    "scripts/test_world.py": {
-        "paths": {"scripts/world.py", "Assets/Scripts/World/WorldData.cs"},   # (the C# check names are mirrored)
-        "match": [_is_session_asset, _is_world_file],
-    },
-    "scripts/test_sim.py": {
-        "paths": {"scripts/sim.py", "scripts/agents.py", "scripts/perception.py", "scripts/world.py", "scripts/costs.py", "scripts/conftest.py"},
-        "match": [_is_session_asset],
-    },
-    "scripts/test_agents.py": {
-        "paths": {"scripts/agents.py", "scripts/sim.py", "scripts/perception.py", "scripts/world.py", "scripts/interlude.py", "scripts/costs.py", "scripts/conftest.py",
-                  "scripts/test_sim.py"},
-        "match": [_is_session_asset, _is_interlude_asset],
-    },
-    "scripts/test_specs.py": {
-        "paths": {"scripts/specs.py", "scripts/agents.py", "scripts/perception.py", "scripts/sim.py", "scripts/world.py",
-                  "scripts/costs.py", "scripts/conftest.py", "scripts/test_agents.py", "scripts/test_sim.py"},
-        "match": [_is_session_asset],
-    },
-    "scripts/test_fingerprint.py": {
-        "paths": {"scripts/fingerprint.py", "scripts/specs.py", "scripts/agents.py", "scripts/perception.py", "scripts/sim.py",
-                  "scripts/world.py", "scripts/interlude.py", "scripts/costs.py", "scripts/conftest.py", "scripts/test_agents.py"},
-        "match": [_is_session_asset, _is_interlude_asset],
-    },
-    "scripts/test_results.py": {
-        "paths": {"scripts/results.py", "scripts/fingerprint.py", "scripts/specs.py", "scripts/agents.py", "scripts/perception.py",
-                  "scripts/sim.py", "scripts/world.py", "scripts/interlude.py", "scripts/costs.py", "scripts/conftest.py"},
-        "match": [_is_session_asset, _is_interlude_asset],
-    },
-    "scripts/test_analysis.py": {
-        "paths": {"scripts/analysis.py", "scripts/plots.py", "scripts/results.py", "scripts/fingerprint.py", "scripts/specs.py", "scripts/agents.py",
-                  "scripts/perception.py", "scripts/sim.py", "scripts/world.py", "scripts/costs.py", "scripts/conftest.py"},
-        "match": [_is_session_asset],
-    },
-    "scripts/test_battery.py": {
-        "paths": {"scripts/battery.py", "scripts/analysis.py", "scripts/results.py", "scripts/fingerprint.py", "scripts/specs.py",
-                  "scripts/agents.py", "scripts/sim.py", "scripts/world.py", "scripts/interlude.py", "scripts/conftest.py"},
-        "match": [_is_session_asset, _is_interlude_asset],
-    },
-    "scripts/test_replay.py": {
-        "paths": {"scripts/replay.py", "scripts/rundata.py", "scripts/trajectory_codec.py", "scripts/world.py"},
-        "match": [_is_session_asset],
-    },
-    "scripts/test_trajectory_codec.py": {
-        "paths": {"scripts/trajectory_codec.py"},
-        "match": [],
-    },
-    "scripts/test_rundata.py": {
-        "paths": {"scripts/rundata.py", "scripts/convert_legacy.py", "scripts/trajectory_codec.py", "scripts/replay.py", "scripts/world.py"},
-        "match": [_is_session_asset],
-    },
-    "scripts/test_server.py": {       # skipped when deno, pgserver or psycopg is missing
-        "paths": {"scripts/server_client.py", "scripts/server_admin.py", "scripts/rundata.py", "scripts/trajectory_codec.py", "scripts/replay.py"},
-        "match": [_is_server_file],
-    },
-    "scripts/test_visibility.py": {
-        "paths": {"scripts/visibility.py", "scripts/replay.py", "scripts/rundata.py", "scripts/world.py"},
-        "match": [],
-    },
-    "scripts/test_mutation_check.py": {       # run_tests.py is a path because mutation_check imports it
-        "paths": {"scripts/mutation_check.py", "scripts/run_tests.py"},
-        "match": [],
-    },
-    "scripts/test_interlude.py": {
-        "paths": {"scripts/interlude.py", "scripts/world.py"},
-        "match": [_is_session_asset, _is_interlude_asset, _is_interlude_file],
-    },
+EXTRA = {
+    "scripts/test_world.py": ({"Assets/Scripts/World/WorldData.cs"}, [_is_session_asset, _is_world_file]),   # (the C# check names are mirrored)
+    "scripts/test_sim.py": (set(), [_is_session_asset]),
+    "scripts/test_agents.py": (set(), [_is_session_asset, _is_interlude_asset]),
+    "scripts/test_specs.py": (set(), [_is_session_asset]),
+    "scripts/test_fingerprint.py": (set(), [_is_session_asset, _is_interlude_asset]),
+    "scripts/test_results.py": (set(), [_is_session_asset, _is_interlude_asset]),
+    "scripts/test_analysis.py": (set(), [_is_session_asset]),
+    "scripts/test_battery.py": (set(), [_is_session_asset, _is_interlude_asset]),
+    "scripts/test_replay.py": ({"scripts/trajectory_codec.py"}, [_is_session_asset]),   # (kept from the old table)
+    "scripts/test_rundata.py": (set(), [_is_session_asset]),
+    "scripts/test_server.py": ({"scripts/load_test.py"}, [_is_server_file]),       # skipped when deno, pgserver or psycopg is missing
+    "scripts/test_mutation_check.py": ({"scripts/run_tests.py"}, []),               # mutation_check imports run_tests
+    "scripts/test_interlude.py": (set(), [_is_session_asset, _is_interlude_asset, _is_interlude_file]),
 }
+
+
+def imports(module, seen=None):
+    """The scripts/ modules `module` imports, directly or not (itself included)."""
+    seen = set() if seen is None else seen
+    path = ROOT / "scripts" / f"{module}.py"
+    if module in seen or not path.exists():
+        return seen
+    seen.add(module)
+    for node in ast.walk(ast.parse(path.read_text())):
+        names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""] if isinstance(node, ast.ImportFrom) else []
+        for name in names:
+            imports(name.split(".")[0], seen)
+    return seen
+
+
+DEPENDENCIES = {}
+for _test in sorted(ROOT.glob("scripts/test_*.py")):
+    _test = f"scripts/{_test.name}"
+    _paths, _match = EXTRA.get(_test, (set(), []))
+    DEPENDENCIES[_test] = {"paths": _paths | {"scripts/conftest.py"} | {f"scripts/{m}.py" for m in imports(Path(_test).stem)}, "match": _match}
 
 
 def changed_files(since):

@@ -1,4 +1,4 @@
-// handlers.ts -- the three endpoints as functions of (db, body): validation, chunk decoding, calling the SQL. No HTTP
+// handlers.ts -- the four endpoints as functions of (db, body): validation, chunk decoding, calling the SQL. No HTTP
 // here (http.ts) and no Deno-specific database code (db.ts), so they run the same locally and deployed.
 
 import { ChunkError, decodeChunk, fromBase64 } from './chunk.ts';
@@ -13,6 +13,8 @@ export class HttpError extends Error {
 const MAX_EVENTS = 5000;
 const MAX_CHUNKS = 50;
 const MAX_TRIALS = 200;
+const MAX_FEEDBACK = 5000;
+// Mirror of IdPattern in Assets/Scripts/Session/ConsentScreen.cs.
 const PID = /^[A-Za-z0-9_-]{1,64}$/;
 
 type Body = Record<string, unknown>;
@@ -81,8 +83,13 @@ export function fromDbError(e: DbError): HttpError {
   return new HttpError(500, 'internal');
 }
 
+// The study's Prolific completion code (a secret of the project; the default is a dummy until the study has a real one).
+function completionCode(): string {
+  return Deno.env.get('PROLIFIC_COMPLETION_CODE') ?? 'DUMMY-COMPLETION-CODE';
+}
+
 // {build: {commit, dirty, platform, unity_version}, prolific_pid?, consent?: {version, signature, at}} starts or (with a Prolific ID the server knows) continues
-// a run; {run_id, token, build} continues an anonymous run. Returns {run_id, token, status, resume}; a finished run has no token.
+// a run. Returns {run_id, token, status, resume}; a finished run has no token but the completion code.
 export function runStart(db: Db, body: Body) {
   return guarded(async () => {
     const build = body.build as Body;
@@ -95,24 +102,19 @@ export function runStart(db: Db, body: Body) {
     };
     const token = newToken();
     const hash = await sha256Hex(token);
-    let result;
-    if (body.token !== undefined) {
-      const oldHash = await sha256Hex(str(body, 'token', 100) as string);
-      result = await db.call('server.resume_run', [runId(body), oldHash, hash, clean]);
-    } else {
-      const pid = str(body, 'prolific_pid', 64, false);
-      if (pid !== null && !PID.test(pid)) bad('prolific_pid has unexpected characters');
-      let consent = null;
-      if (body.consent !== undefined && body.consent !== null) {
-        const c = body.consent as Body;
-        if (typeof c !== 'object' || Array.isArray(c)) bad('consent must be an object');
-        const at = str(c, 'at', 40, false);
-        if (at !== null && Number.isNaN(Date.parse(at))) bad('consent.at is not a time');
-        consent = { version: str(c, 'version', 100), signature: str(c, 'signature', 200), at };
-      }
-      result = await db.call('server.start_run', [hash, clean, pid, consent]);
+    const pid = str(body, 'prolific_pid', 64, false);
+    if (pid !== null && !PID.test(pid)) bad('prolific_pid has unexpected characters');
+    let consent = null;
+    if (body.consent !== undefined && body.consent !== null) {
+      const c = body.consent as Body;
+      if (typeof c !== 'object' || Array.isArray(c)) bad('consent must be an object');
+      const at = str(c, 'at', 40, false);
+      if (at !== null && Number.isNaN(Date.parse(at))) bad('consent.at is not a time');
+      consent = { version: str(c, 'version', 100), signature: str(c, 'signature', 200), at };
     }
-    return result.status === 'in_progress' ? { ...result, token, has_resume: result.resume != null } : result;
+    const result = await db.call('server.start_run', [hash, clean, pid, consent]);
+    if (result.status === 'in_progress') return { ...result, token, has_resume: result.resume != null };
+    return result.status === 'finished' ? { ...result, completion_code: completionCode() } : result;
   });
 }
 
@@ -149,8 +151,17 @@ export function runFinish(db: Db, body: Body) {
   return guarded(async () => {
     const hash = await sha256Hex(str(body, 'token', 100) as string);
     const result = await db.call('server.finish_run', [runId(body), hash]);
-    // The study's Prolific completion code (a secret of the project; the default is a dummy until the study has a real one). Given even when
-    // `ok` is false: missing data is the researcher's problem to look into, not a reason to withhold the participant's payment.
-    return { ...result, completion_code: Deno.env.get('PROLIFIC_COMPLETION_CODE') ?? 'DUMMY-COMPLETION-CODE' };
+    // Given even when `ok` is false: missing data is the researcher's problem to look into, not a reason to withhold the participant's payment.
+    return { ...result, completion_code: completionCode() };
+  });
+}
+
+// {run_id, token, text} -> {ok}; the participant's free-text feedback (one per run, a second one replaces it). Allowed after the run is finished.
+export function saveFeedback(db: Db, body: Body) {
+  return guarded(async () => {
+    const text = str(body, 'text', MAX_FEEDBACK) as string;
+    const hash = await sha256Hex(str(body, 'token', 100) as string);
+    await db.call('server.save_feedback', [runId(body), hash, text]);
+    return { ok: true };
   });
 }

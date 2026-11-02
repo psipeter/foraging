@@ -423,3 +423,6 @@ verify_jwt = false
 
 [functions.run-finish]
 verify_jwt = false
+
+[functions.feedback]
+verify_jwt = false

@@ -18,6 +18,7 @@ Edge Functions (service role) read or write.
 | `trajectory` | chunk | `run_id`, `session_index`, `first_seq`, `n_frames`, `t_start`, `t_end`, `data` bytea |
 | `interlude_plan` | session | `run_id`, `session_index`, `order` (the shuffled trial list, written at the Interlude's start) |
 | `interlude_trials` | trial | the columns of today's `interlude.csv`, plus `run_id`, `session_index`, `seq` and, at the end, `paused_seconds` (real seconds the game was held still while the trial was live) |
+| `feedback` | optional free text from the final screen | `run_id` (primary key: one per run, a second submit replaces it), `text` (1 to 5000 characters), `created_at`, `updated_at`; written by `server.save_feedback`, which accepts the run's token also after the run is finished |
 | `worlds`, `releases` | registered world hash / allowed build commit | filled by a release script, read by `run-start` |
 
 Unique keys make every upload idempotent: `(run_id, session_index, seq)` for `events` and `interlude_trials`, `(run_id,
@@ -42,13 +43,13 @@ The C# codec is tested against the golden bytes and a Python-produced fixture in
 One folder per session, one file per table, the same columns as the database (`events.csv`, `trajectory.csv` of the quantized
 values, `interlude_trials.csv`, `interlude_plan.json`, `session.json` = the `sessions` row, `run.json` above them). `rundata.py`
 reads and writes it (a cut-short last line is dropped and reported, anything else bad is an error); `replay.load_session_log`
-reads it (and still the legacy DataLogger folders: the legacy loader and `convert_legacy.py` are kept only until the old-format tests are rewritten); `convert_legacy.py` turns a legacy folder into it. The
-migration is `supabase/migrations/20261029000000_online_data.sql` (parsed with PostgreSQL's own parser, `pglast`; **not yet run
-against a database**).
+reads it (the legacy DataLogger folder format and its loader and converter are gone). `pull` also writes the world and Interlude files the run's sessions used into `<out>/_worlds/<sha8>_<name>`, taken from git at the run's build commit (a browser never archives worlds); replay looks there. The
+migration is `supabase/migrations/20261029000000_online_data.sql` (with `20261029000100_online_functions.sql`; applied to the project and run
+by `test_server.py` against a real PostgreSQL).
 
 ## 3. Upload protocol (built and tested locally)
 
-Three Edge Functions (`supabase/functions/`, Deno, `verify_jwt = false` and an `apikey` header filter as in `evidence_integration`),
+Four Edge Functions (`supabase/functions/`; `feedback` was added 2026-11-02, see below; Deno, `verify_jwt = false` and an `apikey` header filter as in `evidence_integration`),
 all POST with a JSON body, each a thin wrapper (`_shared/handlers.ts`: validation, chunk decoding) over a function of the
 unexposed `server` schema (`migrations/20261029000100_online_functions.sql`: authentication, idempotent inserts, gap checks, resume
 state), reached over a direct database connection (`SUPABASE_DB_URL`). Errors: 400 `invalid` / `invalid_chunk`, 401 `unauthorized`,
@@ -56,7 +57,7 @@ state), reached over a direct database connection (`SUPABASE_DB_URL`). Errors: 4
 `gap_trials` (the client's sequence numbers disagree with the server: re-sync through `run-start`), 413, 500 `internal`.
 - **`run-start`** `{build: {commit, dirty, platform, unity_version}, prolific_pid?}` starts a run, or continues the Prolific ID's run
   with a fresh token (the old one stops working); `{build, run_id, token}` continues an anonymous run the same way. Returns
-  `{run_id, token, status, resume}`; a finished run returns its status and no token. A build commit not in `releases` is refused;
+  `{run_id, token, status, resume}`; a finished run returns its status and the completion code, no token. A build commit not in `releases` is refused;
   every commit that touches a run is kept in `runs.build_commits`; a dirty build is accepted and flagged.
 - **`append`** `{run_id, token, session_index, session?, events?, trajectory?: [base64 chunk], plan?, trials?}` returns
   `{ok, events_next, trajectory_next, trials_next}`. **A 200 means every row of the request is stored** (all or nothing). Repeats of
@@ -81,7 +82,7 @@ everything on session end and on page unload), and the unload flush for WebGL.
 ### Deploying (done once for `emdgczidpqdhftzujyte`; repeat after a change)
 
 The CLI is the one in `evidence_integration/task_backend/node_modules/.bin/supabase`; `supabase/config.toml` (from `supabase init`) has
-`verify_jwt = false` for the three functions. Facts learned doing it: **no Docker and no database password are needed**: after
+`verify_jwt = false` for the functions. Facts learned doing it: **no Docker and no database password are needed**: after
 `supabase link --project-ref emdgczidpqdhftzujyte` (the CLI is logged in), `db push`, `db query --linked "<sql>"` / `-f file.sql` and
 `migration list` reach the database through a temporary login role, and `functions deploy run-start append run-finish --no-verify-jwt
 --use-api` bundles on Supabase's side (the `npm:postgres` import and the relative `_shared/` imports both worked). `db push` prints a
@@ -107,7 +108,7 @@ history would grow by that much per deploy).
 1. In `Assets/StreamingAssets/online.json` set `"enabled": true` (the URL and the publishable key are already there; the build refuses
    to run in a browser without it). Registered worlds must match the ones in the build (`server_admin.py register-worlds` again if
    they were regenerated).
-2. Commit the code, then register that commit: `server_admin.py register-release --commit <hash> --sessions 10` (or the SQL in the
+2. Commit the code, then register that commit: `server_admin.py register-release --commit <hash> --sessions 12` (or the SQL in the
    walkthrough). A build from a dirty tree is accepted but flagged.
 3. Unity: File > Build Profiles (or Build Settings) > WebGL, **not** a development build, scenes `Boot` then `SampleScene` (already the
    list), Player Settings > Publishing > Decompression Fallback **on** (already set in this project), output to e.g. `Builds/web`.
@@ -171,7 +172,7 @@ count of `session_resume` events are what to apply them to.
 
 0. **Prerequisites (PI):** create the separate Supabase project, `supabase link` from the repo (a new top-level `supabase/`
    directory); keys stay out of git. Decide where the release registry is edited.
-1. **Schema and codec (Python only). Done.** Migration, codec and tests, local layout with reader, writer and legacy converter,
+1. **Schema and codec (Python only). Done.** Migration, codec and tests, local layout with reader and writer,
    `replay.py` and `visibility.py` reading the online layout (`fields(event)` replaces the `note` parsing). Not done: the `pull`
    script from the database (needs phase 2's server; it will write this same layout). *Verified:* `scripts/run_tests.py --fast`
    (97 passed); 76 real debug logs verify as before after quantization; the SQL parses.
@@ -183,8 +184,8 @@ count of `session_resume` events are what to apply them to.
 3. **Client recorder. Done (2026-10-29).** `DataLogger` records rows and batches them (events within a second; trajectory every 5 s
    online, every second offline) to `DataPipeline`, which owns a `FileSink` (the local layout, always) and an `HttpSink` (the queue,
    one request in flight, backoff on network errors and 5xx, a 4xx stops uploading with a message), starts the run (`run-start`), and
-   gates the game with `PauseGate` (the only writer of `Time.timeScale`; `pause` events carry a `reason`: `instructions`, `upload`,
-   `instructions+upload`; this replaces the planned `upload_pause`/`upload_resume` event types). Leaving a session's end screen and
+   gates the game with `PauseGate` (the only writer of `Time.timeScale`; `pause` events carry a `reason`: `instructions`, `upload`, `pointer` (browser) and
+   their combinations joined by `+` (`upload` also covers the Connecting, Finishing up, error and completion screens); this replaces the planned `upload_pause`/`upload_resume` event types). Leaving a session's end screen and
    quitting wait for the drain. The Interlude's shuffled order is logged (`interlude_plan`) and its trials go through the logger.
    `harvests.csv` and `manifest.json` are gone (derived / replaced by the session row); `note` strings became JSON payloads.
    `online.json` in `StreamingAssets` (`enabled`, `url`, `apikey`, `uploadInEditor`; committed with `enabled: false`) or `-onlineUrl` /
@@ -234,3 +235,22 @@ count of `session_resume` events are what to apply them to.
 - Load test: `scripts/load_test.py` (N participants in real time at the game's upload cadence; usage in its docstring; register its commit as a release with `n_sessions` 1 and delete its rows afterwards). **2026-10-31, project `emdgczidpqdhftzujyte`, 20 participants x 60 s:** the first run had 33% 500s because every warm Edge Function isolate held its own direct database connection (48 idle of a limit of 60); with `idle_timeout: 2` in `db.ts` the second run had no errors and no retries (append median 1.0 s, p95 1.2 s, one call of 6.2 s; run-start/finish about 1 s). The secret `FORAGING_POOLER_URL` (the transaction pooler string, port 6543; `db.ts` prefers it) is now set. **50 participants x 60 s through it:** 3,051 appends, median 0.64 s, p95 1.2 s, p99 2.0 s, max 4.4 s; run-start and run-finish about 0.6 s; one transient 503 (one retry) and one call over the 4 s grace window; all 50 runs finished. Not tried above 50; rerun at the target size before a larger launch.
 - Prolific: the completion code is a dummy (`DUMMY-COMPLETION-CODE`) until the study exists; then `supabase secrets set PROLIFIC_COMPLETION_CODE=<code>` (no redeploy of the game; `run-finish` reads it on each call). Not built: a flush when the tab is closed mid-upload.
 - Where the release script runs and who registers world hashes and commits.
+
+
+## Feedback field on the final screen (2026-11-02)
+A browser's final screen (`DataPipeline.ShowComplete`) shows the completion code and, for a run whose token this page holds, an optional multi-line
+box (`FeedbackScreen`) with a Send button; the text goes to the `feedback` function (`{run_id, token, text}` -> `{ok}`; migration
+`20261102000000_feedback.sql`, `handlers.ts: saveFeedback`, `server_client.Client.feedback`). The mouse is released for the screen
+(`PointerLockGuard.Suspended`), and a participant from Prolific returns by a "Return to Prolific" button instead of the 6 s timer (a
+participant with no token, i.e. one who returns to a finished run, gets the code and the timer as before). Skipping it costs nothing: the code is
+shown first. Retries on network errors until it is stored; a second Send replaces the first. Deploy: apply the migration, `supabase functions
+deploy feedback --no-verify-jwt` (config.toml has the entry), then the new build. Free text can contain personal information: the IRB text
+should say so; feedback is tied to the run (and so to the Prolific ID through `pid_registry`).
+
+**Optional TODO: a scoreboard on the final screen** (not built). Ask whether to show the score, then a ranked high-to-low table with the
+participant's own row, and "..." down to it when long. Design notes: a public, anonymised read endpoint (rank and score, "You" for the
+participant's row; no Prolific IDs); a stored yes/no per run (new column or table); the total computed on the server from `sessions.final_score`
+(sessions that are neither practice nor Interlude) plus `interlude_trials.bonus`, as the final screen adds it; rank only runs of the same
+release (the frozen pilot build), among all finished runs with only opted-in rows listed (so ranks are true); the completion code and the Prolific
+return must not wait on it; consent/IRB text must cover showing a score to others; mention of the scoreboard in the instructions may change motivation.
+About a day of work plus a browser test.
