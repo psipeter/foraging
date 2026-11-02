@@ -55,8 +55,16 @@ TIE_TOLERANCE = 0.05          # |R_left - R_right| below this: either answer is 
 POOL_SAMPLES = 500_000        # random (spawn, heading) placements searched for the moisture relations below
 RANDOM_POOL_SAMPLES = 40_000  # placements for the random mode (it needs no particular moisture relation, only valid sites)
 RANDOM_DRAWS = 300            # (shape, colour) pairs tried on a placement before moving to another
-MODES = ("designed", "random")
-MODE_CODES = {0: "designed", 1: "random"}   # SessionConfig.interludeMode (InterludeMode enum order)
+MODES = ("designed", "random", "reward_gap", "feature_gap", "hybrid")
+MODE_CODES = {0: "designed", 1: "random", 2: "reward_gap", 3: "feature_gap", 4: "hybrid"}   # SessionConfig.interludeMode (InterludeMode enum order)
+GAP_MODES = ("reward_gap", "feature_gap", "hybrid")
+GAP_SITES = 60                # placements whose bush pairs the gap modes choose their trials from (one trial per placement)
+GAP_PAIRS = 150               # (shape, colour) pairs drawn on each of them
+GAP_TOP_QUANTILE = 0.98       # the largest gap a gap mode spreads its trials to: this quantile of the candidate pairs' gaps
+GAP_SEARCH_STEPS = 30_000     # swaps tried when choosing the trials from the candidates
+ORDER_DRAWS = 3000            # gap modes: random orders tried for the file order (the same for every participant)
+ORDER_MAX_RUN = 3             # ... which may not put the same correct side more than this many times in a row
+FEATURE_WEIGHTS = {"shape": 1.0, "color": 1.0, "moisture": 1.0}   # perceptual weight of each channel in `feature_gap` (no measured JNDs yet: equal)
 SAME_TOL = 0.02               # |moisture difference| for "the same moisture"
 ONE_LEVEL = (0.20, 0.34)      # |moisture difference| for "one plateau level apart" (levels are ~0.27 apart)
 TWO_LEVELS_MIN = 0.45         # ... and for "two or more levels apart"
@@ -69,6 +77,14 @@ HUMP_TOLERANCE = 0.5          # a rise then a fall of more than this (world unit
 MAX_ATTEMPTS = 300            # placements tried per trial before giving up
 GRADED_TARGETS = [0.15, 1.2]  # range of |R difference| in units of the spread of R across random bushes (geometric steps)
 PRACTICE_GRADED_TARGET = 1.5
+
+
+def feature_gap(a, b):
+    """Perceptual distance of two bushes: the weighted root mean square of their differences in shape, colour and moisture, each on its
+    0-1 scale, so 0 = identical and 1 = opposite ends of every channel. All three channels count, relevant to the reward or not,
+    because a participant sees them all."""
+    w = FEATURE_WEIGHTS
+    return math.sqrt(sum(w[f] * (a[f] - b[f]) ** 2 for f in FEATURES) / sum(w.values()))
 
 
 # --------------------------------------------------------------------------------------------------
@@ -166,6 +182,9 @@ KIND_MASKS = {
 def relevant_features(params):
     rf = params.reward_function
     w = {f: abs(float(rf[f + "Component"]["weight"])) for f in FEATURES}
+    for b in rf.get("bumps") or []:
+        w["shape"] += abs(float(b["height"]))          # a bump makes both of its features relevant
+        w["color"] += abs(float(b["height"]))
     return sorted(FEATURES, key=lambda f: -w[f]), [f for f in FEATURES if w[f] > 0.0]
 
 
@@ -179,6 +198,7 @@ class Designer:
         self.used = []                                  # spawn points already taken
         self._masks = {}
         self._cache = {}
+        self._site_ok = {}
         # spread of R_bush over typical bushes: shape and colour uniform, moisture as the terrain has it
         m = pool["m_left"][rng.integers(0, len(pool["m_left"]), 4000)]
         sh, co = rng.uniform(0, 1, 4000), rng.uniform(0, 1, 4000)
@@ -252,7 +272,10 @@ class Designer:
     def _final_ok(self, i, lt, rt):
         s = self.pool["spawn"][i]
         for b in (lt, rt):
-            if not bool(self.t.is_tree_site(b["pos"][0], b["pos"][1])) or not self._los_ok(s, b["pos"]):
+            key = (i, tuple(np.round(b["pos"], 6)))
+            if key not in self._site_ok:
+                self._site_ok[key] = bool(self.t.is_tree_site(b["pos"][0], b["pos"][1])) and self._los_ok(s, b["pos"])
+            if not self._site_ok[key]:
                 return False
         return True
 
@@ -342,6 +365,24 @@ class Designer:
             return None
 
         return self.attempt("apart" if self.min_elevation_apart() > 0.0 else "any", build)
+
+    def gap_candidates(self):
+        """Gap modes: bush pairs on GAP_SITES placements, GAP_PAIRS random (shape, colour) pairs each, as rows
+        (placement, left bush, right bush, reward gap, feature gap, left is better). Pairs within the tie tolerance are left out; whether a pair is in
+        view is checked only for the pairs chosen (it is the slow part, a terrain line of sight per bush)."""
+        rows = []
+        for _ in range(GAP_SITES):
+            try:
+                i = self.pick("any")
+            except RuntimeError:
+                break
+            for _ in range(GAP_PAIRS):
+                lt = self.bush(i, "left", *self.rng.uniform(0, 1, 2))
+                rt = self.bush(i, "right", *self.rng.uniform(0, 1, 2))
+                d = self.value(lt) - self.value(rt)
+                if abs(d) >= TIE_TOLERANCE:
+                    rows.append((i, lt, rt, abs(d), feature_gap(lt, rt), d > 0))
+        return rows
 
     def _extreme(self, feature):
         if feature not in self.relevant:
@@ -463,15 +504,97 @@ def build_random_trials(params, terrain, pool, rng):
     return _finish_trials(trials, des, rng), des
 
 
-def _finish_trials(trials, des, rng):
-    """Shuffle the file order once (seeded; Unity shuffles again per participant) and add each trial's true values and correct side."""
-    trials = [trials[j] for j in rng.permutation(len(trials))]
+def choose_gap_trials(rows, n, axes, minima, rng):
+    """From candidate rows (placement, left, right, reward gap, feature gap, left is better) choose `n` on distinct placements, half with
+    the left bush better, so that the sorted gaps on each axis (3 = reward, 4 = feature) are as close as possible to n evenly spaced values
+    from that axis's minimum to GAP_TOP_QUANTILE of the candidates' gaps (the target of bin k is its centre). Hill climbing on swaps.
+    Returns (chosen rows, {axis: (low, high)})."""
+    rows = [r for r in rows if all(r[a] >= minima[a] for a in axes)]
+    if len({r[0] for r in rows}) < n:
+        raise RuntimeError(f"only {len(rows)} usable candidate pairs on {len({r[0] for r in rows})} placements for {n} trials; lower the minimum gaps")
+    gaps = np.array([[r[a] for a in axes] for r in rows])
+    span = {a: (minima[a], float(np.quantile(gaps[:, j], GAP_TOP_QUANTILE))) for j, a in enumerate(axes)}
+    targets = np.array([[lo + (k + 0.5) / n * (hi - lo) for k in range(n)] for lo, hi in (span[a] for a in axes)])
+    width = np.array([[hi - lo] for lo, hi in (span[a] for a in axes)])
+    left = np.array([r[5] for r in rows])
+    site = np.array([r[0] for r in rows])
+
+    def loss(sel):
+        return float((((np.sort(gaps[sel], axis=0).T - targets) / width) ** 2).sum())
+
+    n_left = (n + int(rng.integers(0, 2))) // 2
+    sel = []
+    for side, count in ((True, n_left), (False, n - n_left)):
+        for c in rng.permutation(np.flatnonzero(left == side)):
+            if len([k for k in sel if left[k] == side]) == count:
+                break
+            if site[c] not in {site[k] for k in sel}:
+                sel.append(int(c))
+    if len(sel) < n:
+        raise RuntimeError("could not choose Interlude trials on distinct placements with both sides better")
+    best = loss(sel)
+    for _ in range(GAP_SEARCH_STEPS):
+        p = int(rng.integers(n))
+        c = int(rng.integers(len(rows)))
+        if left[c] != left[sel[p]] or (site[c] in {site[k] for j, k in enumerate(sel) if j != p}):
+            continue
+        trial = sel.copy()
+        trial[p] = c
+        value = loss(trial)
+        if value <= best:
+            sel, best = trial, value
+    return [rows[k] for k in sel], span
+
+
+def build_gap_trials(params, terrain, pool, rng, mode):
+    """Gap modes: `interludeTrialCount` pairs spread evenly over the reward gap (`reward_gap`), the feature gap (`feature_gap`) or both
+    (`hybrid`; chosen jointly, so each is even on its own; the two gaps are correlated because reward is a function of the features, which is accepted). The same trials for every participant: the pairs come
+    from the world seed. No elevation rule is needed: moisture is one of the feature channels and a reward feature in S3/S4."""
+    n = int(params.interlude_trial_count)
+    des = Designer(params, terrain, pool, rng)
+    axes = {"reward_gap": (3,), "feature_gap": (4,), "hybrid": (3, 4)}[mode]
+    minima = {3: float(getattr(params, "interlude_min_reward_gap", 0.25)), 4: float(getattr(params, "interlude_min_feature_gap", 0.1))}
+    rows = des.gap_candidates()
+    while True:
+        chosen, span = choose_gap_trials(rows, n, axes, minima, rng)
+        hidden = [r for r in chosen if not des._final_ok(*r[:3])]
+        if not hidden:
+            break
+        rows = [r for r in rows if not any(r is h for h in hidden)]          # a chosen pair not in view: choose again without it
+    trials = [{"type": mode, "varied": "", "place": r[0], "left": r[1], "right": r[2]} for r in chosen]
+    des.gap_span = {("reward", "feature")[a - 3]: span[a] for a in axes}
+    return _finish_trials(trials, des, rng, ordered=True), des
+
+
+def _order_penalty(rows):
+    """How much a presentation order invites a strategy other than the learned values: the same correct side more than ORDER_MAX_RUN
+    times in a row, alternating sides, and a trend or a lag-1 autocorrelation in either gap (a run of ever-larger or ever-smaller differences)."""
+    sides = [r[0] for r in rows]
+    runs = sum(1 for k in range(len(sides) - ORDER_MAX_RUN) if len(set(sides[k:k + ORDER_MAX_RUN + 1])) == 1)
+    alternating = sum(1 for k in range(len(sides) - 3) if sides[k] == sides[k + 2] != sides[k + 1] and sides[k + 1] == sides[k + 3])
+    cost = 10.0 * (runs + alternating)
+    pos = np.arange(len(rows))
+    for column in (1, 2):
+        g = np.array([r[column] for r in rows])
+        cost += abs(np.corrcoef(pos, g)[0, 1]) + abs(np.corrcoef(g[:-1], g[1:])[0, 1])
+    return cost
+
+
+def _finish_trials(trials, des, rng, ordered=False):
+    """Shuffle the file order once (seeded) and add each trial's true values and correct side. The file order is what every participant
+    sees. `ordered` (gap modes): of ORDER_DRAWS shuffles keep the one with the least order structure (`_order_penalty`)."""
     for t in trials:
         t["left_value"], t["right_value"] = des.value(t["left"]), des.value(t["right"])
         delta = t["left_value"] - t["right_value"]
         t["correct"] = "either" if abs(delta) < TIE_TOLERANCE else ("left" if delta > 0 else "right")
         t["delta_value"] = delta
-    return trials
+    if ordered:
+        perms = [rng.permutation(len(trials)) for _ in range(ORDER_DRAWS)]
+        key = lambda perm: _order_penalty([(trials[j]["correct"], abs(trials[j]["delta_value"]), feature_gap(trials[j]["left"], trials[j]["right"])) for j in perm])
+        perm = min(perms, key=key)
+    else:
+        perm = rng.permutation(len(trials))
+    return [trials[j] for j in perm]
 
 
 # --------------------------------------------------------------------------------------------------
@@ -514,9 +637,11 @@ def generate_interlude(name, pool_samples=None, seed=None, mode=None, **override
     terrain = generate_world(base, seed).terrain
     rngs = [np.random.default_rng(c) for c in np.random.SeedSequence([seed, 913]).spawn(3)]
     mode = interlude_mode(params, mode)
-    if mode == "random":
+    if mode == "designed" and params.reward_function.get("bumps"):
+        raise ValueError(f"{name}: designed Interludes assume additive reward terms (contrasts, extrapolation); use a random or gap mode")
+    if mode == "random" or mode in GAP_MODES:
         pool = make_pool(params, terrain, rngs[0], RANDOM_POOL_SAMPLES if pool_samples is None else pool_samples)
-        trials, des = build_random_trials(params, terrain, pool, rngs[1])
+        trials, des = build_random_trials(params, terrain, pool, rngs[1]) if mode == "random" else build_gap_trials(params, terrain, pool, rngs[1], mode)
     else:
         pool = make_pool(params, terrain, rngs[0], pool_samples)
         trials, des = build_trials(params, terrain, pool, rngs[1])
@@ -567,6 +692,11 @@ def generate_interlude(name, pool_samples=None, seed=None, mode=None, **override
     }
     if mode != "designed":
         sidecar["mode"] = mode            # (designed files stay byte-identical to those written before modes existed)
+        for entry, t in zip(sidecar["trials"], trials):
+            entry["rewardGap"] = abs(float(t["delta_value"]))
+            entry["featureGap"] = feature_gap(t["left"], t["right"])
+    if mode in GAP_MODES:
+        sidecar["gapSpan"] = {k: [float(v[0]), float(v[1])] for k, v in des.gap_span.items()}
     return sidecar, params, terrain
 
 

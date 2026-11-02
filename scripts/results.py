@@ -318,7 +318,7 @@ def record_run(agent, session, seeds, tag, *, note=None, kind="session", percept
                interlude_mode=None, checkpoints=None, store=None, progress=None):
     """Run `agent` (a factory, a registry name or a spec dict) on one world per seed and record it, computing only the seeds that are
     not already recorded for this agent, environment and code version. kind="interlude" also evaluates each agent on that world's
-    Interlude (n_samples repeated choices per trial; `interlude_mode` "designed" or "random", None = the asset's own; the trial count is
+    Interlude (n_samples repeated choices per trial; `interlude_mode` one of interlude.MODES, None = the asset's own; the trial count is
     the override interlude_trial_count) and records the accuracy. `checkpoints` (kind interlude, session times in seconds) also scores a copy of the agent as
     it was at each time, a learning curve from one session per seed (for an agent that plans for the end of the session, the agent as it stood at that time of a session of this length). `store` is a Store (default: the project database,
     opened and closed here). Returns a RunReport."""

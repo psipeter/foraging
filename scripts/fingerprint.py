@@ -39,7 +39,7 @@ AGENT_FILES = ("agents.py", "specs.py")
 SIM_FIELDS = (
     "camera_field_of_view", "canopy_width_range", "eye_height", "fruit_count", "fruit_harvest_duration", "harvest_max_angle",
     "harvest_range_gap_base", "harvest_range_gap_per_radius", "interlude_bonus_per_correct", "interlude_bush_bearing",
-    "interlude_bush_distance", "interlude_for", "interlude_min_elevation_difference", "interlude_mode", "interlude_trial_count", "is_interlude", "is_practice", "moisture_terrace_levels",
+    "interlude_bush_distance", "interlude_for", "interlude_min_elevation_difference", "interlude_min_feature_gap", "interlude_min_reward_gap", "interlude_mode", "interlude_trial_count", "is_interlude", "is_practice", "moisture_terrace_levels",
     "moisture_terrace_residual", "moisture_terrace_sharpness", "mountain_band_width", "mountain_block_threshold",
     "mountain_boundary_jitter", "mountain_height", "mountain_noise_scale", "placement_jitter", "player_move_speed",
     "reward_function", "reward_std", "session_duration", "session_name", "shape_range", "snow_line_fraction",
@@ -77,7 +77,7 @@ def interlude_mode_of(name, mode=None, overrides=None):
 def environment(session, overrides=None, percept=None, kind="session", n_samples=None, interlude_mode=None, checkpoints=None):
     """The environment a result was computed in, as a plain dict. `percept` is the run's sensor override (a Component, or None for
     the world's own); `kind` is "session" or "interlude" (then `n_samples` is the number of repeated choices per trial and
-    `interlude_mode` the trial design, "designed" or "random", None = the Interlude asset's own, and `checkpoints` the session times
+    `interlude_mode` the trial design, one of interlude.MODES, None = the Interlude asset's own, and `checkpoints` the session times
     (seconds) at which a copy of the agent is also scored on the Interlude)."""
     if kind not in ("session", "interlude"):
         raise ValueError(f"kind must be 'session' or 'interlude', not '{kind}'")

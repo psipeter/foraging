@@ -169,8 +169,8 @@ def test_sim_fields_cover_every_session_parameter_the_simulator_reads(monkeypatc
 
 def test_an_interlude_environment_records_its_mode_and_only_an_interlude_has_one():
     asset_mode = environment("S1", kind="interlude", n_samples=5)["interlude_mode"]                  # whatever the asset says
-    assert asset_mode in ("designed", "random")
-    other = "designed" if asset_mode == "random" else "random"
+    assert asset_mode in ("designed", "random", "reward_gap", "feature_gap", "hybrid")
+    other = "designed" if asset_mode != "designed" else "random"
     assert environment("S1", kind="interlude", n_samples=5, interlude_mode=asset_mode) == environment("S1", kind="interlude", n_samples=5)
     assert environment("S1", kind="interlude", n_samples=5, interlude_mode=other)["interlude_mode"] == other
     assert environment_hash("S1", kind="interlude", n_samples=5, interlude_mode=other) != environment_hash("S1", kind="interlude", n_samples=5)

@@ -117,10 +117,15 @@ def _basis(component, x):
 
 
 def bush_value(reward_function, shape, color, moisture):
-    """R_bush = w1 f1(shape) + w2 f2(color) + w3 f3(moisture); no normalization."""
-    return (_basis(reward_function["shapeComponent"], shape)
-            + _basis(reward_function["colorComponent"], color)
-            + _basis(reward_function["moistureComponent"], moisture))
+    """R_bush = w1 f1(shape) + w2 f2(color) + w3 f3(moisture) + the sum of the Gaussian bumps over (shape, color); no normalization."""
+    value = (_basis(reward_function["shapeComponent"], shape)
+             + _basis(reward_function["colorComponent"], color)
+             + _basis(reward_function["moistureComponent"], moisture))
+    for b in reward_function.get("bumps") or []:
+        sigma = max(float(b["width"]), 1e-4)
+        ds, dc = np.clip(shape, 0.0, 1.0) - float(b["centerShape"]), np.clip(color, 0.0, 1.0) - float(b["centerColor"])
+        value = value + float(b["height"]) * np.exp(-(ds * ds + dc * dc) / (2.0 * sigma * sigma))
+    return value
 
 
 # --------------------------------------------------------------------------------------------------
@@ -432,6 +437,9 @@ def check_values(params):
         comp = params.reward_function[part + "Component"]
         for field in ("basisFunctionType", "weight", "peak", "width"):
             out[f"reward.{part}.{field}"] = float(comp[field])
+    for i, b in enumerate(params.reward_function.get("bumps") or []):
+        for field in ("centerShape", "centerColor", "width", "height"):
+            out[f"reward.bump{i}.{field}"] = float(b[field])
     return out
 
 

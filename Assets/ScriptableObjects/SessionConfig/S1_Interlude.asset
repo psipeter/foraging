@@ -17,8 +17,8 @@ MonoBehaviour:
   isPractice: 0
   isInterlude: 1
   interludeFor: S1
-  interludeMode: 1
-  interludeTrialCount: 5
+  interludeMode: 4
+  interludeTrialCount: 20
   interludeTrialSeconds: 10
   interludeHarvestFruits: 10
   interludeSwitchPolicy: 3
@@ -26,19 +26,22 @@ MonoBehaviour:
   freezeSun: 1
   interludeBushDistance: 22.6
   interludeBushBearing: 31.5
+  interludeMinElevationDifference: 0
+  interludeMinRewardGap: 0.25
+  interludeMinFeatureGap: 0.1
   instructionsFile: instructions_interlude.txt
   controlsReminder: 
   firstHarvestMessage: 
   controlsReminderOpacity: 0.35
   rewardFunction:
     shapeComponent:
-      basisFunctionType: 0
-      weight: 0
+      basisFunctionType: 1
+      weight: 4
       peak: 0
       width: 0
     colorComponent:
       basisFunctionType: 0
-      weight: 3
+      weight: 0
       peak: 0
       width: 0
     moistureComponent:
@@ -46,9 +49,10 @@ MonoBehaviour:
       weight: 0
       peak: 0
       width: 0
-  rewardStd: 0.3
+  rewardStd: 0.6
   targetFrameRate: 120
-  playerMoveSpeed: 7.5
+  uploadGraceSeconds: 4
+  playerMoveSpeed: 15
   fruitHarvestDuration: 0.05
   eyeHeight: 5.1
   cameraFieldOfView: 75
@@ -73,7 +77,7 @@ MonoBehaviour:
   spentTint: {r: 0.55, g: 0.5, b: 0.42, a: 1}
   fruitPopDuration: 0.15
   showHarvestHint: 1
-  rewardFeedbackMax: 6
+  rewardFeedbackMax: 4
   rewardSizeScaling: 1
   popupScale: 1.7
   popupExtraScale: 0.9

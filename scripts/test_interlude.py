@@ -1,3 +1,4 @@
+import math
 import json
 
 import numpy as np
@@ -15,9 +16,10 @@ _CACHE = {}
 
 
 def get(name):
-    """The designed-mode Interlude of an asset (whatever the asset's own interludeMode is; the designed-stimulus tests are about this)."""
+    """The designed-mode Interlude of an asset (whatever the asset's own interludeMode is; the designed-stimulus tests are about this),
+    with the design's own length (3 trials practice, 5 otherwise), not the asset's, which is for the random trials the game plays."""
     if name not in _CACHE:
-        _CACHE[name] = generate_interlude(name, mode="designed")
+        _CACHE[name] = generate_interlude(name, mode="designed", interlude_trial_count=3 if name.startswith("P_") else 5)
     return _CACHE[name]
 
 
@@ -226,7 +228,7 @@ def test_extrapolation_pairs_are_tradeoffs_when_several_features_matter():
         extras = [t for t in sidecar["trials"] if t["type"] == "extrapolation"]
         assert len(extras) == trial_mix(len(sidecar["trials"]), False, 3)["extrapolation"]
         for t in extras:
-            assert abs(t["deltaValue"]) >= 0.25            # clear difference
+            assert abs(t["deltaValue"]) >= 0.15            # clear difference (the generator's floor is 0.3 x the spread of R, ~0.17 here)
             ca = {f: float(_basis(rf[f + "Component"], t["left"][f])) for f in FEATURES}
             cb = {f: float(_basis(rf[f + "Component"], t["right"][f])) for f in FEATURES}
             assert any(ca[f] > cb[f] + 1e-9 for f in FEATURES) and any(cb[f] > ca[f] + 1e-9 for f in FEATURES)
@@ -362,3 +364,76 @@ def test_random_mode_elevation_floor_applies_only_where_the_asset_sets_it():
     m = np.array(sidecar["moisture"])
     assert getattr(params, "interlude_min_elevation_difference", 0.0) == 0.0
     assert (np.abs(m[0::2] - m[1::2]) * params.terrain_max_elevation < 3.0).any()       # without a floor, level pairs occur
+
+
+# ---- gap modes: trials spread evenly over the reward gap, the feature gap or both ----
+
+_GAP = {}
+
+
+def get_gap(name, mode):
+    if (name, mode) not in _GAP:
+        _GAP[(name, mode)] = generate_interlude(name, mode=mode)[0]
+    return _GAP[(name, mode)]
+
+
+def test_feature_gap_is_the_weighted_rms_of_the_channel_differences():
+    from interlude import feature_gap
+    a, b = {"shape": 0.2, "color": 0.5, "moisture": 0.9}, {"shape": 0.2, "color": 0.5, "moisture": 0.9}
+    assert feature_gap(a, b) == 0.0
+    assert abs(feature_gap({"shape": 0, "color": 0, "moisture": 0}, {"shape": 1, "color": 1, "moisture": 1}) - 1.0) < 1e-12
+    assert abs(feature_gap({"shape": 0, "color": 0.5, "moisture": 0.5}, {"shape": 1, "color": 0.5, "moisture": 0.5}) - math.sqrt(1 / 3)) < 1e-12
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("name,mode", [("S1_Interlude", "reward_gap"), ("S1_Interlude", "feature_gap"), ("S3_Interlude", "hybrid")])
+def test_gap_modes_spread_the_gaps_evenly(name, mode):
+    sc = get_gap(name, mode)
+    n = sc["n"]
+    assert n == len(sc["trials"]) == 20 and sc["mode"] == mode
+    assert sorted(t["correct"] for t in sc["trials"]) == ["left"] * (n // 2) + ["right"] * (n - n // 2)       # the better side is balanced
+    assert len({tuple(t["start"]) for t in sc["trials"]}) == n                                                  # one trial per placement
+    for axis, key in (("reward", "rewardGap"), ("feature", "featureGap")):
+        if axis not in sc["gapSpan"]:
+            continue
+        lo, hi = sc["gapSpan"][axis]
+        got = np.sort([t[key] for t in sc["trials"]])
+        want = lo + (np.arange(n) + 0.5) / n * (hi - lo)
+        assert got.min() >= lo - 1e-9 and np.abs(got - want).max() < 0.1 * (hi - lo)                           # evenly spread from the minimum
+
+
+@pytest.mark.slow
+def test_gap_mode_stimuli_are_the_same_every_time():
+    a, b = get_gap("S1_Interlude", "reward_gap"), generate_interlude("S1_Interlude", mode="reward_gap")[0]
+    assert a == b                                                                                              # a function of the world seed only
+
+
+@pytest.mark.slow
+def test_gap_mode_file_order_has_no_structure():
+    t = get_gap("S1_Interlude", "reward_gap")["trials"]
+    sides = "".join(x["correct"][0] for x in t)
+    assert not any(len(set(sides[k:k + 4])) == 1 for k in range(len(sides) - 3))                  # no 4 in a row of one side
+    assert "lrlr" not in sides and "rlrl" not in sides
+    pos = np.arange(len(t))
+    for key in ("rewardGap", "featureGap"):
+        g = np.array([x[key] for x in t])
+        assert abs(np.corrcoef(pos, g)[0, 1]) < 0.3 and abs(np.corrcoef(g[:-1], g[1:])[0, 1]) < 0.3
+
+
+# ---- S5: the reward function has bumps over (shape, colour) ----
+
+def test_bumps_make_shape_and_colour_relevant_and_designed_mode_is_refused():
+    from interlude import relevant_features
+    params = load_session("S5_Interlude")
+    order, relevant = relevant_features(params)
+    assert set(relevant) == set(FEATURES)                                          # moisture by its weight, shape and colour by the bumps
+    with pytest.raises(ValueError):
+        generate_interlude("S5_Interlude", mode="designed")
+
+
+@pytest.mark.slow
+def test_s5_interlude_file_is_fresh_and_spread_over_the_gaps():
+    sidecar = generate_interlude("S5_Interlude")[0]
+    committed = sidecar_path("S5_Interlude", sidecar["seed"])
+    assert _same(json.load(open(committed)), json.loads(json.dumps(sidecar))), "S5_Interlude file is stale: re-run scripts/interlude.py S5_Interlude"
+    assert sidecar["n"] == 20 and sidecar["mode"] == "hybrid"

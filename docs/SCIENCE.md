@@ -161,7 +161,7 @@ an oversight.
   and a black ambient term; fruit has an ambient floor), so the hue and intensity curves act on the canopy, the sky and the ambient
   probe, and the terrain darkens through the sun's direction plus the exposure ramp. Movement costs time (fixed player speed); harvesting costs
   `fruitHarvestDuration` seconds per fruit (0.2 s in sessions, so 10 fruits = 2 s per bush; 0.05 s in Interludes,
-  0.5 s per bush); player speed 7.5. The progress ring is computed from this value, so it adapts.
+  0.5 s per bush); player speed 7.5 (15 in the S1-S4 Interludes, 7.5 in the practice one). The progress ring is computed from this value, so it adapts.
   Goal: maximize total reward.
   **Harvesting (first person):** bushes glow gradually as you approach them, in
   proportion to horizontal distance from the canopy edge (glow begins 20 units out,
@@ -169,7 +169,7 @@ an oversight.
   ahead, none past 45°; yaw only, after subtracting the bush's angular radius). The glow
   never reveals reward. A bush becomes harvestable within 7 units of its
   canopy edge and within 35° of straight ahead; the best such bush (closest to
-  center) is shown as selected, and a "Hold Space to harvest" hint appears.
+  center) is shown as selected, and a "Hold [Space] to harvest" hint (Space on a key chip) appears.
   A clock-style progress ring floats above every bush in harvest range (constant
   apparent size, camera-facing): a faint full track with the bright arc erased clockwise
   from 12 o'clock as fruits are collected, so you can see how much is left even if
@@ -184,7 +184,7 @@ an oversight.
   ends the bout, and a fresh press starts the next one. +X popups appear in a central row of slots (a fixed
   cycle, so concurrent popups never overlap), and the score updates per fruit. Optional `harvestLookResistance`
   (default 0, off) slows mouse yaw to zero as you turn away from the bush.
-- **World:** ~685–695 trees (P, S1–S4; the count follows from the valley area; `worldHalfExtent` 350, valley
+- **World:** ~685–695 trees (P, S1–S5; the count follows from the valley area; `worldHalfExtent` 350, valley
   about 580 units across) placed on a
   jittered hexagonal lattice (`treeSpacing` 23, `placementJitter` 0.5; nearest-neighbour
   distance ≈ 18.6, CV ≈ 0.13, no pair closer than 11.5, so ≈ 2.5 s walk to the
@@ -196,7 +196,7 @@ an oversight.
   and loaded by Unity from `StreamingAssets/Worlds`).
 - **A participant plays a sequence of sessions** (`P`, `S1`–`S4`, each followed by its Interlude), each with
   a different world seed and reward function. `P` is an unanalyzed practice
-  session (`SessionConfig.isPractice`): its end screen says "Practice Complete" and it
+  session (`SessionConfig.isPractice`): its end screen says "Practice session complete" and it
   is not counted in "Session x/4". Between sessions the player sees a score screen and
   continues with Enter (Space is reserved for harvesting). After every session, including the practice
   one, comes its Interlude, a short forced-choice block (see "Interlude" below).
@@ -205,11 +205,10 @@ an oversight.
   (`instructions.txt`) gives the goal and controls ("different bushes give different points";
   walk next to a bush and hold SPACE), keeps a faint controls reminder on screen all session
   (`controlsReminder`, `controlsReminderOpacity`), and after the first harvest that collects fruit
-  pauses on a one-time message (`firstHarvestMessage`: "Harvesting this bush earned X points ...
-  explore which tree features earn points by harvesting different bushes"; Enter resumes).
-  S1–S4 each have their own file (`instructions_S1.txt`–`instructions_S4.txt`): "This is a new
-  world. The features that determine reward are now different (S1) / more complicated (S2) /
-  even more complicated (S3, S4). Continue to explore and collect as many points as you can."
+  pauses on a one-time message (`firstHarvestMessage`: "This harvest earned X points"; Enter resumes).
+  S1–S5 each have their own file (`instructions_S1.txt`–`instructions_S5.txt`; S5's is a copy of S4's): "This is a new
+  area. The features that determine points are now different (S1) / more complicated (S2) /
+  even more complicated (S3, S4). Collect as many points as you can."
   The wording never says "higher is better" and does not describe the structure of the
   mapping. Note S3 and S4 use identical text, and S1 says "different" (not "more complicated")
   because S1's complexity equals the practice session's.
@@ -241,7 +240,7 @@ is deterministic and independent of the reward and the bush, so position is not 
 ### Interlude (between-session forced choice)
 
 A short block after every session that reads out what the participant learned, separated from how well they
-explored and planned. Flow: P → Interlude (practice) → S1 → Interlude 1 → … → S4 → Interlude 4 → final screen.
+explored and planned. Flow: P → Interlude (practice) → S1 → Interlude 1 → … → S5 → Interlude 5 → final screen (12 sessions in all, 5 of them analyzed).
 
 - **It looks like the session.** An Interlude runs in the probed session's own world: the same terrain (plateaus,
   ground colour, mountains), sun and fog, loaded from that session's world file. Only two bushes are present at a
@@ -261,13 +260,13 @@ explored and planned. Flow: P → Interlude (practice) → S1 → Interlude 1 �
   "Harvesting this bush earned X points" message never appears in an Interlude.
 - **Timer and progress:** a 10 s countdown (`interludeTrialSeconds`, was 7 s) in the upper left (the session-timer slot); when it runs out the trial ends
   with no choice. Progress "X/n" sits in the upper right (the score slot). Trials are separated by a short fade to black.
-  Presentation order is shuffled per participant; each trial's placement, and so which bush is on which side, is fixed
+  Every participant sees the trials in the file's order (since 2026-11-02; the order was shuffled per participant before, and is still logged in `interlude_plan`); each trial's placement, and so which bush is on which side, is fixed
   in the file, with the correct side balanced across trials.
 - **View at each trial start:** the player is placed at the stage spawn facing the pair (yaw from the trial file) with the pitch
   set at run time so the middle of the two bushes' visible canopies (a quarter of each canopy's height above its base, averaged)
   is on the view's horizontal centre line, instead of looking level at the horizon (which showed mostly sky). Pitch is clamped to
   `lookPitchLimit`; the teleport event in `events.csv` records it.
-- **Length:** 3 trials in the practice Interlude, 5 in each of the four others (was 10).
+- **Length:** 3 trials in the practice Interlude, 20 in each of the four others (was 5; 10 before that). The four others walk at `playerMoveSpeed` 15 (the sessions' 7.5 doubled; the practice Interlude keeps 7.5, as the practice session) so a trial's walk to a bush is about 1 s instead of 2 s; the bush distance stays 22.6 so that S3/S4 pairs can still differ in elevation.
 - **Stimulus types** (generated by `scripts/interlude.py` from the probed session's reward function; the same set
   for every participant):
 
@@ -284,9 +283,23 @@ explored and planned. Flow: P → Interlude (practice) → S1 → Interlude 1 �
 
   The practice Interlude has 2 easy contrasts on the relevant feature and 1 large graded pair. Which exact stimuli to
   show per session is still to be refined.
-- **Random mode** (`interludeMode: Random`; the field's default is Designed, but **all five Interlude assets are currently set to Random for
-  testing with people**, so the committed `.interlude.json` files are random trials and the Designed description above is the alternative:
-  set `interludeMode` back to Designed and regenerate). The practice Interlude is then three random pairs, not easy contrasts. Instead of the three designed stimulus types, every
+- **Gap modes** (`interludeMode: RewardGap`, `FeatureGap`, `Hybrid`; **S1_Interlude to S4_Interlude are set to Hybrid since 2026-11-02**, the
+  practice Interlude stays Random). Random pairs are mostly easy (the reward gap of two independent bushes is triangular: many large gaps,
+  few near zero), so a gap mode chooses the 20 trials to be spread evenly over how different the two bushes are. Two measures: the **reward
+  gap** `|R_left - R_right|` (true points per fruit) and the **feature gap**, the root mean square of the shape, colour and moisture
+  differences each on its 0-1 scale (0 identical, 1 opposite ends of every channel; all three channels count whether or not they pay, because the
+  participant sees them all; `interlude.feature_gap`, with equal channel weights since no discrimination thresholds are measured). The generator draws
+  `GAP_PAIRS` (150) random pairs on each of `GAP_SITES` (60) placements in view, drops those in the tie tolerance, and picks 20 on distinct placements
+  (half with the left bush better) by hill climbing so that the sorted gaps on the mode's axis (both axes in Hybrid, jointly) are as close as possible to
+  20 evenly spaced values from the minimum (`interludeMinRewardGap` 0.25 points, about one standard error of a 10-fruit harvest mean;
+  `interludeMinFeatureGap` 0.1) to the 98th percentile of the candidates' gaps (the largest the world offers: about 3.5 points in S1, 2.6 in S3, 2.2 in S4; feature gap about 0.6 to 0.65).
+  The achieved spread is within 5% of the range of the even targets. Reward gap and feature gap rise together (r about 1 in the Hybrid trials) because reward is a function of the features; that is accepted, since the reward mapping still has
+  to be learned. **The stimuli are the same for every participant** (a function of the world seed), **and so is their order**. The order is one seeded shuffle, the best of 3000 for the gap modes: no more than 3 trials in a row with the same correct side, no strict left-right alternation, and no trend or lag-1 autocorrelation in either gap (so no run of ever-harder or ever-easier pairs); the achieved trends and autocorrelations are within about 0.1. The elevation floor is not
+  used: moisture is one of the feature channels and a reward feature in S3/S4, so spreading the gaps spreads the elevation differences too (in S3
+  reward-gap mode about 8 of 20 pairs differ by 5 or more world units of elevation, in S4 about 5), but not per pair: a pair can differ greatly in
+  reward through colour alone. Each trial records `rewardGap` and `featureGap` in the `.interlude.json` (not in `interlude_trials.csv`; recompute from the bush table), the file records `gapSpan`, and the trial `type` in the data is the mode name.
+  Generation takes about 3 s per world (the line-of-sight check, the slow part, runs only on the 20 chosen pairs).
+- **Random mode** (`interludeMode: Random`; the field's default is Designed; the practice Interlude uses it). The practice Interlude is then three random pairs, not easy contrasts. Instead of the three designed stimulus types, every
   trial is a pair of bushes with independent uniform random shape and colour (moisture is still the terrain's at the final positions, so
   relevant-moisture sessions still see moisture differences; roughly a quarter to a half of random pairs differ by more than 0.2). Pairs whose
   true rewards are within the tie tolerance are redrawn, so every trial has a definite correct side, half of them on the left; the geometry
@@ -328,11 +341,10 @@ explored and planned. Flow: P → Interlude (practice) → S1 → Interlude 1 �
   moisture differences available.
 - **Scoring:** a choice is correct if it is the bush with the higher true reward, or if the true rewards are
   within 0.05 (either answer). Each correct choice adds hidden points (`interludeBonusPerCorrect`, 5 points); trials with no
-  commitment before the time limit, and practice-Interlude trials, earn none (a committed choice still counts if the limit runs out before the bush is finished). After each Interlude the end panel shows only that Interlude's points
-  ("+y points"; never which trials, how many were correct, nor anything about the reward function); the final screen adds the total ("Total: +n points" = sessions +
+  commitment before the time limit, and practice-Interlude trials, earn none (a committed choice still counts if the limit runs out before the bush is finished). Only the practice Interlude's end screen shows points (what its choices would have earned; it pays nothing); the other Interludes show none until the final screen ("This interlude: +y points"; never which trials were correct, nor anything about the reward function), which adds the total ("Total: +n points" = sessions +
   Interlude points). Practice sessions are excluded from the total. Participants only ever see "points" (never "reward" or "bonus") and "bushes" (never "trees"). Instruction text: `instructions_interlude_P.txt` (practice) and `instructions_interlude.txt` (1-4), terse, saying that correct choices earn hidden points.
-- **Data:** `interlude.csv` in the Interlude's own folder (it also writes trajectory.csv, events.csv, harvests.csv and
-  manifest.json like any session, with `trial_start`/`teleport`/`trial_end`/`trial_go` events (`trial_go` ends the harvest block that starts at `trial_end`: no bout can start in between), with `sessionName` e.g. `S1_Interlude` and `isInterlude`; `world.file` in the manifest is the
+- **Data:** `interlude_trials.csv` in the Interlude's own folder (it also writes trajectory.csv, events.csv and
+  session.json like any session, with `trial_start`/`teleport`/`trial_end`/`trial_go` events (`trial_go` ends the harvest block that starts at `trial_end`: no bout can start in between), with `name` e.g. `S1_Interlude` and `is_interlude`; `world_file` in session.json is the
   session world file whose terrain was used): one row per trial with presented order, the design id, type, varied feature,
   both bushes' attributes and true reward, the correct side, choice (left/right/none), correct, timed_out, response_time
   (to the last fruit), first_harvest_time and side (first bush started), fruits taken from each bush, the bonus, and `locked_at` (appended: the trial
@@ -413,20 +425,26 @@ running score.
 
 ### Session configurations
 
-`sessionDuration` is the design value on P and S1–S4 (the table below; restored from a temporary 15 s on 2026-10-31). The Interlude assets' `sessionDuration` is only a cap (they end when the
+`sessionDuration` is the design value on P and S1–S5 (the table below; restored from a temporary 15 s on 2026-10-31). The Interlude assets' `sessionDuration` is only a cap (they end when the
 trials are done; 150 s, 60 s for the practice one). The simulated battery still runs S1–S4 at 120, 120, 180, 180 s (`--battery long`), longer than the participants' sessions.
 
-All five sessions: `rewardStd` 0.3, 10 fruit/tree, speed 7.5, `fruitHarvestDuration` 0.2 (0.05 in the Interludes), first-person camera, `worldHalfExtent` 350,
+All five sessions: `rewardStd` 0.6 (was 0.3 until 2026-10-30), 10 fruit/tree, speed 7.5, `fruitHarvestDuration` 0.2 (0.05 in the Interludes), first-person camera, `worldHalfExtent` 350,
 `terrainMeshResolution` 449, ~685–695 trees
-(seed-dependent: P 686, S1 694, S2 688, S3 685, S4 695). Weights apply to (shape, color, moisture).
+(seed-dependent: P 686, S1 700, S2 694, S3 691, S4 701). Weights apply to (shape, color, moisture).
 
 | Session | Seed | Duration | Shape | Color | Moisture | Character |
 |---|---|---|---|---|---|---|
-| P (practice) | 100 | 60 s | Linear, w=3 | w=0 | w=0 | one feature, linear (mechanics) |
-| S1 | 1 | 90 s | w=0 | Linear, w=3 | w=0 | one relevant feature of three |
-| S2 | 2 | 120 s | GaussianPeak, w=3, peak 0.65, width 0.2 | w=0 | w=0 | one feature, non-monotonic |
-| S3 | 3 | 120 s | w=0 | Linear, w=1.5 | Linear, w=3 | two features, linear; moisture (terrain) dominant |
-| S4 | 4 | 150 s | InvertedLinear, w=2 | Linear, w=3 | Linear, w=1.5 | all three, additive, monotonic, one inverted |
+| P (practice) | 100 | 60 s | Linear, w=4 | w=0 | w=0 | one feature, linear (mechanics) |
+| S1 | 1 | 90 s | (redrawn 2026-11-02: see the asset) | | | one relevant feature of three |
+| S2 | 2 | 120 s | (redrawn 2026-11-02: see the asset) | | | one feature, non-monotonic |
+| S3 | 3 | 120 s | (redrawn 2026-11-02: see the asset) | | | two features, monotonic; moisture (terrain) dominant |
+| S4 | 4 | 150 s | (redrawn 2026-11-02: see the asset) | | | all three, additive, monotonic, one inverted |
+
+**Reward functions redrawn (2026-11-02, so the PI learns something new in a live test after earlier runs):** the structure of each session is kept (S1 one feature, S2 one feature with a peak, S3 moisture dominant at 2.67 plus one of shape/colour at 1.33 with the third irrelevant, S4 all three features, unequal weights summing to 3.9 in any order across the features (the first redraw kept moisture weakest to protect the terrain's role in S4; the PI dropped that), exactly one inverted; the best bush still pays about 4) but the details were drawn at random and differ from the earlier functions, twice (the PI asked to not be told which features, weights and orders until after the test). The draw is in the assets and in `results/reward_key_2026-11-02.json` (gitignored); this table does not repeat it. Worlds and Interludes were regenerated; every earlier simulation of S1-S4 and its baselines is stale (environment hash changed), as are weight-specific numbers quoted below.
+
+**Reward scale, second step (2026-10-30):** all sessions were then rescaled so the best bush pays 4 per fruit (P, S1, S2 weight 3→4; S3 1.33/2.67; S4 1.2/1.8/0.9) and `rewardFeedbackMax` is 4 (was 6), so per-fruit rewards 0–4 span the full range of popup size and pitch. Means of R are now 2.0 (S1), 2.0 (S2), 2.0 (S3), 1.95 (S4); max 4.0, 4.0, 3.9, 3.7; share with R < 0.5: 13%, 23%, 4%, 1%. `rewardStd` was then raised from 0.3 to 0.6 (the weights' 4/3 scaling alone would give 0.4; 0.6 was chosen so that bushes at every R show visible fruit-to-fruit variation after integer rounding: a bush at a whole-number R pays a different integer 40% of the time, versus 10% at 0.3; mean std of the paid reward 0.67 vs 0.40). Consequences: the standard error of a 10-fruit bush mean is about 0.2, so neighbours 0.3–0.5 apart are not separable from one harvest; the `max(0, ...)` clamp bites at the bottom (share of fruits paying 0: S1 14%, S2 21%, S3 8%, S4 6%; a bush with R = 0.3 pays 0 in about 63% of draws and on average slightly above its R); and about 1–3% of fruits in S1/S2 and under 1% in S3/S4 pay more than 4 (maximum 6), which popup size and pitch show as 4 (the clamp at `rewardFeedbackMax`) while the displayed number and score are exact. Rewards are not capped at 4 (no per-fruit cap on purpose). The figures in the paragraph that follows are from the first step (best bush 3). All simulated baselines and the tests with weight-specific constants (test_world S4, test_interlude) are stale.
+
+**Reward scale, first step (2026-10-30):** S3/S4 weights were 1.5+3 and 2+3+1.5 (best bush 4.3 and 6.2, mean 2.3 and 3.3, vs best 3.0 and mean 1.5 in S1/S2; playtesters found every bush good). They are now scaled by 2/3 and 1/2 (ratios kept) so the best bush is 2.9 (S3) and 3.1 (S4), means 1.5 and 1.6; share of bushes with R < 0.5: S1 17%, S2 26%, S3 7%, S4 2% (a sum of several features concentrates near its mean, so S3/S4 have fewer poor bushes; std of R 0.66 and 0.57 vs 0.87). Moisture's reward spread in S3 is therefore ≈ 0.6 (was 0.89) and 0.22 in S4 (was 0.44); the notes below quote the old values. Simulated baselines for S3/S4 are stale.
 
 (Read from `Assets/ScriptableObjects/SessionConfig/*.asset`; the assets are the source of
 truth and may have moved on — re-check before citing.) The relevant feature rotates
@@ -436,7 +454,7 @@ a 60 s S1–S3 (one linear; three linear; mixed), replaced by this progression; 
 
 ### Terrain by session
 
-Terrain only matters for reward in S3 (moisture weight 3, the dominant feature) and S4 (weight 1.5), so it is deliberately
+Terrain only matters for reward in S3 (moisture weight 2.67, the dominant feature) and S4 (since 2026-11-02 moisture may carry any of S4's three weights; it was 0.9), so it is deliberately
 different there. All values are `SessionConfig` fields; the field is built in `scripts/world.py`.
 
 | Sessions | `terrainMaxElevation` | Moisture field |
@@ -459,7 +477,7 @@ On the old S3 terrain the start region had few of the wettest (level 3) bushes n
 units against 72 of level 0), so reaching them took travel (not rechecked on the new terrain). The moisture–height coupling is
 likely to be revisited (TODO below). Design decision and alternatives: DECISIONS ("Terraced moisture").
 
-### Session progression (P–S4 implemented; S5 is a TODO)
+### Session progression (P–S5 built and in the game's session sequence)
 
 Goal: each session is long enough for a participant to sample many bushes and
 learn the reward mapping, but not so long that most of it is spent exploiting a
@@ -475,7 +493,7 @@ the stops per session at the same duration (about 12 / 18 / 24 / 24 / 30 stops f
 P / S1 / S2 / S3 / S4 if full-harvesting). **The durations in the table below were sized for the old
 ~9 s stop and have not been retuned: TODO(PI) shorten them (≈ 50 / 70 / 70 / 85 s keeps the
 original stop counts) or keep them and accept longer exploitation phases.**
-Because `rewardStd` is 0.3 and a bush has 10 fruits, a bush's value is known almost exactly after
+With `rewardStd` 0.3 (as of 2026-10-30 it is 0.6, which makes a bush's mean about 0.2 uncertain after 10 fruits and a one-fruit peek clearly noisy, so the following no longer holds as written) a bush has 10 fruits and its value was known almost exactly after
 1–2 fruits: **each visited bush is roughly one clean (attributes → reward) data point**, and the
 difficulty is credit assignment, not noise. A one-fruit "peek" now costs ~0.25 s + walk (~2.5 s)
 versus ~5 s for a full-harvest stop, so peeking is cheaper in absolute terms but saves about half
@@ -489,11 +507,11 @@ Session lengths target learning taking ~35–50% of the stops.
 | S2 | one feature Gaussian peak, others 0 | non-monotonic value | 120 s (~13) | 7–10 |
 | S3 | two features linear, third irrelevant | integrating two features, relative weights | 120 s (~13) | 7–10 |
 | S4 | all three non-zero, additive, monotonic, unequal weights, at least one inverted | integration over all three; "higher is better" is not a safe default | 150 s (~16) | 10–14 |
-| S5 | **TODO(PI)** — one interacting pair plus one additive feature (provisional) | feature-wise learning fails; interactions, non-monotonic | 210–240 s (~24–27) | 15–22 |
+| S5 | two Gaussian bumps over (shape, colour) of unequal height (a global and a local optimum) plus one linear moisture term | interactions no sum of one-feature terms can express; exploration against exploitation | 180 s | not estimated |
 
 Stops-to-learn figures are guesses, to be calibrated by a model-based learner
 agent and then by pilots. Durations are likewise provisional. P–S4 are implemented as
-the table above (P is 60 s); S5 is not built.
+the table above (P is 60 s); S5 is 180 s.
 
 - **S2 before S3.** S2 isolates one new idea (non-monotonic value) while one
   feature is relevant. It also tests whether the linear prior built in S1
@@ -502,18 +520,21 @@ the table above (P is 60 s); S5 is not built.
 - **S4 is the first all-three-relevant session** and is deliberately additive
   and monotonic. It may already be hard enough; S5 should not be committed until
   S4 pilot data exist.
-- **S5 is a TODO.** The code supports only additive rewards today
-  (`R = Σ wᵢ·fᵢ(attrᵢ)`); interactions (product term, 2D Gaussian ridge, pairwise
-  term plus additive terms) are a scientific and code change touching
-  `RewardFunction`/`RewardComponent`, `scripts/world.py` (which mirrors the reward
-  rules) and the metadata JSON. Provisional plan: one interacting pair plus one
-  additive feature, not a fully arbitrary 3D function (probably unlearnable in
-  ~25 stops, and a null result would be uninterpretable). Prediction to test:
-  feature-based learners (Farashahi et al., 2017) do well in S1–S4 and fail on
-  the interacting pair.
+- **S5 (built 2026-11-02, in the game's session sequence since the same day): two bumps plus moisture.** `R = A·G(shape, colour; cA) + B·G(shape, colour; cB) + w·f(moisture)`,
+  `G` a circular Gaussian (the same width σ on both axes), the terms summed. σ 0.2, heights 2.8 (global bump) and 1.8 (local bump), moisture weight 1.2
+  (linear or inverted, drawn), so the best bush pays about 4. The centres are drawn at random at least 3σ (0.6) apart inside [0.15, 0.85]² (a bump leaks
+  about 1% of its height into the other's centre), and are in the assets and the gitignored `results/reward_key_S5_2026-11-02.json`, not here. Chosen from
+  simulated random bushes (the S3 world's moisture): about 17% of bushes lie above half a bump's height at σ 0.2 (a σ of 0.15 gives 10%), so trial and
+  error can find a centre; the nearest of ~700 bushes to a centre is about 0.04 away in shape x colour. The 1.0-point gap between the peaks is about five
+  standard errors of a 10-fruit harvest mean. Shape and colour are the interacting pair because moisture is harder to judge visually. Additive learners
+  (the delta-rule critic and the GP critic's additive kernel) cannot represent the bumps; the joint-kernel GP can. Code: `RewardBump` (C#), the `bumps`
+  list of the reward function in `SessionConfig`, `bush_value` and `check_values` in `world.py` (a test pins the formula; C# and Python agree to 1e-7 on
+  sample points), `relevant_features` in `interlude.py` (a bump makes shape and colour relevant; designed-mode Interludes are refused for a reward
+  function with bumps). The Interlude is Hybrid like the others (20 trials). Wired into the `GameManager` list (12 entries: P, its Interlude, S1-S5 with theirs). Not done: instructions text beyond a copy of S4's,
+  server registration of the S5 worlds and a 12-session release, the simulated battery, play-testing of the bump widths.
 - **Instructions must not imply monotonicity** ("reward depends on the tree's
   features", not "higher is better").
-- **Extra difficulty knobs:** raising `rewardStd` (≈1.0) in later sessions slows
+- **Extra difficulty knobs:** raising `rewardStd` further (≈1.0) in later sessions slows
   per-bush estimates without touching the visual channels; a moisture-driven
   reward adds regional structure (and the spatial-autocorrelation confound
   noted under open questions).
@@ -530,7 +551,7 @@ the table above (P is 60 s); S5 is not built.
 
 The logs are designed so that a participant's session can be **replayed exactly** (path, camera angle, every
 harvest) in the world they played, and fed to mathematical or neural agents as trajectories. Online participants' data go to a
-Supabase (Postgres) database through three Edge Functions; every run also writes a local copy under
+Supabase (Postgres) database through four Edge Functions (run-start, append, run-finish and the optional end-screen feedback); every run also writes a local copy under
 `ForagingData/<run id>/<session:00>/`, the same tables as files. The schema, the upload protocol and the resume rules are in
 `docs/ONLINE_DATA_PLAN.md`; the tables are:
 
@@ -539,12 +560,11 @@ Supabase (Postgres) database through three Edge Functions; every run also writes
 | `trajectory` (`trajectory.csv`) | One row per rendered frame: `t` (unpaused session seconds), `x, z`, `yaw`, `pitch` (degrees), `keys` (bitfield: 1 W, 2 S, 4 Space held), quantized (time 1 microsecond, position 0.01, angles 0.02 degrees) and stored as compressed chunks. Height is the terrain's at (x, z); eye height is in the config. The pose is what `HarvestManager` reads that frame (interpolated player position, camera yaw). |
 | `events` (`events.csv`) | `seq, t, real, type, tree_id, k, reward, running_total, payload` (JSON; `tree_id` is the bush's id). `real` is unscaled seconds. Types: `session_start`/`session_end`, `pause`/`resume` (payload `reason`: instructions, upload or pointer), `focus_lost`/`focus_gained`, `harvest_press`, `harvest_pause`/`harvest_resume` (target left/re-entered the range-and-cone mid-bout), `fruit` (one per fruit: bush, `k` = its index among the fruits taken from that bush, reward, running total), `harvest_release`, `teleport` (Interlude trial change), `trial_start`/`trial_end`, `trial_go`, `choice_lock`, `session_resume` (the participant came back to an interrupted session). |
 | `sessions` (`session.json`) | The full `SessionConfig`, world file and sha256 (for an Interlude also the bush-table file), build commit and a `dirty` flag, camera, display, frame statistics, `final_score`, `completed`. |
-| `interlude_plan`, `interlude_trials` (`interlude_plan.json`, `interlude_trials.csv`) | The shuffled trial order, and one row per trial (columns in the "Interlude" section, plus `paused_seconds`: real seconds the game was held still while the trial was live). |
+| `interlude_plan`, `interlude_trials` (`interlude_plan.json`, `interlude_trials.csv`) | The trial order (the file's, the same for everyone), and one row per trial (columns in the "Interlude" section, plus `paused_seconds`: real seconds the game was held still while the trial was live). |
 | `runs`, `pid_registry`, `consents` | The run (platform, build commits, status), the participant's ID (kept apart from every analysis table) and the signed consent of each visit (text version, typed name, time). |
 
-Harvest bouts are derived (`scripts/replay.py`), not stored. Data from before the online system (one folder of `trajectory.csv`,
-`events.csv`, `harvests.csv`, `manifest.json` and `interlude.csv` per session) can still be read by `replay.py` and converted with
-`scripts/convert_legacy.py`.
+Harvest bouts are derived (`scripts/replay.py`), not stored. The format from before the online system (`harvests.csv`, `manifest.json`, `interlude.csv`)
+is no longer readable; no data of it exists.
 
 **Why this set is sufficient.** Harvest outcomes are a deterministic function of (trajectory, world): the fruit timer,
 range/bearing cone and per-bush carry-over use only position, yaw and `t`, and each fruit's reward is the pre-drawn
@@ -637,7 +657,7 @@ Reward per session for three reference agents with a known map, run on
 the same worlds (seeds 0–99, `python scripts/sim.py <S> --seeds 0-99 --agents
 nearest,greedy_rate_15,plan_beam --baseline nearest`) at each session's own
 duration. Mean ± standard deviation across seeds; "vs nearest" is the paired
-difference ± SE. Rewards include the fruit noise (`rewardStd` 0.3).
+difference ± SE. Rewards include the fruit noise (`rewardStd` 0.3 when these were run; now 0.6 and the rewards rescaled, so they are stale).
 
 | Agent | What it knows / does | P (60 s) | S1 (90 s) | S2 (120 s) | S3 (120 s) | S4 (150 s) |
 |---|---|---|---|---|---|---|
@@ -771,8 +791,7 @@ provisional dirty-tree runs and are not summarised here until they are re-record
   Levers: reward weights/contrast (including making the optimum steeper), world attributes
   (spacing, bush density, attribute distributions), session timing, harvest rate and
   movement speed. Re-run the baselines after each change. Deferred: not yet decided.
-- **S5 reward structure** (interacting pair + additive feature, provisional) and
-  its code support are undecided; see "Planned session progression".
+- **S5 reward structure:** decided and built (two bumps plus moisture, see "Planned session progression"); its widths and the order of sessions are untested with people.
 - **Participant identity:** sessions are keyed only by a generated
   `sessionId`; no participant ID is collected yet (planned).
 - **Reward-noise stream (resolved, kept for context):** per-fruit rewards are pre-drawn in the world file
@@ -785,8 +804,8 @@ provisional dirty-tree runs and are not summarised here until they are re-record
   regenerates each Interlude from the current assets and fails when the committed file differs (re-run `scripts/interlude.py`);
   `run_tests.py` runs it whenever a session or Interlude asset or an `.interlude.json` changes. Unity itself still gives no warning, and
   the session `.world` files have no such test (Unity's startup check covers them).
-- **Interlude parameters are untuned:** trial counts (3 practice, 5 otherwise), the 5-point bonus, the 10 s limit (with a
-  ~2 s walk and 0.5 s harvest), the bush distance/bearing, and the stimulus mix. The Interlude uses the session's own
+- **Interlude parameters are untuned:** trial counts (3 practice, 20 otherwise; the 5-point bonus per correct choice was not rescaled when the count went from 5 to 20), the Interlude walking speed (15), the 10 s limit (with a
+  ~1 s walk and 0.5 s harvest), the bush distance/bearing, and the stimulus mix. The Interlude uses the session's own
   terrain, so participants may recognise regions (a spatial-memory confound); the harvested bushes are gone and the
   pairs straddle elevation boundaries, which should limit it. The instruction texts are first drafts.
 - **TODO(PI): revisit how moisture maps to height** (and ground colour) after seeing the

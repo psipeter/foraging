@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from world import PROJECT_ROOT, Perlin, Terrain, World, check_values, generate_world, load_session, make_world
+from world import PROJECT_ROOT, Perlin, Terrain, World, _basis, bush_value, check_values, generate_world, load_session, make_world
 
 
 def test_deterministic_and_seed_dependent():
@@ -37,25 +37,75 @@ def test_overrides_change_density():
     assert make_world("S1", 1, tree_spacing=40).n < make_world("S1", 1).n * 0.5
 
 
+def _weights(w):
+    """The (shape, color, moisture) component dicts of the session's reward function, read from the SessionConfig asset like world.py does."""
+    rf = w.params.reward_function
+    return rf["shapeComponent"], rf["colorComponent"], rf["moistureComponent"]
+
+
+def _expected(w):
+    """The session's reward function evaluated on the world's bushes, term by term (the asset says which features and directions)."""
+    shape, color, moisture = _weights(w)
+    return _basis(shape, w.shape) + _basis(color, w.color) + _basis(moisture, w.moisture)
+
+
+def _nonzero(w):
+    return [c for c in _weights(w) if c["weight"] != 0]
+
+
 def test_attributes_and_rewards():
-    w = make_world("S1", 1)   # S1: value = 3 * color
-    assert np.allclose(w.value, 3 * w.color)
+    w = make_world("S1", 1)   # S1: one rewarded feature, linear (either direction)
+    (rewarded,) = _nonzero(w)
+    assert rewarded["basisFunctionType"] in (0, 1)
+    assert np.allclose(w.value, _expected(w))
     assert ((0 <= w.moisture) & (w.moisture <= 1)).all()
     assert w.canopy_radius.min() >= 0.5 - 1e-9 and w.canopy_radius.max() <= 3 + 1e-9
     assert w.fruit_reward.min() >= 0 and w.fruit_reward.shape == (w.n, 10)
-    assert abs(w.fruit_reward.mean() - w.value.mean()) < 0.1   # rounding + clipping at 0 barely bias a 0.3 sd
+    assert abs(w.fruit_reward.mean() - w.value.mean()) < 0.1   # rounding and clipping at 0 barely bias the mean at the asset's reward_std
 
 
-def test_s2_gaussian_shape_component():
+def test_s2_gaussian_component():
     w = make_world("S2", 1)
-    # shape peak 0.65, width 0.2, weight 3; color and moisture irrelevant
-    i = np.argmin(np.abs(w.shape - 0.65))
-    assert abs(w.value[i] - 3 * np.exp(-((w.shape[i] - 0.65) ** 2) / (2 * 0.2 ** 2))) < 1e-9
+    (rewarded,) = _nonzero(w)                  # one rewarded feature, a Gaussian peak inside the range
+    assert rewarded["basisFunctionType"] == 2 and 0.2 < rewarded["peak"] < 0.8
+    assert np.allclose(w.value, _expected(w))
 
 
-def test_s4_all_features_additive():
-    w = make_world("S4", 1)   # inverted-linear shape w2, linear color w3, linear moisture w1.5
-    assert np.allclose(w.value, 2 * (1 - w.shape) + 3 * w.color + 1.5 * w.moisture)
+def test_s3_two_features_and_one_irrelevant():
+    w = make_world("S3", 1)
+    assert len(_nonzero(w)) == 2 and _weights(w)[2]["weight"] != 0 and all(c["basisFunctionType"] in (0, 1) for c in _nonzero(w))
+    assert np.allclose(w.value, _expected(w))
+
+
+def test_s4_all_features_additive_with_one_inverted():
+    w = make_world("S4", 1)
+    assert len(_nonzero(w)) == 3 and sorted(c["basisFunctionType"] for c in _nonzero(w)) == [0, 0, 1]
+    assert np.allclose(w.value, _expected(w))
+
+
+def test_s5_two_gaussian_bumps_over_shape_and_color_plus_linear_moisture():
+    w = make_world("S5", 1)
+    shape, color, moisture = _weights(w)
+    bumps = w.params.reward_function["bumps"]
+    assert shape["weight"] == 0 and color["weight"] == 0 and moisture["weight"] != 0 and moisture["basisFunctionType"] in (0, 1)
+    assert len(bumps) == 2 and bumps[0]["height"] > bumps[1]["height"]                       # a global bump and a lower local one
+    centres = np.array([[b["centerShape"], b["centerColor"]] for b in bumps])
+    assert np.hypot(*(centres[0] - centres[1])) >= 3 * bumps[0]["width"] - 1e-9 and ((0.1 <= centres) & (centres <= 0.9)).all()
+    expected = _basis(moisture, w.moisture)
+    for b in bumps:
+        expected = expected + b["height"] * np.exp(-((w.shape - b["centerShape"]) ** 2 + (w.color - b["centerColor"]) ** 2) / (2 * b["width"] ** 2))
+    assert np.allclose(w.value, expected)
+    assert 3.0 < w.value.max() < 4.2                                                          # the best bush pays about 4, as in the other sessions
+
+
+def test_bush_value_adds_the_bumps_to_the_component_terms():
+    rf = {"shapeComponent": {"basisFunctionType": 0, "weight": 0, "peak": 0, "width": 0}, "colorComponent": {"basisFunctionType": 0, "weight": 0, "peak": 0, "width": 0},
+          "moistureComponent": {"basisFunctionType": 0, "weight": 1.0, "peak": 0, "width": 0},
+          "bumps": [{"centerShape": 0.3, "centerColor": 0.6, "width": 0.2, "height": 2.0}]}
+    assert abs(bush_value(rf, 0.3, 0.6, 0.5) - 2.5) < 1e-12                                   # at the centre: the height plus the moisture term
+    d = 0.2
+    assert abs(bush_value(rf, 0.3 + d, 0.6, 0.0) - 2.0 * np.exp(-0.5)) < 1e-12                # one width away along either axis: height * exp(-1/2)
+    assert abs(bush_value(rf, 0.3, 0.6 - d, 0.0) - 2.0 * np.exp(-0.5)) < 1e-12
 
 
 def test_noise_range_and_smoothness():
@@ -189,7 +239,7 @@ def test_committed_world_files_are_fresh(tmp_path):
     SessionConfig assets must reproduce them exactly (this also pins the RNG streams and draw order); Unity warns at
     startup about stale parameters, but not about a changed generator."""
     from world import export_unity, unity_world_path
-    for name in ("P", "S1", "S2", "S3", "S4"):
+    for name in ("P", "S1", "S2", "S3", "S4", "S5"):
         p = load_session(name)
         seed = int(p.world_seed)
         committed = unity_world_path(name, seed)

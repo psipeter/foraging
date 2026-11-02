@@ -27,27 +27,29 @@ MonoBehaviour:
   interludeBushDistance: 24.4
   interludeBushBearing: 31.5
   interludeMinElevationDifference: 0
+  interludeMinRewardGap: 0.25
+  interludeMinFeatureGap: 0.1
   instructionsFile: instructions_S3.txt
   controlsReminder: 
   firstHarvestMessage: 
   controlsReminderOpacity: 0.35
   rewardFunction:
     shapeComponent:
-      basisFunctionType: 0
-      weight: 0
+      basisFunctionType: 1
+      weight: 1.33
       peak: 0
       width: 0
     colorComponent:
       basisFunctionType: 0
-      weight: 1.5
+      weight: 0
       peak: 0
       width: 0
     moistureComponent:
       basisFunctionType: 0
-      weight: 3
+      weight: 2.67
       peak: 0
       width: 0
-  rewardStd: 0.3
+  rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
   playerMoveSpeed: 7.5
@@ -75,7 +77,7 @@ MonoBehaviour:
   spentTint: {r: 0.55, g: 0.5, b: 0.42, a: 1}
   fruitPopDuration: 0.15
   showHarvestHint: 1
-  rewardFeedbackMax: 6
+  rewardFeedbackMax: 4
   rewardSizeScaling: 1
   popupScale: 1.7
   popupExtraScale: 0.9

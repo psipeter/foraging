@@ -28,13 +28,13 @@ MonoBehaviour:
   interludeBushBearing: 31.5
   interludeMinElevationDifference: 0
   instructionsFile: instructions.txt
-  controlsReminder: 'Mouse: look. W / S: walk. Hold Space: harvest. Escape: pause.'
+  controlsReminder: 'Mouse: look. W / S: walk. Space: hold to harvest. Escape: pause.'
   firstHarvestMessage: This harvest earned {points} points
   controlsReminderOpacity: 0.35
   rewardFunction:
     shapeComponent:
       basisFunctionType: 0
-      weight: 3
+      weight: 4
       peak: 0
       width: 0
     colorComponent:
@@ -47,7 +47,7 @@ MonoBehaviour:
       weight: 0
       peak: 0
       width: 0
-  rewardStd: 0.3
+  rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
   playerMoveSpeed: 7.5
@@ -75,7 +75,7 @@ MonoBehaviour:
   spentTint: {r: 0.55, g: 0.5, b: 0.42, a: 1}
   fruitPopDuration: 0.15
   showHarvestHint: 1
-  rewardFeedbackMax: 6
+  rewardFeedbackMax: 4
   rewardSizeScaling: 1
   popupScale: 1.7
   popupExtraScale: 0.9

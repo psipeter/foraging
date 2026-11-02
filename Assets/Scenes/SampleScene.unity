@@ -297,6 +297,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 5d3d4f3f37d1ecd39a86a0305e7302fd, type: 2}
   - {fileID: 11400000, guid: 1798e31453c98d8d2ac732c983af1112, type: 2}
   - {fileID: 11400000, guid: 3df5e1233a52378fc95e9ca49c17c6f5, type: 2}
+  - {fileID: 11400000, guid: 77c8dc0e18ee76cf486591d9d4d996c5, type: 2}
+  - {fileID: 11400000, guid: dc7163bfedd27e41281c843e5ae7461c, type: 2}
   sunController: {fileID: 419207779}
   harvestManager: {fileID: 528505460}
   terrainManager: {fileID: 1847944418}
@@ -368,7 +370,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InstructionsPanel
   panel: {fileID: 1483531329}
   bodyText: {fileID: 1945773331}
-  sessionLabel: {fileID: 831246711}
   sessionConfig: {fileID: 0}
 --- !u!4 &269841568
 Transform:
