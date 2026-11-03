@@ -88,6 +88,10 @@ public static class UiStyle
     // a visible selection); TextMeshPro's defaults are a hairline caret in the text colour and no focus cue.
     public static void StyleInput(TMP_InputField input, Image background)
     {
+        // The field creates its caret in OnEnable, which ran at AddComponent, before its text component was assigned: no caret was ever made.
+        // Enabling it again, now that it is wired, creates it.
+        input.enabled = false;
+        input.enabled = true;
         input.customCaretColor = true;
         input.caretColor = Color.white;
         input.caretWidth = 3;
