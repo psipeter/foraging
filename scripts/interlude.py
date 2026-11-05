@@ -63,6 +63,7 @@ GAP_PAIRS = 150               # (shape, colour) pairs drawn on each of them
 GAP_TOP_QUANTILE = 0.98       # the largest gap a gap mode spreads its trials to: this quantile of the candidate pairs' gaps
 GAP_SEARCH_STEPS = 30_000     # swaps tried when choosing the trials from the candidates
 ORDER_DRAWS = 3000            # gap modes: random orders tried for the file order (the same for every participant)
+REPEAT_SEPARATION = 8         # gap modes with repeats: the fewest trials between a pair and its repeat
 ORDER_MAX_RUN = 3             # ... which may not put the same correct side more than this many times in a row
 FEATURE_WEIGHTS = {"shape": 1.0, "color": 1.0, "moisture": 1.0}   # perceptual weight of each channel in `feature_gap` (no measured JNDs yet: equal)
 SAME_TOL = 0.02               # |moisture difference| for "the same moisture"
@@ -504,16 +505,18 @@ def build_random_trials(params, terrain, pool, rng):
     return _finish_trials(trials, des, rng), des
 
 
-def choose_gap_trials(rows, n, axes, minima, rng):
+def choose_gap_trials(rows, n, axes, minima, rng, maxima=None):
     """From candidate rows (placement, left, right, reward gap, feature gap, left is better) choose `n` on distinct placements, half with
     the left bush better, so that the sorted gaps on each axis (3 = reward, 4 = feature) are as close as possible to n evenly spaced values
-    from that axis's minimum to GAP_TOP_QUANTILE of the candidates' gaps (the target of bin k is its centre). Hill climbing on swaps.
+    from that axis's minimum to its maximum (`maxima`, if given for the axis: candidates above it are left out) or else to GAP_TOP_QUANTILE of the
+    candidates' gaps (the target of bin k is its centre). Hill climbing on swaps.
     Returns (chosen rows, {axis: (low, high)})."""
-    rows = [r for r in rows if all(r[a] >= minima[a] for a in axes)]
+    maxima = maxima or {}
+    rows = [r for r in rows if all(minima[a] <= r[a] <= maxima.get(a, np.inf) for a in axes)]
     if len({r[0] for r in rows}) < n:
         raise RuntimeError(f"only {len(rows)} usable candidate pairs on {len({r[0] for r in rows})} placements for {n} trials; lower the minimum gaps")
     gaps = np.array([[r[a] for a in axes] for r in rows])
-    span = {a: (minima[a], float(np.quantile(gaps[:, j], GAP_TOP_QUANTILE))) for j, a in enumerate(axes)}
+    span = {a: (minima[a], maxima[a] if a in maxima else float(np.quantile(gaps[:, j], GAP_TOP_QUANTILE))) for j, a in enumerate(axes)}
     targets = np.array([[lo + (k + 0.5) / n * (hi - lo) for k in range(n)] for lo, hi in (span[a] for a in axes)])
     width = np.array([[hi - lo] for lo, hi in (span[a] for a in axes)])
     left = np.array([r[5] for r in rows])
@@ -550,20 +553,44 @@ def build_gap_trials(params, terrain, pool, rng, mode):
     """Gap modes: `interludeTrialCount` pairs spread evenly over the reward gap (`reward_gap`), the feature gap (`feature_gap`) or both
     (`hybrid`; chosen jointly, so each is even on its own; the two gaps are correlated because reward is a function of the features, which is accepted). The same trials for every participant: the pairs come
     from the world seed. No elevation rule is needed: moisture is one of the feature channels and a reward feature in S3/S4."""
-    n = int(params.interlude_trial_count)
+    n_total = int(params.interlude_trial_count)
+    repeats = min(int(getattr(params, "interlude_repeat_count", 0) or 0), n_total // 2)         # (at most half the trials repeat a pair: a short Interlude keeps its pairs)
+    n = n_total - repeats
     des = Designer(params, terrain, pool, rng)
     axes = {"reward_gap": (3,), "feature_gap": (4,), "hybrid": (3, 4)}[mode]
     minima = {3: float(getattr(params, "interlude_min_reward_gap", 0.25)), 4: float(getattr(params, "interlude_min_feature_gap", 0.1))}
+    # optional ceilings (reward units for the reward gap, 0-1 for the feature gap); 0 or absent: the gaps spread up to GAP_TOP_QUANTILE of the candidates
+    maxima = {a: float(v) for a, v in ((3, getattr(params, "interlude_max_reward_gap", 0)), (4, getattr(params, "interlude_max_feature_gap", 0))) if v}
     rows = des.gap_candidates()
     while True:
-        chosen, span = choose_gap_trials(rows, n, axes, minima, rng)
+        chosen, span = choose_gap_trials(rows, n, axes, minima, rng, maxima)
         hidden = [r for r in chosen if not des._final_ok(*r[:3])]
         if not hidden:
             break
         rows = [r for r in rows if not any(r is h for h in hidden)]          # a chosen pair not in view: choose again without it
     trials = [{"type": mode, "varied": "", "place": r[0], "left": r[1], "right": r[2]} for r in chosen]
+    trials += pick_repeats(trials, repeats, des)
     des.gap_span = {("reward", "feature")[a - 3]: span[a] for a in axes}
-    return _finish_trials(trials, des, rng, ordered=True), des
+    return _finish_trials(trials, des, rng, ordered=True, separation=int(getattr(params, "interlude_repeat_separation", REPEAT_SEPARATION))), des
+
+
+def pick_repeats(trials, k, des):
+    """`k` exact repeats of chosen trials: the same placement, spawn point, bushes and sides (shallow copies, linked to their source by
+    `repeat_source`; the sidecar gives a copy its own bush entries, so the bush the participant harvested the first time is not the
+    depleted one). The pairs repeated are those whose reward gap is nearest the median (neither trivial nor a coin flip), alternating
+    the correct side so the sides stay balanced."""
+    if k == 0:
+        return []
+    delta = [des.value(t["left"]) - des.value(t["right"]) for t in trials]
+    middle = float(np.median(np.abs(delta)))
+    free, copies = list(range(len(trials))), []
+    for i in range(k):
+        side = i % 2 == 0                                          # left-correct first, then right-correct, ...
+        pool = [j for j in free if (delta[j] > 0) == side] or free
+        j = min(pool, key=lambda j: abs(abs(delta[j]) - middle))
+        free.remove(j)
+        copies.append({**trials[j], "repeat_source": trials[j]})
+    return copies
 
 
 def _order_penalty(rows):
@@ -580,9 +607,10 @@ def _order_penalty(rows):
     return cost
 
 
-def _finish_trials(trials, des, rng, ordered=False):
+def _finish_trials(trials, des, rng, ordered=False, separation=0):
     """Shuffle the file order once (seeded) and add each trial's true values and correct side. The file order is what every participant
-    sees. `ordered` (gap modes): of ORDER_DRAWS shuffles keep the one with the least order structure (`_order_penalty`)."""
+    sees. `ordered` (gap modes): of ORDER_DRAWS shuffles keep the one with the least order structure (`_order_penalty`), among those that put
+    every repeat at least `separation` trials from its source."""
     for t in trials:
         t["left_value"], t["right_value"] = des.value(t["left"]), des.value(t["right"])
         delta = t["left_value"] - t["right_value"]
@@ -590,7 +618,10 @@ def _finish_trials(trials, des, rng, ordered=False):
         t["delta_value"] = delta
     if ordered:
         perms = [rng.permutation(len(trials)) for _ in range(ORDER_DRAWS)]
-        key = lambda perm: _order_penalty([(trials[j]["correct"], abs(trials[j]["delta_value"]), feature_gap(trials[j]["left"], trials[j]["right"])) for j in perm])
+        def key(perm):
+            cost = _order_penalty([(trials[j]["correct"], abs(trials[j]["delta_value"]), feature_gap(trials[j]["left"], trials[j]["right"])) for j in perm])
+            rank = {id(trials[j]): r for r, j in enumerate(perm)}
+            return cost + sum(1000.0 for t in trials if "repeat_source" in t and abs(rank[id(t)] - rank[id(t["repeat_source"])]) < separation)
         perm = min(perms, key=key)
     else:
         perm = rng.permutation(len(trials))
@@ -611,15 +642,20 @@ def interlude_mode(params, mode=None):
     return mode
 
 
-def generate_interlude(name, pool_samples=None, seed=None, mode=None, **overrides):
+def generate_interlude(name, pool_samples=None, seed=None, mode=None, extras=None, **overrides):
     """Build the sidecar dict (bush table + trials) for the Interlude asset `name`; returns (sidecar, params, terrain).
     `pool_samples` overrides POOL_SAMPLES (the tests use a smaller search to run fast). `seed` replaces the world seed of
     the Interlude and of the session it probes, and `overrides` (snake_case SessionConfig fields) apply to both, so the
     simulator can build, for any world it plays, the very Interlude the game would show for that world. `mode` is "designed" (the
-    contrast / graded / extrapolation trials) or "random" (random pairs); None reads the asset's `interludeMode`."""
+    contrast / graded / extrapolation trials) or "random" (random pairs); None reads the asset's `interludeMode`. `extras` sets generator
+    options of the gap modes for an asset that has no field for them (older assets; the same names as the SessionConfig fields): `interlude_max_reward_gap` / `interlude_max_feature_gap` (ceilings of the two gaps),
+    `interlude_repeat_count` (how many of the `interludeTrialCount` trials are exact repeats of an earlier pair) and `interlude_repeat_separation`
+    (the fewest trials between a pair and its repeat, default REPEAT_SEPARATION)."""
     if seed is not None:
         overrides = {**overrides, "world_seed": int(seed)}
     params = load_session(name, **overrides)
+    for key, value in (extras or {}).items():          # generator options that are not asset fields yet (see below)
+        setattr(params, key, value)
     if not bool(params.is_interlude):
         raise ValueError(f"{name} is not an Interlude asset (isInterlude is off)")
     base = load_session(params.interlude_for, **overrides)
@@ -661,6 +697,10 @@ def generate_interlude(name, pool_samples=None, seed=None, mode=None, **override
         t["index"] = i
         t["start"] = [float(v) for v in pool["spawn"][p]]
         t["yaw"] = float(math.degrees(pool["yaw"][p]))
+    for t in trials:
+        if "repeat_source" in t:                    # a repeat and its source: the later one in the file says which earlier trial it repeats
+            early, late = sorted((t, t["repeat_source"]), key=lambda x: x["index"])
+            late["repeat_of"] = early["index"]
 
     value = np.asarray(bush_value(params.reward_function, shape, color, moisture), dtype=float)
     fruit_count = int(params.fruit_count)
@@ -695,6 +735,9 @@ def generate_interlude(name, pool_samples=None, seed=None, mode=None, **override
         for entry, t in zip(sidecar["trials"], trials):
             entry["rewardGap"] = abs(float(t["delta_value"]))
             entry["featureGap"] = feature_gap(t["left"], t["right"])
+    for entry, t in zip(sidecar["trials"], trials):
+        if "repeat_of" in t:
+            entry["repeatOf"] = t["repeat_of"]      # (the loader ignores it; analysis uses it to pair a trial with its repeat)
     if mode in GAP_MODES:
         sidecar["gapSpan"] = {k: [float(v[0]), float(v[1])] for k, v in des.gap_span.items()}
     return sidecar, params, terrain

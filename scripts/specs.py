@@ -89,6 +89,8 @@ def _spec_value(value, where):
 def _normalize(value):
     if isinstance(value, dict):
         return {str(k): _normalize(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_normalize(v) for v in value]
     return _spec_value(value, "spec")
 
 

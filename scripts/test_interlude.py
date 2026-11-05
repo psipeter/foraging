@@ -392,13 +392,16 @@ def test_gap_modes_spread_the_gaps_evenly(name, mode):
     n = sc["n"]
     assert n == len(sc["trials"]) == 20 and sc["mode"] == mode
     assert sorted(t["correct"] for t in sc["trials"]) == ["left"] * (n // 2) + ["right"] * (n - n // 2)       # the better side is balanced
-    assert len({tuple(t["start"]) for t in sc["trials"]}) == n                                                  # one trial per placement
+    repeats = sum("repeatOf" in t for t in sc["trials"])                                                        # (the asset's own repeat count)
+    assert repeats == int(load_session(name).interlude_repeat_count)
+    assert len({tuple(t["start"]) for t in sc["trials"]}) == n - repeats                                        # one trial per placement, a repeat on its source's
+    own = [t for t in sc["trials"] if "repeatOf" not in t]                                                      # the distinct pairs carry the even spread
     for axis, key in (("reward", "rewardGap"), ("feature", "featureGap")):
         if axis not in sc["gapSpan"]:
             continue
         lo, hi = sc["gapSpan"][axis]
-        got = np.sort([t[key] for t in sc["trials"]])
-        want = lo + (np.arange(n) + 0.5) / n * (hi - lo)
+        got = np.sort([t[key] for t in own])
+        want = lo + (np.arange(len(own)) + 0.5) / len(own) * (hi - lo)
         assert got.min() >= lo - 1e-9 and np.abs(got - want).max() < 0.1 * (hi - lo)                           # evenly spread from the minimum
 
 
@@ -437,3 +440,44 @@ def test_s5_interlude_file_is_fresh_and_spread_over_the_gaps():
     committed = sidecar_path("S5_Interlude", sidecar["seed"])
     assert _same(json.load(open(committed)), json.loads(json.dumps(sidecar))), "S5_Interlude file is stale: re-run scripts/interlude.py S5_Interlude"
     assert sidecar["n"] == 20 and sidecar["mode"] == "hybrid"
+
+
+def test_gap_ceilings_keep_the_chosen_pairs_inside_the_window_and_spread_them_evenly():
+    from interlude import choose_gap_trials
+    rng = np.random.default_rng(0)
+    rows = [(i, None, None, float(rng.uniform(0, 4)), float(rng.uniform(0, 1)), bool(i % 2)) for i in range(3000)]
+    chosen, span = choose_gap_trials(rows, 10, (3, 4), {3: 0.5, 4: 0.2}, np.random.default_rng(1), {3: 2.0, 4: 0.7})
+    reward, feature = np.array([r[3] for r in chosen]), np.array([r[4] for r in chosen])
+    assert span == {3: (0.5, 2.0), 4: (0.2, 0.7)}
+    assert reward.min() >= 0.5 and reward.max() <= 2.0 and feature.min() >= 0.2 and feature.max() <= 0.7
+    assert np.abs(np.sort(reward) - (0.5 + (np.arange(10) + 0.5) / 10 * 1.5)).max() < 0.15           # one gap near each evenly spaced target
+    _, open_span = choose_gap_trials(rows, 10, (3,), {3: 0.5}, np.random.default_rng(1))
+    assert open_span[3][1] > 3.5                                                                      # no ceiling: up to the top quantile, as before
+
+
+_REPEATS = {}
+
+
+def test_a_gap_mode_interlude_can_repeat_pairs_exactly_with_their_own_bush_entries_and_apart_in_the_order():
+    if "s" not in _REPEATS:
+        scale = generate_interlude("S3_Interlude", mode="hybrid")[0]["scale"]
+        extras = {"interlude_max_reward_gap": 1.5 * scale, "interlude_max_feature_gap": 0.55, "interlude_repeat_count": 2}
+        _REPEATS["s"] = (generate_interlude("S3_Interlude", mode="hybrid", interlude_trial_count=20, interlude_min_reward_gap=0.25 * scale,
+                                            interlude_min_feature_gap=0.15, extras=extras)[0], scale)
+    sc, scale = _REPEATS["s"]
+    trials, n = sc["trials"], sc["n"]
+    assert n == len(trials) == 20 and len(sc["shape"]) == 40 and len(set(t["left"]["id"] for t in trials)) == 20      # a copy has bush entries of its own
+    repeats = [t for t in trials if "repeatOf" in t]
+    assert len(repeats) == 2 and sorted(t["correct"] for t in repeats) == ["left", "right"]                              # the correct sides stay balanced
+    pos = np.array(sc["treePos"]).reshape(-1, 2)
+    for t in repeats:
+        o = trials[t["repeatOf"]]
+        assert o["index"] < t["index"] and t["index"] - o["index"] >= 8                                                  # the later one names the earlier
+        for side in ("left", "right"):
+            a, b = t[side]["id"], o[side]["id"]
+            assert a != b and np.allclose(pos[a], pos[b]) and sc["canopyRadius"][a] == sc["canopyRadius"][b]
+            assert all(t[side][k] == o[side][k] for k in ("shape", "color", "moisture", "value"))
+        assert t["start"] == o["start"] and t["yaw"] == o["yaw"] and t["correct"] == o["correct"]
+    gaps = np.array([t["rewardGap"] for t in trials]) / scale
+    assert gaps.min() >= 0.25 - 1e-9 and gaps.max() <= 1.5 + 1e-9 and max(t["featureGap"] for t in trials) <= 0.55 + 1e-9
+    assert sum(t["correct"] == "left" for t in trials) == 10

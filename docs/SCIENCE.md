@@ -30,7 +30,12 @@ dependent variable is which trees participants harvest and in what order
 (plus movement/visibility data from the logs). The platform is meant to
 outlast any single question.
 
-**Hypotheses have not been written down yet.** When they are, they go here.
+**Hypothesis (first study, PI, 2026-11-05):** adding more features, feature nonlinearity and feature interaction to the reward function makes the
+mapping harder to learn: learning is slower and the performance ceiling lower. The session structure that tests it is the
+"Planned session structure" under "Session progression" (decided 2026-11-05, not yet built; the progression described after it
+is the one currently in the game). Experiments on reward scarcity, explore/exploit, patch leaving, and priors and unlearning are
+separate, later experiments with their own designs (they will use the terrain and spatial reward structure that the first study
+leaves decorative).
 
 Key constraint: attributes must be clearly visible and perceptually
 independent, and reward feedback must be unambiguous.
@@ -161,7 +166,7 @@ an oversight.
   and a black ambient term; fruit has an ambient floor), so the hue and intensity curves act on the canopy, the sky and the ambient
   probe, and the terrain darkens through the sun's direction plus the exposure ramp. Movement costs time (fixed player speed); harvesting costs
   `fruitHarvestDuration` seconds per fruit (0.2 s in sessions, so 10 fruits = 2 s per bush; 0.05 s in Interludes,
-  0.5 s per bush); player speed 7.5 (15 in the S1-S4 Interludes, 7.5 in the practice one). The progress ring is computed from this value, so it adapts.
+  0.5 s per bush); player speed 11.25 (the same in every session and Interlude; was 7.5 in sessions and 15 in the S1-S5 Interludes until 2026-11-04). The progress ring is computed from this value, so it adapts.
   Goal: maximize total reward.
   **Harvesting (first person):** bushes glow gradually as you approach them, in
   proportion to horizontal distance from the canopy edge (glow begins 20 units out,
@@ -299,6 +304,15 @@ explored and planned. Flow: P → Interlude (practice) → S1 → Interlude 1 �
   reward-gap mode about 8 of 20 pairs differ by 5 or more world units of elevation, in S4 about 5), but not per pair: a pair can differ greatly in
   reward through colour alone. Each trial records `rewardGap` and `featureGap` in the `.interlude.json` (not in `interlude_trials.csv`; recompute from the bush table), the file records `gapSpan`, and the trial `type` in the data is the mode name.
   Generation takes about 3 s per world (the line-of-sight check, the slow part, runs only on the 20 chosen pairs).
+- **Hybrid design since 2026-11-04 (S1_Interlude to S5_Interlude; chosen with the agent test bed `scripts/interlude_design.py`, numbers in `docs/DECISIONS.md`,
+  "Interlude design: trial count, repeats and gap windows").** The 20 trials are **18 distinct pairs plus 2 exact repeats**. The distinct pairs are spread evenly over
+  two windows: feature gap 0.15 to 0.55 (`interludeMinFeatureGap`, `interludeMaxFeatureGap`) and reward gap 0.25 to 1.5 spreads of the session's reward over typical bushes
+  (`interludeMinRewardGap`, `interludeMaxRewardGap`, in raw points per fruit and so different per session: S1 0.286 to 1.713, S2 0.358 to 2.148, S3 0.214 to 1.283, S4 0.179 to 1.077, S5 0.227 to 1.362). Pairs
+  that are close to ties are left out (little information about the value function when choices are noisy) and so are the very easiest (the generator no longer spreads up to the 98th percentile of
+  what the world offers). A repeat (`interludeRepeatCount` 2, at least `interludeRepeatSeparation` 8 trials apart) is the same place, spawn point, heading, bushes and sides as its source, with bush entries of its own in the file (the game
+  does not refill a harvested bush between trials); it repeats the pairs whose reward gap is nearest the median, one with the left bush correct and one with the right, so the sides stay balanced (10 and 10). The later trial of a pair carries `repeatOf` in the
+  `.interlude.json` (the data has equal attributes and different bush ids; no new column). **Purpose of the repeats:** how consistent a participant's choices are (two agreements out of two per participant: a screen, not a noise estimate, and memory of the first pick adds to it).
+  Participants who played before 2026-11-04 saw the earlier 20 distinct pairs: their Interludes are not comparable trial for trial.
 - **Random mode** (`interludeMode: Random`; the field's default is Designed; the practice Interlude uses it). The practice Interlude is then three random pairs, not easy contrasts. Instead of the three designed stimulus types, every
   trial is a pair of bushes with independent uniform random shape and colour (moisture is still the terrain's at the final positions, so
   relevant-moisture sessions still see moisture differences; roughly a quarter to a half of random pairs differ by more than 0.2). Pairs whose
@@ -390,12 +404,14 @@ and played in every session regardless of the sun's position. All ambient volume
 
 ### Attributes and their visual channels
 
-Each tree has three attributes in [0, 1], each on its own visual channel:
+Each tree has three attributes in [0, 1], each on its own visual channel. **Planned (2026-11-05): moisture stops being a reward
+feature** and the ground colour and elevation become decoration that makes the world look natural; shape and fruit colour are the two
+reward features ("Planned session structure" below). The paragraphs here describe the build as it is today.
 
 | Attribute | Visual channel | Ecological level | Prior strength |
 |---|---|---|---|
 | **Shape** | Canopy aspect ratio (squat/wide → tall/narrow) | Tree | Weak |
-| **Color** | Fruit colour (viridis ramp: purple → teal → yellow, equal perceptual steps) | Fruit | Weak |
+| **Color** | Fruit colour (plasma ramp: blue-purple → magenta → orange → yellow, equal perceptual steps) | Fruit | Weak |
 | **Moisture** | Ground color + terrain elevation | Environment | Weak–moderate |
 
 - `shape` and `color` are drawn independently and uniformly per tree.
@@ -407,8 +423,8 @@ Each tree has three attributes in [0, 1], each on its own visual channel:
   hills and almost no relief in P/S1/S2, where moisture earns nothing; terraced
   plateaus and valleys in S3/S4, where it does.
 - **Prior management:** fruit count is constant across bushes (no count-based
-  prior); fruit colour uses the viridis ramp (purple, teal, yellow; no red, which
-  avoids the strongest ripeness association; the green-to-yellow part keeps a weak one, see DECISIONS, "Fruit colour ramp"). Fruits are unlit so hue is always readable;
+  prior); fruit colour uses the plasma ramp (blue-purple, magenta, orange, yellow; no green, and it passes through pink and coral, so the red ripeness association is not
+  avoided, see DECISIONS, "Fruit colour ramp: plasma"). Fruits are unlit so hue is always readable;
   canopy and terrain respond to the day/night lighting.
 - Fruits are distributed over the canopy with a Fibonacci/sunflower spiral
   with per-tree seeded jitter.
@@ -428,7 +444,7 @@ running score.
 `sessionDuration` is the design value on P and S1–S5 (the table below; restored from a temporary 15 s on 2026-10-31). The Interlude assets' `sessionDuration` is only a cap (they end when the
 trials are done; 150 s, 60 s for the practice one). The simulated battery still runs S1–S4 at 120, 120, 180, 180 s (`--battery long`), longer than the participants' sessions.
 
-All five sessions: `rewardStd` 0.6 (was 0.3 until 2026-10-30), 10 fruit/tree, speed 7.5, `fruitHarvestDuration` 0.2 (0.05 in the Interludes), first-person camera, `worldHalfExtent` 350,
+All five sessions: `rewardStd` 0.6 (was 0.3 until 2026-10-30), 10 fruit/tree, speed 11.25, `fruitHarvestDuration` 0.2 (0.05 in the Interludes), first-person camera, `worldHalfExtent` 350,
 `terrainMeshResolution` 449, ~685–695 trees
 (seed-dependent: P 686, S1 700, S2 694, S3 691, S4 701). Weights apply to (shape, color, moisture).
 
@@ -454,6 +470,11 @@ a 60 s S1–S3 (one linear; three linear; mixed), replaced by this progression; 
 
 ### Terrain by session
 
+**Planned (2026-11-05):** with moisture out of the reward function, the terrain no longer needs to differ by session. Every session
+would use the continuous, low-relief configuration of P, S1 and S2 below, so reward is spread about evenly over the lattice and no
+region is rewarded or hidden by relief (the terraced S3/S4 worlds hide 65-68% of the bushes near the start from the player). The
+terraced-moisture code stays for the later experiments on patches and scarcity. The text below describes the current build.
+
 Terrain only matters for reward in S3 (moisture weight 2.67, the dominant feature) and S4 (since 2026-11-02 moisture may carry any of S4's three weights; it was 0.9), so it is deliberately
 different there. All values are `SessionConfig` fields; the field is built in `scripts/world.py`.
 
@@ -477,7 +498,70 @@ On the old S3 terrain the start region had few of the wettest (level 3) bushes n
 units against 72 of level 0), so reaching them took travel (not rechecked on the new terrain). The moisture–height coupling is
 likely to be revisited (TODO below). Design decision and alternatives: DECISIONS ("Terraced moisture").
 
-### Session progression (P–S5 built and in the game's session sequence)
+### Planned session structure (decided 2026-11-05, not yet built)
+
+**Why change:** the aim is a clean test of "more features, nonlinearity and interaction make the mapping harder to learn", with each step
+adding one thing, and a smaller jump into the last sessions (a pilot found the two-bump S5 too large a step from S4: Interlude accuracy 75% and then 55%,
+chance 50%). Moisture leaves the reward function: it was the regional, position-confounded feature (patches, hidden bushes, a
+prior of its own), and patch structure belongs to the later experiments. Rationale and rejected alternatives: DECISIONS, "Session structure
+revised (2026-11-05)".
+
+**Environment (all sessions).** Bushes on the jittered hexagonal lattice as now, so reward density is about uniform everywhere; the
+ground colour and elevation are decoration only (moisture weight 0, a gentle continuous terrain). Reward features are shape (the canopy
+shape axis) and fruit colour (the colour ramp). A session in which a feature "does not vary" gives every bush the same value of it
+(identical canopies, or one fruit colour).
+
+| Session | Features that vary | Reward depends on | Reward function | Goal for the participant | Draft hint |
+|---|---|---|---|---|---|
+| P (practice) | shape and colour | neither: each bush has a random point value | independent random value per bush | learn the controls and the harvest | tutorial text |
+| S1 | colour (shapes identical) | colour | linear | find the better end of the colour spectrum | "Fruit colour determines points." |
+| S2 | shape (colours identical) | shape | nonlinear (a peak off the centre) | find the best spot on the shape spectrum | "Bush shape determines points." |
+| S3 | shape and colour | only one of them | linear | find which feature matters and its better end | "Only one feature matters." |
+| S4 | shape and colour | only one of them | nonlinear (a peak) | find which feature matters and the best spot | "Only one feature matters." |
+| S5 | shape and colour | both | weighted linear mixture | find the relative weights | "Both features matter, to different degrees." |
+| S6 | shape and colour | both, jointly | one linear term times one Gaussian | find the interaction rule | "The two features interact." |
+| S7 | shape and colour | both, jointly | a 2-D Gaussian with a different centre and width on each axis | find the interaction rule | "The two features interact." |
+
+(The proposal numbered two sessions S6; the second is S7.) The sessions are each followed by an Interlude, as now, with the Interlude's pairs
+generated from the shape and colour differences only.
+
+**Contrasts the ladder supports:** S1 against S2 (a linear against a nonlinear single feature), S1 against S3 and S2 against S4 (adding the
+question of which feature matters), S3 against S4 (nonlinearity under that question), S4 against S5 (integrating two relevant features), S5 against S6
+and S6 against S7 (interaction, first partial, then full). The core analysis compares rewards over time and the Interlude's picture of the learned value
+function across these sessions, within and across participants:
+1. Point trajectories in each session: the rate and curvature of increase show the quality of performance, the periods of learning and the
+   trade-off between exploring and exploiting.
+2. Interlude performance assesses the learned value function and how well it approximates the true mapping.
+3. The comparison of both across sessions addresses the hypothesis.
+
+**Decisions already taken** (PI, 2026-11-05):
+- **S1 is colour, S2 is shape.** A nonlinear (peaked) mapping is easier to identify on shape, whose ends are clear, than on colour, which is a wheel. Whether the order of
+  colour and shape is counterbalanced across participants is left for later.
+- **Reward matching is a tuning problem, not a design problem:** the sessions' reward scale, the spread of the reward over bushes, the share of bushes near the
+  top, the peak widths and the noise are to be set parametrically so that the sessions differ in structure and not in signal strength. How the ceiling is
+  measured (a fraction of an oracle forager's score, or a plateau of the participant's own reward rate) is open; no normalised score is decided.
+- **Hints may be removed.** The draft hints state the class of rule and make the task parameter learning within a known family; they depart from the current
+  instruction principle (the wording never says "higher is better" and does not describe the mapping). Pilots decide whether the progression is as clean without
+  them. "Colour" in a hint means the fruit colour, not the ground.
+- **Session durations are adjusted as needed**; seven sessions with their Interludes are expected to take about 30 minutes, against about 25 for the current six.
+- **Interlude analysis, and whether 20 trials are enough for the 2-D sessions, come later.**
+- **S7 is the current S5's job** (one bump over shape and colour); the two-bump version stays rejected.
+
+**What has to be built or changed** (none of it done):
+- *Reward function (C#, `world.py`, the mirrors, tests, `fingerprint.SIM_FIELDS`):* a Gaussian with its own centre and width on each axis (the current `RewardBump` has one
+  width), for S7; a term that is the product of a basis function of one feature and a Gaussian of the other, for S6; a random per-bush value independent of the
+  features, pre-drawn in the world file like the fruit rewards, for the practice session.
+- *Identical features:* equal width and height ranges, or a constant shape value in the world file, for "shapes identical"; a one-colour fruit ramp for "colours identical".
+- *Moisture out of the calculations:* the reward weights; the Interlude's feature gap and its relevant-feature rules (`interlude.py`); the agents' attribute vectors and the
+  human analyses (`human_analysis.py`, the carry-over scripts); the battery's reward functions; the terrain configuration by session.
+- *Assets and text:* P, S1-S7 and their Interludes redrawn and regenerated (`world.py`, `interlude.py`), the instruction files, the hint wording.
+- *Later:* the ABAB alternation of feature sets across sessions (colour sets `warm_arc` and `cool_arc`, shape sets `height_only` and `width_only`, both optional and
+  already available) and its counterbalancing.
+
+**What stays as it is:** the task (first-person foraging, fixed durations, per-fruit rewards pre-drawn from the world file), the Interlude format, the data logging and the online
+pipeline.
+
+### Session progression (P–S5 built and in the game's session sequence; to be replaced by the planned structure above)
 
 Goal: each session is long enough for a participant to sample many bushes and
 learn the reward mapping, but not so long that most of it is spent exploiting a
@@ -784,6 +868,10 @@ provisional dirty-tree runs and are not summarised here until they are re-record
   not what a shorter session would give. (e) A recency-weighted replay and a forgetful memory need the memory to keep the order of visits. (f) The
   simulated observer sees every bush in its cone; `OccludedConePercept` (terrain and bush occlusion) exists but no result is recorded with it.
 
+- **Planned session structure (2026-11-05):** open items are in "Planned session structure" above: the matching of reward across sessions (and what "ceiling" means),
+  hints against no hints, the counterbalancing of the colour and shape order, session durations, and the Interlude's trial count for the 2-D sessions. The
+  later experiments on reward scarcity, explore/exploit, patch leaving, and priors and unlearning are not designed yet; they need the terrain and carry-over machinery
+  (terraced moisture; same-features-in-successive-sessions, the opposite of the ABAB alternation), so both are kept.
 - **TODO(PI): rebalance so `nearest` stays clearly worse than `greedy`/`plan_beam` in every
   session.** In the baselines below the blind nearest-bush forager reaches a large share
   of the planner's score in S3 and S4 (76% / 81% at the original speed and harvest rate), so the

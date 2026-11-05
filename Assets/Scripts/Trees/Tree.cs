@@ -47,6 +47,7 @@ public class Tree : MonoBehaviour
     private float _selectedBlend;
     private bool _spent;
     private Color _canopyBaseColor = Color.white;
+    private Color _canopyNeutralColor = Color.white;
     private GameObject _ringObject;
     private Material _ringInstance;
     private static Mesh _quadMesh;
@@ -99,6 +100,7 @@ public class Tree : MonoBehaviour
                 if (_canopyMaterial.HasProperty("_BaseColor"))
                 {
                     _canopyBaseColor = _canopyMaterial.GetColor("_BaseColor");
+                    _canopyNeutralColor = _canopyBaseColor;
                 }
             }
         }
@@ -148,6 +150,14 @@ public class Tree : MonoBehaviour
         if (canopy == null)
         {
             return;
+        }
+
+        // Decorative canopy tint, drawn from the bush's own seed (independent of the fruit layout's draws and of every attribute).
+        if (sessionConfig != null && _canopyMaterial != null && _canopyMaterial.HasProperty("_BaseColor"))
+        {
+            float tintPosition = (float)new System.Random(fruitSeed ^ 0x1bd1e995).NextDouble();
+            _canopyBaseColor = _canopyNeutralColor * sessionConfig.CanopyTint(tintPosition);
+            _canopyMaterial.SetColor("_BaseColor", _canopyBaseColor);
         }
 
         Vector2 shapeRange = sessionConfig != null ? sessionConfig.ShapeRange : new Vector2(0f, 1f);
@@ -232,10 +242,11 @@ public class Tree : MonoBehaviour
         }
 
         // Fruit scale compensation: keep fruits as configurable world-space spheres.
+        float radius = sessionConfig != null ? sessionConfig.FruitRadiusFor(canopyScale.x, canopyScale.y) : fruitRadius;
         Vector3 compensatedScale = new Vector3(
-            fruitRadius / Mathf.Max(canopyScale.x, 0.0001f),
-            fruitRadius / Mathf.Max(canopyScale.y, 0.0001f),
-            fruitRadius / Mathf.Max(canopyScale.z, 0.0001f));
+            radius / Mathf.Max(canopyScale.x, 0.0001f),
+            radius / Mathf.Max(canopyScale.y, 0.0001f),
+            radius / Mathf.Max(canopyScale.z, 0.0001f));
 
         // Deterministic distribution per tree.
         Color fruitColor = sessionConfig != null ? sessionConfig.FruitColor(attributes.color) : Color.Lerp(ColorLow, ColorHigh, attributes.color);

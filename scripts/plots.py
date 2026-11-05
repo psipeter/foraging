@@ -28,11 +28,12 @@ INK_MUTED = ".5"   # seaborn grey for annotations and the footer
 SERIES = ["#1b4cff", "#c92100", "#ffc300", "#ce98ff", "#00726d", "#e4825c", "#21f4c9", "#0bae92"]   # glasbey, colour-blind safe (deuteranopia, severity 100); the first MAX_DISTINCT are the default
 # matplotlib's named linestyles (solid, dashed, dashdot, dotted) plus a dash-dot-dot, then three extras; an agent's style goes with its colour
 STYLES = ["-", (0, (3.7, 1.6)), (0, (6.4, 1.6, 1, 1.6)), (0, (1, 1.65)), (0, (3, 1, 1, 1, 1, 1)), (0, (5, 10)), (0, (5, 1)), (0, (1, 10))]
+MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*"]   # an agent's (or participant's) marker in the Interlude strip of `figure_points`, in the order of the colours
 ERRORBAR = ("ci", 95)
 MAX_DISTINCT = 5   # lines per figure that colour alone separates for most viewers, colour-blind ones included
 
 
-# Sizes follow the evidence_integration project (utils/plot_style.py, scripts/make_figures.py): a paper figure is the 	extwidth of a letter page
+# Sizes follow the evidence_integration project (utils/plot_style.py, scripts/make_figures.py): a paper figure is the textwidth of a letter page
 # (6.5 in) with 9 pt text; a presentation figure is the 10.6 in slide width with 15 pt text. `panel_height` and `extra_height` (title, legend and
 # footer, in inches) are foraging's own: a figure is `rows * panel_height + extra_height` tall.
 MODES = {
@@ -115,13 +116,13 @@ def _figsize(cfg, rows, n_agents):
     return cfg["width"], cfg["panel_height"] * rows + cfg["extra_height"] + extra
 
 
-def _header(fig, heading, note, n_agents):
+def _header(fig, heading, note, n_agents, **layout):
     """Title and subtitle at the top left, and the panels laid out between the margins."""
     top, footer, bottom = _margins(n_agents)
     height = fig.get_figheight()
     fig.text(0.01, 1 - 0.08 / height, heading, ha="left", va="top", fontsize=plt.rcParams["axes.titlesize"], fontweight="bold")   # not suptitle: tight_layout would reserve room for it
     fig.text(0.01, 1 - (0.08 + plt.rcParams["axes.titlesize"] * 1.3 / 72) / height, note, va="top", fontsize=_small(), color=INK_MUTED)
-    fig.tight_layout(rect=(0, bottom / height, 1, 1 - top / height))
+    fig.tight_layout(rect=(0, bottom / height, 1, 1 - top / height), **layout)
 
 
 def _grid(n):
@@ -131,16 +132,21 @@ def _grid(n):
     return int(np.ceil(n / cols)), cols
 
 
-def _finish(fig, axes, panels, seen, palette, footer_extra=""):
+def _finish(fig, axes, panels, seen, palette, footer_extra="", markers=None):
     for ax in axes.flat[len(panels):]:
         ax.set_visible(False)
-    handles = [Line2D([0], [0], color=palette[n], lw=2, ls=ls) for n, ls in zip(seen, STYLES)]
+    handles = [Line2D([0], [0], color=palette[n], lw=2, ls=ls, marker=m, markersize=6, markeredgecolor="white")
+               for n, ls, m in zip(seen, STYLES, markers or [None] * len(seen))]
     fig.legend(handles, seen, loc="lower center", ncol=min(3, len(seen)), frameon=False,
                bbox_to_anchor=(0.5, (_margins(len(seen))[1] + 0.05) / fig.get_figheight()))
     first = next(iter(panels.values()))
-    code = first.sel.code
-    tags = ", ".join(sorted({t.split("/")[0] for panel in panels.values() for t in panel.sel.tags})) or "any"
-    foot = f"tag {tags}; engine {code['engine_hash']}{', dirty tree' if code['dirty'] else ''}{footer_extra}"
+    foot = []
+    if first.sel is not None:
+        code = first.sel.code
+        tags = ", ".join(sorted({t.split("/")[0] for panel in panels.values() for t in panel.sel.tags})) or "any"
+        foot.append(f"tag {tags}; engine {code['engine_hash']}{', dirty tree' if code['dirty'] else ''}")
+    foot += [f for f in dict.fromkeys(getattr(panel, "footer", None) for panel in panels.values()) if f]
+    foot = "; ".join(foot) + footer_extra
     fig.text(0.01, 0.06 / fig.get_figheight(), foot, va="bottom", fontsize=_small() - 1, color=INK_MUTED)
 
 
@@ -150,10 +156,17 @@ def _axis_style(ax, title):
 
 
 def _lineplot(ax, df, seen, palette, **kw):
+    """Each series as its mean and interval over seeds (a series of one seed, such as a participant, is a plain line)."""
     present = [n for n in seen if n in set(df["agent"])]
     dashes = {n: ("" if ls == "-" else ls[1]) for n, ls in zip(seen, STYLES)}   # seaborn spells solid "" and a dash pattern as its (on, off, ...)
     sns.lineplot(data=df, x="t", y="value", hue="agent", hue_order=present, palette=palette, style="agent", style_order=present, dashes=dashes,
                  errorbar=ERRORBAR, n_boot=1000, seed=0, linewidth=2, legend=False, ax=ax, **kw)
+
+
+def _lowest_tick(*panel_sets):
+    """The lowest accuracy tick: 0.5 (chance) unless a series (a participant, or an agent's mean) goes below it."""
+    low = min((c["per_seed"] if c["n"] == 1 else c["mean"]).min() for panels in panel_sets for curves in panels.values() for c in curves.agents.values())
+    return 0.5 if low > 0.44 else np.floor(low * 10 + 1e-9) / 10
 
 
 def figure_cumulative(panels, names=None, order=None, title=None, mode=DEFAULT_MODE):
@@ -181,7 +194,8 @@ def figure_cumulative(panels, names=None, order=None, title=None, mode=DEFAULT_M
         if i + cols >= len(panels):
             ax.set_xlabel("time in session (s)")
     heading = title or ("Lead over the lowest-performing agent in cumulative reward" if advantage else "Cumulative reward over the session")
-    note = ("paired difference to the lowest-performing agent of each session; " if advantage else "") + "mean and 95% bootstrap interval across seeds"
+    note = getattr(next(iter(panels.values())), "note", None) or (
+        ("paired difference to the lowest-performing agent of each session; " if advantage else "") + "mean and 95% bootstrap interval across seeds")
     _header(fig, heading, note, len(seen))
     _finish(fig, axes, panels, seen, palette)
     return fig
@@ -194,26 +208,88 @@ def figure_learning(panels, names=None, order=None, title=None, mode=DEFAULT_MOD
     seen, palette = _palette(panels, names, order)
     rows, cols = _grid(len(panels))
     fig, axes = plt.subplots(rows, cols, figsize=_figsize(cfg, rows, len(seen)), squeeze=False, sharex=True, sharey=True)
+    lowest_tick = _lowest_tick(panels)
     for ax, (name, curves) in zip(axes.flat, panels.items()):
         accuracy = curves.metric == "interlude_accuracy"
         _lineplot(ax, long_form(curves, names), seen, palette, marker="o", markersize=5, markeredgecolor="white")
         _axis_style(ax, name)
         ax.set_xlabel("training time in the session (s)")
         if accuracy:
-            ax.set_ylim(0.45, 1.02)   # chance is 0.5: room below it for the line and its interval only
-            ax.set_yticks(np.arange(0.5, 1.01, 0.1))
+            ax.set_ylim(lowest_tick - 0.05, 1.02)   # chance is 0.5: room below it for the line and its interval only
+            ax.set_yticks(np.arange(lowest_tick, 1.001, 0.1))
             ax.set_ylabel("Interlude accuracy")
         else:
             ax.set_ylim(bottom=0)
             ax.set_ylabel(curves.metric.replace("_", " "))
-    axes.flat[0].set_xlim(0, max(curves.t[-1] for curves in panels.values()))   # the x axis is shared
+    axes.flat[0].set_xlim(0, 1.03 * max(curves.t[-1] for curves in panels.values()))   # the x axis is shared; room for the last markers
     for ax in axes.flat:
         ax.label_outer()
-    env = next(iter(panels.values())).sel.env
-    _header(fig, title or "Interlude score against training time",
-            f"{env.get('interlude_mode', '?')} Interlude, {env.get('n_samples', '?')} pick per trial; a copy of the agent as it was "
-            "at each time; mean and 95% bootstrap interval across seeds", len(seen))
+    first = next(iter(panels.values()))
+    if getattr(first, "note", None):
+        note = first.note
+    else:
+        env = first.sel.env
+        note = (f"{env.get('interlude_mode', '?')} Interlude, {env.get('n_samples', '?')} pick per trial; a copy of the agent as it was "
+                "at each time; mean and 95% bootstrap interval across seeds")
+    _header(fig, title or "Interlude score against training time", note, len(seen))
     _finish(fig, axes, panels, seen, palette)
+    return fig
+
+
+def point_limits(*figures):
+    """Axis limits for `figure_points` shared by several figures, so that they can be compared: `figures` are (panels, interlude) pairs. Returns
+    {"points": {session: top of the points axis}, "longest": the longest session, "accuracy_low": the lowest accuracy tick, in %}."""
+    top, longest = {}, 0.0
+    for panels, _ in figures:
+        for session, curves in panels.items():
+            longest = max(longest, curves.duration)
+            for c in curves.agents.values():
+                interval = c["hi"][np.isfinite(c["hi"])]
+                top[session] = max(top.get(session, 0.0), float(np.max(c["mean"])), float(interval.max()) if len(interval) else 0.0)
+    return {"points": {session: 1.05 * value for session, value in top.items()}, "longest": longest,
+            "accuracy_low": 100 * _lowest_tick(*[interlude for _, interlude in figures])}
+
+
+def figure_points(panels, interlude, names=None, order=None, title=None, mode=DEFAULT_MODE, limits=None):
+    """One row per session: the points collected so far against session time, and on a twinned y axis (right, Interlude accuracy in %) the
+    Interlude accuracy of the end of the session, a marker just right of where the line ends (all at the same x, so equal scores overlap). A series
+    has one colour and linestyle in its line and one marker on the twin axis; a series of several seeds is its mean and 95% interval there.
+    `panels`: {session: CumulativeCurves}; `interlude`: {session: LearningCurves} (only the last checkpoint of each series is drawn).
+    `limits` (from `point_limits`): the axis limits, to share them with another figure; by default those of this figure's data."""
+    panels = _as_panels(panels)
+    limits = limits or point_limits((panels, interlude))
+    cfg = _style(mode)
+    seen, palette = _palette(panels, names, order)
+    rows = len(panels)
+    fig, axes = plt.subplots(rows, 1, figsize=_figsize(dict(cfg, panel_height=0.8 * cfg["panel_height"]), rows, len(seen)), squeeze=False, sharex=True)
+    longest = limits["longest"]
+    step = 0.04 * longest                                    # the gap between where a session ends and its Interlude markers (all at one x)
+    lowest_tick = limits["accuracy_low"]
+    for i, (ax, (session, curves)) in enumerate(zip(axes[:, 0], panels.items())):
+        _lineplot(ax, long_form(curves, names), seen, palette)
+        _axis_style(ax, session)
+        ax.set_ylim(0, limits["points"][session])
+        ax.set_ylabel("points")
+        ax.set_xlabel("time in session (s)" if i == rows - 1 else "")
+        twin = ax.twinx()
+        learned = {names.get(aid, c["label"]) if names else c["label"]: c for aid, c in interlude[session].agents.items()} if session in interlude else {}
+        for k, name in enumerate(seen):
+            if name not in learned:
+                continue
+            c = learned[name]
+            y, lo, hi = 100 * c["mean"][-1], 100 * c["lo"][-1], 100 * c["hi"][-1]
+            err = [[y - lo], [hi - y]] if c["n"] > 1 and np.isfinite(lo) else None
+            twin.errorbar(curves.duration + step, y, yerr=err, fmt=MARKERS[k], color=palette[name], markersize=6, markeredgecolor="white",
+                          elinewidth=1.5, capsize=0)
+        twin.set_ylim(lowest_tick - 5, 102)
+        twin.set_yticks(np.arange(lowest_tick, 100.1, 10))
+        twin.set_ylabel("Interlude accuracy (%)")
+        sns.despine(ax=twin, left=True, right=False)
+    axes[0, 0].set_xlim(0, longest + 2 * step)
+    axes[0, 0].set_xticks([t for t in axes[0, 0].get_xticks() if 0 <= t <= longest])
+    note = getattr(next(iter(panels.values())), "note", None) or "mean and 95% bootstrap interval across seeds"
+    _header(fig, title or "Points over the session and Interlude accuracy", note, len(seen))
+    _finish(fig, axes, panels, seen, palette, markers=MARKERS)
     return fig
 
 
@@ -233,3 +309,8 @@ def plot_cumulative_reward(panels, path, **kw):
 def plot_learning_curve(panels, path, **kw):
     """Save `figure_learning`; returns the path."""
     return _save(figure_learning(panels, **kw), path)
+
+
+def plot_points(panels, interlude, path, **kw):
+    """Save `figure_points`; returns the path."""
+    return _save(figure_points(panels, interlude, **kw), path)

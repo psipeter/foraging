@@ -63,6 +63,29 @@ def archive_worlds(commit, sessions, out_root):
             target.write_bytes(blob)
 
 
+def write_session_rows(out_root, run_id, s, events, chunks, plan, trials):
+    """Write one session's database rows as the local layout: `s` the `sessions` row, `events` its rows in seq order, `chunks` its
+    trajectory rows (first_seq, data as bytes) in order, `plan` the `interlude_plan` row or None, `trials` its Interlude trial rows."""
+    index = s["session_index"]
+    events = [{"t": e["t"], "real": np.nan if e["real"] is None else e["real"], "type": e["type"],
+               "tree_id": -1 if e["tree_id"] is None else e["tree_id"], "k": -1 if e["k"] is None else e["k"],
+               "reward": np.nan if e["reward"] is None else e["reward"],
+               "running_total": np.nan if e["running_total"] is None else e["running_total"], "payload": e["payload"] or {}}
+              for e in events]
+    frames, expect = [], 0
+    for c in chunks:
+        first, _, f = codec.decode(bytes(c["data"]))
+        if first != expect:
+            raise ValueError(f"run {run_id} session {index}: trajectory chunks do not tile (expected frame {expect}, got {first})")
+        frames.append(f)
+        expect += len(f)
+    traj = np.concatenate(frames) if frames else np.empty((0, 6))
+    trials = [{k: v for k, v in t.items() if k not in ("run_id", "session_index")} for t in trials]
+    row = {k: _iso(v) for k, v in s.items() if k not in ("run_id", "session_index")}
+    rundata.write_session(out_root, run_id, index, row, traj, events, plan=plan["trial_order"] if plan else None,
+                          trials=trials or None)
+
+
 def pull_run(conn, run_id, out_root):
     """Write a run's tables as the local layout under `out_root`/<run_id>/, and its worlds under `out_root`/_worlds; returns the run folder."""
     run = conn.execute("select * from public.runs where run_id = %s", (run_id,)).fetchone()
@@ -71,27 +94,13 @@ def pull_run(conn, run_id, out_root):
     rundata.write_run(out_root, run_id, {k: _iso(v) for k, v in run.items() if k not in ("run_id", "token_hash")})
     sessions = conn.execute("select * from public.sessions where run_id = %s order by session_index", (run_id,)).fetchall()
     for s in sessions:
-        index = s["session_index"]
-        where = (run_id, index)
-        events = [{"t": e["t"], "real": np.nan if e["real"] is None else e["real"], "type": e["type"],
-                   "tree_id": -1 if e["tree_id"] is None else e["tree_id"], "k": -1 if e["k"] is None else e["k"],
-                   "reward": np.nan if e["reward"] is None else e["reward"],
-                   "running_total": np.nan if e["running_total"] is None else e["running_total"], "payload": e["payload"] or {}}
-                  for e in conn.execute("select * from public.events where run_id = %s and session_index = %s order by seq", where)]
-        frames, expect = [], 0
-        for c in conn.execute("select first_seq, data from public.trajectory where run_id = %s and session_index = %s order by first_seq", where):
-            first, _, f = codec.decode(bytes(c["data"]))
-            if first != expect:
-                raise ValueError(f"run {run_id} session {index}: trajectory chunks do not tile (expected frame {expect}, got {first})")
-            frames.append(f)
-            expect += len(f)
-        traj = np.concatenate(frames) if frames else np.empty((0, 6))
-        plan = conn.execute("select trial_order from public.interlude_plan where run_id = %s and session_index = %s", where).fetchone()
-        trials = [{k: v for k, v in t.items() if k not in ("run_id", "session_index")}
-                  for t in conn.execute("select * from public.interlude_trials where run_id = %s and session_index = %s order by seq", where)]
-        row = {k: _iso(v) for k, v in s.items() if k not in ("run_id", "session_index")}
-        rundata.write_session(out_root, run_id, index, row, traj, events, plan=plan["trial_order"] if plan else None,
-                              trials=trials or None)
+        where = (run_id, s["session_index"])
+        write_session_rows(
+            out_root, run_id, s,
+            conn.execute("select * from public.events where run_id = %s and session_index = %s order by seq", where),
+            conn.execute("select first_seq, data from public.trajectory where run_id = %s and session_index = %s order by first_seq", where),
+            conn.execute("select trial_order from public.interlude_plan where run_id = %s and session_index = %s", where).fetchone(),
+            conn.execute("select * from public.interlude_trials where run_id = %s and session_index = %s order by seq", where))
     archive_worlds(run["build_commit"], sessions, out_root)
     return Path(out_root) / str(run_id)
 

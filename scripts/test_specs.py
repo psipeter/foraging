@@ -148,3 +148,9 @@ def test_labels_leave_out_the_parameters_of_a_component_whose_type_differs():
     assert mixed[0] == "OracleCritic, max_walk_time=None, utility=nearest"      # no alpha, features or prior fields (the memory is the same for all three)
     assert mixed[1].startswith("DeltaRuleCritic") and mixed[1].endswith("alpha=0.2") and "alpha=0.5" in mixed[2]
     assert "length_scale" not in mixed[1]
+
+
+def test_a_list_of_dicts_is_part_of_a_canonical_spec():
+    """A session's reward bumps are a list of dicts (S5), and the environment hash writes them."""
+    bumps = [{"centerShape": 0.26, "width": 0.2, "height": 3}]
+    assert specs.canonical_json({"bumps": bumps}) == '{"bumps":[{"centerShape":0.26,"height":3,"width":0.2}]}'

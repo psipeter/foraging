@@ -21,6 +21,15 @@ public enum InterludeMode
     Hybrid      // both spreads at once: the reward gaps and the feature gaps of the trials are each evenly spread
 }
 
+// Which canopy dimension the fruit radius follows (see SessionConfig.FruitRadiusFor). The order is part of the logged format
+// (the session row stores the number): Nothing 0, Height 1, Width 2.
+public enum FruitSizeFollows
+{
+    Nothing,    // every fruit has fruitRadius
+    Height,     // grows linearly with the canopy height (the height-only shape set)
+    Width       // grows linearly with the canopy width (the width-only shape set)
+}
+
 [CreateAssetMenu(
     fileName = "SessionConfig",
     menuName = "Foraging/Session Config")]
@@ -61,6 +70,14 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float interludeMinRewardGap = 0.25f;
     [Tooltip("FeatureGap / Hybrid Interludes only: the smallest perceptual distance between the two bushes of a trial (root mean square of the shape, color and moisture differences, each on its 0-1 scale); the trials are spread evenly from here to the largest the world offers. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
     [SerializeField] private float interludeMinFeatureGap = 0.1f;
+    [Tooltip("RewardGap / Hybrid Interludes only: the largest true reward difference (points per fruit) between the two bushes of a trial, so the trials are spread evenly from interludeMinRewardGap to here instead of to the largest the world offers; 0 = no ceiling. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
+    [SerializeField] private float interludeMaxRewardGap = 0f;
+    [Tooltip("FeatureGap / Hybrid Interludes only: the largest perceptual distance between the two bushes of a trial (same scale as interludeMinFeatureGap); 0 = no ceiling. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
+    [SerializeField] private float interludeMaxFeatureGap = 0f;
+    [Tooltip("RewardGap / FeatureGap / Hybrid Interludes only: how many of the interludeTrialCount trials are exact repeats of an earlier pair (same place, same bushes, same sides; the file gives the repeat bush entries of its own), a check of how consistent a participant's choices are. 0 = none. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
+    [SerializeField] private int interludeRepeatCount = 0;
+    [Tooltip("The fewest trials between a repeated pair and its repeat. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
+    [SerializeField] private int interludeRepeatSeparation = 8;
 
     [Header("Instructions")]
     [Tooltip("File in StreamingAssets shown before this session. '{session}' and '{total}' are replaced by this session's number and the count of non-practice sessions.")]
@@ -181,6 +198,10 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private Vector2 shapeRange = new Vector2(0f, 1f);
     [SerializeField] private Vector2 canopyWidthRange = new Vector2(2.0f, 5.0f);
     [SerializeField] private Vector2 canopyHeightRange = new Vector2(1.2f, 2.8f);
+    [Tooltip("Optional alternative shape sets (scripts/shape_sets.py): with a height-only or width-only set the canopy varies in one dimension and the fruit radius follows it. Nothing = every fruit has fruitRadius (the shared aspect axis). Render only: worlds and Interludes need no regeneration.")]
+    [SerializeField] private FruitSizeFollows fruitSizeFollows = FruitSizeFollows.Nothing;
+    [Tooltip("Fruit radius = fruitRadius * (1 + slope * (size - mid) / half), linear in the followed canopy dimension: size is that dimension, mid and half the middle and half-width of its range. 0.3 = +-30% across the range.")]
+    [SerializeField] private float fruitSizeSlope = 0.3f;
     [Tooltip("Harvest becomes available when the player is within gap(R) = base + perRadius * canopyRadius of the canopy EDGE (horizontal distance). ~7 shows the whole bush at the 5.1 eye height / 75 deg vertical FOV (the near foot is visible from 5.1 / tan(37.5 deg) = 6.6).")]
     [SerializeField] private float harvestRangeGapBase = 7f;
     [SerializeField] private float harvestRangeGapPerRadius = 0f;
@@ -191,6 +212,9 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float fruitBrightness = 1.2f;
     [Tooltip("How much of the sun's post-exposure (it darkens the whole scene as the sun lowers) is undone on fruit, so a fruit keeps its brightness through the session: 1 = fully, 0 = not at all.")]
     [SerializeField] [Range(0f, 1f)] private float fruitExposureCompensation = 1f;
+    [Tooltip("Canopy colour variation, purely decorative and independent of every attribute and reward: each bush draws one position u uniformly in [0, 1] from its own seed and multiplies the canopy material's colour by a tint running from this dark end (u = 0) through no change (u = 0.5) to the light end (u = 1). Same bush, same canopy in every run. Set both to white to switch it off.")]
+    [SerializeField] private Color canopyTintDark = new Color(0.55f, 0.70f, 0.65f);
+    [SerializeField] [ColorUsage(false, true)] private Color canopyTintLight = new Color(1.30f, 1.20f, 1.30f);
 
     [Header("Terrain")]
     [SerializeField] private float terrainNoiseFrequency = 4f;
@@ -297,6 +321,10 @@ public class SessionConfig : ScriptableObject
     public float InterludeMinElevationDifference => interludeMinElevationDifference;
     public float InterludeMinRewardGap => interludeMinRewardGap;
     public float InterludeMinFeatureGap => interludeMinFeatureGap;
+    public float InterludeMaxRewardGap => interludeMaxRewardGap;
+    public float InterludeMaxFeatureGap => interludeMaxFeatureGap;
+    public int InterludeRepeatCount => interludeRepeatCount;
+    public int InterludeRepeatSeparation => interludeRepeatSeparation;
     public string InstructionsFile => instructionsFile;
     public string ControlsReminder => controlsReminder;
     public string FirstHarvestMessage => firstHarvestMessage;
@@ -323,6 +351,25 @@ public class SessionConfig : ScriptableObject
     public float StartClearingRadius => startClearingRadius;
     public int FruitCount => fruitCount;
     public float FruitRadius => fruitRadius;
+
+    // The fruit radius on a canopy of this width and height (world units; fruitRadius unless fruitSizeFollows names a dimension).
+    public float FruitRadiusFor(float canopyWidth, float canopyHeight)
+    {
+        if (fruitSizeFollows == FruitSizeFollows.Nothing)
+        {
+            return fruitRadius;
+        }
+
+        Vector2 range = fruitSizeFollows == FruitSizeFollows.Height ? canopyHeightRange : canopyWidthRange;
+        float half = Mathf.Abs(range.y - range.x) / 2f;
+        if (half < 1e-4f)
+        {
+            return fruitRadius;
+        }
+
+        float size = fruitSizeFollows == FruitSizeFollows.Height ? canopyHeight : canopyWidth;
+        return fruitRadius * (1f + fruitSizeSlope * (size - (range.x + range.y) / 2f) / half);
+    }
     public int TargetFrameRate => targetFrameRate;
     public float UploadGraceSeconds => uploadGraceSeconds;
     public float PlayerMoveSpeed => playerMoveSpeed;
@@ -367,6 +414,14 @@ public class SessionConfig : ScriptableObject
     public float FruitShadingFloor => fruitShadingFloor;
     public float FruitBrightness => fruitBrightness;
     public float FruitExposureCompensation => fruitExposureCompensation;
+    public Color CanopyTintDark => canopyTintDark;
+    public Color CanopyTintLight => canopyTintLight;
+
+    /// <summary>The canopy tint of a bush at position u in [0, 1] of the tint range (dark end, none, light end).</summary>
+    public Color CanopyTint(float u)
+    {
+        return u < 0.5f ? Color.Lerp(canopyTintDark, Color.white, 2f * u) : Color.Lerp(Color.white, canopyTintLight, 2f * u - 1f);
+    }
     public float TerrainNoiseFrequency => terrainNoiseFrequency;
     public int TerrainNoiseOctaves => terrainNoiseOctaves;
     public float TerrainMaxElevation => terrainMaxElevation;

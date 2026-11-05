@@ -73,7 +73,7 @@ state), reached over a direct database connection (`SUPABASE_DB_URL`). Errors: 4
   frame), `last_event_t`, `running_total`, `fruits_taken` (bush -> count), `open_bout_tree`, `interlude_plan`,
   `interlude_trials_done` and the three `*_next` sequence numbers.
 - **Tools:** `scripts/server_client.py` (the reference client, and `upload_session` to push a local-layout session in batches),
-  `scripts/server_admin.py` (`register-release`, `register-worlds`, `runs`, `pull` = a run back into the local layout of section 2b).
+  `scripts/server_admin.py` (`register-release`, `register-worlds`, `runs`, `pull` = a run back into the local layout of section 2b). **Analysis download:** `scripts/human_data.py download` reads every run through the Supabase CLI (no `FORAGING_DB_URL`), writes the raw layout under `ForagingData/<run>/` and the tidy tables `ForagingData/humans.sqlite` (participants with Prolific ID, signed name and feedback; sessions; events and the `fruits` view; Interlude trials); `load(exclude=[...])` filters participants by ID or name.
 
 Still the client's job (phase 3): an `IDataSink` with the three implementations, the in-memory queue with backoff and the
 pause-until-acknowledged overlay (grace window in `SessionConfig`), the cadence (events within about 1 s, trajectory every 5 s,
