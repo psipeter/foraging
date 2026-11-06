@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 // The plain screen of the Boot scene: a panel over the backdrop with a small accent line, a title, a sentence and, while something loads, a progress bar.
-// Loading, connecting, "click anywhere to begin" and the errors all use it, so they look alike.
+// Loading, connecting, "click to begin" and the errors all use it, so they look alike.
 public class StatusScreen : MonoBehaviour
 {
     private TextMeshProUGUI _eyebrow, _title, _body, _percent, _prompt;
@@ -37,7 +37,7 @@ public class StatusScreen : MonoBehaviour
         _prompt.richText = true;
     }
 
-    // `progress` 0 to 1 shows the bar; a negative value hides it. `prompt`, when given, is the last line of the panel under a rule ("[Click] anywhere to begin"): a
+    // `progress` 0 to 1 shows the bar; a negative value hides it. `prompt`, when given, is the last line of the panel under a rule ("[Click] to begin"): a
     // [Key] in it becomes a key chip.
     public void Set(string eyebrow, string title, string body = "", float progress = -1f, string prompt = null)
     {

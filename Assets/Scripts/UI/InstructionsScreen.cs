@@ -1,12 +1,12 @@
 using TMPro;
 using UnityEngine;
 
-// The instruction screen of a part (and the "welcome back" screen): a panel at the left of the screen with the part number, the central instruction as a title, the
-// text, and under a rule the prompt ("Press Enter to begin") as the last line of the text, over the world, which stays visible to its right. Built at runtime; [Key] in
+// The instruction screen of a part (and the "welcome back" screen): a wide panel centred on the screen (its text left-aligned) with the part number, the central instruction as a title, the
+// text, and under a rule the prompt ("Press Enter to begin") as the last line of the text, over the world. Built at runtime; [Key] in
 // the text becomes a key chip.
 public class InstructionsScreen : MonoBehaviour
 {
-    private const float PanelWidth = 1380f;
+    private const float PanelWidth = 1640f;
     private const float BodySize = 36f;
 
     private GameObject _root;
@@ -42,8 +42,7 @@ public class InstructionsScreen : MonoBehaviour
 
         // eyebrow, title, text, a rule, the prompt
         float height = pad * 2f + 36f + 20f + 90f + 20f + bodyHeight + 28f + 2f + 28f + 48f;
-        float centreX = -960f + 160f + PanelWidth / 2f;
-        Transform panel = UiStyle.Rounded(_root.transform, "Panel", UiStyle.Glass, centreX, 0f, PanelWidth, height, UiStyle.PanelRadius).transform;
+        Transform panel = UiStyle.Rounded(_root.transform, "Panel", UiStyle.Glass, 0f, 0f, PanelWidth, height, UiStyle.PanelRadius).transform;
         float y = height / 2f - pad;
         if (!string.IsNullOrEmpty(eyebrow))
         {

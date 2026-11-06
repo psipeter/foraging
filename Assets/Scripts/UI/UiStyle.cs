@@ -242,8 +242,8 @@ public static class UiStyle
         }
 
         Canvas canvas = Canvas("BootBackdrop", null, 50);
-        _bootBackdrop = canvas.gameObject;
-        Backdrop(canvas.transform);
+        BuildBackdrop(canvas.transform, 0.72f);
+        _bootBackdrop = canvas.gameObject;                               // set after the build: Backdrop skips itself once it exists
     }
 
     // The backdrop of the screens before the game: a still frame of the world (Resources/Backdrops/menu) under a dark scrim; the plain panel colour when the image is missing.
@@ -254,6 +254,11 @@ public static class UiStyle
             return;                                                      // the Boot scene's screens share one backdrop (BootBackdrop), so changing screens does not reload or restart it
         }
 
+        BuildBackdrop(parent, scrimAlpha);
+    }
+
+    private static void BuildBackdrop(Transform parent, float scrimAlpha)
+    {
         Texture texture = Resources.Load<Texture>("Backdrops/menu");
         Image fallback = Image(parent, "Backdrop", new Color(0.06f, 0.07f, 0.09f), Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
         fallback.raycastTarget = false;

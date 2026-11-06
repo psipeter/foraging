@@ -54,13 +54,12 @@ public class MenuScreen : MonoBehaviour
             switch (s.status)
             {
                 case "finished":
-                    row.Detail = "Completed";
                     row.Action = "View code";
                     row.Enabled = true;
+                    row.Progress = 1f;
                     row.PillStyle = 1;
                     break;
                 case "in_progress":
-                    row.Detail = $"{s.sessions_done} of {s.n_sessions} parts done";
                     row.Action = "Continue";
                     row.Enabled = s.unlocked;
                     row.Progress = s.n_sessions > 0 ? Mathf.Clamp01(s.sessions_done / (float)s.n_sessions) : 0f;
@@ -188,18 +187,21 @@ public class MenuScreen : MonoBehaviour
         TextMeshProUGUI name = UiStyle.Text(r, "Name", row.Title, 42f, TextAlignmentOptions.MidlineLeft, -292f, 36f, 640f, 52f, dim ? UiStyle.Muted : UiStyle.Ink);
         name.font = UiStyle.DisplayFont;
 
-        float pillWidth = Mathf.Min(620f, 46f + row.Detail.Length * 14f);
-        Color tint = row.PillStyle == 1 ? UiStyle.Good : row.PillStyle == 2 ? UiStyle.Muted : new Color(0.66f, 0.80f, 1f);
-        Color fill = row.PillStyle == 1 ? new Color(0.47f, 0.84f, 0.63f, 0.18f) : row.PillStyle == 2 ? new Color(1f, 1f, 1f, 0.10f) : new Color(0.36f, 0.62f, 0.95f, 0.20f);
-        Transform pill = UiStyle.Rounded(r, "Pill", fill, -644f + 32f + pillWidth / 2f, -14f, pillWidth, 38f, 19f).transform;
-        TextMeshProUGUI pillText = UiStyle.Text(pill, "Text", row.Detail, 24f, TextAlignmentOptions.Center, 0f, 0f, pillWidth, 38f, tint);
-        pillText.font = UiStyle.BoldFont;
-
         if (row.Progress >= 0f)
         {
-            UiStyle.Rounded(r, "Bar", new Color(1f, 1f, 1f, 0.12f), -644f + 32f + 260f, -52f, 520f, 8f, 4f);
-            float fillWidth = Mathf.Max(520f * row.Progress, 8f);
-            UiStyle.Rounded(r, "BarFill", UiStyle.Accent, -644f + 32f + fillWidth / 2f, -52f, fillWidth, 8f, 4f);
+            // a finished experiment is a full green bar, one under way a partly filled accent one; neither has a caption
+            UiStyle.Rounded(r, "Bar", new Color(1f, 1f, 1f, 0.12f), -644f + 32f + 260f, -22f, 520f, 12f, 6f);
+            float fillWidth = Mathf.Max(520f * row.Progress, 12f);
+            UiStyle.Rounded(r, "BarFill", row.PillStyle == 1 ? UiStyle.Good : UiStyle.Accent, -644f + 32f + fillWidth / 2f, -22f, fillWidth, 12f, 6f);
+        }
+        else
+        {
+            float pillWidth = Mathf.Min(620f, 46f + row.Detail.Length * 14f);
+            Color tint = row.PillStyle == 2 ? UiStyle.Muted : new Color(0.66f, 0.80f, 1f);
+            Color fill = row.PillStyle == 2 ? new Color(1f, 1f, 1f, 0.10f) : new Color(0.36f, 0.62f, 0.95f, 0.20f);
+            Transform pill = UiStyle.Rounded(r, "Pill", fill, -644f + 32f + pillWidth / 2f, -14f, pillWidth, 38f, 19f).transform;
+            TextMeshProUGUI pillText = UiStyle.Text(pill, "Text", row.Detail, 24f, TextAlignmentOptions.Center, 0f, 0f, pillWidth, 38f, tint);
+            pillText.font = UiStyle.BoldFont;
         }
 
         if (row.ShowPoints)

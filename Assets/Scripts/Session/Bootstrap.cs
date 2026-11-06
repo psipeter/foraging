@@ -119,6 +119,7 @@ public class Bootstrap : MonoBehaviour
 
             if (run.status == "finished")
             {
+                _status.Hide();                                          // the completion screen is translucent: the "Connecting" box must not show through it
                 yield return ShowCompleted(menu.ChosenCode, run);
             }
 
@@ -238,7 +239,7 @@ public class Bootstrap : MonoBehaviour
                 yield break;
             }
 
-            _status.Set("Ready", experiment.Title, "The mouse will be captured by the game. Press [Escape] to release it.".Replace("[Escape]", UiStyle.Chip("Escape")), -1f, "[Click] anywhere to begin");
+            _status.Set("Ready", experiment.Title, "The mouse will be captured by the game. Press [Escape] to release it.".Replace("[Escape]", UiStyle.Chip("Escape")), -1f, "[Click] to begin");
             yield return null;
             yield return new WaitUntil(() => Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame);
 
