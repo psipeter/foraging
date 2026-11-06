@@ -18,14 +18,11 @@ public class ExperimentConfig : ScriptableObject
     [SerializeField] private List<SessionConfig> sessions = new List<SessionConfig>();
     [Tooltip("Whether the points earned here are added to the total the menu and the completion screens show. Off for a tutorial or other practice, whose points pay nothing.")]
     [SerializeField] private bool countsTowardTotal = true;
-    [Tooltip("Download the files of one session at a time (the next one is fetched while the current one runs) instead of the whole experiment's when it is chosen. Browser builds only.")]
-    [SerializeField] private bool downloadPerSession = false;
 
     public string Code => code;
     public string Title => title;
     public IReadOnlyList<string> Requires => requires;
     public List<SessionConfig> Sessions => sessions;
-    public bool DownloadPerSession => downloadPerSession;
     public bool CountsTowardTotal => countsTowardTotal;
 
     // The StreamingAssets files a session reads: its world, its Interlude file and its instruction text.
@@ -51,12 +48,11 @@ public class ExperimentConfig : ScriptableObject
         return files;
     }
 
-    // The files to have before the experiment starts: every session's, or with downloadPerSession the first session's only (the rest are fetched
-    // while the one before runs, GameManager).
+    // The files to have before the experiment starts: every session's (the browser downloads them when the experiment is chosen).
     public List<string> FilesToStart()
     {
         var files = new List<string>();
-        for (int i = 0; i < sessions.Count && (!downloadPerSession || i < 1); i++)
+        for (int i = 0; i < sessions.Count; i++)
         {
             files.AddRange(FilesOf(sessions[i]));
         }

@@ -1,4 +1,4 @@
-// handlers.ts -- the four endpoints as functions of (db, body): validation, chunk decoding, calling the SQL. No HTTP
+// handlers.ts -- the endpoints as functions of (db, body): validation, chunk decoding, calling the SQL. No HTTP
 // here (http.ts) and no Deno-specific database code (db.ts), so they run the same locally and deployed.
 
 import { ChunkError, decodeChunk, fromBase64 } from './chunk.ts';
@@ -49,11 +49,13 @@ function newToken(): string {
   return btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 }
 
-function runId(body: Body): string {
-  const id = str(body, 'run_id', 36) as string;
-  if (!/^[0-9a-f-]{36}$/.test(id)) bad('run_id must be a UUID');
+function uuid(body: Body, key: string): string {
+  const id = str(body, key, 36) as string;
+  if (!/^[0-9a-f-]{36}$/.test(id)) bad(`${key} must be a UUID`);
   return id;
 }
+
+const runId = (body: Body) => uuid(body, 'run_id');
 
 function sessionIndex(body: Body): number {
   const i = body.session_index;
@@ -94,11 +96,7 @@ function build(body: Body) {
   };
 }
 
-function participantId(body: Body): string {
-  const id = str(body, 'participant_id', 36) as string;
-  if (!/^[0-9a-f-]{36}$/.test(id)) bad('participant_id must be a UUID');
-  return id;
-}
+const participantId = (body: Body) => uuid(body, 'participant_id');
 
 // {build, prolific_pid?, consent_version?, consent?: {version, signature, at}} logs a participant in (a returning Prolific ID gets a fresh
 // token) and returns {participant_id, token, experiments: [{code, title, n_sessions, status, sessions_done, unlocked}]}. With a consent
@@ -167,11 +165,10 @@ export function append(db: Db, body: Body) {
   });
 }
 
-// {run_id, token} -> {ok, problems, completion_code}; ok marks the run finished.
+// {run_id, token} -> {ok, problems, completion_code, points}; ok marks the run finished. The completion code is null unless ok (decided in SQL).
 export function runFinish(db: Db, body: Body) {
   return guarded(async () => {
     const hash = await sha256Hex(str(body, 'token', 100) as string);
-    // The result carries the experiment's completion code even when `ok` is false (decided in SQL).
     return await db.call('server.finish_run', [runId(body), hash]);
   });
 }

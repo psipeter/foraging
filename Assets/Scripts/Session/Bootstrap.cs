@@ -15,6 +15,7 @@ public class Bootstrap : MonoBehaviour
 {
     [SerializeField] private string gameScene = "SampleScene";
 
+    private static bool _directPlayed;
     private StatusScreen _status;
     private OnlineSettings _settings;
     private ExperimentCatalog _catalog;
@@ -62,9 +63,10 @@ public class Bootstrap : MonoBehaviour
             yield break;
         }
 
-        string direct = _settings.Active ? null : DirectExperiment();
+        string direct = _settings.Active || _directPlayed ? null : DirectExperiment();      // an experiment played directly ends in the menu, not again
         if (direct != null)
         {
+            _directPlayed = true;
             ExperimentConfig chosen = _catalog.Find(direct);
             if (chosen == null)
             {
@@ -135,7 +137,13 @@ public class Bootstrap : MonoBehaviour
     private IEnumerator LogIn()
     {
         // A browser build asks for consent; a lab build with an ID on its command line does not (and skips the ID screen).
-        string version = StreamingData.NeedsPreload && StreamingData.Exists(ConsentScreen.File) ? ConsentScreen.ReadVersion() : null;
+        if (StreamingData.NeedsPreload && !StreamingData.Exists(ConsentScreen.File))
+        {
+            Fail("This build has no consent text.");                // a browser build must not skip consent silently
+            yield break;
+        }
+
+        string version = StreamingData.NeedsPreload ? ConsentScreen.ReadVersion() : null;
         string pid = _settings.prolificPid;
         if (StreamingData.NeedsPreload || string.IsNullOrEmpty(pid))
         {
@@ -163,7 +171,10 @@ public class Bootstrap : MonoBehaviour
             error = "The server did not log you in.";
         }
 
-        Failed(error);
+        if (error != null)
+        {
+            Fail(error);
+        }
     }
 
     // After an experiment, or a view of a finished one: log in again for a fresh token and the menu as it stands now.
@@ -172,45 +183,26 @@ public class Bootstrap : MonoBehaviour
         _status.Set("Foraging study", "Connecting", "Reaching the server.");
         string error = null;
         yield return ParticipantSession.Refresh(_settings, r => { }, e => error = e);
-        Failed(error);
-    }
-
-    private void Failed(string error)
-    {
         if (error != null)
         {
             Fail(error);
-            _failed = true;
         }
     }
 
     private void Fail(string reason)
     {
+        _failed = true;
         _status.Set("Something went wrong", "We could not continue", reason + "\n\nPlease reload the page. If this continues, contact the researcher.");
     }
 
     // The completion code of a finished experiment, with the optional feedback box and the way back (to Prolific, and to the menu).
     private IEnumerator ShowCompleted(string code, RunReply run)
     {
-        string title = code;
-        foreach (ExperimentStanding s in ParticipantSession.Standings)
-        {
-            if (s.code == code)
-            {
-                title = s.title;
-            }
-        }
-
+        ExperimentStanding standing = System.Array.Find(ParticipantSession.Standings, s => s.code == code);
+        string title = standing != null ? standing.title : code;
         ExperimentConfig config = _catalog.Find(code);
         bool counts = config == null || config.CountsTowardTotal;
-        float points = 0f;
-        foreach (ExperimentStanding s in ParticipantSession.Standings)
-        {
-            if (s.code == code)
-            {
-                points = s.points;
-            }
-        }
+        float points = standing != null ? standing.points : 0f;
 
         bool back = false;
         CompletionScreen screen = null;
@@ -251,7 +243,7 @@ public class Bootstrap : MonoBehaviour
     }
 
     // The experiment to play without the menu: the Editor's Foraging > Experiments window (an EditorPref) or -experiment <code> on a standalone build.
-    private static string DirectExperiment()
+    public static string DirectExperiment()
     {
 #if UNITY_EDITOR
         string code = UnityEditor.EditorPrefs.GetString("Foraging.Experiment", "");

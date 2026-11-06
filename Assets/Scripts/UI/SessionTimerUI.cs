@@ -25,7 +25,6 @@ public class SessionTimerUI : MonoBehaviour
     private bool _sessionEndHandled;
     private bool _leaveRequested;
     private ScoreScreen _score;
-    private bool _loadingShown;
 
     private void Awake()
     {
@@ -101,17 +100,6 @@ public class SessionTimerUI : MonoBehaviour
                             DataPipeline.ReturnToMenu();
                         }
                     }
-                    else if (!GameManager.NextSessionReady)
-                    {
-                        // A browser fetches the next session's files while this one runs (the experiment's downloadPerSession); wait for them.
-                        GameManager.EnsureNextSession();
-                        _leaveRequested = true;
-                        if (!_loadingShown)
-                        {
-                            _loadingShown = true;
-                            _score.SetPrompt("Loading the next part...");
-                        }
-                    }
                     else
                     {
                         GameManager.AdvanceSession();
@@ -160,11 +148,6 @@ public class SessionTimerUI : MonoBehaviour
         }
 
         bool isInterlude = sessionConfig != null && sessionConfig.IsInterlude;
-        bool isPractice = sessionConfig != null && sessionConfig.IsPractice;
-        if (!isInterlude && !isPractice)
-        {
-            GameManager.SessionScoreTotal += _lastTotalScore;
-        }
 
         // An Interlude's points appear only on its end screen, never trial by trial (the practice Interlude shows what it would have paid, and never which
         // choices were right). The totals are on the experiment's completion screen, after the last of these.

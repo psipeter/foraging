@@ -170,7 +170,6 @@ public class InterludeManager : MonoBehaviour
             foreach (TrialTally done in resume.trial_rows)
             {
                 Points += done.bonus;
-                GameManager.InterludeBonus += done.bonus;
             }
         }
 
@@ -409,7 +408,6 @@ public class InterludeManager : MonoBehaviour
         float worth = correct ? sessionConfig.InterludeBonusPerCorrect : 0f;
         float bonus = sessionConfig.IsPractice ? 0f : worth;     // the practice Interlude shows what its choices would have earned but pays nothing
         Points += worth;
-        GameManager.InterludeBonus += bonus;
 
         WriteRow(timedOut, correct, bonus);
         if (dataLogger != null)

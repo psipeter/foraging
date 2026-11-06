@@ -38,61 +38,14 @@ public class GameManager : MonoBehaviour
         ActiveExperiment = experiment;
         AllSessionConfigs = null;
         CurrentSessionIndex = 0;
-        SessionScoreTotal = 0f;
-        InterludeBonus = 0f;
-    }
-
-    // Running totals for the final screen. Practice sessions and practice Interludes are excluded.
-    public static float SessionScoreTotal = 0f;
-    public static float InterludeBonus = 0f;
-
-    // Continuing an interrupted run: the running totals of the sessions already finished (as the end screens add them up).
-    public static void RestoreTotals(ResumeReply resume)
-    {
-        SessionScoreTotal = 0f;
-        foreach (PreviousSession s in resume.previous)
-        {
-            if (!s.is_practice && !s.is_interlude)
-            {
-                SessionScoreTotal += s.score;
-            }
-        }
-
-        InterludeBonus = resume.previous_interlude.bonus;
     }
 
     public static int TotalSessions => AllSessionConfigs?.Count ?? 0;
     public static bool IsLastSession => TotalSessions == 0 || CurrentSessionIndex >= TotalSessions - 1;
 
-    // "Session x of N" and "Interlude x of N" count only analyzed sessions (not practice, not Interludes).
-    private static bool IsAnalyzed(int index)
-    {
-        SessionConfig config = AllSessionConfigs[index];
-        return config != null && !config.IsPractice && !config.IsInterlude;
-    }
-
-    private static int AnalyzedBefore(int index)
-    {
-        int count = 0;
-        for (int i = 0; i < index; i++)
-        {
-            if (IsAnalyzed(i)) count++;
-        }
-        return count;
-    }
-
     // A session and an Interlude are both just parts in the study's screens: "Part 3 of 14".
     public static int PartNumber => CurrentSessionIndex + 1;
     public static int PartCount => TotalSessions;
-
-    public static int ExperimentSessionCount => AnalyzedBefore(TotalSessions);
-
-    // 1-based number of the session at `index`; 0 for a practice session or an Interlude.
-    public static int ExperimentSessionNumber(int index) =>
-        index >= 0 && index < TotalSessions && IsAnalyzed(index) ? AnalyzedBefore(index) + 1 : 0;
-
-    // Number of the Interlude at `index`: the analyzed sessions before it (so the Interlude after S1 is 1).
-    public static int InterludeNumber(int index) => index >= 0 && index < TotalSessions ? AnalyzedBefore(index) : 0;
 
     private void Awake()
     {
@@ -103,7 +56,7 @@ public class GameManager : MonoBehaviour
             if (experiment == null)
             {
                 // Playing this scene directly from the Editor's Foraging > Experiments window.
-                string code = UnityEditor.EditorPrefs.GetString("Foraging.Experiment", "");
+                string code = Bootstrap.DirectExperiment();
                 experiment = string.IsNullOrEmpty(code) ? null : ExperimentCatalog.Load()?.Find(code);
             }
 #endif
@@ -236,8 +189,6 @@ public class GameManager : MonoBehaviour
         FruitMaterialManager.SetSessionConfig(activeConfig);
         Music.Volume = activeConfig.MusicVolume;
         Music.Stop();                                                    // the score screen's music ended with the last scene; none plays during a session
-        _current = this;
-        FetchNextSession();
     }
 
     // The Editor's Foraging > Quick test toggle (an EditorPref, so it never reaches a build), -quick on the command line of a standalone build, or ?quick=1 in the
@@ -256,46 +207,6 @@ public class GameManager : MonoBehaviour
         }
 
         return System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-quick") >= 0;
-    }
-
-    // The next session's files, fetched while this one runs (a browser; with the experiment's files already loaded this finds nothing to do). The end
-    // screen waits for them (NextSessionReady) rather than load a session whose world is not there.
-    private bool _fetching;
-    private static GameManager _current;
-
-    // The end screen's call while it waits: fetches the next session's files again if the first try failed.
-    public static void EnsureNextSession()
-    {
-        if (_current != null)
-        {
-            _current.FetchNextSession();
-        }
-    }
-
-    public static bool NextSessionReady
-    {
-        get
-        {
-            int next = CurrentSessionIndex + 1;
-            return AllSessionConfigs == null || next >= AllSessionConfigs.Count || StreamingData.AllLoaded(ExperimentConfig.FilesOf(AllSessionConfigs[next]));
-        }
-    }
-
-    // Starts (or, after a failure, restarts) the fetch of the next session's files.
-    public void FetchNextSession()
-    {
-        if (!_fetching && !NextSessionReady)
-        {
-            StartCoroutine(FetchNext());
-        }
-    }
-
-    private System.Collections.IEnumerator FetchNext()
-    {
-        _fetching = true;
-        yield return StreamingData.Fetch(ExperimentConfig.FilesOf(AllSessionConfigs[CurrentSessionIndex + 1]), null,
-            reason => Debug.LogWarning("GameManager: " + reason));
-        _fetching = false;
     }
 
     public static void AdvanceSession()

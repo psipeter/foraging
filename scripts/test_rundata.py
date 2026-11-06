@@ -144,3 +144,19 @@ def test_archive_worlds_takes_the_files_from_git_at_the_build_commit(tmp_path, c
     old_sha = hashlib.sha256(b"old world").hexdigest()
     server_admin.archive_worlds("HEAD", [{"world_file": "S1_seed1.world", "world_sha256": old_sha}], out, repo=repo)
     assert (out / "_worlds" / f"{old_sha[:8]}_S1_seed1.world").read_bytes() == b"old world"
+
+
+def test_a_release_counts_the_sessions_of_the_experiment_asset_at_its_commit(tmp_path):
+    import subprocess
+    import server_admin
+    folder = tmp_path / "Assets" / "ScriptableObjects" / "Experiments" / "XX"
+    folder.mkdir(parents=True)
+    entry = "  - {fileID: 11400000, guid: a2c1af91c6840f167b2e2427d351cbd4, type: 2}\n"
+    (folder / "XX.asset").write_text("  requires:\n  - TUT\n  sessions:\n" + entry * 3 + "  countsTowardTotal: 1\n  downloadPerSession: 0\n")
+    git = lambda *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a], cwd=tmp_path, capture_output=True, check=True)
+    git("init", "-q")
+    git("add", ".")
+    git("commit", "-q", "-m", "asset")
+    assert server_admin.sessions_in_build("HEAD", "XX", repo=tmp_path) == 3            # the requires entry and the later fields are not sessions
+    with pytest.raises(ValueError):
+        server_admin.sessions_in_build("HEAD", "NOPE", repo=tmp_path)

@@ -155,12 +155,3 @@ def test_the_names_before_experiments_still_pair_a_session_with_its_interlude():
     old = hd._session_row(session_row(RUN_A, 1, "S1_Interlude", interlude=True), [], [])
     assert old[3] == "S1" and hd._session_row(session_row(RUN_A, 0, "S1"), [], [])[3] == "S1"
 
-
-def test_a_humans_sqlite_from_before_the_experiments_gains_the_new_columns(tmp_path):
-    import sqlite3
-    con = sqlite3.connect(tmp_path / "old.sqlite")
-    con.execute("create table participants (run_id text primary key)")
-    con.execute("create table sessions (run_id text)")
-    hd._add_missing_columns(con)
-    assert {r[1] for r in con.execute("pragma table_info(participants)")} >= {"participant_id", "experiment"}
-    assert "experiment" in {r[1] for r in con.execute("pragma table_info(sessions)")}

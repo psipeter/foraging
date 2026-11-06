@@ -3,7 +3,8 @@
     ./venv/bin/python scripts/db_backup.py [--out ForagingData] [--label legacy]
 
 Reads every table of the `public` schema through the Supabase CLI (`supabase db query --remote --read-only`, as `human_data.py` does; the CLI must be
-logged in to the linked project) and writes, under `<out>/_db_backup_<label>_<UTC time>/` (ForagingData is gitignored and holds participant names):
+logged in to the linked project) and writes, under `<out>/_db_backup_<label>_<UTC time>/` (ForagingData is gitignored and holds participant names). Pages are cut in primary-key order; run it while
+no one is playing (a row inserted meanwhile can shift a page):
 
     <table>.jsonl     one JSON object per row (`to_jsonb`: a bytea column is its hex text, a timestamp is text, nothing is lost)
     schema.json       the columns of every table (information_schema) and the migrations the project has applied
@@ -15,22 +16,14 @@ It does not need the schema of any migration: it takes the tables as it finds th
 
 import argparse
 import json
-import shutil
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from human_data import query
+
 PAGE = 1000
 ROOT = Path(__file__).resolve().parent.parent
-
-
-def query(sql):
-    cli = [shutil.which("supabase")] if shutil.which("supabase") else ["npx", "--yes", "supabase@latest"]
-    done = subprocess.run(cli + ["db", "query", "--remote", "--read-only", "--output-format", "json", sql], capture_output=True, text=True)
-    if done.returncode != 0:
-        raise RuntimeError(f"supabase db query failed ({done.returncode}): {done.stderr.strip() or done.stdout.strip()}")
-    return json.loads(done.stdout)["rows"]
 
 
 def backup(out, label="legacy", log=print):
@@ -45,11 +38,17 @@ def backup(out, label="legacy", log=print):
         migrations = [{"error": str(e)[:200]}]
     (folder / "schema.json").write_text(json.dumps({"tables": tables, "columns": columns, "migrations": migrations}, indent=1, default=str))
     counts = {}
+    keys = {}                                              # a table's primary key columns: pages are cut in a stable order
+    for r in query("select tc.table_name, kcu.column_name from information_schema.table_constraints tc join information_schema.key_column_usage kcu "
+                   "on kcu.constraint_name = tc.constraint_name and kcu.table_schema = tc.table_schema "
+                   "where tc.table_schema = 'public' and tc.constraint_type = 'PRIMARY KEY' order by tc.table_name, kcu.ordinal_position"):
+        keys.setdefault(r["table_name"], []).append(f'"{r["column_name"]}"')
     for table in tables:
         n = 0
+        order = ", ".join(keys.get(table, ["ctid"]))
         with open(folder / f"{table}.jsonl", "w") as f:
             while True:
-                rows = query(f'select to_jsonb(t) as r from public."{table}" t order by ctid limit {PAGE} offset {n}')
+                rows = query(f'select to_jsonb(t) as r from public."{table}" t order by {order} limit {PAGE} offset {n}')
                 for row in rows:
                     f.write(json.dumps(row["r"], default=str) + "\n")
                 n += len(rows)

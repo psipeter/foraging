@@ -237,6 +237,22 @@ def test_a_resume_on_a_newer_build_is_recorded(env):
     assert row["build_commit"] == COMMIT and row["build_commits"] == [COMMIT, "newer99"]
 
 
+def test_an_experiment_cannot_require_one_that_is_not_registered(env):
+    with pytest.raises(ValueError, match="not registered"):
+        server_admin.register_experiment(env["db"], "BAD", "Bad", requires=["NOPE"])
+
+
+def test_a_run_whose_build_no_longer_lists_the_experiment_does_not_finish(env):
+    c = client(env)
+    c.start(prolific_pid="PID_unlisted")
+    c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start")]), frames=frames(20))
+    env["db"].execute("delete from public.release_experiments where build_commit = %s and experiment = 'TEST'", (COMMIT,))
+    result = c.finish()
+    server_admin.register_release(env["db"], COMMIT, {"TEST": 2})             # the database is shared by the tests
+    assert result["ok"] is False and result["completion_code"] is None and any("no longer lists" in p for p in result["problems"])
+    assert env["db"].execute("select status from public.runs where run_id = %s", (c.run_id,)).fetchone()["status"] != "finished"
+
+
 def test_interludes_carry_a_plan_and_trials_and_the_resume_state_has_them(env):
     c = client(env)
     c.start(prolific_pid="PID_interlude")
@@ -261,12 +277,13 @@ def test_finish_lists_what_is_missing_and_a_finished_run_accepts_no_more(env):
     c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start")]), frames=frames(20))
     result = c.finish()
     assert result["ok"] is False and any("1 sessions present, 2 expected" in p for p in result["problems"])
+    assert result["completion_code"] is None                                  # the code goes only to a run the database confirms finished
     assert any("not complete" in p for p in result["problems"]) and any("no session_end" in p for p in result["problems"])
     c.append(0, session=session_row(ended_at="2026-10-29T12:00:00Z", completed=True, final_score=0.0),
              events=event_rows([ev(1.0, "session_end", running_total=0.0)], first_seq=1))
     c.append(1, session=session_row(1, completed=True, ended_at="2026-10-29T12:05:00Z", final_score=3.0),
              events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end")]), frames=frames(20))
-    assert c.finish() == {"ok": True, "problems": [], "completion_code": "DUMMY-COMPLETION-CODE"}
+    assert c.finish() == {"ok": True, "problems": [], "completion_code": "DUMMY-COMPLETION-CODE", "points": 3}
     with raises(401, "unauthorized"):
         c.append(1, events=event_rows([ev(2.0, "late")], first_seq=2))
     again = client(env).start(prolific_pid="PID_finish")
@@ -505,20 +522,6 @@ def test_a_finished_experiment_is_not_rerun_but_shows_its_completion_code_and_ta
     other.run_id, other.token = run, other.participant_token
     with raises(401, "unauthorized"):
         other.feedback("someone else's participant token")
-
-
-def test_one_participant_has_a_separate_run_per_experiment_and_resumes_each_where_it_stopped(env):
-    c = client(env, commit=MENU_COMMIT)
-    c.login("PID_two_runs")
-    one = c.start("ONE", login=False)
-    play_one_session(c)
-    two = c.start("TWO", login=False)
-    c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start"), ev(1.0, "harvest_press", tree_id=2)]), frames=frames(30))
-    back = client(env, commit=MENU_COMMIT)
-    back.login("PID_two_runs")
-    resumed = back.start("TWO", login=False)
-    assert resumed["run_id"] == two["run_id"] != one["run_id"] and resumed["has_resume"] is True and resumed["resume"]["open_bout_tree"] == 2
-    assert back.start("ONE", login=False)["status"] == "finished"
 
 
 def test_the_completion_code_is_the_experiments_own_and_a_dummy_until_one_is_set(env):

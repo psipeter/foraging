@@ -55,7 +55,8 @@ public class CompletionScreen : MonoBehaviour
 
         UiStyle.Text(panel, "CodeLabel", "Your completion code", UiStyle.Small, TextAlignmentOptions.Left, codeX, 178f, 560f, 36f, UiStyle.Muted);
         Transform codeBox = UiStyle.Rounded(panel, "CodeBox", UiStyle.FieldGlass, codeX, 112f, 560f, 88f, 18f).transform;
-        TextMeshProUGUI codeText = UiStyle.Text(codeBox, "Code", code ?? "", 48f, TextAlignmentOptions.Center, 0f, 0f, 520f, 80f);
+        bool noCode = string.IsNullOrEmpty(code);                              // withheld: the server could not confirm that everything was saved
+        TextMeshProUGUI codeText = UiStyle.Text(codeBox, "Code", noCode ? "Not available" : code, 48f, TextAlignmentOptions.Center, 0f, 0f, 520f, 80f);
         codeText.characterSpacing = 3f;
         codeText.enableAutoSizing = true;                                    // a long code shrinks to fit its box
         codeText.fontSizeMin = 22f;
@@ -77,7 +78,7 @@ public class CompletionScreen : MonoBehaviour
         _input.characterLimit = MaxLength;
         UiStyle.StyleInput(_input, box);
 
-        _status = UiStyle.Text(panel, "Status", "", UiStyle.Small, TextAlignmentOptions.Left, -290f, -196f, 600f, 36f, UiStyle.Muted);
+        _status = UiStyle.Text(panel, "Status", noCode ? "Please contact the researcher." : "", UiStyle.Small, TextAlignmentOptions.Left, -290f, -196f, 600f, 36f, UiStyle.Muted);
 
         // buttons from the right edge inwards
         float right = 594f;

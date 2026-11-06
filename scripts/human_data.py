@@ -122,13 +122,6 @@ def _block(s, config):
     return config.get("interludeFor") or s["name"].removesuffix("_Interlude")
 
 
-def _add_missing_columns(con):
-    """A humans.sqlite made before the experiments lacks the experiment columns: add them (the rows keep NULL there until downloaded again)."""
-    for table, column in (("participants", "participant_id"), ("participants", "experiment"), ("sessions", "experiment")):
-        if column not in {row[1] for row in con.execute(f"pragma table_info({table})")}:
-            con.execute(f"alter table {table} add column {column} text")
-
-
 def _session_row(s, events, trials, experiment=None):
     config, frames = s["config"] or {}, s["frame_stats"] or {}
     started, ended = _utc(s["started_at"]), _utc(s["ended_at"])
@@ -178,7 +171,6 @@ def download(out=DATA_DIR, everything=False, log=print):
     out.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(out / DB_NAME)
     con.executescript(SCHEMA)
-    _add_missing_columns(con)
     runs = query(RUNS_SQL)
     have = {r[0]: r[1:] for r in con.execute("select run_id, status, finished_at, last_event, n_sessions from participants")}
     todo = [r for r in runs if everything or have.get(r["run_id"]) != _stamp(r) or not (out / r["run_id"]).is_dir()]

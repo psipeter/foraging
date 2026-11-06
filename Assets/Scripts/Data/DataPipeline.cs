@@ -17,7 +17,8 @@ public class DataPipeline : MonoBehaviour
     {
         public bool ok;
         public string[] problems;
-        public string completion_code;
+        public string completion_code;                           // null unless the server confirmed the run finished
+        public float points;                                     // the experiment's points as the server adds them up
     }
 
     private static DataPipeline _instance;
@@ -36,6 +37,7 @@ public class DataPipeline : MonoBehaviour
     private string _token;
     private string _notice;
     private string _completionCode;
+    private float _points;
     private CompletionScreen _feedback;
     private bool _finishing;
     private bool _finished;
@@ -110,7 +112,7 @@ public class DataPipeline : MonoBehaviour
         if (_feedback == null)
         {
             _feedback = CompletionScreen.Show(experiment != null ? experiment.Title : "Experiment",
-                counts ? GameManager.SessionScoreTotal + GameManager.InterludeBonus : (float?)null, _completionCode, fromProlific,
+                counts ? _points : (float?)null, _completionCode, fromProlific,
                 text => StartCoroutine(SendFeedback(text)), () => OpenProlificCompletion(_completionCode), ReturnToMenu);
         }
     }
@@ -274,7 +276,6 @@ public class DataPipeline : MonoBehaviour
             }
 
             ResumeInfo.Pending = resume;
-            GameManager.RestoreTotals(resume);
             int target = resume.completed ? resume.session_index + 1 : resume.session_index;
             if (target >= GameManager.TotalSessions)
             {
@@ -304,6 +305,7 @@ public class DataPipeline : MonoBehaviour
             {
                 FinishReply reply = JsonUtility.FromJson<FinishReply>(request.downloadHandler.text);
                 _completionCode = reply.completion_code;
+                _points = reply.points;
                 if (!reply.ok)
                 {
                     Debug.LogWarning("run-finish found problems: " + string.Join("; ", reply.problems));

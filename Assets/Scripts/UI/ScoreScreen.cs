@@ -8,7 +8,6 @@ public class ScoreScreen : MonoBehaviour
 {
     private const float DegreesPerSecond = 3.5f;
 
-    private TextMeshProUGUI _prompt;
 
     public static ScoreScreen Show(int part, int partCount, float points, string prompt, CameraController camera)
     {
@@ -32,14 +31,8 @@ public class ScoreScreen : MonoBehaviour
         number.font = UiStyle.DisplayFont;
         UiStyle.Text(panel, "Label", "points", UiStyle.Heading, TextAlignmentOptions.Center, 0f, -70f, 780f, 60f, UiStyle.Muted).font = UiStyle.DisplayFont;
         UiStyle.Rounded(panel, "Rule", new Color(1f, 1f, 1f, 0.16f), 0f, -150f, 780f, 2f, 1f);
-        _prompt = UiStyle.Text(panel, "Prompt", UiStyle.Chips(prompt), 34f, TextAlignmentOptions.Center, 0f, -222f, 780f, 56f, UiStyle.Ink);
-        _prompt.richText = true;
-    }
-
-    // Replaces the prompt ("Loading the next part...").
-    public void SetPrompt(string prompt)
-    {
-        _prompt.text = UiStyle.Chips(prompt);
+        TextMeshProUGUI promptText = UiStyle.Text(panel, "Prompt", UiStyle.Chips(prompt), 34f, TextAlignmentOptions.Center, 0f, -222f, 780f, 56f, UiStyle.Ink);
+        promptText.richText = true;
     }
 
     private IEnumerator Drift(CameraController camera)

@@ -99,7 +99,7 @@ harmless "failed to cache migrations catalog ... Docker" warning. Edge Functions
 platform (the direct connection and the `apikey` check both worked). `ALLOWED_ORIGIN` (optional secret) restricts CORS to the game's
 web origin. Worlds are registered by SQL (`db query --linked -f`, the hashes of `Assets/StreamingAssets/Experiments/*/*`) or with
 `server_admin.py register-worlds` (needs `FORAGING_DB_URL`); experiments with `register-experiment --code CF --title "Complex Features" --requires TUT [--completion-code ...]`;
-a release with `register-release --commit <hash> --experiment TUT=2 --experiment CF=14` (the sessions of each, Interludes included). **Re-register worlds after regenerating them.** The publishable key is in the
+a release with `register-release --commit <hash> --experiment TUT --experiment CF` (each experiment's session count, Interludes included, is read from its asset at that commit). **Re-register worlds after regenerating them.** The publishable key is in the
 dashboard (API Keys) or `supabase projects api-keys`: that listing also prints the secret keys, so do not paste its output anywhere.
 
 `scripts/server_smoke.py` runs one throwaway run through every endpoint and prints the latency of each call; it needs a release
@@ -113,7 +113,7 @@ checked (the remote migration history already lists both migrations, so a push s
 function (`functions deploy participant-start --no-verify-jwt`, and the others, whose code changed), register the experiments
 (`server_admin.py register-experiment --code TUT --title Tutorial --order 1 --completion-code <code>`, then `--code CF --title "Complex Features" --requires TUT --order 2 --completion-code <code>`),
 register the worlds (`register-worlds`: the files are now in `Assets/StreamingAssets/Experiments/<code>/`) and the build
-(`register-release --commit <hash> --experiment TUT=2 --experiment CF=14`). The deployed old client stops working at the migration.
+(`register-release --commit <hash> --experiment TUT --experiment CF`). The deployed old client stops working at the migration.
 
 ### Deploying the game (GitHub Pages)
 

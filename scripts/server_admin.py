@@ -3,7 +3,7 @@ layout (rundata.py) so replay.py, visibility.py and the analyses read it like a 
 service connection string from the Supabase dashboard, in FORAGING_DB_URL; never put it in the repo).
 
     ./venv/bin/python scripts/server_admin.py register-experiment --code CF --title "Complex Features" [--requires TUT] [--order 2] [--completion-code XXXX] [--payout '{"..."}']
-    ./venv/bin/python scripts/server_admin.py register-release --commit <git hash> --experiment TUT=2 --experiment CF=14 [--note "..."]
+    ./venv/bin/python scripts/server_admin.py register-release --commit <git hash> --experiment TUT --experiment CF [--note "..."]
     ./venv/bin/python scripts/server_admin.py register-worlds            # hashes Assets/StreamingAssets/Experiments/*/*
     ./venv/bin/python scripts/server_admin.py runs
     ./venv/bin/python scripts/server_admin.py pull --run <run_id> --out ForagingData
@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import subprocess
+import uuid
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -29,6 +30,9 @@ from world import PROJECT_ROOT
 def register_experiment(conn, code, title, requires=(), sort_order=0, completion_code=None, payout=None):
     """Create or update an experiment: the menu title, the experiments a participant must have finished first, the order in the menu, its
     Prolific completion code (none: a dummy is shown) and payout settings (stored for the analysis, not read by the server)."""
+    for required in requires:
+        if conn.execute("select 1 from public.experiments where code = %s", (required,)).fetchone() is None and required != code:
+            raise ValueError(f"{code} requires {required}, which is not registered (register it first: a prerequisite that does not exist locks {code} for everyone)")
     conn.execute("insert into public.experiments (code, title, requires, sort_order, completion_code, payout) values (%s, %s, %s, %s, %s, %s) "
                  "on conflict (code) do update set title = excluded.title, requires = excluded.requires, sort_order = excluded.sort_order, "
                  "completion_code = excluded.completion_code, payout = excluded.payout",
@@ -39,11 +43,22 @@ def register_release(conn, commit, experiments, note=None):
     """Register a build and the experiments it offers: `experiments` maps an experiment code to its number of sessions (practice,
     sessions and Interludes alike) in this build. The experiments must be registered (`register_experiment`); run-start refuses a build
     that is not listed or an experiment it does not offer."""
-    conn.execute("insert into public.releases (build_commit, note) values (%s, %s) on conflict (build_commit) do update set note = excluded.note",
-                 (commit, note))
-    conn.execute("delete from public.release_experiments where build_commit = %s", (commit,))
-    for code, n in experiments.items():
-        conn.execute("insert into public.release_experiments (build_commit, experiment, n_sessions) values (%s, %s, %s)", (commit, code, n))
+    with conn.transaction():                                  # run-finish reads these rows: never see them half replaced
+        conn.execute("insert into public.releases (build_commit, note) values (%s, %s) on conflict (build_commit) do update set note = excluded.note",
+                     (commit, note))
+        conn.execute("delete from public.release_experiments where build_commit = %s", (commit,))
+        for code, n in experiments.items():
+            conn.execute("insert into public.release_experiments (build_commit, experiment, n_sessions) values (%s, %s, %s)", (commit, code, n))
+
+
+def sessions_in_build(commit, code, repo=PROJECT_ROOT):
+    """How many sessions (practice, sessions and Interludes alike) the experiment `code` lists in its asset at `commit`: the count `register_release`
+    registers, read from git so it cannot be mistyped."""
+    asset = subprocess.run(["git", "show", f"{commit}:Assets/ScriptableObjects/Experiments/{code}/{code}.asset"], cwd=repo, capture_output=True, text=True)
+    if asset.returncode != 0:
+        raise ValueError(f"no experiment asset for {code} at {commit}: {asset.stderr.strip()}")
+    listed = asset.stdout.split("\n  sessions:\n", 1)[1]
+    return sum(1 for line in listed.split("\n") if line.startswith("  - "))
 
 
 def register_worlds(conn, directory=WORLD_DIR):
@@ -58,7 +73,7 @@ def register_worlds(conn, directory=WORLD_DIR):
 
 
 def _iso(value):
-    return value.isoformat() if isinstance(value, datetime) else value
+    return value.isoformat() if isinstance(value, datetime) else str(value) if isinstance(value, uuid.UUID) else value
 
 
 def archive_worlds(commit, sessions, out_root, repo=PROJECT_ROOT):
@@ -112,7 +127,7 @@ def pull_run(conn, run_id, out_root):
     run = conn.execute("select * from public.runs where run_id = %s", (run_id,)).fetchone()
     if run is None:
         raise KeyError(f"no run {run_id}")
-    rundata.write_run(out_root, run_id, {k: _iso(v) if k != "participant_id" else str(v) for k, v in run.items() if k not in ("run_id", "token_hash")})
+    rundata.write_run(out_root, run_id, {k: _iso(v) for k, v in run.items() if k not in ("run_id", "token_hash")})
     sessions = conn.execute("select * from public.sessions where run_id = %s order by session_index", (run_id,)).fetchall()
     for s in sessions:
         where = (run_id, s["session_index"])
@@ -138,7 +153,7 @@ def main():
     e.add_argument("--payout", help="JSON")
     r = sub.add_parser("register-release")
     r.add_argument("--commit", required=True)
-    r.add_argument("--experiment", action="append", required=True, metavar="CODE=N", help="an experiment of the build and its session count")
+    r.add_argument("--experiment", action="append", required=True, metavar="CODE", help="an experiment of the build (its session count is read from the asset at --commit)")
     r.add_argument("--note")
     sub.add_parser("register-worlds")
     sub.add_parser("runs")
@@ -154,7 +169,7 @@ def main():
         register_experiment(conn, args.code, args.title, args.requires, args.order, args.completion_code, json.loads(args.payout) if args.payout else None)
         print(f"registered {args.code}: {args.title}")
     elif args.command == "register-release":
-        experiments = {code: int(n) for code, n in (item.split("=") for item in args.experiment)}
+        experiments = {code: sessions_in_build(args.commit, code) for code in args.experiment}
         register_release(conn, args.commit, experiments, args.note)
         print(f"registered {args.commit} with {experiments}")
     elif args.command == "register-worlds":
