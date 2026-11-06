@@ -32,6 +32,8 @@ def css(width, height):
     html, body {{ margin: 0; height: 100%; overflow: hidden; background: #000 }}
     #unity-container.unity-desktop {{ position: fixed !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; transform: none !important; display: flex; align-items: center; justify-content: center }}
     #unity-canvas {{ display: block; flex: none; width: min(100vw, calc(100vh * {width} / {height})) !important; height: min(100vh, calc(100vw * {height} / {width})) !important; background: #000 }}
+    #unity-canvas {{ outline: none !important; -webkit-tap-highlight-color: transparent }}
+    html, body, #unity-container {{ -webkit-user-select: none; user-select: none }}
     #unity-footer {{ display: none }}
   </style>
 """

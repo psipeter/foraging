@@ -49,7 +49,7 @@ public class InstructionsPanel : MonoBehaviour
         }
 
         _firstHarvestShown = true;
-        ShowText(sessionConfig.FirstHarvestMessage.Replace("{points}", bout.boutTotal.ToString("0")) + "\n\nPress [Enter] to continue");
+        ShowText(sessionConfig.FirstHarvestMessage.Replace("{points}", bout.boutTotal.ToString("0")) + "\n\nPress [Enter] to continue", true);
         PauseGate.Instructions = true;
     }
 
@@ -69,7 +69,7 @@ public class InstructionsPanel : MonoBehaviour
 
     // The file's first line is the central instruction (the title), the last "Press [Key] to ..." line the prompt, the rest the text; the part number above is
     // "Part n of m" (a session or an Interlude is just a part), and [Key] in the text becomes a key chip.
-    private void ShowText(string text)
+    private void ShowText(string text, bool notice = false)
     {
         string[] lines = text.Replace("\r", "").Trim().Split('\n');
         string title = System.Text.RegularExpressions.Regex.Replace(lines[0], "<[^>]+>", "").Trim();
@@ -82,7 +82,7 @@ public class InstructionsPanel : MonoBehaviour
         }
 
         string body = string.Join("\n", lines, 1, Mathf.Max(0, last)).Trim();
-        _screen.Show($"Part {GameManager.PartNumber} of {GameManager.PartCount}", title, body, prompt);
+        _screen.Show(notice ? null : $"Part {GameManager.PartNumber} of {GameManager.PartCount}", title, body, prompt, notice);
     }
 
     private string LoadInstructions()

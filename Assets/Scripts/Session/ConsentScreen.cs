@@ -97,20 +97,19 @@ public class ConsentScreen : MonoBehaviour
     private void BuildId(string presetId, string problem)
     {
         UiStyle.Backdrop(transform);
-        Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, 820f, 780f, UiStyle.PanelRadius).transform;
-        UiStyle.Eyebrow(panel, "Foraging study", 0f, 308f, 708f);
-        UiStyle.Text(panel, "Title", "Welcome", UiStyle.Title, TextAlignmentOptions.Left, 0f, 232f, 708f, 90f);
-        UiStyle.Text(panel, "Intro", "Enter your Prolific ID to begin, or to continue where you stopped.", UiStyle.Body, TextAlignmentOptions.TopLeft, 0f, 118f, 708f, 120f)
+        Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, 820f, 600f, UiStyle.PanelRadius).transform;
+        UiStyle.Eyebrow(panel, "Welcome", 0f, 232f, 708f);
+        UiStyle.Text(panel, "Title", "Foraging study", UiStyle.Title, TextAlignmentOptions.Left, 0f, 156f, 708f, 90f);
+        UiStyle.Text(panel, "Intro", "Enter your name/ID to continue", UiStyle.Body, TextAlignmentOptions.TopLeft, 0f, 80f, 708f, 60f)
             .textWrappingMode = TextWrappingModes.Normal;
 
         bool locked = !string.IsNullOrEmpty(presetId) && IdPattern.IsMatch(presetId);   // a malformed ID from the address can be corrected
-        UiStyle.Text(panel, "IdLabel", locked ? "Your Prolific ID" : "Prolific ID or participant ID", UiStyle.Small, TextAlignmentOptions.Left, 0f, 30f, 708f, 36f, UiStyle.Muted);
-        _id = Field(panel, "IdField", presetId ?? "", 0f, -34f, 708f, 88f);
+        UiStyle.Text(panel, "IdLabel", locked ? "Your Prolific ID" : "Prolific ID or participant ID", UiStyle.Small, TextAlignmentOptions.Left, 0f, 6f, 708f, 36f, UiStyle.Muted);
+        _id = Field(panel, "IdField", presetId ?? "", 0f, -58f, 708f, 88f);
         _id.characterLimit = 64;
         _id.interactable = !locked;
-        _problem = UiStyle.Text(panel, "Problem", problem ?? "", UiStyle.Small, TextAlignmentOptions.Left, 0f, -102f, 708f, 36f, new Color(0.95f, 0.55f, 0.45f));
-        _continue = UiStyle.Pill(panel, "Continue", "Continue", 0f, -182f, 708f, AcceptId);
-        UiStyle.Text(panel, "Note", "Your ID is kept apart from your answers.", UiStyle.Small, TextAlignmentOptions.Left, 0f, -262f, 708f, 36f, UiStyle.Muted);
+        _problem = UiStyle.Text(panel, "Problem", problem ?? "", UiStyle.Small, TextAlignmentOptions.Left, 0f, -126f, 708f, 36f, new Color(0.95f, 0.55f, 0.45f));
+        _continue = UiStyle.Pill(panel, "Continue", "Continue", 0f, -196f, 708f, AcceptId);
         _id.onValueChanged.AddListener(_ => RefreshId());
         RefreshId(problem);
         _id.ActivateInputField();

@@ -144,21 +144,10 @@ public class MenuScreen : MonoBehaviour
             total += rows[i].ShowPoints && rows[i].CountsTowardTotal ? rows[i].Points : 0f;
         }
 
-        const float rowHeight = 150f, rowGap = 20f, headerHeight = 110f, totalHeight = 96f, pad = 56f;
+        const float rowHeight = 150f, rowGap = 20f, headerHeight = 0f, totalHeight = 96f, pad = 56f;
         float height = pad * 2f + headerHeight + n * (rowHeight + rowGap) + (anyPoints ? totalHeight : 0f);
         Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, 1400f, height, UiStyle.PanelRadius).transform;
         float top = height / 2f - pad;
-        UiStyle.Text(panel, "Title", "Experiments", 64f, TextAlignmentOptions.Left, 0f, top - 40f, 1288f, 80f);
-        if (!string.IsNullOrEmpty(header))
-        {
-            UiStyle.Text(panel, "Header", header, UiStyle.Small, TextAlignmentOptions.Right, 0f, top - 40f, 1288f, 36f, UiStyle.Muted);
-        }
-
-        if (anyPoints)
-        {
-            UiStyle.Text(panel, "PointsHeader", "Points", UiStyle.Small, TextAlignmentOptions.Right, 275f, top - headerHeight + 26f, 150f, 30f, UiStyle.Muted);
-        }
-
         float y = top - headerHeight - rowHeight / 2f;
         for (int i = 0; i < n; i++)
         {

@@ -1,18 +1,4 @@
 version: PLACEHOLDER-1
 Consent to participate in a research study
 
-THIS IS PLACEHOLDER TEXT. Replace it with the approved consent form before any participant sees it.
-
-Purpose. This study examines how people decide where to look for points when the points differ between places.
-
-What you will do. You will walk through a virtual landscape and collect fruit from bushes, about 30 minutes in total. The game records your movements and choices.
-
-Risks and benefits. There are no known risks beyond those of ordinary computer use. You may feel mild eye strain. There is no direct benefit to you.
-
-Voluntary participation. Taking part is voluntary. You may stop at any time by closing this window; the data recorded up to that point will be kept.
-
-Confidentiality. Your data are stored under your participant ID, apart from your name. Your name is kept only as the record of your consent and is not shared.
-
-Contact. Questions about the study: [researcher name and email]. Questions about your rights as a participant: [IRB office and contact].
-
-By typing your name below and ticking the box, you confirm that you have read this form and agree to take part.
+PLACEHOLDER CONSENT TEXT

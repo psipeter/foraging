@@ -221,7 +221,16 @@ public static class UiStyle
         colors.disabledColor = new Color(1f, 1f, 1f, 0.25f);
         colors.highlightedColor = new Color(1f, 1f, 1f, 0.92f);
         colors.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
+        colors.selectedColor = colors.normalColor;                        // a clicked button does not stay highlighted
         button.colors = colors;
+        button.navigation = new Navigation { mode = Navigation.Mode.None };
+        button.onClick.AddListener(() =>
+        {
+            if (UnityEngine.EventSystems.EventSystem.current != null)
+            {
+                UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);   // so a later Enter does not press it again
+            }
+        });
         if (onClick != null)
         {
             button.onClick.AddListener(onClick);
