@@ -36,7 +36,7 @@ public class DataPipeline : MonoBehaviour
     private string _token;
     private string _notice;
     private string _completionCode;
-    private FeedbackScreen _feedback;
+    private CompletionScreen _feedback;
     private bool _finishing;
     private bool _finished;
     private bool _quitRequested;
@@ -102,13 +102,16 @@ public class DataPipeline : MonoBehaviour
     private void ShowComplete()
     {
         SceneSuperseded = true;
+        Music.PlayScore();
+        _notice = null;
         bool fromProlific = _completionCode != null && OnlineSettings.UrlParameter("PROLIFIC_PID") != null;
-        _notice = "Thank you! This experiment is complete." + (_completionCode != null ? $"\n\nYour completion code is {_completionCode}" : "");
+        ExperimentConfig experiment = GameManager.ActiveExperiment;
+        bool counts = experiment == null || experiment.CountsTowardTotal;
         if (_feedback == null)
         {
-            PointerLockGuard.Suspended = true;
-            _feedback = FeedbackScreen.Show(_overlay.transform, _message, fromProlific, text => StartCoroutine(SendFeedback(text)),
-                () => OpenProlificCompletion(_completionCode), ReturnToMenu);
+            _feedback = CompletionScreen.Show(experiment != null ? experiment.Title : "Experiment",
+                counts ? GameManager.SessionScoreTotal + GameManager.InterludeBonus : (float?)null, _completionCode, fromProlific,
+                text => StartCoroutine(SendFeedback(text)), () => OpenProlificCompletion(_completionCode), ReturnToMenu);
         }
     }
 

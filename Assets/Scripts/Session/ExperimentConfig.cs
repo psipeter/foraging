@@ -16,6 +16,8 @@ public class ExperimentConfig : ScriptableObject
     [SerializeField] private string[] requires = new string[0];
     [Tooltip("The sessions in play order, each followed by its Interlude where it has one. Every session's asset name starts with the code and an underscore.")]
     [SerializeField] private List<SessionConfig> sessions = new List<SessionConfig>();
+    [Tooltip("Whether the points earned here are added to the total the menu and the completion screens show. Off for a tutorial or other practice, whose points pay nothing.")]
+    [SerializeField] private bool countsTowardTotal = true;
     [Tooltip("Download the files of one session at a time (the next one is fetched while the current one runs) instead of the whole experiment's when it is chosen. Browser builds only.")]
     [SerializeField] private bool downloadPerSession = false;
 
@@ -24,6 +26,7 @@ public class ExperimentConfig : ScriptableObject
     public IReadOnlyList<string> Requires => requires;
     public List<SessionConfig> Sessions => sessions;
     public bool DownloadPerSession => downloadPerSession;
+    public bool CountsTowardTotal => countsTowardTotal;
 
     // The StreamingAssets files a session reads: its world, its Interlude file and its instruction text.
     public static List<string> FilesOf(SessionConfig session)

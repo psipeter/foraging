@@ -17,6 +17,11 @@ public class MenuScreen : MonoBehaviour
         public string Detail;
         public string Action;      // the button's caption
         public bool Enabled;
+        public bool ShowPoints;    // online: the points column has an entry for this row
+        public float Points;       // what the participant has earned in it so far (counted in the total only when CountsTowardTotal)
+        public bool CountsTowardTotal = true;
+        public int PillStyle;      // 0 accent, 1 good (completed), 2 muted (locked or closed)
+        public float Progress = -1f;   // the share of its parts done, for a bar; negative: no bar
     }
 
     private const int MaxRows = 6;
@@ -45,27 +50,31 @@ public class MenuScreen : MonoBehaviour
         foreach (ExperimentStanding s in standings)
         {
             ExperimentConfig config = catalog != null ? catalog.Find(s.code) : null;
-            var row = new Row { Code = s.code, Title = s.title };
+            var row = new Row { Code = s.code, Title = s.title, ShowPoints = true, Points = s.points, CountsTowardTotal = config == null || config.CountsTowardTotal };
             switch (s.status)
             {
                 case "finished":
                     row.Detail = "Completed";
                     row.Action = "View code";
                     row.Enabled = true;
+                    row.PillStyle = 1;
                     break;
                 case "in_progress":
-                    row.Detail = $"In progress: {s.sessions_done} of {s.n_sessions} parts done";
+                    row.Detail = $"{s.sessions_done} of {s.n_sessions} parts done";
                     row.Action = "Continue";
                     row.Enabled = s.unlocked;
+                    row.Progress = s.n_sessions > 0 ? Mathf.Clamp01(s.sessions_done / (float)s.n_sessions) : 0f;
                     break;
                 case "none":
-                    row.Detail = s.unlocked ? $"{s.n_sessions} parts" : "Locked: " + PrerequisiteText(config, standings);
+                    row.Detail = s.unlocked ? $"{s.n_sessions} parts" : PrerequisiteText(config, standings).Replace("finish", "Finish");
+                    row.PillStyle = s.unlocked ? 0 : 2;
                     row.Action = "Start";
                     row.Enabled = s.unlocked;
                     break;
                 default:
                     row.Detail = "Closed";
                     row.Action = "Closed";
+                    row.PillStyle = 2;
                     break;
             }
 
@@ -126,41 +135,86 @@ public class MenuScreen : MonoBehaviour
 
     private void Build(IList<Row> rows, string header, string footer)
     {
-        UiStyle.Image(transform, "Background", UiStyle.Panel, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        UiStyle.Label(transform, "Title", "Experiments", UiStyle.Title, TextAlignmentOptions.Left, new Vector2(0.1f, 0.86f), new Vector2(0.9f, 0.96f));
-        UiStyle.Label(transform, "Header", header, UiStyle.Small, TextAlignmentOptions.Left, new Vector2(0.1f, 0.8f), new Vector2(0.9f, 0.86f), UiStyle.Muted);
-        const float rowHeight = 0.105f, gap = 0.02f;
-        float top = 0.77f;
-        for (int i = 0; i < rows.Count && i < MaxRows; i++)
+        UiStyle.Backdrop(transform);
+        int n = Mathf.Min(rows.Count, MaxRows);
+        bool anyPoints = false;
+        float total = 0f;
+        for (int i = 0; i < n; i++)
         {
-            BuildRow(rows[i], top - i * (rowHeight + gap), rowHeight);
+            anyPoints |= rows[i].ShowPoints;
+            total += rows[i].ShowPoints && rows[i].CountsTowardTotal ? rows[i].Points : 0f;
         }
 
-        UiStyle.Label(transform, "Footer", footer, UiStyle.Small, TextAlignmentOptions.Left, new Vector2(0.1f, 0.03f), new Vector2(0.9f, 0.09f), UiStyle.Muted);
+        const float rowHeight = 150f, rowGap = 20f, headerHeight = 110f, totalHeight = 96f, pad = 56f;
+        float height = pad * 2f + headerHeight + n * (rowHeight + rowGap) + (anyPoints ? totalHeight : 0f);
+        Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, 1400f, height, UiStyle.PanelRadius).transform;
+        float top = height / 2f - pad;
+        UiStyle.Text(panel, "Title", "Experiments", 64f, TextAlignmentOptions.Left, 0f, top - 40f, 1288f, 80f);
+        if (!string.IsNullOrEmpty(header))
+        {
+            UiStyle.Text(panel, "Header", header, UiStyle.Small, TextAlignmentOptions.Right, 0f, top - 40f, 1288f, 36f, UiStyle.Muted);
+        }
+
+        if (anyPoints)
+        {
+            UiStyle.Text(panel, "PointsHeader", "Points", UiStyle.Small, TextAlignmentOptions.Right, 275f, top - headerHeight + 26f, 150f, 30f, UiStyle.Muted);
+        }
+
+        float y = top - headerHeight - rowHeight / 2f;
+        for (int i = 0; i < n; i++)
+        {
+            BuildRow(panel, rows[i], y, rowHeight);
+            y -= rowHeight + rowGap;
+        }
+
+        if (anyPoints)
+        {
+            float lineY = y + rowHeight / 2f + rowGap / 2f - 6f;
+            UiStyle.Rounded(panel, "TotalLine", new Color(1f, 1f, 1f, 0.18f), 0f, lineY, 1288f, 2f, 1f);
+            UiStyle.Text(panel, "TotalLabel", "Total points", UiStyle.Heading, TextAlignmentOptions.MidlineLeft, -292f, lineY - 48f, 640f, 60f).font = UiStyle.DisplayFont;
+            UiStyle.Text(panel, "TotalPoints", $"{total:F0}", UiStyle.Heading, TextAlignmentOptions.MidlineRight, 275f, lineY - 48f, 150f, 60f).font = UiStyle.DisplayFont;
+        }
+
+        if (!string.IsNullOrEmpty(footer))
+        {
+            UiStyle.Text(transform, "Footer", footer, UiStyle.Small, TextAlignmentOptions.Center, 0f, -height / 2f - 40f, 1288f, 36f, UiStyle.Muted);
+        }
     }
 
-    private void BuildRow(Row row, float top, float height)
+    private void BuildRow(Transform panel, Row row, float y, float height)
     {
-        float bottom = top - height;
-        UiStyle.Image(transform, "Row_" + row.Code, UiStyle.Field, new Vector2(0.1f, bottom), new Vector2(0.9f, top), Vector2.zero, Vector2.zero);
-        UiStyle.Label(transform, "Title_" + row.Code, row.Title, UiStyle.Body, TextAlignmentOptions.BottomLeft,
-            new Vector2(0.12f, bottom + height * 0.45f), new Vector2(0.62f, top - 0.005f), row.Enabled || row.Action == "View code" ? UiStyle.Ink : UiStyle.Muted);
-        UiStyle.Label(transform, "Detail_" + row.Code, row.Detail, UiStyle.Small, TextAlignmentOptions.TopLeft,
-            new Vector2(0.12f, bottom + 0.005f), new Vector2(0.62f, bottom + height * 0.5f), UiStyle.Muted);
+        Transform r = UiStyle.Rounded(panel, "Row_" + row.Code, UiStyle.FieldGlass, 0f, y, 1288f, height, 22f).transform;
+        bool dim = !row.Enabled && row.Action != "View code";
+        TextMeshProUGUI name = UiStyle.Text(r, "Name", row.Title, 42f, TextAlignmentOptions.MidlineLeft, -292f, 36f, 640f, 52f, dim ? UiStyle.Muted : UiStyle.Ink);
+        name.font = UiStyle.DisplayFont;
 
-        Image background = UiStyle.Image(transform, "Button_" + row.Code, UiStyle.Accent, new Vector2(0.68f, bottom + 0.012f), new Vector2(0.88f, top - 0.012f), Vector2.zero, Vector2.zero);
-        UiStyle.Label(background.transform, "Text", row.Action, UiStyle.Body, TextAlignmentOptions.Center, Vector2.zero, Vector2.one, UiStyle.Panel);
-        var button = background.gameObject.AddComponent<Button>();
-        button.targetGraphic = background;
-        ColorBlock colors = button.colors;
-        colors.disabledColor = new Color(0.35f, 0.4f, 0.48f, 0.6f);
-        button.colors = colors;
-        button.interactable = row.Enabled;
+        float pillWidth = Mathf.Min(620f, 46f + row.Detail.Length * 14f);
+        Color tint = row.PillStyle == 1 ? UiStyle.Good : row.PillStyle == 2 ? UiStyle.Muted : new Color(0.66f, 0.80f, 1f);
+        Color fill = row.PillStyle == 1 ? new Color(0.47f, 0.84f, 0.63f, 0.18f) : row.PillStyle == 2 ? new Color(1f, 1f, 1f, 0.10f) : new Color(0.36f, 0.62f, 0.95f, 0.20f);
+        Transform pill = UiStyle.Rounded(r, "Pill", fill, -644f + 32f + pillWidth / 2f, -14f, pillWidth, 38f, 19f).transform;
+        TextMeshProUGUI pillText = UiStyle.Text(pill, "Text", row.Detail, 24f, TextAlignmentOptions.Center, 0f, 0f, pillWidth, 38f, tint);
+        pillText.font = UiStyle.BoldFont;
+
+        if (row.Progress >= 0f)
+        {
+            UiStyle.Rounded(r, "Bar", new Color(1f, 1f, 1f, 0.12f), -644f + 32f + 260f, -52f, 520f, 8f, 4f);
+            float fillWidth = Mathf.Max(520f * row.Progress, 8f);
+            UiStyle.Rounded(r, "BarFill", UiStyle.Accent, -644f + 32f + fillWidth / 2f, -52f, fillWidth, 8f, 4f);
+        }
+
+        if (row.ShowPoints)
+        {
+            TextMeshProUGUI points = UiStyle.Text(r, "Points", row.CountsTowardTotal ? $"{row.Points:F0}" : "-", UiStyle.Heading, TextAlignmentOptions.MidlineRight, 275f, 0f, 150f, 60f,
+                row.CountsTowardTotal ? UiStyle.Ink : UiStyle.Muted);
+            points.font = UiStyle.DisplayFont;
+        }
+
         string code = row.Code;
-        button.onClick.AddListener(() =>
+        Button button = UiStyle.Pill(r, "Button", row.Action, 497f, 0f, 230f, () =>
         {
             ChosenCode = code;
             Destroy(gameObject);
-        });
+        }, row.Action == "View code", 68f);
+        button.interactable = row.Enabled;
     }
 }

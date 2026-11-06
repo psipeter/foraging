@@ -6,11 +6,12 @@ using UnityEngine.InputSystem;
 public class InstructionsPanel : MonoBehaviour
 {
     private const string FallbackInstructions =
-        "<b>Practice session</b>\n\n" +
+        "Find the best fruit\n\n" +
         "Collect as many points as you can before time runs out.\n" +
         "Walk next to a bush and hold [Space] to harvest.\n\n" +
         "Press [Enter] to begin";
 
+    // The scene's own panel and text are not used any more (the screen is built in code, UI/InstructionsScreen.cs) and stay hidden.
     [SerializeField] private GameObject panel;
     [SerializeField] private TextMeshProUGUI bodyText;
 
@@ -18,6 +19,7 @@ public class InstructionsPanel : MonoBehaviour
 
     private bool _firstHarvestShown;
     private bool _sessionEnded;
+    private InstructionsScreen _screen;
 
     private void OnEnable()
     {
@@ -41,47 +43,46 @@ public class InstructionsPanel : MonoBehaviour
     {
         if (_firstHarvestShown || _sessionEnded || bout.endedBySession || sessionConfig == null || sessionConfig.IsInterlude ||
             string.IsNullOrEmpty(sessionConfig.FirstHarvestMessage) ||
-            bout.fruitRewards.Count == 0 || panel == null || bodyText == null)
+            bout.fruitRewards.Count == 0 || _screen == null)
         {
             return;
         }
 
         _firstHarvestShown = true;
         ShowText(sessionConfig.FirstHarvestMessage.Replace("{points}", bout.boutTotal.ToString("0")) + "\n\nPress [Enter] to continue");
-        panel.SetActive(true);
         PauseGate.Instructions = true;
     }
 
     private void Start()
     {
-        if (bodyText != null)
-        {
-            bodyText.gameObject.SetActive(true);
-            bodyText.richText = true;
-            ShowText(LoadInstructions());
-        }
-
         if (panel != null)
         {
-            panel.SetActive(true);
+            panel.SetActive(false);
         }
 
+        _screen = InstructionsScreen.Create();
+        ShowText(LoadInstructions());
         PauseGate.Instructions = true;
 
         CreateControlsReminder();
     }
 
-    // One centred block: heading, text and the "Press [Enter] to ..." prompt, as written in the file; [Key] becomes a key chip.
+    // The file's first line is the central instruction (the title), the last "Press [Key] to ..." line the prompt, the rest the text; the part number above is
+    // "Part n of m" (a session or an Interlude is just a part), and [Key] in the text becomes a key chip.
     private void ShowText(string text)
     {
-        RectTransform rect = bodyText.rectTransform;
-        rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.anchoredPosition = Vector2.zero;
-        rect.sizeDelta = new Vector2(1500f, 700f);
-        bodyText.alignment = TextAlignmentOptions.Center;
-        bodyText.fontSize = UiStyle.Body;
-        bodyText.textWrappingMode = TextWrappingModes.Normal;
-        bodyText.text = System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"\[([^\]]+)\]", m => UiStyle.Chip(m.Groups[1].Value));
+        string[] lines = text.Replace("\r", "").Trim().Split('\n');
+        string title = System.Text.RegularExpressions.Regex.Replace(lines[0], "<[^>]+>", "").Trim();
+        int last = lines.Length - 1;
+        string prompt = "Press [Enter] to begin";
+        if (last > 0 && lines[last].TrimStart().StartsWith("Press"))
+        {
+            prompt = lines[last].Trim();
+            last--;
+        }
+
+        string body = string.Join("\n", lines, 1, Mathf.Max(0, last)).Trim();
+        _screen.Show($"Part {GameManager.PartNumber} of {GameManager.PartCount}", title, body, prompt);
     }
 
     private string LoadInstructions()
@@ -104,12 +105,10 @@ public class InstructionsPanel : MonoBehaviour
             text = FallbackInstructions;
         }
 
-        int number = GameManager.ExperimentSessionNumber(GameManager.CurrentSessionIndex);
         return text
-            .Replace("{session}", number.ToString())
-            .Replace("{interlude}", GameManager.InterludeNumber(GameManager.CurrentSessionIndex).ToString())
-            .Replace("{trial_seconds}", (sessionConfig != null ? sessionConfig.InterludeTrialSeconds : 0f).ToString("0"))
-            .Replace("{total}", GameManager.ExperimentSessionCount.ToString());
+            .Replace("{part}", GameManager.PartNumber.ToString())
+            .Replace("{total}", GameManager.PartCount.ToString())
+            .Replace("{trial_seconds}", (sessionConfig != null ? sessionConfig.InterludeTrialSeconds : 0f).ToString("0"));
     }
 
     // A faint controls hint kept on screen for the whole session (sessions that set one in their config).
@@ -155,7 +154,7 @@ public class InstructionsPanel : MonoBehaviour
 
     private void Update()
     {
-        if (panel == null || !panel.activeSelf || Keyboard.current == null || PauseGate.Pointer)   // not while the "Paused" screen covers it
+        if (_screen == null || !_screen.Visible || Keyboard.current == null || PauseGate.Pointer)   // not while the "Paused" screen covers it
         {
             return;
         }
@@ -164,7 +163,7 @@ public class InstructionsPanel : MonoBehaviour
         if (Keyboard.current.enterKey.wasPressedThisFrame ||
             Keyboard.current.numpadEnterKey.wasPressedThisFrame)
         {
-            panel.SetActive(false);
+            _screen.Hide();
             PauseGate.Instructions = false;
         }
     }

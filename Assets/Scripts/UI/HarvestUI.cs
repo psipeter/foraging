@@ -62,7 +62,8 @@ public class HarvestUI : MonoBehaviour
 
         if (totalScoreText != null)
         {
-            UiStyle.HudPlate(totalScoreText, scorePosition, scorePlateSize, scoreFontSize, plateColor, "ScorePlate");
+            // upper right, a pill 64 from the corner (the serialized position, size and colour are the old rectangle's and no longer used)
+            UiStyle.HudPlate(totalScoreText, new Vector2(-(64f + 130f), -(44f + 34f)), new Vector2(260f, 68f), 46f, new Color(0.06f, 0.067f, 0.09f, 0.55f), "ScorePlate");
             ShowScore();
         }
     }
@@ -101,7 +102,7 @@ public class HarvestUI : MonoBehaviour
 
     private void ShowScore()
     {
-        totalScoreText.text = _progressText ?? $"Points: {Mathf.RoundToInt(_scoreShown)}";
+        totalScoreText.text = _progressText ?? $"{Mathf.RoundToInt(_scoreShown)}";
     }
 
     private void HandleFruitCollected(float amount, Vector3 worldPos)

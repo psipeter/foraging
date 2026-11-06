@@ -12,6 +12,7 @@ public class ExperimentStanding
     public int n_sessions;
     public string status;            // none, in_progress, finished, terminated
     public int sessions_done;
+    public float points;             // the score of its completed sessions plus its Interlude bonuses, practice left out
     public bool unlocked;            // the prerequisites are finished (the server enforces it when the run starts)
 }
 

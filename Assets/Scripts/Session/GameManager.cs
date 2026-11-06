@@ -81,6 +81,10 @@ public class GameManager : MonoBehaviour
         return count;
     }
 
+    // A session and an Interlude are both just parts in the study's screens: "Part 3 of 14".
+    public static int PartNumber => CurrentSessionIndex + 1;
+    public static int PartCount => TotalSessions;
+
     public static int ExperimentSessionCount => AnalyzedBefore(TotalSessions);
 
     // 1-based number of the session at `index`; 0 for a practice session or an Interlude.
@@ -230,6 +234,8 @@ public class GameManager : MonoBehaviour
         }
 
         FruitMaterialManager.SetSessionConfig(activeConfig);
+        Music.Volume = activeConfig.MusicVolume;
+        Music.Stop();                                                    // the score screen's music ended with the last scene; none plays during a session
         _current = this;
         FetchNextSession();
     }

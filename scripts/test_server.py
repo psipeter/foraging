@@ -469,9 +469,21 @@ def test_the_menu_lists_the_experiments_with_the_participants_standing_and_locks
     assert play_one_session(c)["completion_code"] == "CODE-ONE"
     after = {m["code"]: m for m in c.login("PID_menu")["experiments"]}
     assert after["ONE"]["status"] == "finished" and after["ONE"]["sessions_done"] == 1 and after["TWO"]["unlocked"] is True
+    assert after["ONE"]["points"] == 4.0 and after["TWO"]["points"] == 0 and menu["ONE"]["points"] == 0          # the finished session's score; nothing before play
     two = c.start("TWO", login=False)
     assert two["status"] == "in_progress" and two["run_id"] != started["run_id"]
     assert env["db"].execute("select experiment, build_commit from public.runs where run_id = %s", (two["run_id"],)).fetchone() == {"experiment": "TWO", "build_commit": MENU_COMMIT}
+
+
+def test_menu_points_are_completed_session_scores_plus_interlude_bonuses_without_the_practice_ones(env):
+    c = client(env)
+    c.login("PID_points")
+    c.start(login=False)
+    done = {"completed": True, "ended_at": "2026-11-07T12:00:00Z"}
+    c.append(0, session=session_row(0, is_practice=True, final_score=58.0, **done), events=event_rows([ev(0.0, "session_start")]))         # practice: not counted
+    c.append(1, session=session_row(1, is_interlude=True, **done), events=event_rows([ev(0.0, "session_start")]), trials=[trial(0, 1, 5.0), trial(1, 0, 0.0)])
+    standing = {m["code"]: m for m in c.login("PID_points")["experiments"]}["TEST"]
+    assert standing["points"] == 5.0 and standing["sessions_done"] == 2
 
 
 def test_a_finished_experiment_is_not_rerun_but_shows_its_completion_code_and_takes_feedback(env):
@@ -530,15 +542,15 @@ def test_the_migration_turns_existing_runs_into_participants_of_a_legacy_experim
             for role in ("anon", "authenticated"):
                 c.execute(f"create role {role} nologin")
             files = sorted(glob.glob(str(ROOT / "supabase" / "migrations" / "*.sql")))
-            before = [f for f in files if "experiments" not in f]
-            for f in before:
+            migration = [f for f in files if f.endswith("_experiments.sql")][0]
+            for f in files[:files.index(migration)]:                           # the schema before the experiments
                 c.execute(Path(f).read_text())
             c.execute("insert into public.releases (build_commit, n_sessions) values ('old', 3)")
             run_a = c.execute("insert into public.runs (token_hash, build_commit, status) values ('h', 'old', 'finished') returning run_id").fetchone()["run_id"]
             run_b = c.execute("insert into public.runs (token_hash, build_commit) values ('h', 'old') returning run_id").fetchone()["run_id"]
             c.execute("insert into public.pid_registry (prolific_pid, run_id) values ('OLD_PID', %s)", (run_a,))
             c.execute("insert into public.consents (run_id, version, signature) values (%s, 'v0', 'Old Name')", (run_a,))
-            c.execute(Path([f for f in files if "experiments" in f][0]).read_text())
+            c.execute(Path(migration).read_text())
             runs = c.execute("select run_id, participant_id, experiment, status from public.runs order by started_at, run_id").fetchall()
             assert {r["experiment"] for r in runs} == {"legacy"} and len({r["participant_id"] for r in runs}) == 2
             pid = c.execute("select participant_id from public.pid_registry where prolific_pid = 'OLD_PID'").fetchone()["participant_id"]

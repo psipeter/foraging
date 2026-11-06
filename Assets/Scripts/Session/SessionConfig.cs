@@ -173,6 +173,10 @@ public class SessionConfig : ScriptableObject
     [Tooltip("Burst particle diameter (world units).")]
     [SerializeField] private float burstSize = 0.12f;
 
+    [Header("Music")]
+    [Tooltip("Volume (0-1) of the menu and score-screen music (UI/Music.cs). 0 disables. It never plays during a session.")]
+    [SerializeField] [Range(0f, 1f)] private float musicVolume = 0.3f;
+
     [Header("Ambient Audio")]
     [Tooltip("Volume (0-1) of footsteps while walking. 0 disables. Ambient audio is purely passive: it never depends on bush attributes, rewards, terrain or time of day.")]
     [SerializeField] [Range(0f, 1f)] private float footstepVolume = 0.06f;
@@ -375,6 +379,7 @@ public class SessionConfig : ScriptableObject
     public float PitchSemitoneRange => pitchSemitoneRange;
     public float SfxVolume => sfxVolume;
     public float FootstepVolume => footstepVolume;
+    public float MusicVolume => musicVolume;
     public float FootstepStride => footstepStride;
     public float BedVolume => bedVolume;
     public float BirdVolume => birdVolume;

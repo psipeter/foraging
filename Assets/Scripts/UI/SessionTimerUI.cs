@@ -9,6 +9,7 @@ public class SessionTimerUI : MonoBehaviour
     [SerializeField] private SunController sunController;
     public SessionConfig sessionConfig;
     public InterludeManager interludeManager;
+    // The scene's own end-of-part panel and texts are not used any more (the score screen is built in code, UI/ScoreScreen.cs) and stay hidden.
     [SerializeField] private GameObject sessionEndPanel;
     [SerializeField] private TextMeshProUGUI finalScoreText;
     [SerializeField] private TextMeshProUGUI sessionCompleteText;
@@ -23,6 +24,8 @@ public class SessionTimerUI : MonoBehaviour
     private float _lastTotalScore;
     private bool _sessionEndHandled;
     private bool _leaveRequested;
+    private ScoreScreen _score;
+    private bool _loadingShown;
 
     private void Awake()
     {
@@ -39,7 +42,8 @@ public class SessionTimerUI : MonoBehaviour
             return;
         }
 
-        UiStyle.HudPlate(timerText, timerPosition, timerPlateSize, timerFontSize, plateColor, "TimerPlate");
+        // upper left, a pill 64 from the corner (the serialized position, size and colour are the old rectangle's and no longer used)
+        UiStyle.HudPlate(timerText, new Vector2(64f + 110f, -(44f + 34f)), new Vector2(220f, 68f), 46f, new Color(0.06f, 0.067f, 0.09f, 0.55f), "TimerPlate");
     }
 
     private void OnEnable()
@@ -65,7 +69,7 @@ public class SessionTimerUI : MonoBehaviour
         {
             timerText.text = "00:00";
 
-            if (sessionEndPanel != null && sessionEndPanel.activeSelf)
+            if (_score != null)
             {
                 // Space is reserved for harvesting, so screens advance with Enter only.
                 if (Keyboard.current != null &&
@@ -102,9 +106,10 @@ public class SessionTimerUI : MonoBehaviour
                         // A browser fetches the next session's files while this one runs (the experiment's downloadPerSession); wait for them.
                         GameManager.EnsureNextSession();
                         _leaveRequested = true;
-                        if (nextSessionPromptText != null)
+                        if (!_loadingShown)
                         {
-                            nextSessionPromptText.text = "Loading the next part...";
+                            _loadingShown = true;
+                            _score.SetPrompt("Loading the next part...");
                         }
                     }
                     else
@@ -161,35 +166,10 @@ public class SessionTimerUI : MonoBehaviour
             GameManager.SessionScoreTotal += _lastTotalScore;
         }
 
-        bool isLast = GameManager.IsLastSession;
-
-        if (sessionEndPanel != null)
-        {
-            sessionEndPanel.SetActive(true);
-        }
-
-        if (sessionCompleteText != null)
-        {
-            sessionCompleteText.text = isLast ? "Experiment complete"
-                : isInterlude ? "Interlude complete"
-                : isPractice ? "Practice session complete"
-                : "Session complete";
-        }
-
-        if (nextSessionPromptText != null)
-        {
-            nextSessionPromptText.text = $"Press {UiStyle.Chip("Enter")} to {(isLast ? "return to the menu" : "continue")}";
-        }
-
-        if (finalScoreText != null)
-        {
-            // An Interlude's points appear only on its end screen, never trial by trial (the practice Interlude shows what it would have
-            // paid, and never which choices were right); the last screen adds the totals.
-            finalScoreText.gameObject.SetActive(true);
-            float points = isInterlude ? (interludeManager != null ? interludeManager.Points : 0f) : _lastTotalScore;
-            finalScoreText.text = !isLast ? $"+{points:F0} points"
-                : (isInterlude ? $"This interlude: +{points:F0} points\n" : "")
-                  + $"Total: +{GameManager.SessionScoreTotal + GameManager.InterludeBonus:F0} points";
-        }
+        // An Interlude's points appear only on its end screen, never trial by trial (the practice Interlude shows what it would have paid, and never which
+        // choices were right). The totals are on the experiment's completion screen, after the last of these.
+        float points = isInterlude ? (interludeManager != null ? interludeManager.Points : 0f) : _lastTotalScore;
+        _score = ScoreScreen.Show(GameManager.PartNumber, GameManager.PartCount, points, "Press [Enter] to continue", FindFirstObjectByType<CameraController>());
+        Music.PlayScore();
     }
 }

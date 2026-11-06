@@ -66,7 +66,8 @@ public static class SessionPreview
         SessionConfig session = PreviewSessionOf(Object.FindFirstObjectByType<GameManager>());
         ApplyFog(session);                                                // (cheap: follows an Inspector edit of the fog without rebuilding the bushes)
         string wanted = session != null ? session.name : "none";
-        bool present = GameObject.Find(RootName) != null;
+        GameObject existing = SceneRoot();
+        bool present = existing != null && Healthy(existing);
         if (session != null && (wanted != _attempted || (!present && _attempted == wanted && _builtOnce)))
         {
             Build(false);
@@ -74,6 +75,33 @@ public static class SessionPreview
     }
 
     private static bool _builtOnce;
+
+    // The preview's root in the open scene (GameObject.Find could return a scene-less leftover).
+    private static GameObject SceneRoot()
+    {
+        foreach (GameObject root in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            if (root.name == RootName)
+            {
+                return root;
+            }
+        }
+
+        return null;
+    }
+
+    // False when the first bush has lost its materials (see Build): the preview is rebuilt.
+    private static bool Healthy(GameObject root)
+    {
+        Transform bushes = root.transform.Find("Bushes");
+        if (bushes == null || bushes.childCount == 0)
+        {
+            return false;
+        }
+
+        Renderer renderer = bushes.GetChild(0).GetComponentInChildren<Renderer>(true);
+        return renderer != null && renderer.sharedMaterial != null;
+    }
 
     // The session's fog on the scene's render settings, as GameManager sets it when the session starts, so the preview looks like the session.
     private static void ApplyFog(SessionConfig session)
@@ -124,22 +152,14 @@ public static class SessionPreview
     [MenuItem("Foraging/Clear session preview")]
     public static void Clear()
     {
-        // FindObjectsByType skips objects that are not saved, so the roots are taken from the scenes (an earlier version used it and never removed anything,
-        // which left a copy of the world behind at every rebuild).
-        for (int i = 0; i < UnityEngine.SceneManagement.SceneManager.sceneCount; i++)
+        // FindObjectsByType skips objects that are not saved, so the roots are found among every object in memory. That includes the ones that belong to no
+        // scene any more: an object marked not-saved survives a scene reload as a scene-less copy that still renders, with its runtime materials unloaded
+        // (magenta bushes) or its bushes drawn over the real ones; earlier versions left one behind at every Play.
+        foreach (GameObject candidate in Resources.FindObjectsOfTypeAll<GameObject>())
         {
-            UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
-            if (!scene.isLoaded)
+            if (candidate != null && candidate.name == RootName && candidate.transform.parent == null && !EditorUtility.IsPersistent(candidate))
             {
-                continue;
-            }
-
-            foreach (GameObject root in scene.GetRootGameObjects())
-            {
-                if (root.name == RootName)
-                {
-                    Object.DestroyImmediate(root);
-                }
+                Object.DestroyImmediate(candidate);
             }
         }
     }
@@ -179,6 +199,27 @@ public static class SessionPreview
         foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
         {
             t.gameObject.hideFlags = NotSaved;
+        }
+
+        // The materials and meshes the game's code made at runtime (the bushes, the ground) are not assets and nothing saved refers to them, so Unity unloads
+        // them as "unused" at the next Play, save or refresh and the bushes turn magenta. DontSave keeps them.
+        foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+        {
+            foreach (Material material in renderer.sharedMaterials)
+            {
+                if (material != null && string.IsNullOrEmpty(AssetDatabase.GetAssetPath(material)))
+                {
+                    material.hideFlags |= HideFlags.DontSave;
+                }
+            }
+        }
+
+        foreach (MeshFilter filter in root.GetComponentsInChildren<MeshFilter>(true))
+        {
+            if (filter.sharedMesh != null && string.IsNullOrEmpty(AssetDatabase.GetAssetPath(filter.sharedMesh)))
+            {
+                filter.sharedMesh.hideFlags |= HideFlags.DontSave;
+            }
         }
 
         if (frame && SceneView.lastActiveSceneView != null)

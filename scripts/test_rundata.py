@@ -136,3 +136,11 @@ def test_archive_worlds_takes_the_files_from_git_at_the_build_commit(tmp_path, c
     assert (out / "_worlds" / f"{sha[:8]}_{name}").read_bytes() == blob
     assert [p.name for p in (out / "_worlds").iterdir()] == [f"{sha[:8]}_{name}"]          # the file with a wrong sha is not written
     assert "not in git" in capsys.readouterr().err
+    old = repo / "Assets" / "StreamingAssets" / "Worlds"                     # a build from before experiments kept its worlds in one folder
+    old.mkdir(parents=True)
+    (old / "S1_seed1.world").write_bytes(b"old world")
+    git("add", ".")
+    git("commit", "-q", "-m", "old layout")
+    old_sha = hashlib.sha256(b"old world").hexdigest()
+    server_admin.archive_worlds("HEAD", [{"world_file": "S1_seed1.world", "world_sha256": old_sha}], out, repo=repo)
+    assert (out / "_worlds" / f"{old_sha[:8]}_S1_seed1.world").read_bytes() == b"old world"

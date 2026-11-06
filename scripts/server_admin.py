@@ -71,7 +71,12 @@ def archive_worlds(commit, sessions, out_root, repo=PROJECT_ROOT):
             target = archive / f"{sha[:8]}_{name}" if name else None
             if target is None or target.exists():
                 continue
-            blob = subprocess.run(["git", "show", f"{commit}:Assets/StreamingAssets/Experiments/{name.split('_')[0]}/{name}"], cwd=repo, capture_output=True).stdout
+            # an experiment's folder, or (a build from before experiments) the flat Worlds folder
+            blob = b""
+            for place in (f"Experiments/{name.split('_')[0]}", "Worlds"):
+                blob = subprocess.run(["git", "show", f"{commit}:Assets/StreamingAssets/{place}/{name}"], cwd=repo, capture_output=True).stdout
+                if blob:
+                    break
             if hashlib.sha256(blob).hexdigest() != sha:
                 print(f"warning: {name} (sha256 {sha[:12]}) is not in git at {commit}; replay needs that file from elsewhere", file=sys.stderr)
                 continue

@@ -1,5 +1,4 @@
 using System.Collections;
-using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
@@ -16,7 +15,7 @@ public class Bootstrap : MonoBehaviour
 {
     [SerializeField] private string gameScene = "SampleScene";
 
-    private TextMeshProUGUI _text;
+    private StatusScreen _status;
     private OnlineSettings _settings;
     private ExperimentCatalog _catalog;
     private bool _failed;
@@ -28,17 +27,17 @@ public class Bootstrap : MonoBehaviour
 
     private IEnumerator Run()
     {
-        _text = UiStyle.MessageScreen("BootCanvas", null, 0, false);
+        _status = StatusScreen.Show();
         if (StreamingData.NeedsPreload)
         {
             if (!StreamingData.Loaded)
             {
                 string failure = null;
-                _text.text = "Loading...";
-                yield return StreamingData.Preload(p => _text.text = $"Loading... {Mathf.RoundToInt(p * 100f)}%", reason => failure = reason);
+                _status.Set("Foraging study", "Loading", "Getting the game ready.", 0f);
+                yield return StreamingData.Preload(p => _status.Set("Foraging study", "Loading", "Getting the game ready.", p), reason => failure = reason);
                 if (failure != null)
                 {
-                    _text.text = failure + "\n\nPlease reload the page. If this continues, contact the researcher.";
+                    Fail(failure);
                     yield break;
                 }
             }
@@ -52,6 +51,7 @@ public class Bootstrap : MonoBehaviour
             PointerLockGuard.Suspended = true;       // the menu needs the mouse
         }
 
+        Music.PlayMenu();                                                // a browser starts the sound at the first click
         _settings = OnlineSettings.Load();
         _catalog = ExperimentCatalog.Load();
         if (_catalog == null)
@@ -67,7 +67,7 @@ public class Bootstrap : MonoBehaviour
             ExperimentConfig chosen = _catalog.Find(direct);
             if (chosen == null)
             {
-                _text.text = $"There is no experiment \"{direct}\" in the catalog.";
+                _status.Set("Foraging study", "No such experiment", $"There is no experiment \"{direct}\" in the catalog.");
                 yield break;
             }
 
@@ -86,12 +86,11 @@ public class Bootstrap : MonoBehaviour
 
         while (true)
         {
-            _text.gameObject.SetActive(false);
+            _status.Hide();
             MenuScreen menu = _settings.Active
                 ? MenuScreen.Show(MenuScreen.OnlineRows(ParticipantSession.Standings, _catalog), "Signed in as " + ParticipantSession.ProlificId, "")
                 : MenuScreen.Show(MenuScreen.OfflineRows(_catalog), "No data server: the data is saved on this computer only.", "");
             yield return new WaitUntil(() => menu.Done);
-            _text.gameObject.SetActive(true);
             ExperimentConfig experiment = _catalog.Find(menu.ChosenCode);
 
             if (!_settings.Active)
@@ -100,13 +99,13 @@ public class Bootstrap : MonoBehaviour
                 yield break;
             }
 
-            _text.text = "Connecting to the server...";
+            _status.Set("Foraging study", "Connecting", "Reaching the server.");
             RunReply run = null;
             string error = null;
             yield return ParticipantSession.StartRun(_settings, menu.ChosenCode, r => run = r, e => error = e);
             if (error != null)
             {
-                _text.text = error + "\n\nPlease reload the page. If this continues, contact the researcher.";
+                Fail(error);
                 yield break;
             }
 
@@ -138,24 +137,22 @@ public class Bootstrap : MonoBehaviour
         string pid = _settings.prolificPid;
         if (StreamingData.NeedsPreload || string.IsNullOrEmpty(pid))
         {
-            _text.gameObject.SetActive(false);
+            _status.Hide();
             ConsentScreen idScreen = ConsentScreen.ShowId(pid);
             yield return new WaitUntil(() => idScreen.Done);
             pid = idScreen.ParticipantId;
         }
 
-        _text.gameObject.SetActive(true);
-        _text.text = "Connecting to the server...";
+        _status.Set("Foraging study", "Connecting", "Reaching the server.");
         LoginReply reply = null;
         string error = null;
         yield return ParticipantSession.Login(_settings, pid, version, null, r => reply = r, e => error = e);
         if (error == null && reply.needs_consent)
         {
-            _text.gameObject.SetActive(false);
+            _status.Hide();
             ConsentScreen consentScreen = ConsentScreen.ShowConsent();
             yield return new WaitUntil(() => consentScreen.Done);
-            _text.gameObject.SetActive(true);
-            _text.text = "Connecting to the server...";
+            _status.Set("Foraging study", "Connecting", "Reaching the server.");
             yield return ParticipantSession.Login(_settings, pid, version, consentScreen.Consent, r => reply = r, e => error = e);
         }
 
@@ -170,8 +167,7 @@ public class Bootstrap : MonoBehaviour
     // After an experiment, or a view of a finished one: log in again for a fresh token and the menu as it stands now.
     private IEnumerator Refresh()
     {
-        _text.gameObject.SetActive(true);
-        _text.text = "Connecting to the server...";
+        _status.Set("Foraging study", "Connecting", "Reaching the server.");
         string error = null;
         yield return ParticipantSession.Refresh(_settings, r => { }, e => error = e);
         Failed(error);
@@ -181,9 +177,14 @@ public class Bootstrap : MonoBehaviour
     {
         if (error != null)
         {
-            _text.text = error + "\n\nPlease reload the page. If this continues, contact the researcher.";
+            Fail(error);
             _failed = true;
         }
+    }
+
+    private void Fail(string reason)
+    {
+        _status.Set("Something went wrong", "We could not continue", reason + "\n\nPlease reload the page. If this continues, contact the researcher.");
     }
 
     // The completion code of a finished experiment, with the optional feedback box and the way back (to Prolific, and to the menu).
@@ -198,36 +199,45 @@ public class Bootstrap : MonoBehaviour
             }
         }
 
-        TextMeshProUGUI message = UiStyle.MessageScreen("CompletedScreen", null, 6000, true);
-        message.text = $"{title}\n\n<size=65%>You have completed this experiment.</size>\n\nYour completion code is {run.completion_code}";
+        ExperimentConfig config = _catalog.Find(code);
+        bool counts = config == null || config.CountsTowardTotal;
+        float points = 0f;
+        foreach (ExperimentStanding s in ParticipantSession.Standings)
+        {
+            if (s.code == code)
+            {
+                points = s.points;
+            }
+        }
+
         bool back = false;
-        FeedbackScreen feedback = null;
-        feedback = FeedbackScreen.Show(message.transform.parent, message, OnlineSettings.UrlParameter("PROLIFIC_PID") != null,
+        CompletionScreen screen = null;
+        screen = CompletionScreen.Show(title, counts ? points : (float?)null, run.completion_code, OnlineSettings.UrlParameter("PROLIFIC_PID") != null,
             text => StartCoroutine(ParticipantSession.SendFeedback(_settings, run.run_id, text, ok =>
-                feedback.SetStatus(ok ? "Thank you, your feedback was saved." : "Your feedback could not be sent. You can try again.", false))),
+                screen.SetStatus(ok ? "Thank you, your feedback was saved." : "Your feedback could not be sent. You can try again.", false))),
             () => DataPipeline.OpenProlificCompletion(run.completion_code), () => back = true);
         yield return new WaitUntil(() => back);
-        Destroy(message.canvas.gameObject);
+        Destroy(screen.gameObject);
     }
 
     // The game scene with the experiment's sessions. In a browser, first a click: pointer lock and audio need a user gesture, and this is the one that starts them.
     private IEnumerator Begin(ExperimentConfig experiment)
     {
         GameManager.BeginExperiment(experiment);
+        Music.Stop();
         if (StreamingData.NeedsPreload)
         {
             // The experiment's files (its worlds, Interlude files and instruction texts) are fetched now, not with the common ones at the start.
             string failure = null;
-            _text.gameObject.SetActive(true);
-            _text.text = $"Loading {experiment.Title}...";
-            yield return StreamingData.Fetch(experiment.FilesToStart(), p => _text.text = $"Loading {experiment.Title}... {Mathf.RoundToInt(p * 100f)}%", reason => failure = reason);
+            _status.Set("Getting ready", experiment.Title, "Loading the worlds for this experiment.", 0f);
+            yield return StreamingData.Fetch(experiment.FilesToStart(), p => _status.Set("Getting ready", experiment.Title, "Loading the worlds for this experiment.", p), reason => failure = reason);
             if (failure != null)
             {
-                _text.text = failure + "\n\nPlease reload the page. If this continues, contact the researcher.";
+                Fail(failure);
                 yield break;
             }
 
-            _text.text = "Click anywhere to begin.\n\n<size=65%>The mouse will be captured by the game. Press Escape to release it.</size>";
+            _status.Set("Ready", experiment.Title, "Click anywhere to begin.\n<size=75%>The mouse will be captured by the game. Press Escape to release it.</size>");
             yield return null;
             yield return new WaitUntil(() => Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame);
 

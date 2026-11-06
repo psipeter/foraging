@@ -96,20 +96,21 @@ public class ConsentScreen : MonoBehaviour
 
     private void BuildId(string presetId, string problem)
     {
-        UiStyle.Image(transform, "Background", UiStyle.Panel, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        UiStyle.Label(transform, "Title", "Welcome", UiStyle.Title, TextAlignmentOptions.Left, new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.9f));
-        UiStyle.Label(transform, "Intro", "Enter your Prolific ID to begin, or to continue where you stopped.", UiStyle.Body, TextAlignmentOptions.TopLeft,
-            new Vector2(0.1f, 0.62f), new Vector2(0.9f, 0.76f), UiStyle.Muted);
+        UiStyle.Backdrop(transform);
+        Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, 820f, 780f, UiStyle.PanelRadius).transform;
+        UiStyle.Eyebrow(panel, "Foraging study", 0f, 308f, 708f);
+        UiStyle.Text(panel, "Title", "Welcome", UiStyle.Title, TextAlignmentOptions.Left, 0f, 232f, 708f, 90f);
+        UiStyle.Text(panel, "Intro", "Enter your Prolific ID to begin, or to continue where you stopped.", UiStyle.Body, TextAlignmentOptions.TopLeft, 0f, 118f, 708f, 120f)
+            .textWrappingMode = TextWrappingModes.Normal;
 
         bool locked = !string.IsNullOrEmpty(presetId) && IdPattern.IsMatch(presetId);   // a malformed ID from the address can be corrected
-        UiStyle.Label(transform, "IdLabel", locked ? "Your Prolific ID" : "Prolific ID or participant ID", UiStyle.Small, TextAlignmentOptions.Left,
-            new Vector2(0.1f, 0.5f), new Vector2(0.6f, 0.56f), UiStyle.Muted);
-        _id = Field("IdField", presetId ?? "", new Vector2(0.1f, 0.42f), new Vector2(0.6f, 0.5f));
+        UiStyle.Text(panel, "IdLabel", locked ? "Your Prolific ID" : "Prolific ID or participant ID", UiStyle.Small, TextAlignmentOptions.Left, 0f, 30f, 708f, 36f, UiStyle.Muted);
+        _id = Field(panel, "IdField", presetId ?? "", 0f, -34f, 708f, 88f);
         _id.characterLimit = 64;
         _id.interactable = !locked;
-        _problem = UiStyle.Label(transform, "Problem", problem ?? "", UiStyle.Small, TextAlignmentOptions.Left, new Vector2(0.1f, 0.33f), new Vector2(0.9f, 0.4f),
-            new Color(0.95f, 0.55f, 0.45f));
-        _continue = ContinueButton(new Vector2(0.65f, 0.42f), new Vector2(0.9f, 0.5f), AcceptId);
+        _problem = UiStyle.Text(panel, "Problem", problem ?? "", UiStyle.Small, TextAlignmentOptions.Left, 0f, -102f, 708f, 36f, new Color(0.95f, 0.55f, 0.45f));
+        _continue = UiStyle.Pill(panel, "Continue", "Continue", 0f, -182f, 708f, AcceptId);
+        UiStyle.Text(panel, "Note", "Your ID is kept apart from your answers.", UiStyle.Small, TextAlignmentOptions.Left, 0f, -262f, 708f, 36f, UiStyle.Muted);
         _id.onValueChanged.AddListener(_ => RefreshId());
         RefreshId(problem);
         _id.ActivateInputField();
@@ -137,14 +138,16 @@ public class ConsentScreen : MonoBehaviour
     private void BuildConsent()
     {
         ParseText(out _version, out string title, out string body);
-        UiStyle.Image(transform, "Background", UiStyle.Panel, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        UiStyle.Label(transform, "Title", title, UiStyle.Title, TextAlignmentOptions.Left, new Vector2(0.1f, 0.88f), new Vector2(0.9f, 0.97f));
-        BuildScroll(body);
-        UiStyle.Label(transform, "SignatureLabel", "Type your full name to sign. This means you have read this form and agree to take part.", UiStyle.Small,
-            TextAlignmentOptions.Left, new Vector2(0.1f, 0.255f), new Vector2(0.9f, 0.295f), UiStyle.Muted);
-        _signature = Field("SignatureField", "", new Vector2(0.1f, 0.19f), new Vector2(0.62f, 0.25f));
+        UiStyle.Backdrop(transform);
+        Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, 1340f, 900f, UiStyle.PanelRadius).transform;
+        UiStyle.Eyebrow(panel, "Consent", 0f, 376f, 1228f);
+        UiStyle.Text(panel, "Title", title, 60f, TextAlignmentOptions.Left, 0f, 306f, 1228f, 80f);
+        BuildScroll(panel, body, 0f, 24f, 1228f, 410f);
+        UiStyle.Text(panel, "SignatureLabel", "Type your full name to sign. This means you have read this form and agree to take part.", UiStyle.Small, TextAlignmentOptions.Left,
+            0f, -218f, 1228f, 36f, UiStyle.Muted);
+        _signature = Field(panel, "SignatureField", "", -174f, -286f, 880f, 88f);
         _signature.characterLimit = 120;
-        _continue = ContinueButton(new Vector2(0.7f, 0.19f), new Vector2(0.9f, 0.25f), AcceptConsent);
+        _continue = UiStyle.Pill(panel, "Continue", "Continue", 464f, -286f, 300f, AcceptConsent);
         _signature.onValueChanged.AddListener(_ => _continue.interactable = _signature.text.Trim().Length >= 2);
         _continue.interactable = false;
         _signature.ActivateInputField();
@@ -157,9 +160,9 @@ public class ConsentScreen : MonoBehaviour
         Destroy(gameObject);
     }
 
-    private void BuildScroll(string body)
+    private void BuildScroll(Transform parent, string body, float x, float y, float w, float h)
     {
-        GameObject view = UiStyle.Image(transform, "ConsentText", UiStyle.Field, new Vector2(0.1f, 0.32f), new Vector2(0.9f, 0.86f), Vector2.zero, Vector2.zero).gameObject;
+        GameObject view = UiStyle.Rounded(parent, "ConsentText", UiStyle.FieldGlass, x, y, w, h, 16f).gameObject;
         view.AddComponent<RectMask2D>();
         var scroll = view.AddComponent<ScrollRect>();
         scroll.horizontal = false;
@@ -172,28 +175,29 @@ public class ConsentScreen : MonoBehaviour
         rect.anchorMin = new Vector2(0f, 1f);
         rect.anchorMax = new Vector2(1f, 1f);
         rect.pivot = new Vector2(0.5f, 1f);
-        rect.offsetMin = new Vector2(24f, 0f);
-        rect.offsetMax = new Vector2(-24f, 0f);
+        rect.offsetMin = new Vector2(32f, 0f);
+        rect.offsetMax = new Vector2(-32f, 0f);
         content.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
         var text = content.AddComponent<TextMeshProUGUI>();
-        UiStyle.Apply(text, UiStyle.Body * 0.85f);
+        UiStyle.Apply(text, 32f);
         text.color = UiStyle.Ink;
+        text.lineSpacing = 12f;
         text.text = body;
-        text.margin = new Vector4(0f, 16f, 0f, 16f);
+        text.margin = new Vector4(0f, 22f, 0f, 22f);
         scroll.content = rect;
         scroll.viewport = view.GetComponent<RectTransform>();
     }
 
-    private TMP_InputField Field(string name, string text, Vector2 min, Vector2 max)
+    private TMP_InputField Field(Transform parent, string name, string text, float x, float y, float w, float h)
     {
-        Image background = UiStyle.Image(transform, name, UiStyle.Field, min, max, Vector2.zero, Vector2.zero);
+        Image background = UiStyle.Rounded(parent, name, UiStyle.FieldGlass, x, y, w, h, 16f);
         var area = new GameObject("Text Area", typeof(RectTransform), typeof(RectMask2D));
         area.transform.SetParent(background.transform, false);
         var areaRect = area.GetComponent<RectTransform>();
         areaRect.anchorMin = Vector2.zero;
         areaRect.anchorMax = Vector2.one;
-        areaRect.offsetMin = new Vector2(16f, 4f);
-        areaRect.offsetMax = new Vector2(-16f, -4f);
+        areaRect.offsetMin = new Vector2(28f, 6f);
+        areaRect.offsetMax = new Vector2(-28f, -6f);
         TextMeshProUGUI shown = UiStyle.Label(area.transform, "Text", "", UiStyle.Body, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.one);
         var input = background.gameObject.AddComponent<TMP_InputField>();
         input.textViewport = areaRect;
@@ -203,18 +207,5 @@ public class ConsentScreen : MonoBehaviour
         UiStyle.StyleInput(input, background);
         input.text = text;
         return input;
-    }
-
-    private Button ContinueButton(Vector2 min, Vector2 max, UnityEngine.Events.UnityAction onClick)
-    {
-        Image background = UiStyle.Image(transform, "Continue", UiStyle.Accent, min, max, Vector2.zero, Vector2.zero);
-        UiStyle.Label(background.transform, "Text", "Continue", UiStyle.Body, TextAlignmentOptions.Center, Vector2.zero, Vector2.one, UiStyle.Panel);
-        var button = background.gameObject.AddComponent<Button>();
-        button.targetGraphic = background;
-        ColorBlock colors = button.colors;
-        colors.disabledColor = new Color(0.35f, 0.4f, 0.48f, 0.6f);
-        button.colors = colors;
-        button.onClick.AddListener(onClick);
-        return button;
     }
 }
