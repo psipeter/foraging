@@ -35,6 +35,7 @@ from server_client import Client, ServerError, event_rows
 ROOT = Path(__file__).resolve().parent.parent
 APIKEY = "test-key"
 COMMIT = "abc1234"
+MENU_COMMIT = "menu123"
 BUILD = {"commit": COMMIT, "dirty": False, "platform": "TestPlatform", "unity_version": "6000.test"}
 WORLD = "a" * 64
 INTERLUDE = "b" * 64
@@ -68,7 +69,11 @@ def env(tmp_path_factory):
         proc.kill()
         raise RuntimeError("deno server did not start")
     admin = psycopg.connect(url, autocommit=True, row_factory=psycopg.rows.dict_row)
-    server_admin.register_release(admin, COMMIT, 2)
+    server_admin.register_experiment(admin, "TEST", "Test experiment")
+    server_admin.register_experiment(admin, "ONE", "First", sort_order=1, completion_code="CODE-ONE")
+    server_admin.register_experiment(admin, "TWO", "Second", requires=["ONE"], sort_order=2, completion_code="CODE-TWO")
+    server_admin.register_release(admin, COMMIT, {"TEST": 2})
+    server_admin.register_release(admin, MENU_COMMIT, {"ONE": 1, "TWO": 1})
     admin.execute("insert into public.worlds (sha256, name) values (%s, 'S1_seed1.world'), (%s, 'S1_Interlude_seed1.interlude.json')", (WORLD, INTERLUDE))
     yield {"url": f"http://127.0.0.1:{port}", "db": admin, "dburl": url, "log": log}
     proc.terminate()
@@ -131,7 +136,7 @@ def test_requests_without_the_api_key_or_with_a_bad_token_or_body_are_refused(en
     with raises(400, "invalid"):
         c._post("append", {"run_id": c.run_id, "token": good, "session_index": "zero"})
     with raises(400, "invalid"):
-        c._post("run-start", {"build": {"commit": COMMIT}, "prolific_pid": "has space"})
+        c._post("participant-start", {"build": {"commit": COMMIT}, "prolific_pid": "has space"})
 
 
 def test_append_stores_rows_and_a_repeat_changes_nothing(env):
@@ -223,7 +228,7 @@ def test_resume_state_describes_where_the_session_stopped(env):
 
 
 def test_a_resume_on_a_newer_build_is_recorded(env):
-    server_admin.register_release(env["db"], "newer99", 2)
+    server_admin.register_release(env["db"], "newer99", {"TEST": 2})
     c = client(env)
     c.start(prolific_pid="PID_build")
     newer = client(env, commit="newer99")
@@ -369,7 +374,9 @@ def test_the_public_roles_can_read_nothing_and_call_nothing(env, role):
     with psycopg.connect(env["dburl"], autocommit=True) as conn:
         conn.execute(f"set role {role}")
         for statement in ("select * from public.runs", "select * from public.events", "select * from public.consents", "insert into public.releases (build_commit) values ('x')",
-                          "select server.stream_state('00000000-0000-0000-0000-000000000000', 0)"):
+                          "select * from public.participants", "select * from public.experiments", "select * from public.release_experiments",
+                          "select server.stream_state('00000000-0000-0000-0000-000000000000', 0)",
+                          "select server.menu('00000000-0000-0000-0000-000000000000', 'x')"):
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
                 conn.execute(statement)
 
@@ -407,21 +414,147 @@ def test_a_completed_latest_session_is_reported_as_completed(env):
     assert state["completed"] is True and state["final_score"] == 7.0 and [p["index"] for p in state["previous"]] == [0]
 
 
-def test_consent_is_recorded_each_visit_and_validated(env):
+def test_consent_is_asked_once_per_participant_and_version(env):
     consent = {"version": "v1", "signature": "Ada Lovelace", "at": "2026-10-31T12:00:00Z"}
-    first = client(env).start(prolific_pid="PID_consent", consent=consent)
-    client(env).start(prolific_pid="PID_consent", consent=dict(consent, at="2026-10-31T13:00:00Z"))      # the same person signs again
-    rows = env["db"].execute("select version, signature from public.consents where run_id = %s order by consent_id", (first["run_id"],)).fetchall()
-    assert [(r["version"], r["signature"]) for r in rows] == [("v1", "Ada Lovelace")] * 2
+    c = client(env)
+    assert c.login("PID_consent", consent_version="v1") == {"needs_consent": True} and c.participant_token is None      # nothing is issued or created
+    assert env["db"].execute("select count(*) as n from public.pid_registry where prolific_pid = 'PID_consent'").fetchone()["n"] == 0
+    first = c.login("PID_consent", consent=consent)
+    again = client(env).login("PID_consent", consent_version="v1")                                  # a returning participant: no signature
+    assert first["participant_id"] == again["participant_id"] and again["token"] != first["token"]
+    assert client(env).login("PID_consent", consent=dict(consent, at="2026-10-31T13:00:00Z"))["participant_id"] == first["participant_id"]
+    rows = env["db"].execute("select version, signature from public.consents where participant_id = %s", (first["participant_id"],)).fetchall()
+    assert [(r["version"], r["signature"]) for r in rows] == [("v1", "Ada Lovelace")]              # one row per version, not per visit
+    assert client(env).login("PID_consent", consent_version="v2") == {"needs_consent": True}      # a new text asks again
+    assert "token" in client(env).login("PID_nothing_asked")                                       # no version: a development build asks nothing
     with pytest.raises(ServerError):
-        client(env)._post("run-start", {"build": BUILD, "prolific_pid": "PID_bad", "consent": {"version": "v1"}})
+        client(env)._post("participant-start", {"build": BUILD, "prolific_pid": "PID_bad", "consent": {"version": "v1"}})
+
+
+def test_an_old_participant_token_stops_working_at_the_next_login(env):
+    c = client(env)
+    c.login("PID_tokens")
+    old = c.participant_token
+    c.login("PID_tokens")
+    stale = client(env)
+    stale.participant_id, stale.participant_token = c.participant_id, old
+    with raises(401, "unauthorized"):
+        stale.start(login=False)
+    with raises(401, "unauthorized"):
+        client(env)._post("run-start", {"build": BUILD, "participant_id": c.participant_id, "participant_token": "nope", "experiment": "TEST"})
+
+
+def finished_session():
+    return session_row(0, completed=True, ended_at="2026-11-06T12:00:00Z", final_score=4.0)
+
+
+def play_one_session(c):
+    c.append(0, session=finished_session(), events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end", running_total=4.0)]), frames=frames(20))
+    return c.finish()
+
+
+def test_the_menu_lists_the_experiments_with_the_participants_standing_and_locks_the_ones_with_unmet_prerequisites(env):
+    c = client(env, commit=MENU_COMMIT)
+    menu = {m["code"]: m for m in c.login("PID_menu")["experiments"]}
+    assert list(menu) == ["ONE", "TWO"]                                                    # in sort order; TEST is not offered by this build
+    assert (menu["ONE"]["title"], menu["ONE"]["n_sessions"], menu["ONE"]["status"], menu["ONE"]["unlocked"]) == ("First", 1, "none", True)
+    assert menu["TWO"]["unlocked"] is False and menu["TWO"]["status"] == "none"
+    with raises(403, "prerequisite_unmet"):
+        c.start("TWO", login=False)
+    with raises(403, "unknown_experiment"):
+        c.start("TEST", login=False)                                                       # registered, but not offered by this build
+    started = c.start("ONE", login=False)
+    assert started["status"] == "in_progress" and started["experiment"] == "ONE" and started["resume"] is None
+    assert {m["code"]: m["status"] for m in c.login("PID_menu")["experiments"]} == {"ONE": "in_progress", "TWO": "none"}
+    assert play_one_session(c)["completion_code"] == "CODE-ONE"
+    after = {m["code"]: m for m in c.login("PID_menu")["experiments"]}
+    assert after["ONE"]["status"] == "finished" and after["ONE"]["sessions_done"] == 1 and after["TWO"]["unlocked"] is True
+    two = c.start("TWO", login=False)
+    assert two["status"] == "in_progress" and two["run_id"] != started["run_id"]
+    assert env["db"].execute("select experiment, build_commit from public.runs where run_id = %s", (two["run_id"],)).fetchone() == {"experiment": "TWO", "build_commit": MENU_COMMIT}
+
+
+def test_a_finished_experiment_is_not_rerun_but_shows_its_completion_code_and_takes_feedback(env):
+    c = client(env, commit=MENU_COMMIT)
+    c.login("PID_done")
+    c.start("ONE", login=False)
+    play_one_session(c)
+    run = c.run_id
+    again = client(env, commit=MENU_COMMIT)
+    again.login("PID_done")
+    back = again.start("ONE", login=False)
+    assert back["status"] == "finished" and back["run_id"] == run and back["completion_code"] == "CODE-ONE" and "token" not in back
+    assert count(env, "sessions", run) == 1 and env["db"].execute("select count(*) as n from public.runs where participant_id = %s", (again.participant_id,)).fetchone()["n"] == 1
+    again.run_id, again.token = run, again.participant_token                               # the menu has no run token: the participant's does
+    assert again.feedback("seen again from the menu") == {"ok": True}
+    assert env["db"].execute("select text from public.feedback where run_id = %s", (run,)).fetchone()["text"] == "seen again from the menu"
+    other = client(env, commit=MENU_COMMIT)
+    other.login("PID_done_other")
+    other.run_id, other.token = run, other.participant_token
+    with raises(401, "unauthorized"):
+        other.feedback("someone else's participant token")
+
+
+def test_one_participant_has_a_separate_run_per_experiment_and_resumes_each_where_it_stopped(env):
+    c = client(env, commit=MENU_COMMIT)
+    c.login("PID_two_runs")
+    one = c.start("ONE", login=False)
+    play_one_session(c)
+    two = c.start("TWO", login=False)
+    c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start"), ev(1.0, "harvest_press", tree_id=2)]), frames=frames(30))
+    back = client(env, commit=MENU_COMMIT)
+    back.login("PID_two_runs")
+    resumed = back.start("TWO", login=False)
+    assert resumed["run_id"] == two["run_id"] != one["run_id"] and resumed["has_resume"] is True and resumed["resume"]["open_bout_tree"] == 2
+    assert back.start("ONE", login=False)["status"] == "finished"
+
+
+def test_the_completion_code_is_the_experiments_own_and_a_dummy_until_one_is_set(env):
+    assert client(env).start()["experiment"] == "TEST"
+    c = client(env)
+    c.start(prolific_pid="PID_dummy")
+    assert play_two_sessions(c)["completion_code"] == "DUMMY-COMPLETION-CODE"
+
+
+def play_two_sessions(c):
+    c.append(0, session=finished_session(), events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end", running_total=4.0)]), frames=frames(20))
+    c.append(1, session=session_row(1, completed=True, ended_at="2026-11-06T12:05:00Z", final_score=1.0),
+             events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end")]), frames=frames(20))
+    return c.finish()
+
+
+def test_the_migration_turns_existing_runs_into_participants_of_a_legacy_experiment(tmp_path):
+    pg = pgserver.get_server(tmp_path / "pg", cleanup_mode="delete")
+    try:
+        with psycopg.connect(pg.get_uri(), autocommit=True, row_factory=psycopg.rows.dict_row) as c:
+            for role in ("anon", "authenticated"):
+                c.execute(f"create role {role} nologin")
+            files = sorted(glob.glob(str(ROOT / "supabase" / "migrations" / "*.sql")))
+            before = [f for f in files if "experiments" not in f]
+            for f in before:
+                c.execute(Path(f).read_text())
+            c.execute("insert into public.releases (build_commit, n_sessions) values ('old', 3)")
+            run_a = c.execute("insert into public.runs (token_hash, build_commit, status) values ('h', 'old', 'finished') returning run_id").fetchone()["run_id"]
+            run_b = c.execute("insert into public.runs (token_hash, build_commit) values ('h', 'old') returning run_id").fetchone()["run_id"]
+            c.execute("insert into public.pid_registry (prolific_pid, run_id) values ('OLD_PID', %s)", (run_a,))
+            c.execute("insert into public.consents (run_id, version, signature) values (%s, 'v0', 'Old Name')", (run_a,))
+            c.execute(Path([f for f in files if "experiments" in f][0]).read_text())
+            runs = c.execute("select run_id, participant_id, experiment, status from public.runs order by started_at, run_id").fetchall()
+            assert {r["experiment"] for r in runs} == {"legacy"} and len({r["participant_id"] for r in runs}) == 2
+            pid = c.execute("select participant_id from public.pid_registry where prolific_pid = 'OLD_PID'").fetchone()["participant_id"]
+            assert c.execute("select participant_id from public.runs where run_id = %s", (run_a,)).fetchone()["participant_id"] == pid
+            assert c.execute("select participant_id, version from public.consents").fetchall() == [{"participant_id": pid, "version": "v0"}]
+            assert c.execute("select n_sessions from public.release_experiments where build_commit = 'old' and experiment = 'legacy'").fetchone()["n_sessions"] == 3
+            assert [m["code"] for m in c.execute("select jsonb_array_elements(server.menu(%s, 'old')) as m", (pid,)).fetchall() for m in [m["m"]]] == ["legacy"]
+    finally:
+        pg.cleanup()
 
 
 def test_the_load_test_script_runs_clean_against_the_local_server(env):
     import hashlib
-    world = ROOT / "Assets" / "StreamingAssets" / "Worlds" / "S1_seed1.world"
-    env["db"].execute("insert into public.worlds (sha256, name) values (%s, 'S1_seed1.world') on conflict do nothing", (hashlib.sha256(world.read_bytes()).hexdigest(),))
-    server_admin.register_release(env["db"], "load-test", 1)
+    world = ROOT / "Assets" / "StreamingAssets" / "Experiments" / "TUT" / "TUT_S1_seed200.world"
+    env["db"].execute("insert into public.worlds (sha256, name) values (%s, 'TUT_S1_seed200.world') on conflict do nothing", (hashlib.sha256(world.read_bytes()).hexdigest(),))
+    server_admin.register_release(env["db"], "load-test", {"TEST": 1})
     done = subprocess.run([sys.executable, str(ROOT / "scripts" / "load_test.py"), "--url", env["url"], "--participants", "3", "--seconds", "6",
                            "--ramp", "1"], capture_output=True, text=True, env={**os.environ, "FORAGING_API_KEY": APIKEY}, timeout=120)
     assert done.returncode == 0, done.stdout + done.stderr

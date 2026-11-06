@@ -2,7 +2,8 @@
 speak, in Python, so the server can be tested end to end and a stored session can be uploaded by hand.
 
     client = Client(url, apikey, build={"commit": "abc123", "dirty": False, "platform": "Test", "unity_version": "6000"})
-    started = client.start()                       # {"run_id", "token", "status", "resume"}
+    menu = client.login(prolific_pid="...", consent={"version": "v1", "signature": "...", "at": "..."})   # {"participant_id", "token", "experiments": [...]}
+    started = client.start("CF")                   # {"run_id", "token", "status", "experiment", "resume"}: the run of an experiment
     client.append(0, session=row, events=[...], frames=array, first_seq=0)
     client.finish()                                # {"ok", "problems", "completion_code"}
     client.feedback("text")                        # {"ok"}
@@ -21,6 +22,9 @@ import numpy as np
 import trajectory_codec as codec
 
 
+EXPERIMENT = "TEST"      # the experiment `Client.start` plays by default (the tests register it)
+
+
 class ServerError(Exception):
     def __init__(self, status, code, message=""):
         super().__init__(f"{status} {code}: {message}")
@@ -31,6 +35,7 @@ class Client:
     def __init__(self, url, apikey, build, timeout=15.0):
         self.url, self.apikey, self.build, self.timeout = url.rstrip("/"), apikey, build, timeout
         self.run_id = self.token = None
+        self.participant_id = self.participant_token = None
 
     def _post(self, name, body):
         request = urllib.request.Request(f"{self.url}/{name}", json.dumps(body).encode(),
@@ -45,19 +50,32 @@ class Client:
                 detail = {}
             raise ServerError(e.code, detail.get("error", "http"), detail.get("message", "")) from None
 
-    def _take(self, result):
-        self.run_id = result.get("run_id", self.run_id)
-        self.token = result.get("token", self.token)
-        return result
-
-    def start(self, prolific_pid=None, consent=None):
-        """A new run, or the continuation of the Prolific ID's run. `consent` is {version, signature, at}."""
+    def login(self, prolific_pid=None, consent=None, consent_version=None):
+        """Log a participant in (a returning Prolific ID gets a fresh participant token) and return the menu: {"participant_id", "token",
+        "experiments": [...]}, or {"needs_consent": True} when `consent_version` (or `consent`'s) is not on file for that ID and no `consent`
+        {version, signature, at} was given. Without a version no consent is asked. The result's `token` is kept as the participant token."""
         body = {"build": self.build}
         if prolific_pid is not None:
             body["prolific_pid"] = prolific_pid
         if consent is not None:
             body["consent"] = consent
-        return self._take(self._post("run-start", body))
+        if consent_version is not None:
+            body["consent_version"] = consent_version
+        result = self._post("participant-start", body)
+        if not result.get("needs_consent"):
+            self.participant_id, self.participant_token = result["participant_id"], result["token"]
+        return result
+
+    def start(self, experiment=EXPERIMENT, prolific_pid=None, consent=None, login=True):
+        """The run of `experiment`: a new one, or the continuation of the participant's unfinished one (a finished one answers with its
+        status and completion code). Logs in first (a new participant unless `prolific_pid` names a known one) unless `login` is False."""
+        if login:
+            self.login(prolific_pid, consent)
+        body = {"build": self.build, "participant_id": self.participant_id, "participant_token": self.participant_token, "experiment": experiment}
+        result = self._post("run-start", body)
+        self.run_id = result.get("run_id", self.run_id)
+        self.token = result.get("token", self.token)
+        return result
 
     def append(self, session_index, session=None, events=(), frames=None, first_seq=0, plan=None, trials=()):
         """One upload. `frames` is an (n, 6) array whose first frame has sequence number `first_seq`."""

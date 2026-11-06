@@ -209,10 +209,10 @@ public class SunController : MonoBehaviour
 
         LightingState light;
         light.sunColor = Color.Lerp(neutral, physical, strength);
-        light.sunIntensity = c != null ? c.SunIntensityByElevation.Evaluate(elevationDeg) : 1.2f;
+        light.sunIntensity = c != null ? c.SunIntensityByElevation.Evaluate(elevationDeg) * c.SunIntensityScale : 1.2f;
         light.ambientIntensity = c != null ? c.AmbientIntensityByElevation.Evaluate(elevationDeg) : 1f;
         light.skyExposure = c != null ? c.SkyExposureByElevation.Evaluate(elevationDeg) : 1.3f;
-        light.postExposureEv = c != null ? c.PostExposureByElevation.Evaluate(elevationDeg) : 0f;
+        light.postExposureEv = c != null ? c.PostExposureByElevation.Evaluate(elevationDeg) + c.PostExposureOffset : 0f;
         return light;
     }
 

@@ -6,7 +6,8 @@ its own colour, linestyle and marker in the figures; a group mean and interval c
     interlude_curves(humans)   {session: LearningCurves}     Interlude accuracy at the end of the session (a participant is scored once,
                                                              so each series has a single time, the session's length)
 
-`humans` is `human_data.load(...)`. Only completed sessions of finished runs are used. Each curves object carries a `footer` and a `note` that
+`humans` is `human_data.load(...)`. A session is named by its block (`human_data`'s `block`: CF_S1 for CF_S1 and its Interlude CF_I1; the names before
+experiments, S1 to S5, work for the pilot data), so sessions of different experiments are never pooled. Only completed sessions of finished runs are used. Each curves object carries a `footer` and a `note` that
 `plots.py` prints instead of the agents' tag and engine hash.
 
     agent_curves(store, tag)   (reward, interlude)           the same two kinds of curves for the agents recorded in the humans' worlds
@@ -16,7 +17,7 @@ its own colour, linestyle and marker in the figures; a group mean and interval c
 The command line draws the participants and then the agents, with `plots.figure_points`, on the same axis limits (`plots.point_limits`) so that
 the two figures can be laid side by side: `humans_points.png` and `agents_points.png`.
 
-    ./venv/bin/python scripts/human_curves.py [--sessions S1,S2,S3,S4,S5] [--agents-tag human-worlds] [--exclude STRING ...] [--mode paper|presentation] [--out DIR]
+    ./venv/bin/python scripts/human_curves.py [--sessions CF_S1,CF_S2,...] [--agents-tag human-worlds] [--exclude STRING ...] [--mode paper|presentation] [--out DIR]
 """
 
 import argparse
@@ -30,7 +31,7 @@ import human_data
 import interlude
 import plots
 
-SESSIONS = ("S1", "S2", "S3", "S4", "S5")      # the participants also played the practice block P, left out
+SESSIONS = tuple(f"CF_S{n}" for n in range(1, 8))      # Complex Features; the Tutorial's TUT_S1 is left out (the pilot data: S1 to S5 by their old names)
 
 
 def _footer(h, run_ids):
@@ -53,9 +54,9 @@ def _series(name, curve):
 
 
 def _completed(h, name, kind, names):
-    """The completed rows of a session (or its Interlude), in the order the participants started."""
+    """The completed rows of a session block (the session itself or its Interlude), in the order the participants started."""
     s = h.sessions
-    rows = s[(s["name"] == (name if kind == "session" else f"{name}_Interlude")) & (s["completed"] == 1)]
+    rows = s[(s["block"] == name) & (s["kind"] == kind) & (s["completed"] == 1)]
     return rows.assign(person=rows["run_id"].map(names)).sort_values("person", key=lambda p: p.str[1:].astype(int))
 
 

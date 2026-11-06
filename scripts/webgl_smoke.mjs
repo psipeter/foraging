@@ -1,7 +1,14 @@
-// Smoke test of a WebGL build in headless Chromium (software GL, so slow: it checks that the game loads, reaches the first
-// session and talks to the data server, not how it plays or looks at speed).
+// Smoke test of a WebGL build in headless Chromium (software GL, so slow: it checks that the game loads, logs the participant in, shows the
+// experiment menu, starts an experiment, reaches its first session and talks to the data server, not how it plays or looks at speed).
 //
-//   node scripts/webgl_smoke.mjs <build dir> [--server http://127.0.0.1:54399 --key testkey --pid WEB1 --out <dir> --seconds 60 --release --send-encoding]
+//   node scripts/webgl_smoke.mjs <build dir> [--server http://127.0.0.1:54399 --key testkey --pid WEB1 --out <dir> --seconds 90 --row 0
+//        --returning --signature "Smoke Test" --release --send-encoding]
+//
+// The flow (clicks at the screens' fixed positions, since the UI is drawn on a canvas): the ID screen (the pid from the address, locked) ->
+// Continue; the consent screen (unless --returning: the server already holds this pid's signature) -> type the name, Continue; the menu -> the
+// button of row --row (0 = the first experiment, the Tutorial) -> the experiment's files download -> "Click anywhere to begin" -> click ->
+// the instruction screen -> Enter. The server must know the build's commit and offer the experiment (server_admin register-experiment,
+// register-release --experiment CODE=N).
 //
 // --release: a non-development build ignores the URL overrides for the server (by design), so the page is opened with only ?pid=
 // and the build's own StreamingAssets/online.json decides where it uploads (patch the copy in the build directory to test).
@@ -21,7 +28,10 @@ const server = opt('server', 'http://127.0.0.1:54399');
 const key = opt('key', 'testkey');
 const pid = opt('pid', 'WEB1');
 const out = path.resolve(opt('out', '.'));
-const seconds = Number(opt('seconds', '60'));
+const seconds = Number(opt('seconds', '90'));
+const row = Number(opt('row', '0'));
+const returning = args.includes('--returning');
+const signature = opt('signature', 'Smoke Test');
 const require = createRequire((process.env.PLAYWRIGHT_DIR ?? '/home/psipeter/evidence_integration/task_backend') + '/');
 const { chromium } = require('playwright');
 
@@ -63,17 +73,30 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 console.log('opening', url);
 await page.goto(url);
 const start = Date.now();
-let clicked = false;
-for (let t = 0; t < seconds; t += 5) {
+const px = (fx, fy) => [fx * 1280, (1 - fy) * 720];        // a point of the 1920 x 1080 reference canvas, as fractions from the bottom left
+const click = async (fx, fy) => { const [x, y] = px(fx, fy); await page.mouse.click(x, y); };
+const steps = [
+  [15, 'id screen: Continue', async () => click(0.775, 0.46)],
+  ...(returning ? [] : [[8, 'consent screen: sign and Continue', async () => {
+    await click(0.36, 0.22);
+    await page.keyboard.type(signature);
+    await click(0.8, 0.22);
+  }]]),
+  [8, `menu: start experiment row ${row}`, async () => click(0.78, 0.7175 - row * 0.125)],
+  [25, 'click anywhere to begin', async () => click(0.5, 0.5)],
+  [9, 'instructions: Enter', async () => page.keyboard.press('Enter')],
+];
+let elapsed = 0;
+for (const [delay, label, act] of steps) {
+  await wait(delay * 1000);
+  elapsed += delay;
+  await shot(`t${String(elapsed).padStart(3, '0')}_before`);
+  log.push(`[smoke] ${label}`);
+  await act();
+}
+for (; elapsed < seconds; elapsed += 5) {
   await wait(5000);
-  await shot(`t${String(t + 5).padStart(3, '0')}`);
-  if (!clicked && t >= 15) {          // the boot scene shows its prompt after the files are fetched (about 10 s with software GL)
-    // the boot scene waits for a click; then the instruction screen waits for Enter
-    await page.mouse.click(640, 360);
-    clicked = true;
-    await wait(9000);
-    await page.keyboard.press('Enter');
-  }
+  await shot(`t${String(elapsed + 5).padStart(3, '0')}`);
 }
 console.log(`ran ${(Date.now() - start) / 1000} s`);
 fs.writeFileSync(path.join(out, 'console.log'), log.join('\n'));

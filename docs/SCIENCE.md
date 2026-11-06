@@ -500,6 +500,8 @@ likely to be revisited (TODO below). Design decision and alternatives: DECISIONS
 
 ### Session structure (built 2026-11-05)
 
+**Experiments (2026-11-06).** The sessions below belong to experiments, each a titled progression with its own assets and downloads: **Tutorial** (`TUT`: `TUT_S1`, the practice session with random reward, and its Interlude `TUT_I1`) and **Complex Features** (`CF`: `CF_S1` to `CF_S7` with `CF_I1` to `CF_I7`, the ladder below; this is what the tables and "S1" to "S7" in this section mean). A participant completes the Tutorial first (a prerequisite the server enforces), then Complex Features; each experiment has its own run, completion code, points and payout, and later experiments will add their own. The old names (P, S1 to S7) are used in this section and in the older notes; the mapping is in `world.LEGACY_NAMES`. See DECISIONS, "Experiments" and "Experiment assets and the naming scheme".
+
 **Hypothesis:** adding more features, feature nonlinearity and feature interaction to the reward function makes the mapping harder to learn, so learning is slower and the ceiling lower. **Why this ladder:** each
 step adds one thing, and the jump into the last sessions is smaller than the old one (a pilot found the two-bump S5 too large a step from S4: Interlude accuracy 75% and then 55%, chance 50%). Moisture is
 not a reward feature: it was the regional, position-confounded one (patches, hidden bushes, a prior of its own), and patch structure belongs to the later experiments on reward scarcity, explore/exploit,
@@ -624,7 +626,7 @@ the table above (P is 60 s); S5 is 180 s.
 
 The logs are designed so that a participant's session can be **replayed exactly** (path, camera angle, every
 harvest) in the world they played, and fed to mathematical or neural agents as trajectories. Online participants' data go to a
-Supabase (Postgres) database through four Edge Functions (run-start, append, run-finish and the optional end-screen feedback); every run also writes a local copy under
+Supabase (Postgres) database through five Edge Functions (participant-start, run-start, append, run-finish and the optional end-screen feedback; one run per participant and experiment); every run also writes a local copy under
 `ForagingData/<run id>/<session:00>/`, the same tables as files. The schema, the upload protocol and the resume rules are in
 `docs/ONLINE_DATA_PLAN.md`; the tables are:
 
@@ -634,7 +636,7 @@ Supabase (Postgres) database through four Edge Functions (run-start, append, run
 | `events` (`events.csv`) | `seq, t, real, type, tree_id, k, reward, running_total, payload` (JSON; `tree_id` is the bush's id). `real` is unscaled seconds. Types: `session_start`/`session_end`, `pause`/`resume` (payload `reason`: instructions, upload or pointer), `focus_lost`/`focus_gained`, `harvest_press`, `harvest_pause`/`harvest_resume` (target left/re-entered the range-and-cone mid-bout), `fruit` (one per fruit: bush, `k` = its index among the fruits taken from that bush, reward, running total), `harvest_release`, `teleport` (Interlude trial change), `trial_start`/`trial_end`, `trial_go`, `choice_lock`, `session_resume` (the participant came back to an interrupted session). |
 | `sessions` (`session.json`) | The full `SessionConfig`, world file and sha256 (for an Interlude also the bush-table file), build commit and a `dirty` flag, camera, display, frame statistics, `final_score`, `completed`. |
 | `interlude_plan`, `interlude_trials` (`interlude_plan.json`, `interlude_trials.csv`) | The trial order (the file's, the same for everyone), and one row per trial (columns in the "Interlude" section, plus `paused_seconds`: real seconds the game was held still while the trial was live). |
-| `runs`, `pid_registry`, `consents` | The run (platform, build commits, status), the participant's ID (kept apart from every analysis table) and the signed consent of each visit (text version, typed name, time). |
+| `runs`, `participants`, `pid_registry`, `consents`, `experiments`, `release_experiments` | The run (experiment, platform, build commits, status), the participant, the participant's ID (kept apart from every analysis table), the signed consent (once per participant and text version) and the experiments (title, prerequisites, completion code) a build offers. |
 
 Harvest bouts are derived (`scripts/replay.py`), not stored. The format from before the online system (`harvests.csv`, `manifest.json`, `interlude.csv`)
 is no longer readable; no data of it exists.
@@ -890,6 +892,12 @@ moisture as a reward feature in S3 and S4, the terraced-terrain TODO, the baseli
   hints against no hints, the counterbalancing of the colour and shape order, session durations, and the Interlude's trial count for the 2-D sessions. The
   later experiments on reward scarcity, explore/exploit, patch leaving, and priors and unlearning are not designed yet; they need the terrain and carry-over machinery
   (terraced moisture; same-features-in-successive-sessions, the opposite of the ABAB alternation), so both are kept.
+- **TODO(PI): clean up the machinery for the old pilot configurations (later; keep it until then).** The pre-ladder sessions (P, S1 to S5 as they were:
+  moisture-paying, continuous or terraced terrain, bumps) live on as `scripts/legacy_sessions.py` with `scripts/fixtures/legacy_S3-S5.asset`, the
+  `LEGACY_NAMES` aliases in `world.py`, the pilot-era analyses keyed on the old names (`idle_analysis`, `human_gap`, `prior_carryover`, `carryover_decay`,
+  `human_analysis`), the old agent battery sessions (S1 to S4), and the moisture-paying and bump code paths of the generators and `FIELD_DEFAULTS`. Most of it can
+  go once nothing needs the pilot data or those worlds. It is kept on purpose for now: small checks on the old data, and the generator tests that pin the old
+  rules. When it goes, take the tests that use `legacy()` with it and re-check `docs/DECISIONS.md` for what each piece was for.
 - **TODO(PI): rebalance so `nearest` stays clearly worse than `greedy`/`plan_beam` in every
   session.** In the baselines below the blind nearest-bush forager reaches a large share
   of the planner's score in S3 and S4 (76% / 81% at the original speed and harvest rate), so the

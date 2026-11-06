@@ -5,8 +5,8 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
-// The optional box for free-text feedback on a browser's final screen, drawn on the data gate's canvas below the completion code, with
-// a button that returns the participant to Prolific when there is somewhere to return to. It only collects the text: the caller
+// The optional box for free-text feedback on a completed experiment's screen (at the end of its last session, or from the menu), drawn below the completion code, with
+// a button that returns the participant to Prolific when there is somewhere to return to and one that goes back to the experiment menu. It only collects the text: the caller
 // (DataPipeline) sends it and reports back through SetStatus. The mouse is released for it (PointerLockGuard.Suspended).
 public class FeedbackScreen : MonoBehaviour
 {
@@ -17,7 +17,7 @@ public class FeedbackScreen : MonoBehaviour
     private TextMeshProUGUI _status;
     private Action<string> _onSend;
 
-    public static FeedbackScreen Show(Transform canvas, TextMeshProUGUI message, bool withReturn, Action<string> onSend, Action onReturn)
+    public static FeedbackScreen Show(Transform canvas, TextMeshProUGUI message, bool withReturn, Action<string> onSend, Action onReturn, Action onMenu = null)
     {
         var screen = new GameObject("Feedback", typeof(RectTransform)).AddComponent<FeedbackScreen>();
         screen.transform.SetParent(canvas, false);
@@ -34,7 +34,7 @@ public class FeedbackScreen : MonoBehaviour
         }
 
         UiStyle.SetAnchors((RectTransform)screen.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        screen.Build(message, withReturn, onSend, onReturn);
+        screen.Build(message, withReturn, onSend, onReturn, onMenu);
         return screen;
     }
 
@@ -44,7 +44,7 @@ public class FeedbackScreen : MonoBehaviour
         _send.interactable = !sending;
     }
 
-    private void Build(TextMeshProUGUI message, bool withReturn, Action<string> onSend, Action onReturn)
+    private void Build(TextMeshProUGUI message, bool withReturn, Action<string> onSend, Action onReturn, Action onMenu)
     {
         _onSend = onSend;
         UiStyle.SetAnchors(message.rectTransform, new Vector2(0.2f, 0.55f), new Vector2(0.8f, 0.92f), Vector2.zero, Vector2.zero);
@@ -70,7 +70,12 @@ public class FeedbackScreen : MonoBehaviour
             new Vector2(0.2f, 0.11f), new Vector2(0.62f, 0.18f), UiStyle.Muted);
         if (withReturn)
         {
-            Button(transform, "Return", "Return to Prolific", new Vector2(0.38f, 0.02f), new Vector2(0.62f, 0.09f), () => onReturn());
+            Button(transform, "Return", "Return to Prolific", new Vector2(0.56f, 0.02f), new Vector2(0.8f, 0.09f), () => onReturn());
+        }
+
+        if (onMenu != null)
+        {
+            Button(transform, "Menu", "Back to the menu", new Vector2(0.2f, 0.02f), new Vector2(0.44f, 0.09f), () => onMenu());
         }
 
         _input.ActivateInputField();

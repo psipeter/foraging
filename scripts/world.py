@@ -1,7 +1,7 @@
 """World generation for the foraging task, in Python.
 
 A world is fully determined by (session parameters, world seed). Parameters are read from the Unity
-SessionConfig assets (Assets/ScriptableObjects/SessionConfig/<name>.asset), so SessionConfig stays the
+SessionConfig assets (Assets/ScriptableObjects/Experiments/<code>/<name>.asset), so SessionConfig stays the
 single source of truth; any parameter can be overridden per call (e.g. tree_spacing=30).
 
 Everything random derives from the one world seed through fixed, named child streams of a numpy
@@ -25,7 +25,7 @@ resolution and exported with the bushes in the binary format Unity loads (see ex
 
 Run as a script to export worlds:
     python scripts/world.py S1 --seeds 0-99 --out worlds        # .npz for the simulator
-    python scripts/world.py S1 S2 S3 --unity                    # Unity files into Assets/StreamingAssets/Worlds
+    python scripts/world.py CF_S1 CF_S2 --unity                 # Unity files into Assets/StreamingAssets/Experiments/<code>
 """
 
 import argparse
@@ -42,7 +42,34 @@ import yaml
 import spatial
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-SESSION_DIR = PROJECT_ROOT / "Assets" / "ScriptableObjects" / "SessionConfig"
+EXPERIMENTS_DIR = PROJECT_ROOT / "Assets" / "ScriptableObjects" / "Experiments"            # <code>/<code>_S1.asset, <code>_I1.asset, <code>.asset
+STREAMING_EXPERIMENTS = PROJECT_ROOT / "Assets" / "StreamingAssets" / "Experiments"        # <code>/<name>_seed<N>.world, .interlude.json, instruction texts
+
+# The names the sessions had before they belonged to experiments (the practice session, S1 to S7 and their Interludes), still accepted
+# wherever a session name is: the tests, the agent battery and the results database call sessions by them.
+LEGACY_NAMES = {"P": "TUT_S1", "P_Interlude": "TUT_I1",
+                **{f"S{n}": f"CF_S{n}" for n in range(1, 8)}, **{f"S{n}_Interlude": f"CF_I{n}" for n in range(1, 8)}}
+
+
+def canonical(name):
+    """The session's current asset name (`S1` -> `CF_S1`); a name that is already current, or a path, is returned as it is."""
+    return LEGACY_NAMES.get(name, name)
+
+
+def experiment_of(name):
+    """The experiment code of a session name: the part before the first underscore (`CF_S1` -> `CF`), as `SessionConfig.ExperimentCode`."""
+    return canonical(name).split("_")[0]
+
+
+def interlude_name(session):
+    """The Interlude of a session: CF_S1 -> CF_I1 (the practice names too: P -> TUT_I1)."""
+    code, tail = canonical(session).split("_", 1)
+    return f"{code}_I{tail[1:]}"
+
+
+def session_asset_path(name):
+    name = canonical(name)
+    return EXPERIMENTS_DIR / experiment_of(name) / f"{name}.asset"
 
 BASIS_NAMES = ["Linear", "InvertedLinear", "GaussianPeak", "InvertedGaussian", "Constant"]
 
@@ -98,7 +125,7 @@ def load_session(name="S1", **overrides):
     (e.g. tree_spacing, world_half_extent, reward_function). Keyword overrides replace values."""
     path = Path(name)
     if not path.suffix:
-        path = SESSION_DIR / f"{name}.asset"
+        path = session_asset_path(name)
     with open(path) as f:
         doc = yaml.load(f, Loader=_UnityLoader)
     fields = doc["MonoBehaviour"]
@@ -484,7 +511,9 @@ def check_values(params):
 
 
 def unity_world_path(session, seed, out_dir=None):
-    out_dir = Path(out_dir) if out_dir else PROJECT_ROOT / "Assets" / "StreamingAssets" / "Worlds"
+    """Where the game reads the session's world (`WorldData.PathFor`): the experiment's folder under StreamingAssets/Experiments."""
+    session = canonical(session)
+    out_dir = Path(out_dir) if out_dir else STREAMING_EXPERIMENTS / experiment_of(session)
     return out_dir / f"{session}_seed{seed}.world"
 
 
@@ -638,7 +667,7 @@ def main():
     ap.add_argument("--seeds", default=None,
                     help="e.g. 0-99 or 1,2,7 (default: each session's own worldSeed)")
     ap.add_argument("--out", default=None, help="output directory (default: worlds/ for .npz, "
-                    "Assets/StreamingAssets/Worlds for --unity)")
+                    "Assets/StreamingAssets/Experiments/<code> for --unity)")
     ap.add_argument("--unity", action="store_true", help="write Unity .world files instead of .npz")
     args = ap.parse_args()
     for session in args.sessions:
@@ -652,7 +681,7 @@ def main():
             else:
                 out = Path(args.out or "worlds")
                 out = out if out.is_absolute() else PROJECT_ROOT / out
-                path = out / f"{session}_seed{seed}.npz"
+                path = out / f"{canonical(session)}_seed{seed}.npz"
                 world.save(path)
             print(f"{path.name}: {world.n} bushes")
 

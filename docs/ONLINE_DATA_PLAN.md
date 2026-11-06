@@ -10,9 +10,11 @@ Edge Functions (service role) read or write.
 
 | Table | One row per | Columns (sketch) |
 |---|---|---|
-| `runs` | participant run | `run_id`, `token_hash`, `platform`, `build_commit`, `build_dirty`, `unity_version`, `started_at`, `finished_at`, `status` |
-| `pid_registry` | participant | `prolific_pid`, `run_id` (kept apart from analysis tables) |
-| `consents` | signed consent (every visit) | `run_id`, `version` (consent text), `signature` (typed name), `client_time`, `recorded_at` (kept apart from analysis tables) |
+| `runs` | participant run: one per (participant, experiment) | `run_id`, `participant_id`, `experiment`, `token_hash`, `platform`, `build_commit`, `build_dirty`, `unity_version`, `started_at`, `finished_at`, `status` |
+| `participants` | person | `participant_id`, `token_hash` (the participant's bearer secret), `created_at` |
+| `pid_registry` | participant | `prolific_pid`, `participant_id` (kept apart from analysis tables) |
+| `experiments`, `release_experiments` | experiment / experiment offered by a build | `code`, `title`, `requires`, `sort_order`, `completion_code`, `payout`; `build_commit`, `experiment`, `n_sessions` |
+| `consents` | signed consent (once per participant and consent version, at login) | `participant_id`, `version` (consent text), `signature` (typed name), `client_time`, `recorded_at` (kept apart from analysis tables) |
 | `sessions` | session in a run | `run_id`, `session_index`, `name`, `world_sha256`, `interlude_sha256`, `config` jsonb (the full `SessionConfig`), `display` jsonb, `frame_stats`, `started_at`, `ended_at`, `completed`, `final_score` |
 | `events` | event | `run_id`, `session_index`, `seq`, `t`, `real`, `type`, `tree_id`, `k`, `reward`, `running_total`, `payload` jsonb |
 | `trajectory` | chunk | `run_id`, `session_index`, `first_seq`, `n_frames`, `t_start`, `t_end`, `data` bytea |
@@ -53,11 +55,17 @@ Four Edge Functions (`supabase/functions/`; `feedback` was added 2026-11-02, see
 all POST with a JSON body, each a thin wrapper (`_shared/handlers.ts`: validation, chunk decoding) over a function of the
 unexposed `server` schema (`migrations/20261029000100_online_functions.sql`: authentication, idempotent inserts, gap checks, resume
 state), reached over a direct database connection (`SUPABASE_DB_URL`). Errors: 400 `invalid` / `invalid_chunk`, 401 `unauthorized`,
-403 `unknown_build` / `unknown_world`, 409 `no_session` / `session_gap` / `gap_events` / `gap_trajectory` / `overlap_trajectory` /
+403 `unknown_build` / `unknown_world` / `unknown_experiment` / `prerequisite_unmet`, 409 `no_session` / `session_gap` / `gap_events` / `gap_trajectory` / `overlap_trajectory` /
 `gap_trials` (the client's sequence numbers disagree with the server: re-sync through `run-start`), 413, 500 `internal`.
-- **`run-start`** `{build: {commit, dirty, platform, unity_version}, prolific_pid?}` starts a run, or continues the Prolific ID's run
-  with a fresh token (the old one stops working); `{build, run_id, token}` continues an anonymous run the same way. Returns
-  `{run_id, token, status, resume}`; a finished run returns its status and the completion code, no token. A build commit not in `releases` is refused;
+- **`participant-start`** `{build, prolific_pid?, consent_version?, consent?: {version, signature, at}}` logs a participant in (a returning Prolific ID gets a
+  fresh participant token, the old one stops working) and returns `{participant_id, token, experiments: [{code, title, n_sessions, status (none, in_progress,
+  finished, terminated), sessions_done, unlocked}]}`: the menu, for the experiments the build offers (`release_experiments`). With a consent version and no
+  consent of that version on file the answer is `{needs_consent: true}` and nothing is created; send the `consent` to log in. Consent is stored once per
+  participant and version. Without a version no consent is asked (a development build).
+- **`run-start`** `{build, participant_id, participant_token, experiment}` starts the participant's run of an experiment, or continues its unfinished run
+  with a fresh run token (the old one stops working). A new run needs the experiment's prerequisites (`requires`) finished (403 `prerequisite_unmet`);
+  an experiment the build does not offer is 403 `unknown_experiment`. Returns
+  `{run_id, token, status, experiment, resume}`; a finished run is not rerun: it returns its status and the experiment's completion code (the menu's "Completed" screen), no token. A build commit not in `releases` is refused;
   every commit that touches a run is kept in `runs.build_commits`; a dirty build is accepted and flagged.
 - **`append`** `{run_id, token, session_index, session?, events?, trajectory?: [base64 chunk], plan?, trials?}` returns
   `{ok, events_next, trajectory_next, trials_next}`. **A 200 means every row of the request is stored** (all or nothing). Repeats of
@@ -66,8 +74,9 @@ state), reached over a direct database connection (`SUPABASE_DB_URL`). Errors: 4
   the client. A session's first append carries its row (a world or Interlude hash not in `worlds` is a 403); later appends may
   update `ended_at`, `completed`, `final_score`, `frame_stats`, `display` and nothing else. Requests for one run are serialized
   (advisory lock).
-- **`run-finish`** `{run_id, token}` returns `{ok, problems}`; with no problems the run is marked finished and accepts nothing more
-  (the Prolific code comes with the Prolific step). It checks the session count against `releases.n_sessions`, that each session is
+- **`run-finish`** `{run_id, token}` returns `{ok, problems, completion_code}` (the experiment's code from `experiments.completion_code`, a dummy until one is set,
+  returned even when `ok` is false); with no problems the run is marked finished and accepts nothing more. It checks the session count against the build's
+  `release_experiments.n_sessions` for the run's experiment, that each session is
   complete and has a `session_end` event and a trajectory, and that the indices are contiguous.
 - **Resume state** (`run-start`'s `resume`, from the rows): `session_index`, `name`, `completed`, `final_score`, `pose` (the last
   frame), `last_event_t`, `running_total`, `fruits_taken` (bush -> count), `open_bout_tree`, `interlude_plan`,
@@ -84,21 +93,27 @@ everything on session end and on page unload), and the unload flush for WebGL.
 The CLI is the one in `evidence_integration/task_backend/node_modules/.bin/supabase`; `supabase/config.toml` (from `supabase init`) has
 `verify_jwt = false` for the functions. Facts learned doing it: **no Docker and no database password are needed**: after
 `supabase link --project-ref emdgczidpqdhftzujyte` (the CLI is logged in), `db push`, `db query --linked "<sql>"` / `-f file.sql` and
-`migration list` reach the database through a temporary login role, and `functions deploy run-start append run-finish --no-verify-jwt
+`migration list` reach the database through a temporary login role, and `functions deploy participant-start run-start append run-finish feedback --no-verify-jwt
 --use-api` bundles on Supabase's side (the `npm:postgres` import and the relative `_shared/` imports both worked). `db push` prints a
 harmless "failed to cache migrations catalog ... Docker" warning. Edge Functions get `SUPABASE_DB_URL` and the publishable key from the
 platform (the direct connection and the `apikey` check both worked). `ALLOWED_ORIGIN` (optional secret) restricts CORS to the game's
-web origin. Worlds are registered by SQL (`db query --linked -f`, the hashes of `Assets/StreamingAssets/Worlds/*`) or with
-`server_admin.py register-worlds` (needs `FORAGING_DB_URL`); a release with `register-release --commit <hash> --sessions <n>`
-(n = 10: P and S1 to S4, each with its Interlude). **Re-register worlds after regenerating them.** The publishable key is in the
+web origin. Worlds are registered by SQL (`db query --linked -f`, the hashes of `Assets/StreamingAssets/Experiments/*/*`) or with
+`server_admin.py register-worlds` (needs `FORAGING_DB_URL`); experiments with `register-experiment --code CF --title "Complex Features" --requires TUT [--completion-code ...]`;
+a release with `register-release --commit <hash> --experiment TUT=2 --experiment CF=14` (the sessions of each, Interludes included). **Re-register worlds after regenerating them.** The publishable key is in the
 dashboard (API Keys) or `supabase projects api-keys`: that listing also prints the secret keys, so do not paste its output anywhere.
 
 `scripts/server_smoke.py` runs one throwaway run through every endpoint and prints the latency of each call; it needs a release
-`smoke-test` with `n_sessions` 1 (register it, run, then `delete from public.runs where build_commit = 'smoke-test'` and delete the
+`smoke-test` offering an experiment with 1 session (register it, run, then `delete from public.runs where build_commit = 'smoke-test'` and delete the
 release). First results: all 12 checks pass; the public roles can select, insert or execute nothing and all 9 tables have RLS;
 calls took 0.3 to 1.1 s, the slower ones probably cold starts, which the grace window before a pause must tolerate (several seconds).
 Supabase's GitHub integration is connected to the repo; whether it deploys on push, and what it would redeploy, has not been
 checked (the remote migration history already lists both migrations, so a push should find nothing new).
+
+**Experiments (2026-11-06), what to run before a release works:** apply the migration `20261106000000_experiments.sql` (`supabase db push`), deploy the new
+function (`functions deploy participant-start --no-verify-jwt`, and the others, whose code changed), register the experiments
+(`server_admin.py register-experiment --code TUT --title Tutorial --order 1 --completion-code <code>`, then `--code CF --title "Complex Features" --requires TUT --order 2 --completion-code <code>`),
+register the worlds (`register-worlds`: the files are now in `Assets/StreamingAssets/Experiments/<code>/`) and the build
+(`register-release --commit <hash> --experiment TUT=2 --experiment CF=14`). The deployed old client stops working at the migration.
 
 ### Deploying the game (GitHub Pages)
 
@@ -108,7 +123,7 @@ history would grow by that much per deploy).
 1. In `Assets/StreamingAssets/online.json` set `"enabled": true` (the URL and the publishable key are already there; the build refuses
    to run in a browser without it). Registered worlds must match the ones in the build (`server_admin.py register-worlds` again if
    they were regenerated).
-2. Commit the code, then register that commit: `server_admin.py register-release --commit <hash> --sessions 12` (or the SQL in the
+2. Commit the code, then register that commit: `server_admin.py register-release --commit <hash> --experiment <code>=<n> ...` (or the SQL in the
    walkthrough). A build from a dirty tree is accepted but flagged.
 3. Unity: File > Build Profiles (or Build Settings) > WebGL, **not** a development build, scenes `Boot` then `SampleScene` (already the
    list), Player Settings > Publishing > Decompression Fallback **on** (already set in this project), output to e.g. `Builds/web`.
@@ -207,7 +222,7 @@ count of `session_resume` events are what to apply them to.
    last real end screen (`TryFinish`; only its `run-finish` call was exercised, through the all-complete path), a resume on another computer,
    a resume with Space held, WebGL.
 5. **WebGL port. Built (2026-10-30); needs your real-browser check.** A new first scene, `Boot` (`Bootstrap`), fetches every file in
-   StreamingAssets into memory (`StreamingData`, driven by `streaming_files.txt`, which `BuildInfoWriter` writes before each build),
+   StreamingAssets into memory (`StreamingData`: the common files named in `streaming_files.txt`, which `BuildInfoWriter` writes before each build, at the start, and an experiment's own files when the participant chooses it, 2026-11-06),
    waits for a click (the gesture that starts pointer lock, audio and fullscreen) and loads the game scene; on desktop it hands over at
    once, and playing `SampleScene` in the Editor skips it as before. In a browser: no local copy (`FileSink` is skipped; without a
    server the game says so), no command line (`?PROLIFIC_PID=` or `?pid=` in the address; `?onlineUrl=`/`?onlineKey=` only in a
@@ -232,7 +247,7 @@ count of `session_resume` events are what to apply them to.
 - Grace window length before a pause (a `SessionConfig` field).
 - Resume limits (maximum gap, number of resumes): deferred, set from pilot experience.
 - Minimum-performance gate for the browser (a frame-rate or GPU check before the study starts): before the first pilot.
-- Load test: `scripts/load_test.py` (N participants in real time at the game's upload cadence; usage in its docstring; register its commit as a release with `n_sessions` 1 and delete its rows afterwards). **2026-10-31, project `emdgczidpqdhftzujyte`, 20 participants x 60 s:** the first run had 33% 500s because every warm Edge Function isolate held its own direct database connection (48 idle of a limit of 60); with `idle_timeout: 2` in `db.ts` the second run had no errors and no retries (append median 1.0 s, p95 1.2 s, one call of 6.2 s; run-start/finish about 1 s). The secret `FORAGING_POOLER_URL` (the transaction pooler string, port 6543; `db.ts` prefers it) is now set. **50 participants x 60 s through it:** 3,051 appends, median 0.64 s, p95 1.2 s, p99 2.0 s, max 4.4 s; run-start and run-finish about 0.6 s; one transient 503 (one retry) and one call over the 4 s grace window; all 50 runs finished. Not tried above 50; rerun at the target size before a larger launch.
+- Load test: `scripts/load_test.py` (N participants in real time at the game's upload cadence; usage in its docstring; register its commit as a release offering `--experiment` with 1 session and delete its rows afterwards). **2026-10-31, project `emdgczidpqdhftzujyte`, 20 participants x 60 s:** the first run had 33% 500s because every warm Edge Function isolate held its own direct database connection (48 idle of a limit of 60); with `idle_timeout: 2` in `db.ts` the second run had no errors and no retries (append median 1.0 s, p95 1.2 s, one call of 6.2 s; run-start/finish about 1 s). The secret `FORAGING_POOLER_URL` (the transaction pooler string, port 6543; `db.ts` prefers it) is now set. **50 participants x 60 s through it:** 3,051 appends, median 0.64 s, p95 1.2 s, p99 2.0 s, max 4.4 s; run-start and run-finish about 0.6 s; one transient 503 (one retry) and one call over the 4 s grace window; all 50 runs finished. Not tried above 50; rerun at the target size before a larger launch.
 - Prolific: the completion code is a dummy (`DUMMY-COMPLETION-CODE`) until the study exists; then `supabase secrets set PROLIFIC_COMPLETION_CODE=<code>` (no redeploy of the game; `run-finish` reads it on each call). Not built: a flush when the tab is closed mid-upload.
 - Where the release script runs and who registers world hashes and commits.
 

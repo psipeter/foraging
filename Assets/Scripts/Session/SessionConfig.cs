@@ -250,8 +250,12 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float sunEndElevation = 10f;
     [Tooltip("Rotates the whole sun path about the vertical axis (degrees). 0 = the sun sits at compass azimuth measured from world +Z toward +X (south at noon in the northern hemisphere = world -Z).")]
     [SerializeField] private float sunAzimuthOffset = 0f;
-    [Tooltip("Distance fog on or off. Distances and color are the scene's Lighting > Fog settings (linear). Off by default: fog limits how far bushes can be seen.")]
+    [Tooltip("Distance fog on or off (the fog colour is the scene's Lighting > Fog colour). Off by default: fog limits how far bushes can be seen. The ladder's sessions turn it on lightly (scripts/ladder.py).")]
     [SerializeField] private bool fogEnabled = false;
+    [Tooltip("Linear fog: the distance (world units) where fog begins. Nothing nearer is affected. Used when fogEnabled is on.")]
+    [SerializeField] private float fogStartDistance = 50f;
+    [Tooltip("Linear fog: the distance where fog is complete (everything beyond is the fog colour). Mountains take mountainFogStrength of the fog. The valley is 700 wide.")]
+    [SerializeField] private float fogEndDistance = 200f;
     [Tooltip("optical depth of the atmosphere at the zenith for red, green and blue. The sun's colour is exp(-depth * air mass), which turns it from warm white at noon to orange near the horizon (blue is removed fastest).")]
     [SerializeField] private Vector3 sunExtinction = new Vector3(0.10f, 0.16f, 0.30f);
     [Tooltip("how much of the physical colour shift is applied (0 = constant warm white, 1 = fully physical). Lower it to keep ground and canopy hues easier to judge at dusk.")]
@@ -270,6 +274,10 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float ambientUpdateMinDegrees = 2f;
     [Tooltip("x = sun elevation in degrees, y = the procedural sky's Exposure.")]
     [SerializeField] private AnimationCurve skyExposureByElevation = ElevationCurve(0f, 1f, 10f, 1.1f, 20f, 1.25f, 34f, 1.3f, 90f, 1.3f);
+    [Tooltip("Multiplies the sun's intensity curve at every elevation (1 = the curve as it is). Acts on the canopy and fruit highlights only: the terrain ignores the sun's intensity (use postExposureOffset to brighten everything).")]
+    [SerializeField] private float sunIntensityScale = 1f;
+    [Tooltip("Stops (EV) added to the post-exposure curve at every elevation: positive brightens the whole screen (terrain, canopy, sky), 0 = the curve as it is. Fruit undo it through fruitExposureCompensation, so a fruit keeps its brightness.")]
+    [SerializeField] private float postExposureOffset = 0f;
     [Tooltip("x = sun elevation in degrees, y = post-exposure in stops (EV) of the URP Color Adjustments override. 0 = unchanged; negative darkens everything on screen, including the fruit (hue unchanged, luminance lower).")]
     [SerializeField] private AnimationCurve postExposureByElevation = ElevationCurve(0f, -1f, 10f, -0.6f, 20f, -0.3f, 34f, 0f, 90f, 0f);
     [Tooltip("Optional floor (degrees) on the light's elevation. 0 = off (the sun follows the real path). Raise it if low-sun shadow artifacts appear; the earlier fixed arc used 25.")]
@@ -319,6 +327,10 @@ public class SessionConfig : ScriptableObject
     public bool IsPractice => isPractice;
     public bool IsInterlude => isInterlude;
     public string InterludeFor => interludeFor;
+
+    // The experiment this session belongs to: the part of its asset name before the first underscore (CF_S1 -> "CF"). Its generated files are
+    // in StreamingAssets/Experiments/<code>/.
+    public string ExperimentCode => name.Split('_')[0];
     public InterludeMode InterludeMode => interludeMode;
     public int InterludeTrialCount => interludeTrialCount;
     public int InterludeTrialLimit => interludeTrialLimit;
@@ -428,6 +440,8 @@ public class SessionConfig : ScriptableObject
     public float FruitShadingFloor => fruitShadingFloor;
     public float FruitBrightness => fruitBrightness;
     public float FruitExposureCompensation => fruitExposureCompensation;
+    public float SunIntensityScale => sunIntensityScale;
+    public float PostExposureOffset => postExposureOffset;
     public Color CanopyTintDark => canopyTintDark;
     public Color CanopyTintLight => canopyTintLight;
 
@@ -455,6 +469,8 @@ public class SessionConfig : ScriptableObject
     public Color MountainRockColor => mountainRockColor;
     public Color MountainSnowColor => mountainSnowColor;
     public bool FogEnabled => fogEnabled;
+    public float FogStartDistance => fogStartDistance;
+    public float FogEndDistance => fogEndDistance;
     public float SunStartElevation => sunStartElevation;
     public float AmbientUpdateInterval => ambientUpdateInterval;
     public float AmbientUpdateMinDegrees => ambientUpdateMinDegrees;

@@ -288,7 +288,7 @@ def test_export_writes_only_the_sidecar(tmp_path):
     sidecar = get("S3_Interlude")[0]
     path = write_sidecar(sidecar, "S3_Interlude", tmp_path)
     assert path == sidecar_path("S3_Interlude", 3, tmp_path)
-    assert path.name == "S3_Interlude_seed3.interlude.json"
+    assert path.name == "CF_I3_seed3.interlude.json"
     assert list(tmp_path.glob("*.world")) == []                      # the terrain is the session's own world file
     assert json.load(open(path))["n"] == 5
     assert path.stat().st_size < 50_000

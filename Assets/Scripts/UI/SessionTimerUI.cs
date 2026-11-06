@@ -2,9 +2,6 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using TMPro;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 
 public class SessionTimerUI : MonoBehaviour
 {
@@ -91,16 +88,23 @@ public class SessionTimerUI : MonoBehaviour
                     _leaveRequested = false;
                     if (GameManager.IsLastSession)
                     {
-                        if (StreamingData.NeedsPreload)
+                        if (DataPipeline.IsOnline)
                         {
-                            DataPipeline.ShowStudyComplete();       // a browser cannot close its page; quitting would leave it blank
+                            DataPipeline.ShowStudyComplete();       // the completion code, feedback, and the way back to the experiment menu
                         }
                         else
                         {
-                            Application.Quit();
-#if UNITY_EDITOR
-                            EditorApplication.isPlaying = false;
-#endif
+                            DataPipeline.ReturnToMenu();
+                        }
+                    }
+                    else if (!GameManager.NextSessionReady)
+                    {
+                        // A browser fetches the next session's files while this one runs (the experiment's downloadPerSession); wait for them.
+                        GameManager.EnsureNextSession();
+                        _leaveRequested = true;
+                        if (nextSessionPromptText != null)
+                        {
+                            nextSessionPromptText.text = "Loading the next part...";
                         }
                     }
                     else
@@ -174,7 +178,7 @@ public class SessionTimerUI : MonoBehaviour
 
         if (nextSessionPromptText != null)
         {
-            nextSessionPromptText.text = $"Press {UiStyle.Chip("Enter")} to {(isLast ? "exit" : "continue")}";
+            nextSessionPromptText.text = $"Press {UiStyle.Chip("Enter")} to {(isLast ? "return to the menu" : "continue")}";
         }
 
         if (finalScoreText != null)

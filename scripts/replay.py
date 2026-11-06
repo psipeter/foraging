@@ -3,7 +3,7 @@
 A session folder is the local layout of rundata.py (<run>/<session>/: session.json, events.csv, trajectory.csv; keys are
 1 = W, 2 = S, 4 = Space held). The world (bush positions and radii, per-fruit rewards, terrain) is found by the session row's
 sha256 in the `_worlds` folder next to the run's folder (where `server_admin.py pull` puts the files it takes from git at the run's
-build commit), ForagingData/_worlds/ (archived by the Editor and standalone loggers) or, failing that, in Assets/StreamingAssets/Worlds/.
+build commit), ForagingData/_worlds/ (archived by the Editor and standalone loggers) or, failing that, in Assets/StreamingAssets/Experiments/<code>/.
 
 A session that was interrupted and continued (docs/ONLINE_DATA_PLAN.md, section 4) has a `session_resume` event: the game restarted
 from the server's state, so the harvest state (open bout, per-bush progress on the fruit being picked) starts empty there, the
@@ -31,7 +31,7 @@ import rundata
 from world import PROJECT_ROOT, read_unity_world
 
 DATA_DIR = PROJECT_ROOT / "ForagingData"
-WORLD_DIR = PROJECT_ROOT / "Assets" / "StreamingAssets" / "Worlds"
+WORLD_DIR = PROJECT_ROOT / "Assets" / "StreamingAssets" / "Experiments"      # <code>/<file>: searched one level down
 
 KEY_FORWARD, KEY_BACK, KEY_HARVEST = 1, 2, 4
 TIME_TOL = 2e-3     # seconds; logged times are F6, so replayed event times agree far inside this
@@ -85,7 +85,7 @@ def _sha256(path):
 
 def find_world_file(name, sha, archive=None):
     """Path of the file with this name and sha256: the archive `_worlds` folder given (a pulled run's), the logger's, then StreamingAssets."""
-    candidates = [*([Path(archive) / f"{sha[:8]}_{name}"] if archive else []), DATA_DIR / "_worlds" / f"{sha[:8]}_{name}", WORLD_DIR / name]
+    candidates = [*([Path(archive) / f"{sha[:8]}_{name}"] if archive else []), DATA_DIR / "_worlds" / f"{sha[:8]}_{name}", *sorted(WORLD_DIR.glob(f"*/{name}"))]
     for path in candidates:
         if path.exists() and _sha256(path) == sha:
             return path

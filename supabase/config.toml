@@ -413,8 +413,11 @@ enabled = true
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
 
-# The three data-collection functions: called by the game with its own publishable key (an `apikey` header, checked in
+# The data-collection functions: called by the game with its own publishable key (an `apikey` header, checked in
 # functions/_shared/http.ts) and a per-run token, not a user JWT.
+[functions.participant-start]
+verify_jwt = false
+
 [functions.run-start]
 verify_jwt = false
 

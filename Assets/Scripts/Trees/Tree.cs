@@ -86,6 +86,19 @@ public class Tree : MonoBehaviour
         }
     }
 
+    // Destroy is an error outside play mode, where the Editor's session preview (Foraging > Session preview) builds bushes: DestroyImmediate is the edit-mode form.
+    private static void Discard(UnityEngine.Object target)
+    {
+        if (Application.isPlaying)
+        {
+            Destroy(target);
+        }
+        else
+        {
+            DestroyImmediate(target);
+        }
+    }
+
     private void Awake()
     {
         gameObject.tag = "Interactable";
@@ -188,7 +201,7 @@ public class Tree : MonoBehaviour
         {
             GameObject primitive = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             _sphereMesh = primitive.GetComponent<MeshFilter>().sharedMesh;
-            Destroy(primitive);
+            Discard(primitive);
         }
 
         meshFilter.sharedMesh = _sphereMesh;
@@ -202,13 +215,13 @@ public class Tree : MonoBehaviour
         SphereCollider canopyCollider = canopy.GetComponent<SphereCollider>();
         if (canopyCollider != null)
         {
-            Destroy(canopyCollider);
+            Discard(canopyCollider);
         }
 
         SphereCollider rootCollider = GetComponent<SphereCollider>();
         if (rootCollider != null)
         {
-            Destroy(rootCollider);
+            Discard(rootCollider);
         }
 
         // Add a capsule collider for physical blocking.
@@ -229,7 +242,7 @@ public class Tree : MonoBehaviour
         {
             if (_fruits[i] != null)
             {
-                Destroy(_fruits[i]);
+                Discard(_fruits[i]);
             }
         }
         _fruits.Clear();
@@ -390,7 +403,7 @@ public class Tree : MonoBehaviour
         {
             GameObject primitive = GameObject.CreatePrimitive(PrimitiveType.Quad);
             _quadMesh = primitive.GetComponent<MeshFilter>().sharedMesh;
-            Destroy(primitive);
+            Discard(primitive);
         }
 
         _ringObject = new GameObject("HarvestRing");
@@ -587,7 +600,7 @@ public class Tree : MonoBehaviour
         {
             if (pieces[i] != null)
             {
-                Destroy(pieces[i].gameObject);
+                Discard(pieces[i].gameObject);
             }
         }
     }

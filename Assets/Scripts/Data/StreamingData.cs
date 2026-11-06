@@ -7,9 +7,10 @@ using UnityEngine;
 using UnityEngine.Networking;
 
 // Reads the files in Assets/StreamingAssets (worlds, Interlude files, instruction text, online.json, build_info.json).
-// On desktop they are plain files. In a browser there is no file system: the Bootstrap scene fetches every file listed in
-// streaming_files.txt (written by Assets/Editor/BuildInfoWriter before each build) into memory before the game scene starts,
-// and the game reads them from there. Paths are relative to StreamingAssets, with '/' ("Worlds/S1_seed1.world").
+// On desktop they are plain files. In a browser there is no file system: the Bootstrap scene fetches the common files listed in
+// streaming_files.txt (written by Assets/Editor/BuildInfoWriter before each build: everything outside Experiments/) into memory at the start,
+// then the files of the experiment the participant chooses (all of them, or one session's at a time: ExperimentConfig.DownloadPerSession) before
+// its game scene starts, and the game reads them from there. Paths are relative to StreamingAssets, with '/' ("Experiments/CF/CF_S1_seed201.world").
 public static class StreamingData
 {
     private const string Manifest = "streaming_files.txt";
@@ -45,7 +46,29 @@ public static class StreamingData
         return Path.Combine(Application.streamingAssetsPath, relativePath);
     }
 
-    // Fetches every listed file into memory. `progress` gets 0 to 1; `failed` the reason, after which nothing more is fetched.
+    // True once Preload has fetched the common files (the Boot scene runs again between experiments and need not fetch twice).
+    public static bool Loaded { get; private set; }
+
+    // True when every file is available to read (always on desktop, where they are plain files).
+    public static bool AllLoaded(IEnumerable<string> relativePaths)
+    {
+        if (!NeedsPreload)
+        {
+            return true;
+        }
+
+        foreach (string path in relativePaths)
+        {
+            if (!Cache.ContainsKey(path))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // Fetches the common files named in the manifest.
     public static IEnumerator Preload(Action<float> progress, Action<string> failed)
     {
         string[] names = null;
@@ -61,22 +84,46 @@ public static class StreamingData
             names = request.downloadHandler.text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
         }
 
-        for (int i = 0; i < names.Length; i++)
+        bool ok = true;
+        yield return Fetch(names, progress, reason => { ok = false; failed(reason); });
+        Loaded = ok;
+    }
+
+    // Fetches the listed files into memory unless they are there already. `progress` gets 0 to 1 (may be null); `failed` the reason, after which
+    // nothing more is fetched. A browser only: on desktop the files are read where they are.
+    public static IEnumerator Fetch(IEnumerable<string> relativePaths, Action<float> progress, Action<string> failed)
+    {
+        if (!NeedsPreload)
         {
-            progress(i / (float)names.Length);
-            using (UnityWebRequest request = UnityWebRequest.Get(Application.streamingAssetsPath + "/" + names[i]))
+            progress?.Invoke(1f);
+            yield break;
+        }
+
+        var wanted = new List<string>();
+        foreach (string path in relativePaths)
+        {
+            if (!Cache.ContainsKey(path) && !wanted.Contains(path))
+            {
+                wanted.Add(path);
+            }
+        }
+
+        for (int i = 0; i < wanted.Count; i++)
+        {
+            progress?.Invoke(i / (float)wanted.Count);
+            using (UnityWebRequest request = UnityWebRequest.Get(Application.streamingAssetsPath + "/" + wanted[i]))
             {
                 yield return HttpSink.Send(request, 120f);
                 if (request.result != UnityWebRequest.Result.Success)
                 {
-                    failed($"Could not load {names[i]} ({request.error}).");
+                    failed($"Could not load {wanted[i]} ({request.error}).");
                     yield break;
                 }
 
-                Cache[names[i]] = request.downloadHandler.data;
+                Cache[wanted[i]] = request.downloadHandler.data;
             }
         }
 
-        progress(1f);
+        progress?.Invoke(1f);
     }
 }

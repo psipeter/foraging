@@ -18,13 +18,13 @@ def run_row(run_id, participant, signature, status="finished", n_sessions=2, las
     return {"run_id": run_id, "status": status, "platform": "WebGLPlayer", "build_commit": "abc", "build_commits": ["abc"], "build_dirty": False,
             "unity_version": "6000", "started_at": "2026-11-03 10:00:00+00", "finished_at": "2026-11-03 10:18:30+00" if status == "finished" else None,
             "participant": participant, "signature": signature, "consent_version": "v1", "feedback": feedback, "n_sessions": n_sessions,
-            "last_event": last}
+            "last_event": last, "participant_id": "pp-" + run_id[:8], "experiment": "CF"}
 
 
-def session_row(run_id, index, name, interlude=False):
+def session_row(run_id, index, name, interlude=False, interlude_for=None):
     return {"run_id": run_id, "session_index": index, "name": name, "is_practice": False, "is_interlude": interlude, "world_seed": 1,
             "world_file": None, "world_sha256": None, "interlude_file": None, "interlude_sha256": None,
-            "config": {"sessionDuration": 90}, "camera": {}, "display": {"width": 1920}, "frame_stats": {"count": 100, "meanMs": 9.5, "maxMs": 30},
+            "config": {"sessionDuration": 90, **({"interludeFor": interlude_for} if interlude_for else {})}, "camera": {}, "display": {"width": 1920}, "frame_stats": {"count": 100, "meanMs": 9.5, "maxMs": 30},
             "started_at": "2026-11-03 10:00:00+00", "ended_at": "2026-11-03 10:01:30.5+00", "completed": True, "final_score": 12.0}
 
 
@@ -71,13 +71,13 @@ def server(monkeypatch):
     monkeypatch.setattr(hd, "query", fake)
     monkeypatch.setattr(hd, "PAGE", 3)      # pages of 3 rows: every table is read in several queries
     fake.add(run_row(RUN_A, "Peter_test", "Peter D", feedback="fun"),
-             [session_row(RUN_A, 0, "S1"), session_row(RUN_A, 1, "S1_Interlude", interlude=True)],
+             [session_row(RUN_A, 0, "CF_S1"), session_row(RUN_A, 1, "CF_I1", interlude=True, interlude_for="CF_S1")],
              [event_row(RUN_A, 0, 0, "session_start"), event_row(RUN_A, 0, 1, "fruit", 5.0, 5.0), event_row(RUN_A, 0, 2, "fruit", 0.0, 5.0),
               event_row(RUN_A, 0, 3, "teleport", payload={"x": 1}), event_row(RUN_A, 1, 0, "trial_end")],
              [trial_row(RUN_A, 1, 0, True), trial_row(RUN_A, 1, 1, False)])
-    fake.add(run_row(RUN_B, "p7788", "Alice Smith"), [session_row(RUN_B, 0, "S1"), session_row(RUN_B, 1, "S1_Interlude", interlude=True)],
+    fake.add(run_row(RUN_B, "p7788", "Alice Smith"), [session_row(RUN_B, 0, "CF_S1"), session_row(RUN_B, 1, "CF_I1", interlude=True, interlude_for="CF_S1")],
              [event_row(RUN_B, 0, 0, "fruit", 3.0, 3.0)], [trial_row(RUN_B, 1, 0, True)])
-    fake.add(run_row(RUN_C, "someone", "xx PETER xx", status="in_progress", n_sessions=1), [session_row(RUN_C, 0, "S1")], [])
+    fake.add(run_row(RUN_C, "someone", "xx PETER xx", status="in_progress", n_sessions=1), [session_row(RUN_C, 0, "CF_S1")], [])
     return fake
 
 
@@ -89,8 +89,8 @@ def test_download_writes_the_tidy_tables_and_the_raw_layout(server, tmp_path):
     assert (a.signature, a.status, a.n_sessions, a.n_completed, a.feedback, a.on_server) == ("Peter D", "finished", 2, 2, "fun", 1)
     assert a.minutes == pytest.approx(18.5)
     s = h.sessions.set_index(["run_id", "session_index"])
-    assert s.loc[(RUN_A, 0), ["kind", "block", "duration_s", "n_fruits", "wall_s"]].tolist() == ["session", "S1", 90.0, 2, 90.5]
-    assert s.loc[(RUN_A, 1), ["kind", "block", "n_trials", "n_correct", "bonus"]].tolist() == ["interlude", "S1", 2, 1, 10.0]
+    assert s.loc[(RUN_A, 0), ["kind", "block", "duration_s", "n_fruits", "wall_s"]].tolist() == ["session", "CF_S1", 90.0, 2, 90.5]
+    assert s.loc[(RUN_A, 1), ["kind", "block", "n_trials", "n_correct", "bonus"]].tolist() == ["interlude", "CF_S1", 2, 1, 10.0]
     assert pd.isna(s.loc[(RUN_A, 1), "duration_s"]) and s.loc[(RUN_A, 0), "mean_frame_ms"] == 9.5
     assert len(h.events) == 6 and list(h.fruits["reward"][h.fruits.run_id == RUN_A]) == [5.0, 0.0]
     assert h.events.set_index(["run_id", "session_index", "seq"]).loc[(RUN_A, 0, 3), "payload"] == '{"x": 1}'
@@ -98,9 +98,10 @@ def test_download_writes_the_tidy_tables_and_the_raw_layout(server, tmp_path):
     traj = h.trajectory(RUN_A, 0)
     assert len(traj) == 5 and list(traj.columns) == ["t", "x", "z", "yaw", "pitch", "keys"] and traj["t"].iloc[-1] == pytest.approx(0.5)
     log = rundata.read_session(tmp_path / RUN_A / "00")                  # the raw layout reads like a local log
-    assert log["session"]["name"] == "S1" and [e["type"] for e in log["events"]][:2] == ["session_start", "fruit"] and len(log["traj"]) == 5
+    assert log["session"]["name"] == "CF_S1" and [e["type"] for e in log["events"]][:2] == ["session_start", "fruit"] and len(log["traj"]) == 5
+    assert (a.experiment, a.participant_id) == ("CF", "pp-" + RUN_A[:8]) and set(s["experiment"]) == {"CF"}
     run_json = rundata.json.loads((tmp_path / RUN_A / "run.json").read_text())
-    assert run_json["participant"] == "Peter_test" and run_json["signature"] == "Peter D" and "token_hash" not in run_json
+    assert run_json["experiment"] == "CF" and run_json["participant"] == "Peter_test" and run_json["signature"] == "Peter D" and "token_hash" not in run_json
 
 
 def test_exclude_matches_the_id_or_the_signed_name_in_any_case_and_leaves_every_table(server, tmp_path):
@@ -148,3 +149,18 @@ def test_a_failing_query_raises_with_the_cli_message(monkeypatch):
     monkeypatch.setattr(hd.subprocess, "run", lambda *a, **k: Done())
     with pytest.raises(RuntimeError, match="not logged in"):
         hd.query("select 1")
+
+
+def test_the_names_before_experiments_still_pair_a_session_with_its_interlude():
+    old = hd._session_row(session_row(RUN_A, 1, "S1_Interlude", interlude=True), [], [])
+    assert old[3] == "S1" and hd._session_row(session_row(RUN_A, 0, "S1"), [], [])[3] == "S1"
+
+
+def test_a_humans_sqlite_from_before_the_experiments_gains_the_new_columns(tmp_path):
+    import sqlite3
+    con = sqlite3.connect(tmp_path / "old.sqlite")
+    con.execute("create table participants (run_id text primary key)")
+    con.execute("create table sessions (run_id text)")
+    hd._add_missing_columns(con)
+    assert {r[1] for r in con.execute("pragma table_info(participants)")} >= {"participant_id", "experiment"}
+    assert "experiment" in {r[1] for r in con.execute("pragma table_info(sessions)")}

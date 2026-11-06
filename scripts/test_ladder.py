@@ -10,13 +10,13 @@ from world import generate_world, load_session
 def test_every_session_sets_the_same_fields_and_its_interlude_gets_them_too():
     keys = {frozenset(k for k in v if ".Array.data[" not in k) for v in ladder.LADDER.values()}      # (the items of a bump or product list differ)
     assert len(keys) == 1
-    calls = ladder.calls("S1")
-    assert {c[2] for c in calls} == {"Assets/ScriptableObjects/SessionConfig/S1.asset", "Assets/ScriptableObjects/SessionConfig/S1_Interlude.asset"}
+    calls = ladder.calls("CF_S1")
+    assert {c[2] for c in calls} == {"Assets/ScriptableObjects/Experiments/CF/CF_S1.asset", "Assets/ScriptableObjects/Experiments/CF/CF_I1.asset"}
 
 
 def overrides(name):
     """The ladder's fields as load_session overrides (snake_case params) on top of a real asset."""
-    values = ladder.LADDER[name]
+    values = ladder.LADDER[world.canonical(name)]
     rf = load_session("S1").reward_function
     rf = {k: (dict(v) if isinstance(v, dict) else v) for k, v in rf.items()}
     rf["bumps"], rf["products"] = [], []
@@ -58,15 +58,15 @@ def test_s3_s4_s5_reward_depends_on_what_the_design_says():
 
 
 def test_session_only_fields_go_to_the_session_asset_and_recreate_copies_the_template():
-    calls = {c[2]: [] for c in ladder.calls("S3")}
-    for c in ladder.calls("S3"):
+    calls = {c[2]: [] for c in ladder.calls("CF_S3")}
+    for c in ladder.calls("CF_S3"):
         calls[c[2]].append(c[4])
-    assert "sessionDuration" in calls["Assets/ScriptableObjects/SessionConfig/S3.asset"]
-    assert "sessionDuration" not in calls["Assets/ScriptableObjects/SessionConfig/S3_Interlude.asset"]
-    assert "interludeFor" in calls["Assets/ScriptableObjects/SessionConfig/S3_Interlude.asset"] and "interludeFor" not in calls["Assets/ScriptableObjects/SessionConfig/S3.asset"]
-    copies = [c for c in ladder.recreate_calls("S3") if c[0] == "copy_asset"]
-    assert [(c[2], c[4]) for c in copies] == [("Assets/ScriptableObjects/SessionConfig/S2.asset", "Assets/ScriptableObjects/SessionConfig/S3.asset"),
-                                              ("Assets/ScriptableObjects/SessionConfig/S2_Interlude.asset", "Assets/ScriptableObjects/SessionConfig/S3_Interlude.asset")]
+    assert "sessionDuration" in calls["Assets/ScriptableObjects/Experiments/CF/CF_S3.asset"]
+    assert "sessionDuration" not in calls["Assets/ScriptableObjects/Experiments/CF/CF_I3.asset"]
+    assert "interludeFor" in calls["Assets/ScriptableObjects/Experiments/CF/CF_I3.asset"] and "interludeFor" not in calls["Assets/ScriptableObjects/Experiments/CF/CF_S3.asset"]
+    copies = [c for c in ladder.recreate_calls("CF_S3") if c[0] == "copy_asset"]
+    assert [(c[2], c[4]) for c in copies] == [("Assets/ScriptableObjects/Experiments/CF/CF_S2.asset", "Assets/ScriptableObjects/Experiments/CF/CF_S3.asset"),
+                                              ("Assets/ScriptableObjects/Experiments/CF/CF_I2.asset", "Assets/ScriptableObjects/Experiments/CF/CF_I3.asset")]
 
 
 def test_s6_is_one_feature_linear_times_a_gaussian_of_the_other_and_s7_an_anisotropic_gaussian():
@@ -79,7 +79,12 @@ def test_s6_is_one_feature_linear_times_a_gaussian_of_the_other_and_s7_an_anisot
     assert 0.10 < np.mean(s7.value > 2.0) < 0.25                  # the share of bushes above half the best: a peak that trial and error can find (the old S5 had about 17%)
 
 
+def test_every_session_has_light_linear_fog_that_starts_before_it_ends():
+    for name, values in ladder.LADDER.items():
+        assert values["fogEnabled"] is True and 0 < values["fogStartDistance"] < values["fogEndDistance"], name
+
+
 def test_every_session_has_the_terraced_terrain_and_the_planned_duration():
     for name, values in ladder.LADDER.items():
         assert values["moistureTerraceLevels"] == 4 and values["terrainMaxElevation"] == 6.0, name
-    assert {n: ladder.SESSION_ONLY[n]["sessionDuration"] for n in ladder.LADDER} == {"P": 30, "S1": 90, "S2": 90, "S3": 120, "S4": 120, "S5": 180, "S6": 180, "S7": 180}
+    assert {n: ladder.SESSION_ONLY[n]["sessionDuration"] for n in ladder.LADDER} == {"TUT_S1": 30, "CF_S1": 90, "CF_S2": 90, "CF_S3": 120, "CF_S4": 120, "CF_S5": 180, "CF_S6": 180, "CF_S7": 180}

@@ -4,8 +4,8 @@ using UnityEngine;
 [DefaultExecutionOrder(-20)]
 public class GameManager : MonoBehaviour
 {
-    [Tooltip("The default design: the ordered session list (P, its Interlude, S1, its Interlude, ...).")]
-    [SerializeField] private List<SessionConfig> sessionConfigs;
+    [Tooltip("The experiment played when the game starts from this scene without the menu (the Editor, a build without the menu): its session list becomes AllSessionConfigs.")]
+    [SerializeField] private ExperimentConfig defaultExperiment;
     [SerializeField] private SunController sunController;
     [SerializeField] private HarvestManager harvestManager;
     [SerializeField] private TerrainManager terrainManager;
@@ -28,6 +28,19 @@ public class GameManager : MonoBehaviour
 
     public static int CurrentSessionIndex = 0;
     public static List<SessionConfig> AllSessionConfigs;
+
+    // The experiment chosen in the menu (null: defaultExperiment). Set it through BeginExperiment, before the game scene loads.
+    public static ExperimentConfig ActiveExperiment;
+
+    // Starts `experiment` from its first session with fresh totals (the menu calls this; scene reloads between sessions keep the statics).
+    public static void BeginExperiment(ExperimentConfig experiment)
+    {
+        ActiveExperiment = experiment;
+        AllSessionConfigs = null;
+        CurrentSessionIndex = 0;
+        SessionScoreTotal = 0f;
+        InterludeBonus = 0f;
+    }
 
     // Running totals for the final screen. Practice sessions and practice Interludes are excluded.
     public static float SessionScoreTotal = 0f;
@@ -81,7 +94,21 @@ public class GameManager : MonoBehaviour
     {
         if (AllSessionConfigs == null || AllSessionConfigs.Count == 0)
         {
-            List<SessionConfig> chosen = sessionConfigs;
+            ExperimentConfig experiment = ActiveExperiment;
+#if UNITY_EDITOR
+            if (experiment == null)
+            {
+                // Playing this scene directly from the Editor's Foraging > Experiments window.
+                string code = UnityEditor.EditorPrefs.GetString("Foraging.Experiment", "");
+                experiment = string.IsNullOrEmpty(code) ? null : ExperimentCatalog.Load()?.Find(code);
+            }
+#endif
+            if (experiment == null)
+            {
+                experiment = defaultExperiment;
+            }
+
+            List<SessionConfig> chosen = experiment != null ? experiment.Sessions : null;
             AllSessionConfigs = chosen != null
                 ? new List<SessionConfig>(chosen)
                 : new List<SessionConfig>();
@@ -113,6 +140,12 @@ public class GameManager : MonoBehaviour
         }
 
         RenderSettings.fog = activeConfig.FogEnabled;
+        if (activeConfig.FogEnabled)
+        {
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogStartDistance = activeConfig.FogStartDistance;
+            RenderSettings.fogEndDistance = Mathf.Max(activeConfig.FogEndDistance, activeConfig.FogStartDistance + 1f);
+        }
         QualitySettings.vSyncCount = 0;
         Application.targetFrameRate = activeConfig.TargetFrameRate;
 
@@ -197,9 +230,12 @@ public class GameManager : MonoBehaviour
         }
 
         FruitMaterialManager.SetSessionConfig(activeConfig);
+        _current = this;
+        FetchNextSession();
     }
 
-    // The Editor's Foraging > Quick test toggle (an EditorPref, so it never reaches a build) or -quick on the command line of a standalone build.
+    // The Editor's Foraging > Quick test toggle (an EditorPref, so it never reaches a build), -quick on the command line of a standalone build, or ?quick=1 in the
+    // address of a browser development build (a release build ignores it: a link must not be able to shorten a participant's sessions).
     private static bool QuickTestRequested()
     {
 #if UNITY_EDITOR
@@ -208,7 +244,52 @@ public class GameManager : MonoBehaviour
             return true;
         }
 #endif
-        return Application.platform != RuntimePlatform.WebGLPlayer && System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-quick") >= 0;
+        if (Application.platform == RuntimePlatform.WebGLPlayer)
+        {
+            return Debug.isDebugBuild && OnlineSettings.UrlParameter("quick") != null;
+        }
+
+        return System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-quick") >= 0;
+    }
+
+    // The next session's files, fetched while this one runs (a browser; with the experiment's files already loaded this finds nothing to do). The end
+    // screen waits for them (NextSessionReady) rather than load a session whose world is not there.
+    private bool _fetching;
+    private static GameManager _current;
+
+    // The end screen's call while it waits: fetches the next session's files again if the first try failed.
+    public static void EnsureNextSession()
+    {
+        if (_current != null)
+        {
+            _current.FetchNextSession();
+        }
+    }
+
+    public static bool NextSessionReady
+    {
+        get
+        {
+            int next = CurrentSessionIndex + 1;
+            return AllSessionConfigs == null || next >= AllSessionConfigs.Count || StreamingData.AllLoaded(ExperimentConfig.FilesOf(AllSessionConfigs[next]));
+        }
+    }
+
+    // Starts (or, after a failure, restarts) the fetch of the next session's files.
+    public void FetchNextSession()
+    {
+        if (!_fetching && !NextSessionReady)
+        {
+            StartCoroutine(FetchNext());
+        }
+    }
+
+    private System.Collections.IEnumerator FetchNext()
+    {
+        _fetching = true;
+        yield return StreamingData.Fetch(ExperimentConfig.FilesOf(AllSessionConfigs[CurrentSessionIndex + 1]), null,
+            reason => Debug.LogWarning("GameManager: " + reason));
+        _fetching = false;
     }
 
     public static void AdvanceSession()

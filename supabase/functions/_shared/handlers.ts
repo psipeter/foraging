@@ -76,32 +76,37 @@ const CONFLICTS = ['no_session', 'session_gap', 'gap_events', 'gap_trajectory', 
 
 export function fromDbError(e: DbError): HttpError {
   if (e.message === 'unauthorized') return new HttpError(401, 'unauthorized');
-  if (e.message === 'unknown_build' || e.message === 'unknown_world') return new HttpError(403, e.message);
+  if (['unknown_build', 'unknown_world', 'unknown_experiment', 'prerequisite_unmet'].includes(e.message)) return new HttpError(403, e.message);
   if (CONFLICTS.includes(e.message)) return new HttpError(409, e.message);
   if (/^2[23]/.test(e.code)) return new HttpError(400, 'invalid', 'a field has the wrong type, is missing or violates a constraint');
   console.error('database error', e.code, e.message);
   return new HttpError(500, 'internal');
 }
 
-// The study's Prolific completion code (a secret of the project; the default is a dummy until the study has a real one).
-function completionCode(): string {
-  return Deno.env.get('PROLIFIC_COMPLETION_CODE') ?? 'DUMMY-COMPLETION-CODE';
+function build(body: Body) {
+  const b = body.build as Body;
+  if (typeof b !== 'object' || b === null || Array.isArray(b)) bad('build is required');
+  return {
+    commit: str(b, 'commit', 64),
+    dirty: b.dirty === true,
+    platform: str(b, 'platform', 64, false),
+    unity_version: str(b, 'unity_version', 64, false),
+  };
 }
 
-// {build: {commit, dirty, platform, unity_version}, prolific_pid?, consent?: {version, signature, at}} starts or (with a Prolific ID the server knows) continues
-// a run. Returns {run_id, token, status, resume}; a finished run has no token but the completion code.
-export function runStart(db: Db, body: Body) {
+function participantId(body: Body): string {
+  const id = str(body, 'participant_id', 36) as string;
+  if (!/^[0-9a-f-]{36}$/.test(id)) bad('participant_id must be a UUID');
+  return id;
+}
+
+// {build, prolific_pid?, consent_version?, consent?: {version, signature, at}} logs a participant in (a returning Prolific ID gets a fresh
+// token) and returns {participant_id, token, experiments: [{code, title, n_sessions, status, sessions_done, unlocked}]}. With a consent
+// version (or a consent) the server asks for the signature of a participant who has none of that version on file: {needs_consent: true},
+// nothing issued. Without either, no consent is asked (a development build with no consent screen).
+export function participantStart(db: Db, body: Body) {
   return guarded(async () => {
-    const build = body.build as Body;
-    if (typeof build !== 'object' || build === null) bad('build is required');
-    const clean = {
-      commit: str(build, 'commit', 64),
-      dirty: build.dirty === true,
-      platform: str(build, 'platform', 64, false),
-      unity_version: str(build, 'unity_version', 64, false),
-    };
-    const token = newToken();
-    const hash = await sha256Hex(token);
+    const clean = build(body);
     const pid = str(body, 'prolific_pid', 64, false);
     if (pid !== null && !PID.test(pid)) bad('prolific_pid has unexpected characters');
     let consent = null;
@@ -112,9 +117,25 @@ export function runStart(db: Db, body: Body) {
       if (at !== null && Number.isNaN(Date.parse(at))) bad('consent.at is not a time');
       consent = { version: str(c, 'version', 100), signature: str(c, 'signature', 200), at };
     }
-    const result = await db.call('server.start_run', [hash, clean, pid, consent]);
-    if (result.status === 'in_progress') return { ...result, token, has_resume: result.resume != null };
-    return result.status === 'finished' ? { ...result, completion_code: completionCode() } : result;
+    const version = consent ? consent.version : str(body, 'consent_version', 100, false);
+    const token = newToken();
+    const result = await db.call('server.start_participant', [await sha256Hex(token), clean, pid, version, consent]);
+    return result.needs_consent ? result : { ...result, token };
+  });
+}
+
+// {build, participant_id, participant_token, experiment} starts the participant's run of an experiment, or continues the unfinished one
+// (the participant must satisfy its prerequisites). Returns {run_id, token, status, experiment, resume, has_resume}; a finished run has no
+// token but the experiment's completion code.
+export function runStart(db: Db, body: Body) {
+  return guarded(async () => {
+    const clean = build(body);
+    const experiment = str(body, 'experiment', 32) as string;
+    if (!/^[A-Za-z0-9]{1,32}$/.test(experiment)) bad('experiment has unexpected characters');
+    const participantHash = await sha256Hex(str(body, 'participant_token', 100) as string);
+    const token = newToken();
+    const result = await db.call('server.start_run', [await sha256Hex(token), participantId(body), participantHash, experiment, clean]);
+    return result.status === 'in_progress' ? { ...result, token, has_resume: result.resume != null } : result;
   });
 }
 
@@ -146,17 +167,17 @@ export function append(db: Db, body: Body) {
   });
 }
 
-// {run_id, token} -> {ok, problems}; ok marks the run finished.
+// {run_id, token} -> {ok, problems, completion_code}; ok marks the run finished.
 export function runFinish(db: Db, body: Body) {
   return guarded(async () => {
     const hash = await sha256Hex(str(body, 'token', 100) as string);
-    const result = await db.call('server.finish_run', [runId(body), hash]);
-    // Given even when `ok` is false: missing data is the researcher's problem to look into, not a reason to withhold the participant's payment.
-    return { ...result, completion_code: completionCode() };
+    // The result carries the experiment's completion code even when `ok` is false (decided in SQL).
+    return await db.call('server.finish_run', [runId(body), hash]);
   });
 }
 
 // {run_id, token, text} -> {ok}; the participant's free-text feedback (one per run, a second one replaces it). Allowed after the run is finished.
+// `token` is the run's token or the token of the participant the run belongs to.
 export function saveFeedback(db: Db, body: Body) {
   return guarded(async () => {
     const text = str(body, 'text', MAX_FEEDBACK) as string;

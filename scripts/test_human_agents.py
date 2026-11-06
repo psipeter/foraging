@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 import human_agents
+import world
 import perception
 import replay
 from agents import REGISTRY
@@ -59,7 +60,7 @@ FINISHED = sorted(glob.glob(str(Path(__file__).resolve().parent.parent / "Foragi
 
 def _asset_exists(log):
     """A pilot run of a session that has since been removed (an archived design's variant) cannot be rebuilt."""
-    return (Path(__file__).resolve().parent.parent / "Assets" / "ScriptableObjects" / "SessionConfig" / f"{log.name}.asset").exists()
+    return world.session_asset_path(log.name).exists()
 
 
 @pytest.mark.skipif(not FINISHED, reason="no participant data in ForagingData/")

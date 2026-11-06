@@ -28,7 +28,7 @@ import numpy as np
 
 import costs
 from specs import canonical_json
-from world import load_session
+from world import interlude_name, load_session
 
 SCRIPTS = Path(__file__).resolve().parent
 ROOT = SCRIPTS.parent
@@ -89,8 +89,8 @@ def environment(session, overrides=None, percept=None, kind="session", n_samples
            "percept": None if percept is None else percept.spec(), "kind": kind,
            "n_samples": None if n_samples is None else int(n_samples), "costs": motor_costs()}
     if kind == "interlude":
-        env["interlude_hash"] = params_hash(f"{session}_Interlude", overrides)
-        env["interlude_mode"] = interlude_mode_of(f"{session}_Interlude", interlude_mode, overrides)
+        env["interlude_hash"] = params_hash(interlude_name(session), overrides)
+        env["interlude_mode"] = interlude_mode_of(interlude_name(session), interlude_mode, overrides)
         if checkpoints is not None:
             times = sorted({float(t) for t in checkpoints})
             length = float(load_session(session, **overrides).session_duration)

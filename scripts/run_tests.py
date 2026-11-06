@@ -17,30 +17,31 @@ A test file depends on the scripts it imports; anything else it reads goes in EX
 
 import argparse
 import ast
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SESSION_CONFIGS = "Assets/ScriptableObjects/SessionConfig/"
+SESSION_CONFIGS = "Assets/ScriptableObjects/Experiments/"       # <code>/<code>_S1.asset, <code>_I1.asset, <code>.asset
 
 
 def _is_interlude_asset(path):
-    return path.startswith(SESSION_CONFIGS) and path.endswith("_Interlude.asset")
+    return path.startswith(SESSION_CONFIGS) and re.search(r"_I\d+\.asset$", path) is not None
 
 
 def _is_session_asset(path):
-    return path.startswith(SESSION_CONFIGS) and path.endswith(".asset") and not _is_interlude_asset(path)
+    return path.startswith(SESSION_CONFIGS) and re.search(r"_S\d+\.asset$", path) is not None
 
 
 def _is_interlude_file(path):
     # the committed Interlude trial files are compared with a fresh generation (test_committed_interlude_file_is_fresh)
-    return path.startswith("Assets/StreamingAssets/Worlds/") and path.endswith(".interlude.json")
+    return path.startswith("Assets/StreamingAssets/Experiments/") and path.endswith(".interlude.json")
 
 
 def _is_world_file(path):
     # the committed session worlds are compared with a fresh generation (test_committed_world_files_are_fresh)
-    return path.startswith("Assets/StreamingAssets/Worlds/") and path.endswith(".world")
+    return path.startswith("Assets/StreamingAssets/Experiments/") and path.endswith(".world")
 
 
 def _is_server_file(path):

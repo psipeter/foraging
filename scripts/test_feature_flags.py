@@ -23,7 +23,7 @@ def moisture_weight(w):
 
 
 def test_old_assets_get_the_new_fields_by_default(tmp_path):
-    text = (world.SESSION_DIR / "S2.asset").read_text()
+    text = world.session_asset_path("S2").read_text()
     old = "\n".join(line for line in text.split("\n") if not line.strip().startswith(("shapeVaries", "colorVaries", "shapeWhenFixed", "colorWhenFixed", "randomBushValueRange")))
     path = tmp_path / "Old.asset"                              # an asset file saved before the fields existed
     path.write_text(old)

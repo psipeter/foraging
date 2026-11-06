@@ -1,4 +1,5 @@
 import hashlib
+from pathlib import Path
 import math
 
 import numpy as np
@@ -120,10 +121,18 @@ def test_a_local_copy_of_a_session_continued_elsewhere_may_start_after_seq_zero(
 def test_archive_worlds_takes_the_files_from_git_at_the_build_commit(tmp_path, capsys):
     import subprocess
     import server_admin
-    name = "S1_seed1.world"
-    blob = subprocess.run(["git", "show", f"HEAD:Assets/StreamingAssets/Worlds/{name}"], cwd=server_admin.PROJECT_ROOT, capture_output=True, check=True).stdout
+    repo = tmp_path / "repo"
+    folder = repo / "Assets" / "StreamingAssets" / "Experiments" / "CF"
+    folder.mkdir(parents=True)
+    name, blob = "CF_S1_seed201.world", b"FWLD fake world bytes"
+    (folder / name).write_bytes(blob)
+    git = lambda *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a], cwd=repo, capture_output=True, check=True)
+    git("init", "-q")
+    git("add", ".")
+    git("commit", "-q", "-m", "worlds")
     sha = hashlib.sha256(blob).hexdigest()
-    server_admin.archive_worlds("HEAD", [{"world_file": name, "world_sha256": sha}, {"world_file": name, "world_sha256": "0" * 64}], tmp_path)
-    assert (tmp_path / "_worlds" / f"{sha[:8]}_{name}").read_bytes() == blob
-    assert [p.name for p in (tmp_path / "_worlds").iterdir()] == [f"{sha[:8]}_{name}"]          # the file with a wrong sha is not written
+    out = tmp_path / "out"
+    server_admin.archive_worlds("HEAD", [{"world_file": name, "world_sha256": sha}, {"world_file": name, "world_sha256": "0" * 64}], out, repo=repo)
+    assert (out / "_worlds" / f"{sha[:8]}_{name}").read_bytes() == blob
+    assert [p.name for p in (out / "_worlds").iterdir()] == [f"{sha[:8]}_{name}"]          # the file with a wrong sha is not written
     assert "not in git" in capsys.readouterr().err

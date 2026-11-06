@@ -13,7 +13,7 @@ Inputs are two SessionConfig assets, read through world.load_session:
                       parameter are copies of the session it probes (checked here).
   <interludeFor>      the session asset it probes; its world file (<session>_seed<N>.world) supplies the terrain.
 
-Output (Assets/StreamingAssets/Worlds/<name>_seed<N>.interlude.json): the bush table for all trials (ids 2i and 2i+1 =
+Output (Assets/StreamingAssets/Experiments/<code>/<name>_seed<N>.interlude.json): the bush table for all trials (ids 2i and 2i+1 =
 left and right of trial i) plus the per-trial metadata: type, varied feature, spawn point and heading, both bushes'
 attributes and true reward, and the correct side. Unity loads the terrain from the session's world file and replaces
 its bush table with this one.
@@ -35,7 +35,7 @@ chooses shape and colour, and checks the relation again at the final positions. 
 contrasts on the relevant feature and one large graded pair.
 
 Usage:
-    python scripts/interlude.py P_Interlude S1_Interlude S2_Interlude S3_Interlude S4_Interlude
+    python scripts/interlude.py TUT_I1 CF_I1 CF_I2 CF_I3 CF_I4 CF_I5 CF_I6 CF_I7     (P_Interlude, S1_Interlude, ... are accepted too)
 """
 
 import argparse
@@ -782,8 +782,8 @@ def export(name, out_dir=None):
 
 def main():
     ap = argparse.ArgumentParser(description="Generate Interlude trial files for Unity.")
-    ap.add_argument("sessions", nargs="+", help="Interlude asset names, e.g. S1_Interlude")
-    ap.add_argument("--out", default=None, help="output directory (default Assets/StreamingAssets/Worlds)")
+    ap.add_argument("sessions", nargs="+", help="Interlude asset names, e.g. CF_I1")
+    ap.add_argument("--out", default=None, help="output directory (default Assets/StreamingAssets/Experiments/<code>)")
     args = ap.parse_args()
     for name in args.sessions:
         path, sidecar = export(name, args.out)

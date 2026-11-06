@@ -3,8 +3,8 @@ and uploading the way the game does (events about every second, a trajectory chu
 finishing the run. It reports the latency of every call and how many calls were slower than the game's grace window
 (`SessionConfig.uploadGraceSeconds`, 4 s: past it a participant would see the game held still behind "Saving your data...").
 
-It writes rows under the build commit given by --commit, which must be registered in `releases` (the printed SQL registers it and
-deletes the rows afterwards) and uses a registered world's hash. Run it against a local server first (`supabase/local/serve.ts`,
+It writes rows under the build commit given by --commit, which must be registered as a release offering --experiment with one session (`server_admin.py register-release`;
+the printed SQL deletes the rows afterwards) and uses a registered world's hash. Run it against a local server first (`supabase/local/serve.ts`,
 see docs/ONLINE_DATA_PLAN.md) and against the project only with a number of participants you are happy to load it with.
 
     FORAGING_API_KEY=<publishable key> ./venv/bin/python scripts/load_test.py --url https://<ref>.supabase.co/functions/v1 \\
@@ -27,7 +27,7 @@ from server_client import Client, ServerError, event_rows
 FPS = 90
 CHUNK_SECONDS = 5
 GRACE = 4.0
-WORLD = Path(__file__).resolve().parent.parent / "Assets" / "StreamingAssets" / "Worlds" / "S1_seed1.world"
+WORLD = Path(__file__).resolve().parent.parent / "Assets" / "StreamingAssets" / "Experiments" / "TUT" / "TUT_S1_seed200.world"
 
 lock = threading.Lock()
 timings = {}          # endpoint -> [ms]
@@ -71,10 +71,10 @@ def participant(index, args, key, world_sha, start_delay):
     build = {"commit": args.commit, "dirty": False, "platform": "LoadTest", "unity_version": "none"}
     client = Client(args.url, key, build, timeout=30)
     rng = np.random.default_rng(index)
-    if call("run-start", lambda: client.start(prolific_pid=f"LOAD_{args.commit}_{index:04d}",
+    if call("run-start", lambda: client.start(args.experiment, prolific_pid=f"LOAD_{args.commit}_{index:04d}",
                                               consent={"version": "load-test", "signature": "Load Test", "at": "2026-10-31T00:00:00Z"})) is None:
         return
-    row = {"name": "Load", "config": {"load_test": True}, "world_file": WORLD.name, "world_sha256": world_sha, "world_seed": 1}
+    row = {"name": "Load", "config": {"load_test": True}, "world_file": WORLD.name, "world_sha256": world_sha, "world_seed": 200}
     seq_events = seq_frames = 0
     pending = []                                    # frames of the current chunk
     t0 = time.perf_counter()
@@ -113,6 +113,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--url", required=True)
     parser.add_argument("--commit", default="load-test")
+    parser.add_argument("--experiment", default="TEST", help="the experiment each participant runs (registered, and offered by the commit's release)")
     parser.add_argument("--participants", type=int, default=10)
     parser.add_argument("--seconds", type=int, default=60, help="session length each participant plays, in real time")
     parser.add_argument("--ramp", type=float, default=10.0, help="seconds over which the participants arrive")

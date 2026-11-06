@@ -51,7 +51,7 @@ import numpy as np
 import costs
 from agents import Body, Explore, Harvest, Look, Stop, WorldKnowledge
 from perception import ConePercept, NullPercept, Observation, percept_for  # noqa: F401  (re-exported)
-from world import generate_world, load_session, _parse_seeds
+from world import generate_world, interlude_name, load_session, _parse_seeds
 
 AGENT_STREAM = 99  # SeedSequence child key for agent randomness, kept apart from the world's streams
 OBS_STEP = 5.0     # world units of walking between looks
@@ -364,7 +364,7 @@ NON_INTERLUDE_OVERRIDES = ("session_duration",)
 @functools.lru_cache(maxsize=None)
 def _interlude_for(session, seed, mode, overrides):
     from interlude import generate_interlude
-    sidecar, params, _ = generate_interlude(f"{session}_Interlude", seed=seed, mode=mode, **dict(overrides))
+    sidecar, params, _ = generate_interlude(interlude_name(session), seed=seed, mode=mode, **dict(overrides))
     return sidecar, float(params.interlude_bonus_per_correct), bool(params.is_practice)
 
 

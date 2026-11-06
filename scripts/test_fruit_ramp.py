@@ -7,7 +7,7 @@ import numpy as np
 
 import fruit_ramp
 
-ASSETS = Path(__file__).resolve().parent.parent / "Assets" / "ScriptableObjects" / "SessionConfig"
+ASSETS = Path(__file__).resolve().parent.parent / "Assets" / "ScriptableObjects" / "Experiments"
 
 
 def test_ramp_has_even_steps_in_gamut():
@@ -24,7 +24,7 @@ def test_smallest_step_is_visible_for_every_vision_type():
 
 def test_assets_carry_the_generated_stops():
     allowed = {name: np.round(fruit_ramp.to_srgb(fruit_ramp.ramp(name)), 4) for name in (fruit_ramp.CHOSEN,)}
-    for path in sorted(ASSETS.glob("*.asset")):
+    for path in sorted(ASSETS.glob("*/*_[SI][0-9].asset")):                           # the sessions and Interludes of every experiment (not the experiment assets)
         text = path.read_text()
         stops = re.findall(r"- \{r: ([\d.e-]+), g: ([\d.e-]+), b: ([\d.e-]+), a: 1\}", text.split("fruitColorRamp:")[1].split("\n  fruitColorPreservation")[0])
         assert len(stops) == fruit_ramp.STOPS, f"{path.name} has {len(stops)} fruit colour stops"

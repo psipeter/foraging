@@ -15,9 +15,10 @@ public class ConsentRecord
     public string at;
 }
 
-// The opening screen of an online build: the consent text (StreamingAssets/consent.txt: a first line "version: <id>", then the
-// text), a participant ID field (filled in and locked when the page address carries a Prolific ID), a typed signature and an
-// agreement box. It runs on every visit, including a return to resume. Built at runtime like the other overlays.
+// The opening screens of an online build, both built at runtime like the other overlays. The ID screen asks for the participant's Prolific ID (filled in
+// and locked when the page address carries one) or name; the server then says whether it holds a consent of the current version for that ID. If not, the
+// consent screen shows the text (StreamingAssets/consent.txt: a first line "version: <id>", then the title and the text) and asks for a typed signature,
+// which counts as agreement. A returning participant who has signed this version is not asked again.
 public class ConsentScreen : MonoBehaviour
 {
     public const string File = "consent.txt";
@@ -31,83 +32,126 @@ public class ConsentScreen : MonoBehaviour
 
     private TMP_InputField _id;
     private TMP_InputField _signature;
-    private Toggle _agree;
     private Button _continue;
     private TextMeshProUGUI _problem;
     private string _version = "unversioned";
 
-    public static ConsentScreen Show(string presetId)
+    // The version line of the consent text ("unversioned" when the file has none or is missing).
+    public static string ReadVersion()
     {
-        Canvas canvas = UiStyle.Canvas("ConsentScreen", null, 6000);
-        canvas.gameObject.AddComponent<GraphicRaycaster>();
-        var screen = canvas.gameObject.AddComponent<ConsentScreen>();
-        screen.Build(presetId);
+        ParseText(out string version, out _, out _);
+        return version;
+    }
+
+    public static ConsentScreen ShowId(string presetId, string problem = null)
+    {
+        ConsentScreen screen = Create();
+        screen.BuildId(presetId, problem);
         return screen;
     }
 
-    private void Build(string presetId)
+    public static ConsentScreen ShowConsent()
     {
+        ConsentScreen screen = Create();
+        screen.BuildConsent();
+        return screen;
+    }
+
+    private static ConsentScreen Create()
+    {
+        Canvas canvas = UiStyle.Canvas("ConsentScreen", null, 6000);
+        canvas.gameObject.AddComponent<GraphicRaycaster>();
         if (FindAnyObjectByType<EventSystem>() == null)
         {
             new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
         }
 
-        string title = "Consent to participate", body = "Consent text not found (StreamingAssets/" + File + ").";
-        if (StreamingData.Exists(File))
-        {
-            string[] lines = StreamingData.ReadText(File).Replace("\r", "").Split('\n');
-            int first = 0;
-            if (lines.Length > 0 && lines[0].StartsWith("version:", StringComparison.OrdinalIgnoreCase))
-            {
-                _version = lines[0].Substring(8).Trim();
-                first = 1;
-            }
-
-            if (lines.Length > first + 1)
-            {
-                title = lines[first].Trim();
-                body = string.Join("\n", lines, first + 1, lines.Length - first - 1).Trim();
-            }
-        }
-
-        UiStyle.Image(transform, "Background", UiStyle.Panel, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-        UiStyle.Label(transform, "Title", title, UiStyle.Title, TextAlignmentOptions.Left, new Vector2(0.1f, 0.88f), new Vector2(0.9f, 0.97f));
-        BuildScroll(body);
-
-        bool locked = !string.IsNullOrEmpty(presetId) && IdPattern.IsMatch(presetId);   // a malformed ID from the address can be corrected
-        UiStyle.Label(transform, "IdLabel", locked ? "Your Prolific ID" : "Participant ID", UiStyle.Small, TextAlignmentOptions.Left,
-            new Vector2(0.1f, 0.255f), new Vector2(0.45f, 0.295f), UiStyle.Muted);
-        _id = Field("IdField", presetId ?? "", new Vector2(0.1f, 0.19f), new Vector2(0.45f, 0.25f));
-        _id.characterLimit = 64;
-        _id.interactable = !locked;
-        UiStyle.Label(transform, "SignatureLabel", "Type your full name to sign", UiStyle.Small, TextAlignmentOptions.Left,
-            new Vector2(0.5f, 0.255f), new Vector2(0.9f, 0.295f), UiStyle.Muted);
-        _signature = Field("SignatureField", "", new Vector2(0.5f, 0.19f), new Vector2(0.9f, 0.25f));
-        _signature.characterLimit = 120;
-
-        _agree = Checkbox("I have read this form and agree to take part", new Vector2(0.1f, 0.115f), new Vector2(0.62f, 0.175f));
-        _problem = UiStyle.Label(transform, "Problem", "", UiStyle.Small, TextAlignmentOptions.Left, new Vector2(0.1f, 0.04f), new Vector2(0.62f, 0.1f),
-            new Color(0.95f, 0.55f, 0.45f));
-        _continue = ContinueButton(new Vector2(0.7f, 0.05f), new Vector2(0.9f, 0.14f));
-
-        _id.onValueChanged.AddListener(_ => Refresh());
-        _signature.onValueChanged.AddListener(_ => Refresh());
-        _agree.onValueChanged.AddListener(_ => Refresh());
-        Refresh();
-        (locked ? _signature : _id).ActivateInputField();
+        return canvas.gameObject.AddComponent<ConsentScreen>();
     }
 
-    private void Refresh()
+    private static void ParseText(out string version, out string title, out string body)
+    {
+        version = "unversioned";
+        title = "Consent to participate";
+        body = "Consent text not found (StreamingAssets/" + File + ").";
+        if (!StreamingData.Exists(File))
+        {
+            return;
+        }
+
+        string[] lines = StreamingData.ReadText(File).Replace("\r", "").Split('\n');
+        int first = 0;
+        if (lines.Length > 0 && lines[0].StartsWith("version:", StringComparison.OrdinalIgnoreCase))
+        {
+            version = lines[0].Substring(8).Trim();
+            first = 1;
+        }
+
+        if (lines.Length > first + 1)
+        {
+            title = lines[first].Trim();
+            body = string.Join("\n", lines, first + 1, lines.Length - first - 1).Trim();
+        }
+    }
+
+    private void BuildId(string presetId, string problem)
+    {
+        UiStyle.Image(transform, "Background", UiStyle.Panel, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        UiStyle.Label(transform, "Title", "Welcome", UiStyle.Title, TextAlignmentOptions.Left, new Vector2(0.1f, 0.78f), new Vector2(0.9f, 0.9f));
+        UiStyle.Label(transform, "Intro", "Enter your Prolific ID to begin, or to continue where you stopped.", UiStyle.Body, TextAlignmentOptions.TopLeft,
+            new Vector2(0.1f, 0.62f), new Vector2(0.9f, 0.76f), UiStyle.Muted);
+
+        bool locked = !string.IsNullOrEmpty(presetId) && IdPattern.IsMatch(presetId);   // a malformed ID from the address can be corrected
+        UiStyle.Label(transform, "IdLabel", locked ? "Your Prolific ID" : "Prolific ID or participant ID", UiStyle.Small, TextAlignmentOptions.Left,
+            new Vector2(0.1f, 0.5f), new Vector2(0.6f, 0.56f), UiStyle.Muted);
+        _id = Field("IdField", presetId ?? "", new Vector2(0.1f, 0.42f), new Vector2(0.6f, 0.5f));
+        _id.characterLimit = 64;
+        _id.interactable = !locked;
+        _problem = UiStyle.Label(transform, "Problem", problem ?? "", UiStyle.Small, TextAlignmentOptions.Left, new Vector2(0.1f, 0.33f), new Vector2(0.9f, 0.4f),
+            new Color(0.95f, 0.55f, 0.45f));
+        _continue = ContinueButton(new Vector2(0.65f, 0.42f), new Vector2(0.9f, 0.5f), AcceptId);
+        _id.onValueChanged.AddListener(_ => RefreshId());
+        RefreshId(problem);
+        _id.ActivateInputField();
+    }
+
+    private void RefreshId(string keepProblem = null)
     {
         string id = _id.text.Trim();
         bool idOk = IdPattern.IsMatch(id);
-        _problem.text = id.Length > 0 && !idOk ? "The ID may contain only letters, digits, - and _." : "";
-        _continue.interactable = idOk && _signature.text.Trim().Length >= 2 && _agree.isOn;
+        if (keepProblem == null)
+        {
+            _problem.text = id.Length > 0 && !idOk ? "The ID may contain only letters, digits, - and _." : "";
+        }
+
+        _continue.interactable = idOk;
     }
 
-    private void Accept()
+    private void AcceptId()
     {
         ParticipantId = _id.text.Trim();
+        Done = true;
+        Destroy(gameObject);
+    }
+
+    private void BuildConsent()
+    {
+        ParseText(out _version, out string title, out string body);
+        UiStyle.Image(transform, "Background", UiStyle.Panel, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+        UiStyle.Label(transform, "Title", title, UiStyle.Title, TextAlignmentOptions.Left, new Vector2(0.1f, 0.88f), new Vector2(0.9f, 0.97f));
+        BuildScroll(body);
+        UiStyle.Label(transform, "SignatureLabel", "Type your full name to sign. This means you have read this form and agree to take part.", UiStyle.Small,
+            TextAlignmentOptions.Left, new Vector2(0.1f, 0.255f), new Vector2(0.9f, 0.295f), UiStyle.Muted);
+        _signature = Field("SignatureField", "", new Vector2(0.1f, 0.19f), new Vector2(0.62f, 0.25f));
+        _signature.characterLimit = 120;
+        _continue = ContinueButton(new Vector2(0.7f, 0.19f), new Vector2(0.9f, 0.25f), AcceptConsent);
+        _signature.onValueChanged.AddListener(_ => _continue.interactable = _signature.text.Trim().Length >= 2);
+        _continue.interactable = false;
+        _signature.ActivateInputField();
+    }
+
+    private void AcceptConsent()
+    {
         Consent = new ConsentRecord { version = _version, signature = _signature.text.Trim(), at = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture) };
         Done = true;
         Destroy(gameObject);
@@ -161,23 +205,7 @@ public class ConsentScreen : MonoBehaviour
         return input;
     }
 
-    private Toggle Checkbox(string caption, Vector2 min, Vector2 max)
-    {
-        var go = new GameObject("Agree", typeof(RectTransform), typeof(Toggle));
-        go.transform.SetParent(transform, false);
-        UiStyle.SetAnchors(go.GetComponent<RectTransform>(), min, max, Vector2.zero, Vector2.zero);
-        var box = UiStyle.Image(go.transform, "Box", UiStyle.Field, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, -22f), new Vector2(44f, 22f));
-        var tick = UiStyle.Image(box.transform, "Tick", UiStyle.Accent, Vector2.zero, Vector2.one, new Vector2(8f, 8f), new Vector2(-8f, -8f));
-        UiStyle.Label(go.transform, "Caption", caption, UiStyle.Small, TextAlignmentOptions.MidlineLeft, Vector2.zero, Vector2.one, UiStyle.Ink)
-            .rectTransform.offsetMin = new Vector2(64f, 0f);
-        var toggle = go.GetComponent<Toggle>();
-        toggle.targetGraphic = box;
-        toggle.graphic = tick;
-        toggle.isOn = false;
-        return toggle;
-    }
-
-    private Button ContinueButton(Vector2 min, Vector2 max)
+    private Button ContinueButton(Vector2 min, Vector2 max, UnityEngine.Events.UnityAction onClick)
     {
         Image background = UiStyle.Image(transform, "Continue", UiStyle.Accent, min, max, Vector2.zero, Vector2.zero);
         UiStyle.Label(background.transform, "Text", "Continue", UiStyle.Body, TextAlignmentOptions.Center, Vector2.zero, Vector2.one, UiStyle.Panel);
@@ -186,7 +214,7 @@ public class ConsentScreen : MonoBehaviour
         ColorBlock colors = button.colors;
         colors.disabledColor = new Color(0.35f, 0.4f, 0.48f, 0.6f);
         button.colors = colors;
-        button.onClick.AddListener(Accept);
+        button.onClick.AddListener(onClick);
         return button;
     }
 }

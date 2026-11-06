@@ -7,22 +7,11 @@ using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 
 // Owns where recorded data goes, across the scene reloads between sessions: the local copy (FileSink) always, and the
-// server (HttpSink) when online.json says so. It starts the run on the server, holds the game still behind a message
+// server (HttpSink) when online.json says so. It adopts the run the experiment menu started on the server (ParticipantSession.PendingRun), holds the game still behind a message
 // while the server is unreachable or has not yet acknowledged data older than the grace window (docs/ONLINE_DATA_PLAN.md,
 // "pause until acknowledged"), and delays leaving a session or quitting until everything is acknowledged.
 public class DataPipeline : MonoBehaviour
 {
-    [Serializable]
-    private class StartReply
-    {
-        public string run_id;
-        public string token;
-        public string status;
-        public bool has_resume;           // `resume` is a nested object, which JsonUtility cannot leave null: this says whether it was sent
-        public ResumeReply resume;
-        public string completion_code;
-    }
-
     [Serializable]
     private class FinishReply
     {
@@ -33,6 +22,7 @@ public class DataPipeline : MonoBehaviour
 
     private static DataPipeline _instance;
     private static float _graceSeconds = 4f;
+    private const string MenuScene = "Boot";
     private const string ProlificCompletionUrl = "https://app.prolific.com/submissions/complete?cc=";
 
     private OnlineSettings _settings;
@@ -46,7 +36,6 @@ public class DataPipeline : MonoBehaviour
     private string _token;
     private string _notice;
     private string _completionCode;
-    private bool _redirecting;
     private FeedbackScreen _feedback;
     private bool _finishing;
     private bool _finished;
@@ -106,31 +95,20 @@ public class DataPipeline : MonoBehaviour
         return false;
     }
 
-    // The study is finished and its data stored: a browser page cannot be closed by the game, so it says so and stays still.
+    // The experiment is finished and its data stored: the completion code, the optional feedback box, and the way on: back to the menu, and to Prolific
+    // for a participant who arrived from Prolific (the address carries PROLIFIC_PID).
     public static void ShowStudyComplete() => Instance.ShowComplete();
 
-    // The final message: the completion code and, for a participant who arrived from Prolific (the address carries PROLIFIC_PID), a way
-    // back to Prolific's completion page. A run this page holds the token of also gets the optional feedback box, and then the
-    // participant returns by a button (typing takes longer than a timer); otherwise Prolific is opened a few seconds later.
     private void ShowComplete()
     {
         SceneSuperseded = true;
         bool fromProlific = _completionCode != null && OnlineSettings.UrlParameter("PROLIFIC_PID") != null;
-        bool feedback = _token != null && _online;
-        _notice = "Thank you! The study is complete." +
-            (_completionCode != null ? $"\n\nYour completion code is {_completionCode}" : "") +
-            (fromProlific && !feedback ? "\n\n<size=65%>You will be returned to Prolific in a few seconds.</size>" : "") +
-            (fromProlific && feedback ? "\n\n<size=65%>Press \"Return to Prolific\" when you are done.</size>" : "") +
-            (!fromProlific ? "\n\n<size=65%>You can close this page.</size>" : "");
-        if (feedback && _feedback == null)
+        _notice = "Thank you! This experiment is complete." + (_completionCode != null ? $"\n\nYour completion code is {_completionCode}" : "");
+        if (_feedback == null)
         {
             PointerLockGuard.Suspended = true;
-            _feedback = FeedbackScreen.Show(_overlay.transform, _message, fromProlific, text => StartCoroutine(SendFeedback(text)), RedirectToProlificNow);
-        }
-        else if (fromProlific && !feedback && !_redirecting)
-        {
-            _redirecting = true;
-            StartCoroutine(RedirectToProlific());
+            _feedback = FeedbackScreen.Show(_overlay.transform, _message, fromProlific, text => StartCoroutine(SendFeedback(text)),
+                () => OpenProlificCompletion(_completionCode), ReturnToMenu);
         }
     }
 
@@ -143,16 +121,11 @@ public class DataPipeline : MonoBehaviour
                 : "Your feedback could not be sent. You can try again.", false));
     }
 
-    private IEnumerator RedirectToProlific()
-    {
-        yield return new WaitForSecondsRealtime(6f);
-        RedirectToProlificNow();
-    }
-
-    private void RedirectToProlificNow()
+    // Opens Prolific's completion page for a code (a browser only).
+    public static void OpenProlificCompletion(string completionCode)
     {
 #if UNITY_WEBGL && !UNITY_EDITOR
-        RedirectTo(ProlificCompletionUrl + System.Uri.EscapeDataString(_completionCode));
+        RedirectTo(ProlificCompletionUrl + System.Uri.EscapeDataString(completionCode));
 #endif
     }
 
@@ -160,6 +133,24 @@ public class DataPipeline : MonoBehaviour
     [System.Runtime.InteropServices.DllImport("__Internal")]
     private static extern void RedirectTo(string url);
 #endif
+
+    // Ends the experiment's run on this side (the next experiment starts a new one) and goes back to the Boot scene, which is the experiment menu.
+    public static void ReturnToMenu()
+    {
+        if (_instance != null)
+        {
+            Destroy(_instance.gameObject);
+            _instance = null;
+        }
+
+        RunId = null;
+        SceneSuperseded = false;
+        ResumeInfo.Pending = null;
+        ParticipantSession.PendingRun = null;
+        PauseGate.Upload = false;
+        PointerLockGuard.Suspended = true;
+        SceneManager.LoadScene(MenuScene);
+    }
 
     // Called when the participant asks to leave the last session's end screen: true when the run is closed on the server
     // (everything stored, then run-finish answered); until then the game shows "saving" / "finishing up".
@@ -208,7 +199,15 @@ public class DataPipeline : MonoBehaviour
 
         if (_online)
         {
-            StartCoroutine(StartRun());
+            RunReply run = ParticipantSession.PendingRun;
+            if (run != null && run.status == "in_progress" && !string.IsNullOrEmpty(run.token))
+            {
+                BecomeReady(run.run_id, run.token, run.has_resume ? run.resume : null);
+            }
+            else
+            {
+                _fatal = "No experiment was started. Please return to the menu.";
+            }
         }
         else
         {
@@ -243,7 +242,8 @@ public class DataPipeline : MonoBehaviour
         string root = Path.Combine(Application.dataPath, "..", "ForagingData");
         string runJson = Json.Obj(("platform", Application.platform.ToString()), ("build_commit", _build?.commit),
             ("build_dirty", _build != null ? (object)_build.dirty : null), ("unity_version", Application.unityVersion),
-            ("started_at", DateTime.UtcNow.ToString("O")), ("online", token != null));
+            ("started_at", DateTime.UtcNow.ToString("O")), ("online", token != null),
+            ("experiment", GameManager.ActiveExperiment != null ? GameManager.ActiveExperiment.Code : null));
         try
         {
             _file = StreamingData.NeedsPreload ? null : new FileSink(root, runId, runJson);      // a browser has no file system
@@ -314,34 +314,6 @@ public class DataPipeline : MonoBehaviour
         {
             ShowComplete();
         }
-    }
-
-    private IEnumerator StartRun()
-    {
-        string body = Json.Obj(("build", new Json.Raw(Json.Obj(("commit", _build?.commit), ("dirty", _build != null ? (object)_build.dirty : false),
-            ("platform", Application.platform.ToString()), ("unity_version", Application.unityVersion)))),
-            ("prolific_pid", _settings.prolificPid),
-            ("consent", _settings.consent != null ? new Json.Raw(Json.Obj(("version", _settings.consent.version),
-                ("signature", _settings.consent.signature), ("at", _settings.consent.at))) : null));
-        yield return HttpSink.Call(_settings.url, _settings.apikey, "run-start", System.Text.Encoding.UTF8.GetBytes(body), request =>
-        {
-            if (request.result != UnityWebRequest.Result.Success)
-            {
-                _fatal = "The server did not accept this version of the game (" + HttpSink.Describe(request) + ").";
-                return;
-            }
-
-            StartReply reply = JsonUtility.FromJson<StartReply>(request.downloadHandler.text);
-            if (reply.status == "in_progress" && !string.IsNullOrEmpty(reply.token))
-            {
-                BecomeReady(reply.run_id, reply.token, reply.has_resume ? reply.resume : null);
-            }
-            else
-            {
-                _completionCode = reply.completion_code;
-                ShowComplete();
-            }
-        });
     }
 
     private bool OnWantsToQuit()

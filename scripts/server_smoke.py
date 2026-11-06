@@ -1,6 +1,6 @@
 """Smoke test of a deployed online data server: one throwaway run through every endpoint, with the checks the local tests make
 (idempotent repeat, 401/409/400 cases, resume state, finish) and the latency of each call. It writes rows under the build commit
-given by --commit, which must be registered in `releases` with n_sessions 1 and be deleted afterwards (the printed SQL does it).
+given by --commit, which must be registered as a release offering --experiment with one session (`server_admin.py register-release`) and be deleted afterwards (the printed SQL does it).
 
     FORAGING_API_KEY=<publishable key> ./venv/bin/python scripts/server_smoke.py --url https://<ref>.supabase.co/functions/v1 \\
         --commit smoke-test --world-sha <sha256 of a registered world file>
@@ -46,6 +46,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--url", required=True)
     parser.add_argument("--commit", default="smoke-test")
+    parser.add_argument("--experiment", default="TEST")
     parser.add_argument("--world-sha", required=True)
     args = parser.parse_args()
     key = os.environ.get("FORAGING_API_KEY")
@@ -65,9 +66,9 @@ def main():
                          {"t": 1.5, "real": 1.5, "type": "harvest_press", "tree_id": 4}])
 
     print("endpoints")
-    check("wrong api key refused", refused(lambda: Client(args.url, "wrong", build).start(), 401, "unauthorized"))
-    check("unregistered build refused", refused(lambda: Client(args.url, key, {**build, "commit": "not-registered"}).start(), 403, "unknown_build"))
-    started = timed("run-start", lambda: c.start(prolific_pid="SMOKE_TEST"), t)
+    check("wrong api key refused", refused(lambda: Client(args.url, "wrong", build).start(args.experiment), 401, "unauthorized"))
+    check("unregistered build refused", refused(lambda: Client(args.url, key, {**build, "commit": "not-registered"}).start(args.experiment), 403, "unknown_build"))
+    started = timed("run-start", lambda: c.start(args.experiment, prolific_pid="SMOKE_TEST"), t)
     check("run starts with a token", started["status"] == "in_progress" and bool(started["token"]) and started["resume"] is None)
     ack = timed("append (session, events, 400 frames)", lambda: c.append(0, session=row, events=events, frames=frames), t)
     check("append acknowledges every stream", ack["events_next"] == 3 and ack["trajectory_next"] == n, ack)
@@ -79,7 +80,7 @@ def main():
     bad[50] ^= 1
     check("a damaged chunk is a 400", refused(lambda: c.append_chunks(0, chunks=[base64.b64encode(bytes(bad)).decode()]), 400, "invalid_chunk"))
     old = c.token
-    state = timed("run-start (returning ID)", lambda: c.start(prolific_pid="SMOKE_TEST"), t)["resume"]
+    state = timed("run-start (returning ID)", lambda: c.start(args.experiment, prolific_pid="SMOKE_TEST"), t)["resume"]
     q = codec.quantize(frames)[-1]
     check("resume state is right", state["fruits_taken"] == [{"tree": 3, "n": 1}] and state["open_bout_tree"] == 4 and state["running_total"] == 2.0
           and state["trajectory_next"] == n and state["events_next"] == 3 and abs(state["pose"]["x"] - q[1]) < 1e-9, state)

@@ -15,9 +15,9 @@ def _humans():
                            "build_dirty": [1, 0]})
     config = '{"interludeMode": 4}'
     sessions = pd.DataFrame([
-        {"run_id": r, "session_index": i, "name": n, "completed": 1, "duration_s": d, "n_trials": nt, "n_correct": nc, "config": config}
-        for r, nc in zip(runs, (15, 4)) for i, (n, d, nt) in enumerate((("S1", 10.0, np.nan), ("S1_Interlude", np.nan, 20)))])
-    sessions.loc[sessions["name"] == "S1", "n_correct"] = np.nan
+        {"run_id": r, "session_index": i, "name": n, "block": "S1", "kind": k, "completed": 1, "duration_s": d, "n_trials": nt, "n_correct": nc, "config": config}
+        for r, nc in zip(runs, (15, 4)) for i, (n, k, d, nt) in enumerate((("S1", "session", 10.0, np.nan), ("S1_Interlude", "interlude", np.nan, 20)))])
+    sessions.loc[sessions["kind"] == "session", "n_correct"] = np.nan
     fruits = pd.DataFrame({"run_id": ["run-a"] * 3 + ["run-b"] * 1, "session_index": 0, "seq": [0, 1, 2, 0], "t": [2.0, 4.0, 8.0, 3.0],
                            "reward": [5.0, 5.0, 10.0, 7.0]})
     return human_data.Humans(people, sessions, pd.DataFrame(), fruits, pd.DataFrame(), None)

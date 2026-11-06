@@ -4,7 +4,7 @@ using System.IO;
 using System.Text;
 using UnityEngine;
 
-// A generated world, loaded from StreamingAssets/Worlds/<session>_seed<seed>.world. The files are written by
+// A generated world, loaded from StreamingAssets/Experiments/<code>/<session>_seed<seed>.world. The files are written by
 // scripts/world.py (the source of truth for placement, attributes, terrain fields and per-fruit rewards);
 // Unity only renders and plays them. Format: "FWLD", uint32 version, uint32 header length, JSON header, then
 // float32 little-endian grids (res * res each, index i * res + j, i across X, j across Z).
@@ -65,13 +65,13 @@ public class WorldData
     public static string PathFor(SessionConfig config)
     {
         string owner = config.IsInterlude ? config.InterludeFor : config.name;
-        return $"Worlds/{owner}_seed{config.WorldSeed}.world";
+        return $"Experiments/{config.ExperimentCode}/{owner}_seed{config.WorldSeed}.world";
     }
 
     // An Interlude's bush table and trial list (written by scripts/interlude.py), relative to StreamingAssets.
     public static string InterludePathFor(SessionConfig config)
     {
-        return $"Worlds/{config.name}_seed{config.WorldSeed}.interlude.json";
+        return $"Experiments/{config.ExperimentCode}/{config.name}_seed{config.WorldSeed}.interlude.json";
     }
 
     [Serializable]

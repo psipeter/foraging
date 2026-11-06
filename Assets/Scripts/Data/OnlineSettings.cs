@@ -36,12 +36,8 @@ public class OnlineSettings
     public string apikey;
     public bool uploadInEditor;
 
+    // The Prolific ID the page address or the command line carries (the login screen offers it, locked; a lab build with one skips the screen).
     [NonSerialized] public string prolificPid;
-    [NonSerialized] public ConsentRecord consent;
-
-    // What the opening screen collected (Bootstrap sets these before the game scene loads; Load applies them).
-    public static string EnteredId;
-    public static ConsentRecord EnteredConsent;
 
     public bool Active =>
         enabled && !string.IsNullOrEmpty(url) && !string.IsNullOrEmpty(apikey) && (!Application.isEditor || uploadInEditor);
@@ -88,12 +84,6 @@ public class OnlineSettings
             settings.url = UrlParameter("onlineUrl");
             settings.apikey = UrlParameter("onlineKey") ?? settings.apikey;
             settings.enabled = true;
-        }
-
-        if (EnteredId != null)
-        {
-            settings.prolificPid = EnteredId;
-            settings.consent = EnteredConsent;
         }
 
         return settings;

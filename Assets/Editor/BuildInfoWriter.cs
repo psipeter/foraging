@@ -57,7 +57,7 @@ public class BuildInfoWriter : IPreprocessBuildWithReport
         AssetDatabase.ImportAsset("Assets/StreamingAssets/streaming_files.txt");
     }
 
-    // A browser cannot list a directory: the Bootstrap scene fetches the files named here (StreamingData.Preload).
+    // A browser cannot list a directory: the Bootstrap scene fetches the common files named here (StreamingData.Preload).
     private static void WriteStreamingFileList()
     {
         string folder = Path.Combine(Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, "..")), "Assets", "StreamingAssets");
@@ -65,7 +65,9 @@ public class BuildInfoWriter : IPreprocessBuildWithReport
         foreach (string file in Directory.GetFiles(folder, "*", SearchOption.AllDirectories))
         {
             string relative = Path.GetRelativePath(folder, file).Replace('\\', '/');
-            if (!relative.EndsWith(".meta") && relative != "streaming_files.txt")
+            // The experiments' own files (worlds, Interlude files, instruction texts) are fetched when the participant chooses an experiment
+            // (StreamingData.Fetch with the files its sessions name), so the list holds only what every participant needs.
+            if (!relative.EndsWith(".meta") && relative != "streaming_files.txt" && !relative.StartsWith("Experiments/"))
             {
                 names.Add(relative);
             }
