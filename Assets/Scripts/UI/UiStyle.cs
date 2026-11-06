@@ -30,7 +30,13 @@ public static class UiStyle
     // A key or mouse name on a highlighted chip (TextMeshPro rich text).
     public static string Chip(string key)
     {
-        return $"<mark=#FFFFFF55 padding=\"18,18,6,6\"><b>{key}</b></mark>";
+        return $"<mark=#FFFFFF55 padding=\"18,18,6,6\"><b>{key}</b></mark><space=10>";
+    }
+
+    // Every [Key] in the text as a key chip.
+    public static string Chips(string text)
+    {
+        return System.Text.RegularExpressions.Regex.Replace(text, @"\[([^\]]+)\]", m => Chip(m.Groups[1].Value));
     }
 
     private static TMP_FontAsset _font, _display, _bold;
@@ -224,15 +230,36 @@ public static class UiStyle
         return button;
     }
 
-    // The backdrop of the screens before the game: a frame of the world (Resources/Backdrops/menu) drifting very slowly, under a dark scrim; the plain panel colour when the image is missing.
+    private static GameObject _bootBackdrop;
+
+    // The one backdrop under all of the Boot scene's screens, made once (its own canvas, below them): switching from one screen to the next then leaves the picture
+    // as it is, instead of each screen building its own and the new one starting from rest.
+    public static void BootBackdrop()
+    {
+        if (_bootBackdrop != null)
+        {
+            return;
+        }
+
+        Canvas canvas = Canvas("BootBackdrop", null, 50);
+        _bootBackdrop = canvas.gameObject;
+        Backdrop(canvas.transform);
+    }
+
+    // The backdrop of the screens before the game: a still frame of the world (Resources/Backdrops/menu) under a dark scrim; the plain panel colour when the image is missing.
     public static void Backdrop(Transform parent, float scrimAlpha = 0.72f)
     {
+        if (_bootBackdrop != null)
+        {
+            return;                                                      // the Boot scene's screens share one backdrop (BootBackdrop), so changing screens does not reload or restart it
+        }
+
         Texture texture = Resources.Load<Texture>("Backdrops/menu");
         Image fallback = Image(parent, "Backdrop", new Color(0.06f, 0.07f, 0.09f), Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
         fallback.raycastTarget = false;
         if (texture != null)
         {
-            var go = new GameObject("BackdropImage", typeof(RectTransform), typeof(RawImage), typeof(BackdropDrift));
+            var go = new GameObject("BackdropImage", typeof(RectTransform), typeof(RawImage));
             go.transform.SetParent(parent, false);
             SetAnchors(go.GetComponent<RectTransform>(), Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             var raw = go.GetComponent<RawImage>();

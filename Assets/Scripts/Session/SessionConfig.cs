@@ -175,7 +175,7 @@ public class SessionConfig : ScriptableObject
 
     [Header("Music")]
     [Tooltip("Volume (0-1) of the menu and score-screen music (UI/Music.cs). 0 disables. It never plays during a session.")]
-    [SerializeField] [Range(0f, 1f)] private float musicVolume = 0.3f;
+    [SerializeField] [Range(0f, 1f)] private float musicVolume = 0.15f;
 
     [Header("Ambient Audio")]
     [Tooltip("Volume (0-1) of footsteps while walking. 0 disables. Ambient audio is purely passive: it never depends on bush attributes, rewards, terrain or time of day.")]

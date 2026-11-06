@@ -111,45 +111,28 @@ public class InstructionsPanel : MonoBehaviour
             .Replace("{trial_seconds}", (sessionConfig != null ? sessionConfig.InterludeTrialSeconds : 0f).ToString("0"));
     }
 
-    // A faint controls hint kept on screen for the whole session (sessions that set one in their config).
+    // The controls hint kept on screen for the whole session (sessions that set one in their config), on a pill at the bottom: "[Mouse] look  [W / S] walk ...".
     private void CreateControlsReminder()
     {
-        if (sessionConfig == null || string.IsNullOrEmpty(sessionConfig.ControlsReminder) ||
-            panel == null || bodyText == null)
+        if (sessionConfig == null || string.IsNullOrEmpty(sessionConfig.ControlsReminder) || panel == null)
         {
             return;
         }
 
-        GameObject go = new GameObject("ControlsReminder", typeof(RectTransform));
-        go.transform.SetParent(panel.transform.parent, false);
-        RectTransform rect = go.GetComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0f);
-        rect.pivot = new Vector2(0.5f, 0f);
-        rect.anchoredPosition = new Vector2(0f, 24f);
-        rect.sizeDelta = new Vector2(1800f, 56f);
-
-        TextMeshProUGUI text = go.AddComponent<TextMeshProUGUI>();
-        text.font = bodyText.font;
-        UiStyle.Apply(text, UiStyle.Hint);
-        text.alignment = TextAlignmentOptions.Center;
-        text.color = new Color(1f, 1f, 1f, sessionConfig.ControlsReminderOpacity);
-        text.raycastTarget = false;
-        text.richText = true;
-        text.text = FormatControls(sessionConfig.ControlsReminder);
+        HintPill.Create(panel.transform.parent, "ControlsReminder", 44f, 0.5f).Show(FormatControls(sessionConfig.ControlsReminder));
     }
 
-    // "Mouse: look. W / S: walk." -> each "Key: action" pair with the key on a highlighted chip, pairs spaced apart.
+    // "Mouse: look. W / S: walk." -> "[Mouse] look      [W / S] walk": each "Key: action" pair with the key as a chip, pairs spaced apart.
     private static string FormatControls(string reminder)
     {
         var pairs = new System.Collections.Generic.List<string>();
         foreach (string part in reminder.Split(new[] { '.' }, System.StringSplitOptions.RemoveEmptyEntries))
         {
             int colon = part.IndexOf(':');
-            pairs.Add(colon < 0 ? part.Trim()
-                : $"{UiStyle.Chip(part.Substring(0, colon).Trim())}  {part.Substring(colon + 1).Trim()}");
+            pairs.Add(colon < 0 ? part.Trim() : $"[{part.Substring(0, colon).Trim()}] {part.Substring(colon + 1).Trim()}");
         }
 
-        return string.Join("<space=70>", pairs);
+        return string.Join("      ", pairs);
     }
 
     private void Update()

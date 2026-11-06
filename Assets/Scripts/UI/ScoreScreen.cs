@@ -2,13 +2,13 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 
-// The screen at the end of a part, a session's or an Interlude's: "Part 3 of 14 complete", the points of that part very large in a panel, and the prompt. The
-// world stays behind it and the camera turns slowly, so it is not a still frame. The music (UI/Music.cs) starts with it. Built at runtime.
+// The screen at the end of a part, a session's or an Interlude's: "Part 3 of 14 complete", the points of that part very large in a panel, and under a rule the prompt
+// as the last line of the panel. The world stays behind it and the camera turns slowly, so it is not a still frame. The music (UI/Music.cs) starts with it. Built at runtime.
 public class ScoreScreen : MonoBehaviour
 {
     private const float DegreesPerSecond = 3.5f;
 
-    private Transform _promptHolder;
+    private TextMeshProUGUI _prompt;
 
     public static ScoreScreen Show(int part, int partCount, float points, string prompt, CameraController camera)
     {
@@ -26,23 +26,20 @@ public class ScoreScreen : MonoBehaviour
     private void Build(Transform canvas, int part, int partCount, float points, string prompt)
     {
         UiStyle.Image(canvas, "Scrim", new Color(0.04f, 0.05f, 0.07f, 0.34f), Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero).raycastTarget = false;
-        Transform panel = UiStyle.Rounded(canvas, "Panel", UiStyle.Glass, 0f, 20f, 900f, 520f, UiStyle.PanelRadius).transform;
-        UiStyle.Eyebrow(panel, $"Part {part} of {partCount} complete", 0f, 190f, 780f, TextAlignmentOptions.Center);
-        TextMeshProUGUI number = UiStyle.Text(panel, "Points", $"{points:F0}", 230f, TextAlignmentOptions.Center, 0f, 20f, 780f, 260f);
+        Transform panel = UiStyle.Rounded(canvas, "Panel", UiStyle.Glass, 0f, 10f, 900f, 640f, UiStyle.PanelRadius).transform;
+        UiStyle.Eyebrow(panel, $"Part {part} of {partCount} complete", 0f, 262f, 780f, TextAlignmentOptions.Center);
+        TextMeshProUGUI number = UiStyle.Text(panel, "Points", $"{points:F0}", 230f, TextAlignmentOptions.Center, 0f, 100f, 780f, 260f);
         number.font = UiStyle.DisplayFont;
-        UiStyle.Text(panel, "Label", "points", UiStyle.Heading, TextAlignmentOptions.Center, 0f, -150f, 780f, 60f, UiStyle.Muted).font = UiStyle.DisplayFont;
-        _promptHolder = InstructionsScreen.Prompt(canvas, prompt);
+        UiStyle.Text(panel, "Label", "points", UiStyle.Heading, TextAlignmentOptions.Center, 0f, -70f, 780f, 60f, UiStyle.Muted).font = UiStyle.DisplayFont;
+        UiStyle.Rounded(panel, "Rule", new Color(1f, 1f, 1f, 0.16f), 0f, -150f, 780f, 2f, 1f);
+        _prompt = UiStyle.Text(panel, "Prompt", UiStyle.Chips(prompt), 34f, TextAlignmentOptions.Center, 0f, -222f, 780f, 56f, UiStyle.Ink);
+        _prompt.richText = true;
     }
 
     // Replaces the prompt ("Loading the next part...").
     public void SetPrompt(string prompt)
     {
-        if (_promptHolder != null)
-        {
-            Destroy(_promptHolder.gameObject);
-        }
-
-        _promptHolder = InstructionsScreen.Prompt(transform, prompt);
+        _prompt.text = UiStyle.Chips(prompt);
     }
 
     private IEnumerator Drift(CameraController camera)

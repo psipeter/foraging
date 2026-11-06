@@ -27,6 +27,7 @@ public class Bootstrap : MonoBehaviour
 
     private IEnumerator Run()
     {
+        UiStyle.BootBackdrop();
         _status = StatusScreen.Show();
         if (StreamingData.NeedsPreload)
         {
@@ -237,7 +238,7 @@ public class Bootstrap : MonoBehaviour
                 yield break;
             }
 
-            _status.Set("Ready", experiment.Title, "Click anywhere to begin.\n<size=75%>The mouse will be captured by the game. Press Escape to release it.</size>");
+            _status.Set("Ready", experiment.Title, "The mouse will be captured by the game. Press [Escape] to release it.".Replace("[Escape]", UiStyle.Chip("Escape")), -1f, "[Click] anywhere to begin");
             yield return null;
             yield return new WaitUntil(() => Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame);
 

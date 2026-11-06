@@ -6,7 +6,8 @@ using UnityEngine.UI;
 // Loading, connecting, "click anywhere to begin" and the errors all use it, so they look alike.
 public class StatusScreen : MonoBehaviour
 {
-    private TextMeshProUGUI _eyebrow, _title, _body, _percent;
+    private TextMeshProUGUI _eyebrow, _title, _body, _percent, _prompt;
+    private GameObject _rule;
     private RectTransform _barFill;
     private GameObject _bar;
     private GameObject _root;
@@ -31,15 +32,22 @@ public class StatusScreen : MonoBehaviour
         _bar = UiStyle.Rounded(panel, "Bar", new Color(1f, 1f, 1f, 0.14f), 0f, -150f, 720f, 14f, 7f).gameObject;
         _barFill = UiStyle.Rounded(_bar.transform, "Fill", UiStyle.Accent, 0f, 0f, 720f, 14f, 7f).rectTransform;
         _percent = UiStyle.Text(panel, "Percent", "", UiStyle.Small, TextAlignmentOptions.Center, 0f, -200f, 400f, 40f, UiStyle.Muted);
+        _rule = UiStyle.Rounded(panel, "Rule", new Color(1f, 1f, 1f, 0.16f), 0f, -128f, 820f, 2f, 1f).gameObject;
+        _prompt = UiStyle.Text(panel, "Prompt", "", 36f, TextAlignmentOptions.Center, 0f, -188f, 820f, 56f, UiStyle.Ink);
+        _prompt.richText = true;
     }
 
-    // `progress` 0 to 1 shows the bar; a negative value hides it. Rich text in `body` works ([Key] chips are the caller's business).
-    public void Set(string eyebrow, string title, string body = "", float progress = -1f)
+    // `progress` 0 to 1 shows the bar; a negative value hides it. `prompt`, when given, is the last line of the panel under a rule ("[Click] anywhere to begin"): a
+    // [Key] in it becomes a key chip.
+    public void Set(string eyebrow, string title, string body = "", float progress = -1f, string prompt = null)
     {
         _root.SetActive(true);
         _eyebrow.text = eyebrow.ToUpperInvariant();
         _title.text = title;
         _body.text = body;
+        _rule.SetActive(!string.IsNullOrEmpty(prompt));
+        _prompt.gameObject.SetActive(!string.IsNullOrEmpty(prompt));
+        _prompt.text = string.IsNullOrEmpty(prompt) ? "" : UiStyle.Chips(prompt);
         _bar.SetActive(progress >= 0f);
         _percent.gameObject.SetActive(progress >= 0f);
         if (progress >= 0f)

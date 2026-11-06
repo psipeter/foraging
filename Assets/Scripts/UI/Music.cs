@@ -7,8 +7,8 @@ public class Music : MonoBehaviour
 {
     private enum Mode { None, Menu, Score }
 
-    // The loudness of the music, 0 to 1 (SessionConfig.musicVolume sets it at each session; the menus use the last value, 0.3 at first).
-    public static float Volume = 0.3f;
+    // The loudness of the music, 0 to 1 (SessionConfig.musicVolume sets it at each session; the menus use the last value, 0.15 at first).
+    public static float Volume = 0.15f;
 
     private const float FadeSeconds = 1.5f;
     private static Music _instance;
@@ -23,7 +23,7 @@ public class Music : MonoBehaviour
     private static void Reset()
     {
         _instance = null;
-        Volume = 0.3f;
+        Volume = 0.15f;
     }
 
     private static Music Instance

@@ -55,7 +55,12 @@ public class CompletionScreen : MonoBehaviour
 
         UiStyle.Text(panel, "CodeLabel", "Your completion code", UiStyle.Small, TextAlignmentOptions.Left, codeX, 178f, 560f, 36f, UiStyle.Muted);
         Transform codeBox = UiStyle.Rounded(panel, "CodeBox", UiStyle.FieldGlass, codeX, 112f, 560f, 88f, 18f).transform;
-        UiStyle.Text(codeBox, "Code", code ?? "", 48f, TextAlignmentOptions.Center, 0f, 0f, 540f, 80f).characterSpacing = 3f;
+        TextMeshProUGUI codeText = UiStyle.Text(codeBox, "Code", code ?? "", 48f, TextAlignmentOptions.Center, 0f, 0f, 520f, 80f);
+        codeText.characterSpacing = 3f;
+        codeText.enableAutoSizing = true;                                    // a long code shrinks to fit its box
+        codeText.fontSizeMin = 22f;
+        codeText.fontSizeMax = 48f;
+        codeText.textWrappingMode = TextWrappingModes.NoWrap;
 
         UiStyle.Text(panel, "Prompt", "Optional: tell us what you thought of the game", UiStyle.Small, TextAlignmentOptions.Left, 0f, 20f, 1180f, 36f, UiStyle.Muted);
         Image box = UiStyle.Rounded(panel, "Box", UiStyle.FieldGlass, 0f, -80f, 1180f, 150f, 16f);

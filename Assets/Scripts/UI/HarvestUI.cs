@@ -53,11 +53,14 @@ public class HarvestUI : MonoBehaviour
         HarvestManager.OnHintChanged -= HandleHintChanged;
     }
 
+    private HintPill _hint;
+
     private void Start()
     {
         if (hintText != null)
         {
-            hintText.gameObject.SetActive(false);
+            hintText.gameObject.SetActive(false);                           // the scene's loose hint text is not used: the hint is a pill (UI/HintPill.cs)
+            _hint = HintPill.Create(hintText.transform.parent, "HintPill", 140f);
         }
 
         if (totalScoreText != null)
@@ -205,7 +208,7 @@ public class HarvestUI : MonoBehaviour
 
     private void HandleHintChanged(HarvestHint hint)
     {
-        if (hintText == null)
+        if (_hint == null)
         {
             return;
         }
@@ -213,15 +216,13 @@ public class HarvestUI : MonoBehaviour
         switch (hint)
         {
             case HarvestHint.Available:
-                hintText.text = $"Hold {UiStyle.Chip("Space")} to harvest";
-                hintText.gameObject.SetActive(true);
+                _hint.Show("Hold [Space] to harvest");
                 break;
             case HarvestHint.Paused:
-                hintText.text = "Look toward the bush to keep harvesting";
-                hintText.gameObject.SetActive(true);
+                _hint.Show("Look toward the bush to keep harvesting");
                 break;
             default:
-                hintText.gameObject.SetActive(false);
+                _hint.Hide();
                 break;
         }
     }
