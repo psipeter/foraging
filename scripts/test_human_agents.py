@@ -57,11 +57,16 @@ def test_fast_mode_teaches_the_same_critic_and_shows_only_the_harvested_bushes()
 FINISHED = sorted(glob.glob(str(Path(__file__).resolve().parent.parent / "ForagingData" / "*" / "02" / "session.json")))
 
 
+def _asset_exists(log):
+    """A pilot run of a session that has since been removed (an archived design's variant) cannot be rebuilt."""
+    return (Path(__file__).resolve().parent.parent / "Assets" / "ScriptableObjects" / "SessionConfig" / f"{log.name}.asset").exists()
+
+
 @pytest.mark.skipif(not FINISHED, reason="no participant data in ForagingData/")
 def test_every_participant_session_is_replayed_fast_to_its_logged_score():
     for path in FINISHED:
         log = replay.load_session_log(Path(path).parent)
-        if log.final_score is None:
+        if log.final_score is None or len(log.traj) == 0 or not _asset_exists(log):      # (a session stopped before the first frame has nothing to replay)
             continue
         fed = human_agents.replay_into_agent(REGISTRY["learner"](), log, fast=True)
         assert fed.total == log.final_score and fed.n_steps == 0
@@ -91,7 +96,7 @@ def test_a_participants_interlude_is_answered_trial_by_trial_by_the_agent_that_l
     for path in FINISHED:
         folder = Path(path).parent
         log = replay.load_session_log(folder)
-        if log.final_score is None or not human_agents.interlude_folder(folder).exists():
+        if log.final_score is None or not _asset_exists(log) or not human_agents.interlude_folder(folder).exists():
             continue
         fed = human_agents.replay_into_agent(REGISTRY["gp_mean"](), log, fast=True)
         rows = human_agents.interlude_comparison(fed.agent, human_agents.interlude_folder(folder))

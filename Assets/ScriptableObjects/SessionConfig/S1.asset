@@ -13,12 +13,13 @@ MonoBehaviour:
   m_Name: S1
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
   sessionDuration: 90
-  worldSeed: 1
+  worldSeed: 201
   isPractice: 0
   isInterlude: 0
   interludeFor: 
   interludeMode: 0
   interludeTrialCount: 10
+  interludeTrialLimit: 0
   interludeTrialSeconds: 7
   interludeHarvestFruits: 10
   interludeSwitchPolicy: 3
@@ -39,13 +40,13 @@ MonoBehaviour:
   controlsReminderOpacity: 0.35
   rewardFunction:
     shapeComponent:
-      basisFunctionType: 1
-      weight: 4
+      basisFunctionType: 0
+      weight: 0
       peak: 0
       width: 0
     colorComponent:
       basisFunctionType: 0
-      weight: 0
+      weight: 4
       peak: 0
       width: 0
     moistureComponent:
@@ -54,6 +55,7 @@ MonoBehaviour:
       peak: 0
       width: 0
     bumps: []
+    products: []
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -129,18 +131,30 @@ MonoBehaviour:
   shapeRange: {x: 0, y: 1}
   canopyWidthRange: {x: 1, y: 6}
   canopyHeightRange: {x: 1, y: 15}
+  fruitSizeFollows: 0
+  fruitSizeSlope: 0.3
+  canopyForm: 0
+  canopyEdgeRadius: 1.5
+  spatialBalance: 2
+  shapeVaries: 0
+  shapeWhenFixed: 0.5
+  colorVaries: 1
+  colorWhenFixed: 0.5
+  randomBushValueRange: {x: 0, y: 0}
   harvestRangeGapBase: 7
   harvestRangeGapPerRadius: 0
   fruitColorPreservation: 0.5
   fruitShadingFloor: 0.65
   fruitBrightness: 1.2
   fruitExposureCompensation: 1
+  canopyTintDark: {r: 0.55, g: 0.7, b: 0.65, a: 1}
+  canopyTintLight: {r: 1.3, g: 1.2, b: 1.3, a: 1}
   terrainNoiseFrequency: 2
   terrainNoiseOctaves: 1
-  terrainMaxElevation: 12
-  moistureTerraceLevels: 0
-  moistureTerraceSharpness: 0.5
-  moistureTerraceResidual: 0
+  terrainMaxElevation: 6
+  moistureTerraceLevels: 4
+  moistureTerraceSharpness: 0.3
+  moistureTerraceResidual: 0.1
   terrainMeshResolution: 449
   worldHalfExtent: 350
   sunStartElevation: 30

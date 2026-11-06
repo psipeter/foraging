@@ -57,6 +57,8 @@ def session_params(log):
         field_name = worldmod._snake(key)
         if hasattr(params, field_name) and isinstance(_value(value), (int, float, bool, tuple)):
             setattr(params, field_name, _value(value))
+    if "rewardFunction" in log.config:                                         # nested: the asset's current reward function may be another session's
+        params.reward_function = log.config["rewardFunction"]
     return params
 
 

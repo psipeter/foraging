@@ -258,12 +258,12 @@ def test_sim_record_needs_a_tag_and_the_flags_need_record(monkeypatch, capsys, t
 @pytest.mark.slow
 def test_a_random_mode_interlude_run_is_its_own_environment_and_scores_the_random_trials(store):
     overrides = {**OVERRIDES, "interlude_trial_count": 8}
-    rand = record_run("nearest", "P", [0], "r", kind="interlude", n_samples=5, interlude_mode="random", overrides=overrides, store=store)
+    rand = record_run("nearest", "S1", [0], "r", kind="interlude", n_samples=5, interlude_mode="random", overrides=overrides, store=store)
     row = rand.rows[0]
     assert row["interlude_trials"] == 8 and set(row["by_type"]) == {"random"}
     env = store.select("SELECT env_json FROM environments WHERE env_id = ?", (rand.env_id,))[0]["env_json"]
     assert '"interlude_mode":"random"' in env
-    designed = record_run("nearest", "P", [0], "d", kind="interlude", n_samples=5, interlude_mode="designed", overrides=overrides, store=store)
+    designed = record_run("nearest", "S1", [0], "d", kind="interlude", n_samples=5, interlude_mode="designed", overrides=overrides, store=store)
     assert designed.env_id != rand.env_id and designed.n_computed == 1
 
 

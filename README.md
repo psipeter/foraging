@@ -3,9 +3,9 @@
 A Unity 3D foraging task for psychology research on **feature-based reward
 learning** in naturalistic environments. Participants navigate a procedurally
 generated landscape and harvest trees for fruit; each tree's reward is a
-researcher-defined function of three continuous attributes (canopy shape,
-fruit color, ground moisture). The research question is how participants
-learn that function from experience.
+researcher-defined function of continuous attributes (canopy shape and
+fruit color; the ground and its moisture are decoration). The research question is how
+participants learn that function from experience, and how that depends on its complexity.
 
 It is a research tool first and a game second: the design favors perceptual
 clarity of the attributes and unambiguous reward feedback over polish.
@@ -22,8 +22,9 @@ Each session is a fixed-length day (sunrise → sunset). Moving costs time;
 harvesting a tree costs time and yields a reward. The goal is to maximize
 total reward before sunset. There is no combat, inventory, or crafting —
 the loop is navigate → observe → decide → harvest. A participant plays a
-practice session (`P`) and four sessions (`S1`–`S4`), each with its own world seed and
-reward function; the reward function gets more complex across sessions. After each session
+practice session (`P`) and seven sessions (`S1`–`S7`), each with its own world seed and
+reward function; the reward function gets more complex across sessions (one feature, a peak,
+which of two features matters, a weighted mixture, two interactions). After each session
 comes an **Interlude**: a short forced-choice block in the same world where the participant
 picks which of two bushes pays more (no outcomes shown; correct choices earn a hidden bonus).
 

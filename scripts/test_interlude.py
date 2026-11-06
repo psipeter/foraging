@@ -7,6 +7,7 @@ import pytest
 from interlude import (FEATURES, ONE_LEVEL, SAME_TOL, TIE_TOLERANCE, TWO_LEVELS_MIN, bush_position, canopy_radius,
                        check_geometry, generate_interlude, has_hump, sidecar_path, trial_mix, write_sidecar)
 from interlude import CANOPY_AIM_HEIGHT, HUMP_TOLERANCE
+from legacy_sessions import legacy
 from world import _basis, bush_value, check_values, generate_world, load_session
 
 NAMES = ["P_Interlude", "S1_Interlude", "S2_Interlude", "S3_Interlude", "S4_Interlude"]
@@ -14,12 +15,30 @@ NAMES = ["P_Interlude", "S1_Interlude", "S2_Interlude", "S3_Interlude", "S4_Inte
 # Generating an Interlude searches half a million placements (a few seconds each), so each one is generated once per run.
 _CACHE = {}
 
+# The generator tests are about the generator, not about one session of the ladder: both features vary in them (S1 and S2 of the ladder have
+# identical shapes or colours), and the practice session (a random reward no feature predicts) is stood in for by a shape-linear reward.
+BOTH_VARY = {"shape_varies": True, "color_varies": True}
+
+
+def _practice_stand_in():
+    rf = {k: (dict(v) if isinstance(v, dict) else v) for k, v in load_session("S2").reward_function.items()}
+    rf["shapeComponent"] = {**rf["shapeComponent"], "basisFunctionType": 0, "weight": 4.0, "peak": 0.0, "width": 0.0}
+    rf["colorComponent"] = {**rf["colorComponent"], "weight": 0.0}
+    return {"reward_function": rf, "random_bush_value_range": (0.0, 0.0)}
+
+
+def design_overrides(name):
+    """S3 to S5 are the old sessions of those names (moisture paying, terraces, bumps), which exercise the generator's moisture and bump logic (legacy_sessions.py)."""
+    if name[:2] in ("S3", "S4", "S5"):
+        return {**BOTH_VARY, **legacy(name[:2])}
+    return {**BOTH_VARY, **(_practice_stand_in() if name.startswith("P_") else {})}
+
 
 def get(name):
     """The designed-mode Interlude of an asset (whatever the asset's own interludeMode is; the designed-stimulus tests are about this),
     with the design's own length (3 trials practice, 5 otherwise), not the asset's, which is for the random trials the game plays."""
     if name not in _CACHE:
-        _CACHE[name] = generate_interlude(name, mode="designed", interlude_trial_count=3 if name.startswith("P_") else 5)
+        _CACHE[name] = generate_interlude(name, mode="designed", interlude_trial_count=3 if name.startswith("P_") else 5, **design_overrides(name))
     return _CACHE[name]
 
 
@@ -51,7 +70,7 @@ _RANDOM = {}
 
 def get_random(name, seed=None):
     if (name, seed) not in _RANDOM:
-        _RANDOM[(name, seed)] = generate_interlude(name, mode="random", interlude_trial_count=50, seed=seed)
+        _RANDOM[(name, seed)] = generate_interlude(name, mode="random", interlude_trial_count=50, seed=seed, **design_overrides(name))
     return _RANDOM[(name, seed)]
 
 
@@ -102,7 +121,7 @@ def test_committed_interlude_file_is_fresh(built_asset):
 
 def test_interlude_assets_copy_the_session_they_probe(built):
     name, sidecar, params, terrain = built
-    base = load_session(params.interlude_for)
+    base = load_session(params.interlude_for, **design_overrides(name))
     assert params.reward_function == base.reward_function
     assert int(params.world_seed) == int(base.world_seed) == sidecar["seed"]
     assert check_values(params) == check_values(base)           # every terrain parameter is a copy
@@ -356,7 +375,8 @@ def test_the_mode_comes_from_the_asset_unless_given_and_designed_files_carry_no_
 
 def test_random_mode_elevation_floor_applies_only_where_the_asset_sets_it():
     for name in ("S3_Interlude", "S4_Interlude"):
-        sidecar, params, terrain = get_random(name) if name in RANDOM_NAMES else generate_interlude(name, mode="random", interlude_trial_count=50)
+        # (the old S3 and S4 Interlude assets set a floor of 3 world units; the new assets do not, so the floor is set here)
+        sidecar, params, terrain = generate_interlude(name, mode="random", interlude_trial_count=50, **{**design_overrides(name), "interlude_min_elevation_difference": 3.0})
         assert params.interlude_min_elevation_difference == 3.0
         m = np.array(sidecar["moisture"])
         assert (np.abs(m[0::2] - m[1::2]) * params.terrain_max_elevation >= 3.0).all()
@@ -427,11 +447,11 @@ def test_gap_mode_file_order_has_no_structure():
 
 def test_bumps_make_shape_and_colour_relevant_and_designed_mode_is_refused():
     from interlude import relevant_features
-    params = load_session("S5_Interlude")
+    params = load_session("S5_Interlude", **legacy("S5"))                          # (the old S5: a bump over shape and colour, plus moisture)
     order, relevant = relevant_features(params)
     assert set(relevant) == set(FEATURES)                                          # moisture by its weight, shape and colour by the bumps
     with pytest.raises(ValueError):
-        generate_interlude("S5_Interlude", mode="designed")
+        generate_interlude("S5_Interlude", mode="designed", **legacy("S5"))
 
 
 @pytest.mark.slow
@@ -440,6 +460,13 @@ def test_s5_interlude_file_is_fresh_and_spread_over_the_gaps():
     committed = sidecar_path("S5_Interlude", sidecar["seed"])
     assert _same(json.load(open(committed)), json.loads(json.dumps(sidecar))), "S5_Interlude file is stale: re-run scripts/interlude.py S5_Interlude"
     assert sidecar["n"] == 20 and sidecar["mode"] == "hybrid"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("name", ["S6_Interlude", "S7_Interlude"])
+def test_two_dimensional_interlude_files_are_fresh(name):
+    sidecar = generate_interlude(name)[0]
+    assert _same(json.load(open(sidecar_path(name, sidecar["seed"]))), json.loads(json.dumps(sidecar))), f"{name} file is stale: re-run scripts/interlude.py {name}"
 
 
 def test_gap_ceilings_keep_the_chosen_pairs_inside_the_window_and_spread_them_evenly():

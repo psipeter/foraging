@@ -246,7 +246,14 @@ public class WorldData
             { "canopyWidthRange.min", config.CanopyWidthRange.x },
             { "canopyWidthRange.max", config.CanopyWidthRange.y },
             { "shapeRange.min", config.ShapeRange.x },
-            { "shapeRange.max", config.ShapeRange.y }
+            { "shapeRange.max", config.ShapeRange.y },
+            { "spatialBalance", (float)(int)config.SpatialBalance },
+            { "shapeVaries", config.ShapeVaries ? 1f : 0f },
+            { "colorVaries", config.ColorVaries ? 1f : 0f },
+            { "shapeWhenFixed", config.ShapeWhenFixed },
+            { "colorWhenFixed", config.ColorWhenFixed },
+            { "randomBushValueRange.min", config.RandomBushValueRange.x },
+            { "randomBushValueRange.max", config.RandomBushValueRange.y }
         };
         AddReward(current, "shape", config.RewardFunction.ShapeComponent);
         AddReward(current, "color", config.RewardFunction.ColorComponent);
@@ -258,6 +265,17 @@ public class WorldData
             current[$"reward.bump{i}.centerColor"] = bumps[i].CenterColor;
             current[$"reward.bump{i}.width"] = bumps[i].Width;
             current[$"reward.bump{i}.height"] = bumps[i].Height;
+            current[$"reward.bump{i}.widthColor"] = bumps[i].WidthColor;
+        }
+
+        RewardProduct[] products = config.RewardFunction.Products;
+        for (int i = 0; i < products.Length; i++)
+        {
+            current[$"reward.product{i}.linearInShape"] = products[i].LinearInShape ? 1f : 0f;
+            current[$"reward.product{i}.linearInverted"] = products[i].LinearInverted ? 1f : 0f;
+            current[$"reward.product{i}.center"] = products[i].Center;
+            current[$"reward.product{i}.width"] = products[i].Width;
+            current[$"reward.product{i}.height"] = products[i].Height;
         }
 
         var mismatches = new List<string>();
@@ -266,6 +284,28 @@ public class WorldData
             if (!current.TryGetValue(_checkNames[i], out float value) || !Mathf.Approximately(value, _checkValues[i]))
             {
                 mismatches.Add(_checkNames[i]);
+            }
+        }
+
+        // Reward terms newer than the first world files: a product term, and a bump's color spread when it is not 0, are written only when present, so a file
+        // without them was made without them and a config that has them now is stale.
+        foreach (KeyValuePair<string, float> entry in current)
+        {
+            bool newer = entry.Key.StartsWith("reward.product") || (entry.Key.EndsWith(".widthColor") && !Mathf.Approximately(entry.Value, 0f));
+            if (newer && Array.IndexOf(_checkNames, entry.Key) < 0)
+            {
+                mismatches.Add(entry.Key);
+            }
+        }
+
+        // Names the generator writes only when they differ from the default (1 for the "varies" flags, 0.5 for the "when fixed" values, 0 for the random value range):
+        // a file without one was made with the default, so a config that now differs is stale.
+        foreach (string name in new[] { "shapeVaries", "colorVaries", "shapeWhenFixed", "colorWhenFixed", "randomBushValueRange.min", "randomBushValueRange.max", "spatialBalance" })
+        {
+            float fallback = name.StartsWith("randomBushValueRange") || name == "spatialBalance" ? 0f : name.EndsWith("WhenFixed") ? 0.5f : 1f;
+            if (Array.IndexOf(_checkNames, name) < 0 && current.TryGetValue(name, out float now) && !Mathf.Approximately(now, fallback))
+            {
+                mismatches.Add(name);
             }
         }
 

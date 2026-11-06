@@ -3,7 +3,6 @@
     ./venv/bin/python scripts/fruit_ramp.py                # score the candidate ramps (table)
     ./venv/bin/python scripts/fruit_ramp.py --stops        # the chosen ramp as the SessionConfig.fruitColorRamp stops
     ./venv/bin/python scripts/fruit_ramp.py --stops --ramp viridis   # another matplotlib colour map
-    ./venv/bin/python scripts/fruit_ramp.py --stops --ramp warm_arc   # warm_arc / cool_arc: the two constant-lightness hue arcs (below)
     ./venv/bin/python scripts/fruit_ramp.py --png out.png  # swatches under normal, protan, deutan and tritan vision
 
 A ramp maps the colour attribute (0..1) to a fruit colour. The aim is equal perceptual steps along the ramp (CIE-like distance in
@@ -74,43 +73,9 @@ def _equal_steps(lin):
 # prototype; only the library colour maps are kept here, since they are what was chosen between).
 CANDIDATES = ("viridis", "cividis", "plasma", "YlGnBu_r", "PuOr_r")
 
-# Two hue-arc ramps for alternating colour sets across sessions: constant OKLab lightness, hue sweeping 120 degrees at 92% of the
-# largest chroma the sRGB gamut allows, so lightness carries no information. name: (lightness, start hue in degrees, sweep in degrees).
-# warm_arc runs red-coral, orange, yellow-olive, green (hue 20 to 140); cool_arc teal, blue, violet, magenta (215 to 335): 75 degrees
-# of wheel between them. See docs/DECISIONS.md, "Hue-arc colour sets".
-ARCS = {"warm_arc": (0.65, 20, 120), "cool_arc": (0.65, 215, 120)}
-ARC_CHROMA_FILL = 0.92
-
-
-def _lin_from_oklab(lab):
-    return (np.linalg.inv(_M1) @ ((np.linalg.inv(_M2) @ np.asarray(lab, float).T) ** 3)).T
-
-
-def _lch(lightness, chroma, hue_deg):
-    h = np.radians(hue_deg)
-    return np.stack([np.full_like(h, lightness), chroma * np.cos(h), chroma * np.sin(h)], axis=-1)
-
-
-def _max_chroma(lightness, hue_deg):
-    """Largest chroma at this lightness and hue(s) that stays inside the sRGB gamut (bisection)."""
-    low, high = np.zeros_like(hue_deg), np.full_like(hue_deg, 0.4)
-    for _ in range(30):
-        mid = (low + high) / 2
-        lin = _lin_from_oklab(_lch(lightness, mid, hue_deg))
-        inside = (lin.min(axis=-1) >= 0) & (lin.max(axis=-1) <= 1)
-        low, high = np.where(inside, mid, low), np.where(inside, high, mid)
-    return low
-
-
-def _arc(lightness, start, sweep):
-    """The hue arc as a dense linear-RGB path."""
-    hue = (start + np.linspace(0, sweep, 201)) % 360
-    return np.clip(_lin_from_oklab(_lch(lightness, _max_chroma(lightness, hue) * ARC_CHROMA_FILL, hue)), 0, 1)
-
-
 def ramp(name=CHOSEN):
-    """The ramp `name` (a matplotlib colour map, or one of ARCS) as STOPS linear-RGB colours at equal perceptual steps."""
-    return _equal_steps(_arc(*ARCS[name]) if name in ARCS else _colormap(name))
+    """The ramp `name` (a matplotlib colour map) as STOPS linear-RGB colours at equal perceptual steps."""
+    return _equal_steps(_colormap(name))
 
 
 def at(lin_ramp, t):

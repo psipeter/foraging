@@ -1,0 +1,793 @@
+--- a/Assets/Scripts/Data/OnlineSettings.cs
++++ b/Assets/Scripts/Data/OnlineSettings.cs
+@@ -25,7 +25,7 @@
+ }
+ 
+ // Whether and where the game uploads its data: StreamingAssets/online.json, overridden by the command line
+-// (-onlineUrl <functions url> -onlineKey <publishable key> turn uploading on, -pid <id> sets the participant's Prolific ID, -design default|abab|baba|counterbalanced picks the session design).
++// (-onlineUrl <functions url> -onlineKey <publishable key> turn uploading on, -pid <id> sets the participant's Prolific ID).
+ // The key is the project's publishable key, which is meant to ship in clients. Uploading is off in the Editor unless
+ // "uploadInEditor" is true, so developing never writes to the study database.
+ [Serializable]
+@@ -35,8 +35,6 @@
+     public string url;
+     public string apikey;
+     public bool uploadInEditor;
+-    // Which session design to play: "abab", "baba" or "counterbalanced" (the alternating feature sets, GameManager's sequence lists) or "default"/empty (its sessionConfigs list).
+-    public string design;
+ 
+     [NonSerialized] public string prolificPid;
+     [NonSerialized] public ConsentRecord consent;
+@@ -73,7 +71,6 @@
+                     case "-onlineUrl": settings.url = args[i + 1]; settings.enabled = settings.uploadInEditor = true; break;
+                     case "-onlineKey": settings.apikey = args[i + 1]; break;
+                     case "-pid": settings.prolificPid = args[i + 1]; break;
+-                    case "-design": settings.design = args[i + 1]; break;
+                 }
+             }
+         }
+@@ -93,11 +90,6 @@
+             settings.enabled = true;
+         }
+ 
+-        if (Debug.isDebugBuild && UrlParameter("design") != null)
+-        {
+-            settings.design = UrlParameter("design");
+-        }
+-
+         if (EnteredId != null)
+         {
+             settings.prolificPid = EnteredId;
+--- a/Assets/Scripts/Trees/Tree.cs
++++ b/Assets/Scripts/Trees/Tree.cs
+@@ -59,12 +59,6 @@
+     private static readonly Color ColorHigh = new Color(1.0f, 0.5f, 0.1f);
+ 
+     private static Mesh _sphereMesh;
+-    private static readonly Dictionary<long, Mesh> _capsuleMeshes = new Dictionary<long, Mesh>();
+-    private static readonly Dictionary<long, Mesh> _capsuleBlockers = new Dictionary<long, Mesh>();
+-
+-    // The canopy's visible height in canopy-local units, to be multiplied by the canopy's lossy y scale: 0.5 for the unit-sphere ellipsoid (whose scale is
+-    // its full height), the real visible height for a capsule canopy (whose scale stays 1).
+-    private float _crownLocalHeight = 0.5f;
+ 
+     public bool isHarvested = false;
+ 
+@@ -177,9 +171,7 @@
+         float sy = Mathf.Lerp(heightRange.x, heightRange.y, shapeT);
+         float sz = Mathf.Lerp(widthRange.y, widthRange.x, shapeT);
+ 
+-        // Capsule form: a mesh built at the real size (cached per size), so the canopy's own scale stays 1 and the crown does not stretch with the height.
+-        bool capsule = sessionConfig != null && sessionConfig.CanopyForm == CanopyForm.Capsule;
+-        canopy.transform.localScale = capsule ? Vector3.one : new Vector3(sx, sy, sz);
++        canopy.transform.localScale = new Vector3(sx, sy, sz);
+         canopy.transform.localPosition = new Vector3(0f, 0f, 0f);
+ 
+         Vector3 canopyScale = canopy.transform.localScale;
+@@ -199,16 +191,10 @@
+             Destroy(primitive);
+         }
+ 
+-        float capsuleRadius = Quantize(Mathf.Max(sx, sz) * 0.5f);
+-        float capsuleHeight = Quantize(sy * 0.5f);
+-        float capsuleEdge = capsule ? Quantize(sessionConfig.CanopyEdgeRadius) : 0f;
+-        List<Vector2> profile = capsule ? CapsuleProfile(capsuleRadius, capsuleHeight, capsuleEdge) : null;
+-        Mesh canopyMesh = capsule ? CapsuleMesh(capsuleRadius, capsuleHeight, capsuleEdge) : _sphereMesh;
+-        _crownLocalHeight = capsule ? capsuleHeight : 0.5f;
+-        meshFilter.sharedMesh = canopyMesh;
+-        BuildRimOverlay(canopyMesh);
++        meshFilter.sharedMesh = _sphereMesh;
++        BuildRimOverlay();
+ 
+-        float maxScaleXZ = Mathf.Max(sx, sz);
++        float maxScaleXZ = Mathf.Max(canopyScale.x, canopyScale.z);
+         CanopyRadius = maxScaleXZ * 0.5f;
+ 
+         // Ensure no collider remains on the canopy child, and no proximity trigger on the root
+@@ -225,48 +211,17 @@
+             Destroy(rootCollider);
+         }
+ 
+-        if (capsule)
+-        {
+-            // The blocker is a low-poly convex copy of the canopy (cheap to cook and to query, shared by every bush of that size); it scales with the canopy,
+-            // including the spent shrink.
+-            CapsuleCollider oldBlocker = GetComponent<CapsuleCollider>();
+-            if (oldBlocker != null)
+-            {
+-                Destroy(oldBlocker);
+-            }
+-
+-            // On a child of its own with no MeshFilter: a MeshCollider added next to a MeshFilter takes that mesh (here the full canopy mesh) and would cook it.
+-            Transform blocker = canopy.transform.Find("Blocker");
+-            if (blocker == null)
+-            {
+-                blocker = new GameObject("Blocker").transform;
+-                blocker.SetParent(canopy.transform, false);
+-            }
+-
+-            blocker.gameObject.layer = gameObject.layer;
+-            MeshCollider meshBlocker = blocker.GetComponent<MeshCollider>();
+-            if (meshBlocker == null)
+-            {
+-                meshBlocker = blocker.gameObject.AddComponent<MeshCollider>();
+-            }
+-
+-            meshBlocker.sharedMesh = CapsuleBlockerMesh(capsuleRadius, capsuleHeight, capsuleEdge);
+-            meshBlocker.convex = true;
+-        }
+-        else
+-        {
+-            // Add a capsule collider for physical blocking.
+-            CapsuleCollider cap = GetComponent<CapsuleCollider>();
+-            if (cap == null)
+-            {
+-                cap = gameObject.AddComponent<CapsuleCollider>();
+-            }
+-            cap.isTrigger = false;
+-            cap.direction = 1; // Y axis
+-            cap.center = new Vector3(0f, 0f, 0f);
+-            cap.radius = maxScaleXZ * 0.5f;
+-            cap.height = canopyScale.y;
+-        }
++        // Add a capsule collider for physical blocking.
++        CapsuleCollider cap = GetComponent<CapsuleCollider>();
++        if (cap == null)
++        {
++            cap = gameObject.AddComponent<CapsuleCollider>();
++        }
++        cap.isTrigger = false;
++        cap.direction = 1; // Y axis
++        cap.center = new Vector3(0f, 0f, 0f);
++        cap.radius = maxScaleXZ * 0.5f;
++        cap.height = canopyScale.y;
+ 
+         // Rebuild fruits procedurally.
+         // Destroy existing runtime fruits first.
+@@ -287,7 +242,7 @@
+         }
+ 
+         // Fruit scale compensation: keep fruits as configurable world-space spheres.
+-        float radius = sessionConfig != null ? sessionConfig.FruitRadiusFor(sx, sy) : fruitRadius;
++        float radius = sessionConfig != null ? sessionConfig.FruitRadius : fruitRadius;
+         Vector3 compensatedScale = new Vector3(
+             radius / Mathf.Max(canopyScale.x, 0.0001f),
+             radius / Mathf.Max(canopyScale.y, 0.0001f),
+@@ -298,21 +253,9 @@
+         System.Random rng = new System.Random(fruitSeed);
+         float goldenAngle = Mathf.PI * (3f - Mathf.Sqrt(5f));
+ 
+-        int maxFibonacciAttempts = 5000;
++        const int maxFibonacciAttempts = 5000;
+         int placed = 0;
+         int attempt = 0;
+-        if (capsule)
+-        {
+-            // Scattered evenly over the visible surface (no spiral): random points by area, kept apart from each other (see CapsuleFruitSpots).
+-            foreach (Vector3 spot in CapsuleFruitSpots(profile, count, rng))
+-            {
+-                AddFruit(spot, compensatedScale, fruitColor, placed);
+-                placed++;
+-            }
+-
+-            attempt = maxFibonacciAttempts;      // the ellipsoid's loop below is skipped
+-        }
+-
+         while (placed < count && attempt < maxFibonacciAttempts)
+         {
+             float t = (attempt + 0.5f) / Mathf.Max(count, attempt + 1);
+@@ -360,7 +303,7 @@
+ 
+         while (placed < count)
+         {
+-            Vector3 apexLocal = new Vector3(0f, capsule ? capsuleHeight : 0.5f, 0f);
++            Vector3 apexLocal = new Vector3(0f, 0.5f, 0f);
+ 
+             GameObject fruit = new GameObject();
+             MeshFilter mf = fruit.AddComponent<MeshFilter>();
+@@ -382,243 +325,9 @@
+         }
+     }
+ 
+-    private void AddFruit(Vector3 localPosition, Vector3 scale, Color color, int index)
+-    {
+-        GameObject fruit = new GameObject();
+-        fruit.AddComponent<MeshFilter>().sharedMesh = _sphereMesh;
+-        MeshRenderer renderer = fruit.AddComponent<MeshRenderer>();
+-        fruit.name = $"Fruit_{index}";
+-        fruit.transform.SetParent(canopy.transform, false);
+-        fruit.transform.localScale = scale;
+-        fruit.transform.localPosition = localPosition;
+-        renderer.sharedMaterial = FruitMaterialManager.GetMaterial(color);
+-        _fruits.Add(fruit);
+-    }
+-
+-    // Fruit positions (canopy-local) for a capsule canopy: points drawn at random by surface area (top, rounded edge, wall) from the bush's own seed, each kept
+-    // at least a minimum distance from the others (dart throwing; the distance relaxes if the surface is too small for it) and above the terrain. An even,
+-    // irregular scatter: a fixed sequence of points (a golden-angle or Fibonacci lattice) shows as a spiral on a long wall.
+-    private List<Vector3> CapsuleFruitSpots(List<Vector2> profile, int count, System.Random rng)
+-    {
+-        float[] cumulative = ProfileAreaFractions(profile);
+-        float area = 0f;
+-        for (int i = 0; i < profile.Count - 1; i++)
+-        {
+-            area += Mathf.PI * (profile[i].x + profile[i + 1].x) * Vector2.Distance(profile[i], profile[i + 1]);
+-        }
+-
+-        float minDistance = 0.8f * Mathf.Sqrt(area / Mathf.Max(count, 1));
+-        var spots = new List<Vector3>();
+-        int rejected = 0;
+-        for (int tries = 0; tries < 800 && spots.Count < count; tries++)
+-        {
+-            Vector2 onProfile = PointOnProfile(profile, cumulative, (float)rng.NextDouble());
+-            float phi = (float)(rng.NextDouble() * 2.0 * Math.PI);
+-            Vector3 spot = new Vector3(onProfile.x * Mathf.Cos(phi), onProfile.y, onProfile.x * Mathf.Sin(phi));
+-
+-            Vector3 world = canopy.transform.TransformPoint(spot);
+-            float terrainY = terrainManager != null ? terrainManager.SampleElevation(world.x, world.z) : 0f;
+-            bool ok = world.y > terrainY;
+-            for (int i = 0; ok && i < spots.Count; i++)
+-            {
+-                ok = Vector3.Distance(spot, spots[i]) >= minDistance;
+-            }
+-
+-            if (ok)
+-            {
+-                spots.Add(spot);
+-                continue;
+-            }
+-
+-            if (++rejected % 40 == 0)
+-            {
+-                minDistance *= 0.9f;
+-            }
+-        }
+-
+-        return spots;
+-    }
+-
+-    private static float Quantize(float value)
+-    {
+-        return Mathf.Round(value * 20f) / 20f;
+-    }
+-
+-    // The visible profile of a capsule canopy, as (radius, height) points from the middle of the top outwards, round the top edge and down the wall to the
+-    // ground: a flat top, an edge rounded by a quarter circle of radius `edge` (limited to the radius and the height), and a straight wall. With the edge as
+-    // wide as the radius the top is a hemisphere.
+-    private static List<Vector2> CapsuleProfile(float radius, float height, float edge)
+-    {
+-        float rho = Mathf.Max(0.01f, Mathf.Min(edge, Mathf.Min(radius, height)));
+-        float flat = radius - rho;
+-        var points = new List<Vector2> { new Vector2(0f, height) };
+-        if (flat > 0.05f)
+-        {
+-            points.Add(new Vector2(flat * 0.5f, height));
+-        }
+-
+-        const int steps = 10;
+-        for (int i = flat > 0.05f ? 0 : 1; i <= steps; i++)
+-        {
+-            float angle = (1f - (float)i / steps) * Mathf.PI * 0.5f;
+-            points.Add(new Vector2(flat + rho * Mathf.Cos(angle), height - rho + rho * Mathf.Sin(angle)));
+-        }
+-
+-        if (height - rho > 0.02f)
+-        {
+-            points.Add(new Vector2(radius, 0f));
+-        }
+-
+-        return points;
+-    }
+-
+-    // Cumulative share of the profile's surface area up to the end of each segment (the last is 1).
+-    private static float[] ProfileAreaFractions(List<Vector2> profile)
+-    {
+-        var cumulative = new float[profile.Count - 1];
+-        float total = 0f;
+-        for (int i = 0; i < cumulative.Length; i++)
+-        {
+-            total += Mathf.PI * (profile[i].x + profile[i + 1].x) * Vector2.Distance(profile[i], profile[i + 1]);
+-            cumulative[i] = total;
+-        }
+-
+-        for (int i = 0; i < cumulative.Length; i++)
+-        {
+-            cumulative[i] /= Mathf.Max(total, 0.0001f);
+-        }
+-
+-        return cumulative;
+-    }
+-
+-    // The profile point at share t of the surface area.
+-    private static Vector2 PointOnProfile(List<Vector2> profile, float[] cumulative, float t)
+-    {
+-        for (int i = 0; i < cumulative.Length; i++)
+-        {
+-            if (t <= cumulative[i] || i == cumulative.Length - 1)
+-            {
+-                float before = i == 0 ? 0f : cumulative[i - 1];
+-                float u = Mathf.Clamp01((t - before) / Mathf.Max(cumulative[i] - before, 0.0001f));
+-                return Vector2.Lerp(profile[i], profile[i + 1], u);
+-            }
+-        }
+-
+-        return profile[0];
+-    }
+-
+-    private static long SizeKey(float radius, float height, float edge)
+-    {
+-        return ((long)Mathf.RoundToInt(radius * 20f) << 40) | ((long)Mathf.RoundToInt(height * 20f) << 20) | (long)Mathf.RoundToInt(edge * 20f);
+-    }
+-
+-    // The canopy mesh of a capsule bush: the profile turned round the vertical axis, with a skirt below the ground so the base is hidden on a slope. Cached
+-    // per size (the sizes are quantized to 0.05), so bushes of the same size share one mesh.
+-    private static Mesh CapsuleMesh(float radius, float height, float edge)
+-    {
+-        long key = SizeKey(radius, height, edge);
+-        if (_capsuleMeshes.TryGetValue(key, out Mesh cached))
+-        {
+-            return cached;
+-        }
+-
+-        List<Vector2> profile = CapsuleProfile(radius, height, edge);
+-        profile.Add(new Vector2(radius, -(0.5f + 0.4f * radius)));
+-        Mesh mesh = Revolve(profile, 24, $"CapsuleCanopy_{radius:0.00}_{height:0.00}_{edge:0.00}");
+-        _capsuleMeshes[key] = mesh;
+-        return mesh;
+-    }
+-
+-    // A few rings of the same outline (12 segments): the convex blocker, a fraction of the canopy mesh's size.
+-    private static Mesh CapsuleBlockerMesh(float radius, float height, float edge)
+-    {
+-        long key = SizeKey(radius, height, edge);
+-        if (_capsuleBlockers.TryGetValue(key, out Mesh cached))
+-        {
+-            return cached;
+-        }
+-
+-        float rho = Mathf.Max(0.01f, Mathf.Min(edge, Mathf.Min(radius, height)));
+-        float flat = radius - rho;
+-        var profile = new List<Vector2> { new Vector2(0f, height) };
+-        if (flat > 0.05f)
+-        {
+-            profile.Add(new Vector2(flat, height));
+-        }
+-
+-        profile.Add(new Vector2(flat + rho * 0.71f, height - rho * 0.29f));
+-        if (height - rho > 0.02f)
+-        {
+-            profile.Add(new Vector2(radius, height - rho));
+-        }
+-
+-        profile.Add(new Vector2(radius, 0f));
+-        profile.Add(new Vector2(radius, -(0.5f + 0.4f * radius)));
+-        Mesh mesh = Revolve(profile, 12, $"CapsuleBlocker_{radius:0.00}_{height:0.00}_{edge:0.00}");
+-        _capsuleBlockers[key] = mesh;
+-        return mesh;
+-    }
+-
+-    // A profile of (radius, height) points, from the top outwards and down, turned round the vertical axis into a mesh with outward normals and faces.
+-    private static Mesh Revolve(List<Vector2> profile, int segments, string name)
+-    {
+-        int rings = profile.Count;
+-        var vertices = new Vector3[rings * (segments + 1)];
+-        var normals = new Vector3[vertices.Length];
+-        var uvs = new Vector2[vertices.Length];
+-        var triangles = new List<int>();
+-
+-        var segmentNormals = new Vector2[rings - 1];
+-        for (int i = 0; i < rings - 1; i++)
+-        {
+-            Vector2 d = profile[i + 1] - profile[i];
+-            segmentNormals[i] = d.sqrMagnitude > 1e-10f ? new Vector2(-d.y, d.x).normalized : Vector2.up;
+-        }
+-
+-        float totalArc = 0f;
+-        for (int i = 1; i < rings; i++)
+-        {
+-            totalArc += Vector2.Distance(profile[i - 1], profile[i]);
+-        }
+-
+-        float arc = 0f;
+-        for (int i = 0; i < rings; i++)
+-        {
+-            if (i > 0)
+-            {
+-                arc += Vector2.Distance(profile[i - 1], profile[i]);
+-            }
+-
+-            Vector2 n = i == 0 ? segmentNormals[0] : i == rings - 1 ? segmentNormals[rings - 2] : (segmentNormals[i - 1] + segmentNormals[i]).normalized;
+-            for (int j = 0; j <= segments; j++)
+-            {
+-                float phi = 2f * Mathf.PI * j / segments;
+-                int index = i * (segments + 1) + j;
+-                vertices[index] = new Vector3(profile[i].x * Mathf.Cos(phi), profile[i].y, profile[i].x * Mathf.Sin(phi));
+-                normals[index] = new Vector3(n.x * Mathf.Cos(phi), n.y, n.x * Mathf.Sin(phi));
+-                uvs[index] = new Vector2((float)j / segments, arc / Mathf.Max(totalArc, 0.0001f));      // like the sphere primitive's: round, and top to bottom
+-                if (i < rings - 1 && j < segments)
+-                {
+-                    int next = index + segments + 1;
+-                    triangles.Add(index);
+-                    triangles.Add(index + 1);
+-                    triangles.Add(next);
+-                    triangles.Add(index + 1);
+-                    triangles.Add(next + 1);
+-                    triangles.Add(next);
+-                }
+-            }
+-        }
+-
+-        var mesh = new Mesh { name = name, vertices = vertices, normals = normals, uv = uvs };
+-        mesh.SetTriangles(triangles, 0);
+-        mesh.RecalculateBounds();
+-        return mesh;
+-    }
+-
+-    // A slightly enlarged copy of the canopy mesh with the additive fresnel rim material. Built once; the
++    // A slightly enlarged copy of the canopy sphere with the additive fresnel rim material. Built once; the
+     // canopy's own material is left alone. Inactive unless the rim is visible.
+-    private void BuildRimOverlay(Mesh canopyMesh)
++    private void BuildRimOverlay()
+     {
+         if (_rimObject != null || rimMaterial == null || canopy == null)
+         {
+@@ -628,7 +337,7 @@
+         _rimObject = new GameObject("Rim");
+         _rimObject.transform.SetParent(canopy.transform, false);
+         _rimObject.transform.localScale = Vector3.one * 1.03f;
+-        _rimObject.AddComponent<MeshFilter>().sharedMesh = canopyMesh;
++        _rimObject.AddComponent<MeshFilter>().sharedMesh = _sphereMesh;
+ 
+         MeshRenderer rimRenderer = _rimObject.AddComponent<MeshRenderer>();
+         _rimInstance = new Material(rimMaterial);
+@@ -662,7 +371,7 @@
+             _ringObject.SetActive(true);
+         }
+ 
+-        Vector3 crown = GetWorldCenter() + Vector3.up * (canopy.transform.lossyScale.y * _crownLocalHeight);
++        Vector3 crown = GetWorldCenter() + Vector3.up * (canopy.transform.lossyScale.y * 0.5f);
+         float dist = Vector3.Distance(cameraTransform.position, crown);
+         float size = 2f * dist * Mathf.Tan(sessionConfig.HarvestRingSizeDeg * 0.5f * Mathf.Deg2Rad);
+ 
+@@ -933,7 +642,7 @@
+     public Vector3 GetVisibleCenter()
+     {
+         Vector3 center = GetWorldCenter();
+-        return canopy != null ? center + Vector3.up * (canopy.transform.lossyScale.y * _crownLocalHeight * 0.5f) : center;
++        return canopy != null ? center + Vector3.up * (canopy.transform.lossyScale.y * 0.25f) : center;
+     }
+ 
+     public Vector3 GetFruitWorldPosition(int index)
+--- a/Assets/Scripts/Session/SessionConfig.cs
++++ b/Assets/Scripts/Session/SessionConfig.cs
+@@ -21,13 +21,6 @@
+     Hybrid      // both spreads at once: the reward gaps and the feature gaps of the trials are each evenly spread
+ }
+ 
+-// The canopy's form. The order is part of the logged format (the session row stores the number): Ellipsoid 0, Capsule 1.
+-public enum CanopyForm
+-{
+-    Ellipsoid,  // a half-buried ellipsoid scaled to the canopy's width and height (the shared aspect axis: the crown sharpens as the bush gets taller)
+-    Capsule     // a half-buried cylinder of the canopy's width and height with a rounded top edge of constant radius (canopyEdgeRadius), so the crown looks the same at every height or width
+-}
+-
+ // How scripts/world.py arranges the bushes' (shape, color) records over the map (scripts/spatial.py). The order is part of the logged format
+ // (the session row stores the number): Off 0, Tiles 1, TilesAndSwaps 2.
+ public enum SpatialBalance
+@@ -37,15 +30,6 @@
+     TilesAndSwaps   // Tiles, then pairs of bushes swap records while that lowers the patchiness of the reward over disks at those scales
+ }
+ 
+-// Which canopy dimension the fruit radius follows (see SessionConfig.FruitRadiusFor). The order is part of the logged format
+-// (the session row stores the number): Nothing 0, Height 1, Width 2.
+-public enum FruitSizeFollows
+-{
+-    Nothing,    // every fruit has fruitRadius
+-    Height,     // grows linearly with the canopy height (the height-only shape set)
+-    Width       // grows linearly with the canopy width (the width-only shape set)
+-}
+-
+ [CreateAssetMenu(
+     fileName = "SessionConfig",
+     menuName = "Foraging/Session Config")]
+@@ -216,19 +200,11 @@
+     [SerializeField] private Vector2 shapeRange = new Vector2(0f, 1f);
+     [SerializeField] private Vector2 canopyWidthRange = new Vector2(2.0f, 5.0f);
+     [SerializeField] private Vector2 canopyHeightRange = new Vector2(1.2f, 2.8f);
+-    [Tooltip("Optional alternative shape sets (scripts/shape_sets.py): with a height-only or width-only set the canopy varies in one dimension and the fruit radius follows it. Nothing = every fruit has fruitRadius (the shared aspect axis). Render only: worlds and Interludes need no regeneration.")]
+-    [SerializeField] private FruitSizeFollows fruitSizeFollows = FruitSizeFollows.Nothing;
+-    [Tooltip("Fruit radius = fruitRadius * (1 + slope * (size - mid) / half), linear in the followed canopy dimension: size is that dimension, mid and half the middle and half-width of its range. 0.3 = +-30% across the range.")]
+-    [SerializeField] private float fruitSizeSlope = 0.3f;
+-    [Tooltip("Canopy form. Ellipsoid = a half-buried ellipsoid (the shared aspect axis). Capsule = a half-buried cylinder with a rounded top edge: the crown (the rounding, canopyEdgeRadius) is the same at every width and height, so a height-only or width-only shape set changes only that dimension (scripts/shape_sets.py). The visible height is half the canopy height, as for the ellipsoid. Render only: worlds and Interludes need no regeneration.")]
+-    [SerializeField] private CanopyForm canopyForm = CanopyForm.Ellipsoid;
+-    [Tooltip("Capsule form: the radius of the rounded top edge (world units); at most the canopy's radius and visible height. 1.5 on a 3-wide canopy is a hemisphere top.")]
+-    [SerializeField] private float canopyEdgeRadius = 1.5f;
+     [Tooltip("Spatial evenness of the reward over the map (scripts/spatial.py): Off = independent draws, Tiles = the (shape, color, random value) records dealt evenly over tiles at several scales, TilesAndSwaps = then swapped between bushes to lower the patchiness further. The marginal distribution of every attribute and of the reward is unchanged, only which bush has which record. Needs a reward that does not depend on moisture. Read by scripts/world.py: regenerate the world after changing it.")]
+     [SerializeField] private SpatialBalance spatialBalance = SpatialBalance.Off;
+     [Tooltip("False: every bush has the value shapeWhenFixed, so all canopies are identical; give the shape component weight 0. Read by scripts/world.py and scripts/interlude.py: regenerate the world and the Interlude after changing it.")]
+     [SerializeField] private bool shapeVaries = true;
+-    [Tooltip("The shape value of every bush when shapeVaries is off (0..1; the canopy size then follows the shape axis: scripts/shape_sets.py sets it to the set's smallest bush). Read by scripts/world.py and scripts/interlude.py.")]
++    [Tooltip("The shape value of every bush when shapeVaries is off (0..1; the canopy size then follows the shape axis). Read by scripts/world.py and scripts/interlude.py.")]
+     [SerializeField] private float shapeWhenFixed = 0.5f;
+     [Tooltip("False: every bush has the value colorWhenFixed, so all fruit have one color; give the color component weight 0. Read by scripts/world.py and scripts/interlude.py: regenerate the world and the Interlude after changing it.")]
+     [SerializeField] private bool colorVaries = true;
+@@ -401,8 +377,6 @@
+     public float StartClearingRadius => startClearingRadius;
+     public int FruitCount => fruitCount;
+     public float FruitRadius => fruitRadius;
+-    public CanopyForm CanopyForm => canopyForm;
+-    public float CanopyEdgeRadius => canopyEdgeRadius;
+     public SpatialBalance SpatialBalance => spatialBalance;
+     public bool ShapeVaries => shapeVaries;
+     public float ShapeWhenFixed => shapeWhenFixed;
+@@ -410,24 +384,6 @@
+     public bool ColorVaries => colorVaries;
+     public Vector2 RandomBushValueRange => randomBushValueRange;
+ 
+-    // The fruit radius on a canopy of this width and height (world units; fruitRadius unless fruitSizeFollows names a dimension).
+-    public float FruitRadiusFor(float canopyWidth, float canopyHeight)
+-    {
+-        if (fruitSizeFollows == FruitSizeFollows.Nothing)
+-        {
+-            return fruitRadius;
+-        }
+-
+-        Vector2 range = fruitSizeFollows == FruitSizeFollows.Height ? canopyHeightRange : canopyWidthRange;
+-        float half = Mathf.Abs(range.y - range.x) / 2f;
+-        if (half < 1e-4f)
+-        {
+-            return fruitRadius;
+-        }
+-
+-        float size = fruitSizeFollows == FruitSizeFollows.Height ? canopyHeight : canopyWidth;
+-        return fruitRadius * (1f + fruitSizeSlope * (size - (range.x + range.y) / 2f) / half);
+-    }
+     public int TargetFrameRate => targetFrameRate;
+     public float UploadGraceSeconds => uploadGraceSeconds;
+     public float PlayerMoveSpeed => playerMoveSpeed;
+--- a/Assets/Scripts/Session/GameManager.cs
++++ b/Assets/Scripts/Session/GameManager.cs
+@@ -1,24 +1,11 @@
+ using System.Collections.Generic;
+ using UnityEngine;
+ 
+-public enum DesignMode
+-{
+-    Default,            // the sessionConfigs list: every session as its template asset
+-    Abab,               // the ABAB lists (Resources/AbabSequences), start variant A: the practice session uses set A, S1 set B, S2 set A, ...
+-    Baba,               // the ABAB lists, start variant B: the practice session uses set B, S1 set A, S2 set B, ... (to see the other set in each session)
+-    Counterbalanced     // the ABAB lists, the start variant from the participant ID (what a deployment plays)
+-}
+-
+ [DefaultExecutionOrder(-20)]
+ public class GameManager : MonoBehaviour
+ {
+-    [Tooltip("The default design: the ordered session list (P, its Interlude, S1, its Interlude, ...), played unless the ABAB design is selected.")]
++    [Tooltip("The default design: the ordered session list (P, its Interlude, S1, its Interlude, ...).")]
+     [SerializeField] private List<SessionConfig> sessionConfigs;
+-    [Tooltip("Which design to play: Default (sessionConfigs), Abab or Baba (the sequence lists below, start variant A or B), or Counterbalanced (the start variant from the participant ID). Overridden by online.json \"design\", -design default|abab|baba|counterbalanced, and ?design= (development builds).")]
+-    [SerializeField] private DesignMode design = DesignMode.Default;
+-    [Tooltip("Counterbalanced design only, for testing: -1 = from the participant ID (A when there is none), 0 = A, 1 = B.")]
+-    [SerializeField] private int variantOverride = -1;
+-
+     [SerializeField] private SunController sunController;
+     [SerializeField] private HarvestManager harvestManager;
+     [SerializeField] private TerrainManager terrainManager;
+@@ -95,21 +82,6 @@
+         if (AllSessionConfigs == null || AllSessionConfigs.Count == 0)
+         {
+             List<SessionConfig> chosen = sessionConfigs;
+-            // The ABAB lists are a generated, uncommitted asset (scripts/build_sessions.py --wire); without it only the default design is available.
+-            AbabSequences ababSequences = Resources.Load<AbabSequences>("AbabSequences");
+-            bool hasVariants = ababSequences != null && ababSequences.SequenceA.Count > 0 && ababSequences.SequenceB.Count > 0;
+-            DesignMode mode = DesignVariant.ChooseDesign(design);
+-            bool abab = mode != DesignMode.Default;
+-            if (abab && !hasVariants)
+-            {
+-                Debug.LogWarning("GameManager: the ABAB design is selected but there is no Resources/AbabSequences asset (or its lists are empty); playing sessionConfigs (scripts/build_sessions.py --wire makes it).");
+-            }
+-
+-            if (abab && hasVariants)
+-            {
+-                chosen = DesignVariant.Choose(mode, variantOverride) == 1 ? ababSequences.SequenceB : ababSequences.SequenceA;
+-            }
+-
+             AllSessionConfigs = chosen != null
+                 ? new List<SessionConfig>(chosen)
+                 : new List<SessionConfig>();
+--- a/scripts/world.py
++++ b/scripts/world.py
+@@ -83,8 +83,7 @@
+ 
+ 
+ # Fields an older asset file does not have yet (Unity adds a field to an asset only when it is saved): their defaults, snake_case names.
+-FIELD_DEFAULTS = {"spatial_balance": 0, "shape_varies": True, "color_varies": True, "shape_when_fixed": 0.5, "color_when_fixed": 0.5, "random_bush_value_range": (0.0, 0.0),
+-                  "fruit_size_follows": 0, "fruit_size_slope": 0.3}
++FIELD_DEFAULTS = {"spatial_balance": 0, "shape_varies": True, "color_varies": True, "shape_when_fixed": 0.5, "color_when_fixed": 0.5, "random_bush_value_range": (0.0, 0.0)}
+ 
+ 
+ def moisture_matters(params):
+--- a/scripts/ladder.py
++++ b/scripts/ladder.py
+@@ -6,7 +6,7 @@
+ `docs/SCIENCE.md` ("Planned session structure") has the design. This module is the table of the reward function of each session (which
+ features vary, which pays and how); `ladder.py <names>` writes it onto the template assets `<name>.asset` and `<name>_Interlude.asset`
+ with the Unity CLI (an open Editor is needed), the template's other settings (duration, instruction file, Interlude mode and length,
+-terrain) being left as they are. `build_sessions.py` then makes the ABAB variants from the templates and generates the worlds and Interludes.
++terrain) being left as they are. `world.py <sessions> --unity` and `interlude.py <sessions>_Interlude` then regenerate their worlds and Interludes.
+ Reward numbers are provisional: the best bush pays about 4 per fruit (as in every earlier session) and the matching of the spread of the
+ reward across sessions is tuned separately. Which end of a feature pays more is a draw (a linear weight, or a peak), not a design
+ requirement; counterbalancing it across participants is later work.
+@@ -18,10 +18,24 @@
+ """
+ 
+ import argparse
++import json
+ import subprocess
+ import sys
++from pathlib import Path
++
++FOLDER = "Assets/ScriptableObjects/SessionConfig"
++UNITY = [str(Path.home() / ".local/bin/unity"), "--no-banner", "--no-pager", "command"]
++
++
++def asset_path(name):
++    return f"{FOLDER}/{name}.asset"
++
++
++def _value(value):
++    if isinstance(value, bool):
++        return "true" if value else "false"
++    return json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+ 
+-import build_sessions as bs
+ 
+ NO_RANDOM = {"x": 0.0, "y": 0.0}
+ 
+@@ -74,7 +88,7 @@
+ TERRAIN = {"moistureTerraceLevels": 4, "moistureTerraceSharpness": 0.3, "moistureTerraceResidual": 0.1, "terrainNoiseFrequency": 2.0, "terrainMaxElevation": 6.0}
+ 
+ # Spatial evenness of the reward (scripts/spatial.py): Off, Tiles or TilesAndSwaps for every session (a switch to turn on or off per experiment; Off draws every bush
+-# independently, as before). Change it here and re-run `ladder.py` and `build_sessions.py` to regenerate the worlds.
++# independently, as before). Change it here and re-run `ladder.py`, `world.py` and `interlude.py` to regenerate the worlds.
+ SPATIAL_BALANCE = "TilesAndSwaps"
+ 
+ for _fields in LADDER.values():                       # every session sets the reward terms' list sizes (0 for those without bumps or products), the terrain and the spatial switch
+@@ -103,7 +117,7 @@
+     for asset in (name, f"{name}_Interlude"):
+         fields = {**LADDER[name], **(SESSION_ONLY.get(name, {}) if asset == name else {"interludeFor": name})}     # (a copied Interlude still names the session it was copied from)
+         for field, value in fields.items():
+-            out.append(["set_serialized_field", "--target", bs.asset_path(asset), "--field", field, "--value", bs._value(value)])
++            out.append(["set_serialized_field", "--target", asset_path(asset), "--field", field, "--value", _value(value)])
+     return out
+ 
+ 
+@@ -111,8 +125,8 @@
+     """The CLI calls that replace a session and its Interlude by copies of `source` and its Interlude (the old assets are deleted first)."""
+     out = []
+     for asset, src in ((name, source), (f"{name}_Interlude", f"{source}_Interlude")):
+-        out.append(["delete_asset", "--asset", bs.asset_path(asset), "--confirm", "true"])
+-        out.append(["copy_asset", "--asset", bs.asset_path(src), "--destination", bs.asset_path(asset), "--confirm", "true"])
++        out.append(["delete_asset", "--asset", asset_path(asset), "--confirm", "true"])
++        out.append(["copy_asset", "--asset", asset_path(src), "--destination", asset_path(asset), "--confirm", "true"])
+     return out
+ 
+ 
+@@ -128,12 +142,12 @@
+             if args.dry_run:
+                 print(" ".join(call))
+                 continue
+-            result = subprocess.run(bs.UNITY + call, capture_output=True, text=True)
++            result = subprocess.run(UNITY + call, capture_output=True, text=True)
+             if call[0] != "delete_asset" and (result.returncode != 0 or "\tfalse\t" in result.stdout):    # (a delete of an asset that is not there is fine)
+                 sys.exit(f"unity command failed: {' '.join(call[:6])}\n{result.stdout[-300:]}{result.stderr[-300:]}")
+         print(f"{name}: {len(calls(name))} fields set")
+     if not args.dry_run:
+-        subprocess.run(bs.UNITY + ["save_all"], capture_output=True, text=True)
++        subprocess.run(UNITY + ["save_all"], capture_output=True, text=True)
+ 
+ 
+ if __name__ == "__main__":
+--- a/scripts/fruit_ramp.py
++++ b/scripts/fruit_ramp.py
+@@ -3,7 +3,6 @@
+     ./venv/bin/python scripts/fruit_ramp.py                # score the candidate ramps (table)
+     ./venv/bin/python scripts/fruit_ramp.py --stops        # the chosen ramp as the SessionConfig.fruitColorRamp stops
+     ./venv/bin/python scripts/fruit_ramp.py --stops --ramp viridis   # another matplotlib colour map
+-    ./venv/bin/python scripts/fruit_ramp.py --stops --ramp warm_arc   # warm_arc / cool_arc: the two constant-lightness hue arcs (below)
+     ./venv/bin/python scripts/fruit_ramp.py --png out.png  # swatches under normal, protan, deutan and tritan vision
+ 
+ A ramp maps the colour attribute (0..1) to a fruit colour. The aim is equal perceptual steps along the ramp (CIE-like distance in
+@@ -74,43 +73,9 @@
+ # prototype; only the library colour maps are kept here, since they are what was chosen between).
+ CANDIDATES = ("viridis", "cividis", "plasma", "YlGnBu_r", "PuOr_r")
+ 
+-# Two hue-arc ramps for alternating colour sets across sessions: constant OKLab lightness, hue sweeping 120 degrees at 92% of the
+-# largest chroma the sRGB gamut allows, so lightness carries no information. name: (lightness, start hue in degrees, sweep in degrees).
+-# warm_arc runs red-coral, orange, yellow-olive, green (hue 20 to 140, 120 degrees); cool_arc teal, blue, violet, pink-magenta (185 to 350, 165 degrees,
+-# widened from 215 + 120 after a playtest found the fruit too hard to tell apart): 45 and 30 degrees of wheel between them. See docs/DECISIONS.md, "Hue-arc colour sets".
+-ARCS = {"warm_arc": (0.65, 20, 120), "cool_arc": (0.65, 185, 165)}
+-ARC_CHROMA_FILL = 0.92
+-
+-
+-def _lin_from_oklab(lab):
+-    return (np.linalg.inv(_M1) @ ((np.linalg.inv(_M2) @ np.asarray(lab, float).T) ** 3)).T
+-
+-
+-def _lch(lightness, chroma, hue_deg):
+-    h = np.radians(hue_deg)
+-    return np.stack([np.full_like(h, lightness), chroma * np.cos(h), chroma * np.sin(h)], axis=-1)
+-
+-
+-def _max_chroma(lightness, hue_deg):
+-    """Largest chroma at this lightness and hue(s) that stays inside the sRGB gamut (bisection)."""
+-    low, high = np.zeros_like(hue_deg), np.full_like(hue_deg, 0.4)
+-    for _ in range(30):
+-        mid = (low + high) / 2
+-        lin = _lin_from_oklab(_lch(lightness, mid, hue_deg))
+-        inside = (lin.min(axis=-1) >= 0) & (lin.max(axis=-1) <= 1)
+-        low, high = np.where(inside, mid, low), np.where(inside, high, mid)
+-    return low
+-
+-
+-def _arc(lightness, start, sweep):
+-    """The hue arc as a dense linear-RGB path."""
+-    hue = (start + np.linspace(0, sweep, 201)) % 360
+-    return np.clip(_lin_from_oklab(_lch(lightness, _max_chroma(lightness, hue) * ARC_CHROMA_FILL, hue)), 0, 1)
+-
+-
+ def ramp(name=CHOSEN):
+-    """The ramp `name` (a matplotlib colour map, or one of ARCS) as STOPS linear-RGB colours at equal perceptual steps."""
+-    return _equal_steps(_arc(*ARCS[name]) if name in ARCS else _colormap(name))
++    """The ramp `name` (a matplotlib colour map) as STOPS linear-RGB colours at equal perceptual steps."""
++    return _equal_steps(_colormap(name))
+ 
+ 
+ def at(lin_ramp, t):
+--- a/scripts/test_fruit_ramp.py
++++ b/scripts/test_fruit_ramp.py
+@@ -26,25 +26,9 @@
+ 
+ 
+ def test_assets_carry_the_generated_stops():
+-    allowed = {name: np.round(fruit_ramp.to_srgb(fruit_ramp.ramp(name)), 4) for name in (fruit_ramp.CHOSEN, *fruit_ramp.ARCS)}   # the default or a feature set's ramp
++    allowed = {name: np.round(fruit_ramp.to_srgb(fruit_ramp.ramp(name)), 4) for name in (fruit_ramp.CHOSEN,)}
+     for path in sorted(ASSETS.glob("*.asset")):
+         text = path.read_text()
+         stops = re.findall(r"- \{r: ([\d.e-]+), g: ([\d.e-]+), b: ([\d.e-]+), a: 1\}", text.split("fruitColorRamp:")[1].split("\n  fruitColorPreservation")[0])
+         assert len(stops) == fruit_ramp.STOPS, f"{path.name} has {len(stops)} fruit colour stops"
+         assert any(np.allclose(np.array(stops, float), e, atol=2e-3) for e in allowed.values()), f"{path.name}: fruit colour ramp is stale; see scripts/fruit_ramp.py --stops"
+-
+-
+-def test_hue_arc_ramps_have_constant_lightness_even_steps_and_disjoint_hues():
+-    hues = {}
+-    for name in fruit_ramp.ARCS:
+-        lin = fruit_ramp.ramp(name)
+-        lab = fruit_ramp.oklab(lin)
+-        assert len(lin) == fruit_ramp.STOPS and lin.min() >= -1e-6 and lin.max() <= 1 + 1e-6
+-        assert np.ptp(lab[:, 0]) < 0.01                                     # lightness carries no information
+-        gaps = [fruit_ramp.distance(lin[i], lin[i + 1]) for i in range(len(lin) - 1)]
+-        assert max(gaps) - min(gaps) < 0.2 * np.mean(gaps)                  # equal perceptual steps (one chord is shorter where the gamut edge has a cusp)
+-        assert fruit_ramp.score(lin)["normal"] > 3.0                        # the smallest 10% step is visible
+-        hues[name] = np.degrees(np.arctan2(lab[:, 2], lab[:, 1])) % 360
+-    warm, cool = hues["warm_arc"], hues["cool_arc"]
+-    wheel_gap = lambda a, b: np.abs((a[:, None] - b[None] + 180) % 360 - 180).min()
+-    assert wheel_gap(warm, cool) > 25                                       # the two sets share no hues
+--- a/.gitignore
++++ b/.gitignore
+@@ -114,15 +114,3 @@
+ 
+ # Simulated-agent results database (scripts/results.py)
+ /results/
+-
+-# ABAB design: generated by scripts/build_sessions.py (variant session and Interlude assets, their worlds, the sequence asset); not committed
+-/Assets/ScriptableObjects/SessionConfig/*_[AB].asset
+-/Assets/ScriptableObjects/SessionConfig/*_[AB].asset.meta
+-/Assets/ScriptableObjects/SessionConfig/*_[AB]_Interlude.asset
+-/Assets/ScriptableObjects/SessionConfig/*_[AB]_Interlude.asset.meta
+-/Assets/StreamingAssets/Worlds/*_[AB]_seed*.world
+-/Assets/StreamingAssets/Worlds/*_[AB]_seed*.world.meta
+-/Assets/StreamingAssets/Worlds/*_[AB]_Interlude_seed*.interlude.json
+-/Assets/StreamingAssets/Worlds/*_[AB]_Interlude_seed*.interlude.json.meta
+-/Assets/Resources/AbabSequences.asset
+-/Assets/Resources/AbabSequences.asset.meta

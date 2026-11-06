@@ -452,10 +452,11 @@ def test_a_real_interlude_is_solved_by_the_oracle_and_not_by_nearest():
 @pytest.mark.slow
 def test_seeded_generation_matches_the_assets_own_seed_and_applies_overrides():
     a, _, _ = generate_interlude("S3_Interlude", pool_samples=60_000)
-    b, _, _ = generate_interlude("S3_Interlude", pool_samples=60_000, seed=3)
-    assert a == b                                                         # S3's own seed is 3
-    c, _, _ = generate_interlude("S3_Interlude", pool_samples=60_000, seed=4)
-    assert c["seed"] == 4 and c["treePos"] != a["treePos"]
+    own = int(load_session("S3").world_seed)
+    b, _, _ = generate_interlude("S3_Interlude", pool_samples=60_000, seed=own)
+    assert a == b
+    c, _, _ = generate_interlude("S3_Interlude", pool_samples=60_000, seed=own + 1)
+    assert c["seed"] == own + 1 and c["treePos"] != a["treePos"]
 
 
 # --- boundaries: what an agent may know ----------------------------------------------------------------------

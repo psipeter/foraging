@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from legacy_sessions import legacy
 from world import PROJECT_ROOT, Perlin, Terrain, World, _basis, bush_value, check_values, generate_world, load_session, make_world
 
 
@@ -72,19 +73,19 @@ def test_s2_gaussian_component():
 
 
 def test_s3_two_features_and_one_irrelevant():
-    w = make_world("S3", 1)
+    w = make_world("S2", 1, **legacy("S3"))                     # (the old S3: moisture and one other feature pay)
     assert len(_nonzero(w)) == 2 and _weights(w)[2]["weight"] != 0 and all(c["basisFunctionType"] in (0, 1) for c in _nonzero(w))
     assert np.allclose(w.value, _expected(w))
 
 
 def test_s4_all_features_additive_with_one_inverted():
-    w = make_world("S4", 1)
+    w = make_world("S2", 1, **legacy("S4"))                     # (the old S4)
     assert len(_nonzero(w)) == 3 and sorted(c["basisFunctionType"] for c in _nonzero(w)) == [0, 0, 1]
     assert np.allclose(w.value, _expected(w))
 
 
 def test_s5_one_gaussian_bump_over_shape_and_color_plus_linear_moisture():
-    w = make_world("S5", 1)
+    w = make_world("S2", 1, **legacy("S5"))                     # (the old S5)
     shape, color, moisture = _weights(w)
     bumps = w.params.reward_function["bumps"]
     assert shape["weight"] == 0 and color["weight"] == 0 and moisture["weight"] != 0 and moisture["basisFunctionType"] in (0, 1)
@@ -140,7 +141,7 @@ def test_unity_export_roundtrip(tmp_path):
 
 
 def test_terrain_grids_match_rules():
-    w = make_world("S1", 1)
+    w = make_world("S1", 1, moisture_terrace_levels=0)           # (continuous moisture: the grid then matches the bushes' moisture closely; terraces have sharp ramps)
     g = w.terrain.grids()
     half, res = w.params.world_half_extent, g["ramp"].shape[0]
     assert g["ramp"][res // 2, res // 2] == 0 and g["elevation"][res // 2, res // 2] < w.params.terrain_max_elevation + 1e-3
@@ -153,10 +154,10 @@ def test_terrain_grids_match_rules():
     assert np.abs(g["moisture"][i, j] - w.moisture).max() < 0.03
 
 
-def test_terrace_off_for_early_sessions():
-    # S1 has no terracing: moisture is the plain continuous field and the valley has little relief (elev 12)
-    p = load_session("S1")
-    assert int(p.moisture_terrace_levels) == 0 and p.terrain_max_elevation <= 14
+def test_terrace_off_when_the_levels_are_zero():
+    # with no terrace levels moisture is the plain continuous field (every session of the ladder is terraced, with a relief of 6)
+    p = load_session("S1", moisture_terrace_levels=0)
+    assert int(load_session("S1").moisture_terrace_levels) == 4 and p.terrain_max_elevation <= 14
     t = Terrain.from_seed(p, 1)
     g = np.linspace(-100, 100, 50)
     x, z = np.meshgrid(g, g)
@@ -165,7 +166,7 @@ def test_terrace_off_for_early_sessions():
 
 def test_terrace_levels_balanced_and_in_range():
     for name, seed in [("S3", 3), ("S4", 4)]:
-        p = load_session(name)
+        p = load_session("S2", **legacy(name))                  # (the old terraced sessions)
         n, amp = int(p.moisture_terrace_levels), p.moisture_terrace_residual
         assert n == 4
         w = generate_world(p, seed)
@@ -176,7 +177,7 @@ def test_terrace_levels_balanced_and_in_range():
 
 
 def test_terrace_snaps_to_levels_when_sharp_and_no_residual():
-    w = make_world("S3", 3, moisture_terrace_sharpness=1.0, moisture_terrace_residual=0.0)
+    w = make_world("S2", 3, **{**legacy("S3"), "moisture_terrace_sharpness": 1.0, "moisture_terrace_residual": 0.0})
     levels = np.array([0, 1 / 3, 2 / 3, 1])
     nearest = np.abs(w.moisture[:, None] - levels[None]).min(axis=1)
     assert (nearest < 0.02).mean() > 0.9
@@ -199,7 +200,7 @@ def test_canopy_ranges_are_staleness_checked_and_mirrored_in_unity():
 
 def test_canopy_radius_runs_from_wide_for_squat_to_narrow_for_tall():
     # Tree.ApplyAttributes: width = lerp(widthRange.max, widthRange.min, shape), radius = width / 2 (S1: width 2..5).
-    p = load_session("S1")
+    p = load_session("S1", shape_varies=True)             # (S1 of the new ladder has identical shapes)
     w = generate_world(p, 1)
     lo, hi = p.canopy_width_range
     assert np.corrcoef(w.shape, w.canopy_radius)[0, 1] < -0.999
@@ -239,7 +240,7 @@ def test_committed_world_files_are_fresh(tmp_path):
     SessionConfig assets must reproduce them exactly (this also pins the RNG streams and draw order); Unity warns at
     startup about stale parameters, but not about a changed generator."""
     from world import export_unity, unity_world_path
-    for name in ("P", "S1", "S2", "S3", "S4", "S5"):
+    for name in ("P", "S1", "S2", "S3", "S4", "S5", "S6", "S7"):
         p = load_session(name)
         seed = int(p.world_seed)
         committed = unity_world_path(name, seed)
@@ -248,3 +249,25 @@ def test_committed_world_files_are_fresh(tmp_path):
         export_unity(generate_world(p, seed), fresh)
         assert fresh.read_bytes() == committed.read_bytes(), (
             f"{committed.name} is stale: re-run ./venv/bin/python scripts/world.py {name} --unity")
+
+
+def test_bump_with_its_own_color_spread_and_product_terms_have_the_documented_formulas():
+    rf = {"shapeComponent": {"basisFunctionType": 0, "weight": 0, "peak": 0, "width": 0}, "colorComponent": {"basisFunctionType": 0, "weight": 0, "peak": 0, "width": 0},
+          "moistureComponent": {"basisFunctionType": 0, "weight": 0, "peak": 0, "width": 0}}
+    x = np.array([0.0, 0.3, 0.7, 1.0])
+    y = np.array([0.2, 0.7, 0.9, 0.0])
+    round_bump = {**rf, "bumps": [{"centerShape": 0.3, "centerColor": 0.7, "width": 0.2, "height": 2.0}]}
+    assert np.allclose(bush_value(round_bump, x, y, x), 2.0 * np.exp(-(((x - 0.3) ** 2 + (y - 0.7) ** 2) / (2 * 0.2 ** 2))))        # no widthColor: round
+    flipped = {**rf, "products": [{"linearInShape": 0, "linearInverted": 1, "center": 0.4, "width": 0.3, "height": 1.0}]}
+    assert np.allclose(bush_value(flipped, x, y, x), (1.0 - y) * np.exp(-((x - 0.4) ** 2) / (2 * 0.3 ** 2)))                         # linear in colour (inverted), Gaussian in shape
+
+
+def test_new_reward_terms_agree_with_unity():
+    """Values of RewardFunction.Evaluate in Unity (read through the editor on 2026-11-05) for the S6 product term and the S7 anisotropic bump."""
+    zero = {"basisFunctionType": 0, "weight": 0, "peak": 0, "width": 0}
+    base = {"shapeComponent": zero, "colorComponent": zero, "moistureComponent": zero}
+    s6 = {**base, "products": [{"linearInShape": 1, "linearInverted": 0, "center": 0.6, "width": 0.25, "height": 4.0}]}
+    s7 = {**base, "bumps": [{"centerShape": 0.30, "centerColor": 0.70, "width": 0.25, "widthColor": 0.15, "height": 4.0}]}
+    points = [(0.2, 0.7), (0.9, 0.5), (0.3, 0.7), (0.6, 0.1)]
+    for rf, expected in ((s6, [0.738493, 3.323219, 1.107740, 0.324805]), (s7, [3.692465, 0.092311, 4.000000, 0.000653])):
+        assert np.allclose([float(bush_value(rf, a, b, 0.5)) for a, b in points], expected, atol=2e-6)

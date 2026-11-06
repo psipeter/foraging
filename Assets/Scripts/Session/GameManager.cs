@@ -4,8 +4,8 @@ using UnityEngine;
 [DefaultExecutionOrder(-20)]
 public class GameManager : MonoBehaviour
 {
+    [Tooltip("The default design: the ordered session list (P, its Interlude, S1, its Interlude, ...).")]
     [SerializeField] private List<SessionConfig> sessionConfigs;
-
     [SerializeField] private SunController sunController;
     [SerializeField] private HarvestManager harvestManager;
     [SerializeField] private TerrainManager terrainManager;
@@ -19,6 +19,12 @@ public class GameManager : MonoBehaviour
     [SerializeField] private AmbientAudio ambientAudio;
     [SerializeField] private InstructionsPanel instructionsPanel;
     [SerializeField] private InterludeManager interludeManager;
+
+    [Tooltip("Local quick testing (the Foraging > Quick test menu item in the Editor, or -quick on a standalone build): a practice session lasts this long, ...")]
+    [SerializeField] private float quickPracticeSeconds = 15f;
+    [Tooltip("... any other session this long, and an Interlude plays at most this many of its trials. Used on a copy of the session asset; the assets are never changed.")]
+    [SerializeField] private float quickSessionSeconds = 30f;
+    [SerializeField] private int quickInterludeTrials = 5;
 
     public static int CurrentSessionIndex = 0;
     public static List<SessionConfig> AllSessionConfigs;
@@ -75,8 +81,9 @@ public class GameManager : MonoBehaviour
     {
         if (AllSessionConfigs == null || AllSessionConfigs.Count == 0)
         {
-            AllSessionConfigs = sessionConfigs != null
-                ? new List<SessionConfig>(sessionConfigs)
+            List<SessionConfig> chosen = sessionConfigs;
+            AllSessionConfigs = chosen != null
+                ? new List<SessionConfig>(chosen)
                 : new List<SessionConfig>();
             CurrentSessionIndex = 0;
         }
@@ -97,6 +104,12 @@ public class GameManager : MonoBehaviour
         {
             Debug.LogWarning("GameManager: Active SessionConfig is null.");
             return;
+        }
+
+        if (QuickTestRequested())
+        {
+            Debug.LogWarning($"GameManager: quick test mode ({quickPracticeSeconds} s practice, {quickSessionSeconds} s sessions, {quickInterludeTrials} Interlude trials).");
+            activeConfig = activeConfig.QuickCopy(quickPracticeSeconds, quickSessionSeconds, quickInterludeTrials);
         }
 
         RenderSettings.fog = activeConfig.FogEnabled;
@@ -184,6 +197,18 @@ public class GameManager : MonoBehaviour
         }
 
         FruitMaterialManager.SetSessionConfig(activeConfig);
+    }
+
+    // The Editor's Foraging > Quick test toggle (an EditorPref, so it never reaches a build) or -quick on the command line of a standalone build.
+    private static bool QuickTestRequested()
+    {
+#if UNITY_EDITOR
+        if (UnityEditor.EditorPrefs.GetBool("Foraging.QuickTest", false))
+        {
+            return true;
+        }
+#endif
+        return Application.platform != RuntimePlatform.WebGLPlayer && System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-quick") >= 0;
     }
 
     public static void AdvanceSession()

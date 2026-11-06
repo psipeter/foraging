@@ -242,7 +242,7 @@ public class Tree : MonoBehaviour
         }
 
         // Fruit scale compensation: keep fruits as configurable world-space spheres.
-        float radius = sessionConfig != null ? sessionConfig.FruitRadiusFor(canopyScale.x, canopyScale.y) : fruitRadius;
+        float radius = sessionConfig != null ? sessionConfig.FruitRadius : fruitRadius;
         Vector3 compensatedScale = new Vector3(
             radius / Mathf.Max(canopyScale.x, 0.0001f),
             radius / Mathf.Max(canopyScale.y, 0.0001f),

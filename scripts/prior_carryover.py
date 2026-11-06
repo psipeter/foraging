@@ -77,6 +77,9 @@ def build_sets(runs):
                 continue
             log = replay.load_session_log(folder)
             w = make_world(name, log.manifest["world_seed"])
+            if not (np.allclose(log.bushes.pos, w.pos, atol=1e-3) and np.array_equal(log.bushes.fruit_reward, w.fruit_reward)):
+                print(f"warning: {who} {name}: the archived world differs from the current asset (a later design reuses the name); skipped")
+                continue
             tr = log.traj
             t = tr[:, 0]
             bouts = bouts_of(log.events, w.fruit_count)

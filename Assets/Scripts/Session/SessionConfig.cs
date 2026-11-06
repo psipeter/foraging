@@ -21,13 +21,13 @@ public enum InterludeMode
     Hybrid      // both spreads at once: the reward gaps and the feature gaps of the trials are each evenly spread
 }
 
-// Which canopy dimension the fruit radius follows (see SessionConfig.FruitRadiusFor). The order is part of the logged format
-// (the session row stores the number): Nothing 0, Height 1, Width 2.
-public enum FruitSizeFollows
+// How scripts/world.py arranges the bushes' (shape, color) records over the map (scripts/spatial.py). The order is part of the logged format
+// (the session row stores the number): Off 0, Tiles 1, TilesAndSwaps 2.
+public enum SpatialBalance
 {
-    Nothing,    // every fruit has fruitRadius
-    Height,     // grows linearly with the canopy height (the height-only shape set)
-    Width       // grows linearly with the canopy width (the width-only shape set)
+    Off,            // every bush's attributes are drawn independently of its position (rewarding bushes can cluster by chance)
+    Tiles,          // the records are dealt over tiles at several scales so each tile gets an even mix of the reward quantiles
+    TilesAndSwaps   // Tiles, then pairs of bushes swap records while that lowers the patchiness of the reward over disks at those scales
 }
 
 [CreateAssetMenu(
@@ -50,6 +50,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private InterludeMode interludeMode = InterludeMode.Designed;
     [Tooltip("Number of choice trials.")]
     [SerializeField] private int interludeTrialCount = 10;
+    // Set only on the copy GameManager makes for local quick testing (QuickCopy): the Interlude plays only this many of the file's first trials. 0 = all.
+    [HideInInspector] [SerializeField] private int interludeTrialLimit;
     [Tooltip("Seconds allowed per trial; the trial moves on when it runs out.")]
     [SerializeField] private float interludeTrialSeconds = 7f;
     [Tooltip("Fruits that must be harvested from a bush to register it as the choice (times fruitHarvestDuration = harvest time). Equal to fruitCount = the whole bush.")]
@@ -198,10 +200,18 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private Vector2 shapeRange = new Vector2(0f, 1f);
     [SerializeField] private Vector2 canopyWidthRange = new Vector2(2.0f, 5.0f);
     [SerializeField] private Vector2 canopyHeightRange = new Vector2(1.2f, 2.8f);
-    [Tooltip("Optional alternative shape sets (scripts/shape_sets.py): with a height-only or width-only set the canopy varies in one dimension and the fruit radius follows it. Nothing = every fruit has fruitRadius (the shared aspect axis). Render only: worlds and Interludes need no regeneration.")]
-    [SerializeField] private FruitSizeFollows fruitSizeFollows = FruitSizeFollows.Nothing;
-    [Tooltip("Fruit radius = fruitRadius * (1 + slope * (size - mid) / half), linear in the followed canopy dimension: size is that dimension, mid and half the middle and half-width of its range. 0.3 = +-30% across the range.")]
-    [SerializeField] private float fruitSizeSlope = 0.3f;
+    [Tooltip("Spatial evenness of the reward over the map (scripts/spatial.py): Off = independent draws, Tiles = the (shape, color, random value) records dealt evenly over tiles at several scales, TilesAndSwaps = then swapped between bushes to lower the patchiness further. The marginal distribution of every attribute and of the reward is unchanged, only which bush has which record. Needs a reward that does not depend on moisture. Read by scripts/world.py: regenerate the world after changing it.")]
+    [SerializeField] private SpatialBalance spatialBalance = SpatialBalance.Off;
+    [Tooltip("False: every bush has the value shapeWhenFixed, so all canopies are identical; give the shape component weight 0. Read by scripts/world.py and scripts/interlude.py: regenerate the world and the Interlude after changing it.")]
+    [SerializeField] private bool shapeVaries = true;
+    [Tooltip("The shape value of every bush when shapeVaries is off (0..1; the canopy size then follows the shape axis). Read by scripts/world.py and scripts/interlude.py.")]
+    [SerializeField] private float shapeWhenFixed = 0.5f;
+    [Tooltip("False: every bush has the value colorWhenFixed, so all fruit have one color; give the color component weight 0. Read by scripts/world.py and scripts/interlude.py: regenerate the world and the Interlude after changing it.")]
+    [SerializeField] private bool colorVaries = true;
+    [Tooltip("The color value of every bush when colorVaries is off (0..1). Read by scripts/world.py and scripts/interlude.py.")]
+    [SerializeField] private float colorWhenFixed = 0.5f;
+    [Tooltip("A per-bush point value drawn uniformly from (min, max) and added to the reward function, independent of every attribute: the practice session's random reward. (0, 0) = off. Pre-drawn in the world file by scripts/world.py; an Interlude of such a session has no correct side.")]
+    [SerializeField] private Vector2 randomBushValueRange = Vector2.zero;
     [Tooltip("Harvest becomes available when the player is within gap(R) = base + perRadius * canopyRadius of the canopy EDGE (horizontal distance). ~7 shows the whole bush at the 5.1 eye height / 75 deg vertical FOV (the near foot is visible from 5.1 / tan(37.5 deg) = 6.6).")]
     [SerializeField] private float harvestRangeGapBase = 7f;
     [SerializeField] private float harvestRangeGapPerRadius = 0f;
@@ -311,6 +321,22 @@ public class SessionConfig : ScriptableObject
     public string InterludeFor => interludeFor;
     public InterludeMode InterludeMode => interludeMode;
     public int InterludeTrialCount => interludeTrialCount;
+    public int InterludeTrialLimit => interludeTrialLimit;
+
+    // A copy for local quick testing (never the asset itself, which would be saved into the file): a session lasts practiceSeconds or sessionSeconds, an
+    // Interlude plays at most interludeTrials of its trials. The copy keeps the asset's name, which names the world and Interlude files.
+    public SessionConfig QuickCopy(float practiceSeconds, float sessionSeconds, int interludeTrials)
+    {
+        SessionConfig copy = Instantiate(this);
+        copy.name = name;
+        if (!isInterlude)
+        {
+            copy.sessionDuration = isPractice ? practiceSeconds : sessionSeconds;
+        }
+
+        copy.interludeTrialLimit = interludeTrials;
+        return copy;
+    }
     public float InterludeTrialSeconds => interludeTrialSeconds;
     public int InterludeHarvestFruits => interludeHarvestFruits;
     public InterludeSwitchPolicy InterludeSwitchPolicy => interludeSwitchPolicy;
@@ -351,25 +377,13 @@ public class SessionConfig : ScriptableObject
     public float StartClearingRadius => startClearingRadius;
     public int FruitCount => fruitCount;
     public float FruitRadius => fruitRadius;
+    public SpatialBalance SpatialBalance => spatialBalance;
+    public bool ShapeVaries => shapeVaries;
+    public float ShapeWhenFixed => shapeWhenFixed;
+    public float ColorWhenFixed => colorWhenFixed;
+    public bool ColorVaries => colorVaries;
+    public Vector2 RandomBushValueRange => randomBushValueRange;
 
-    // The fruit radius on a canopy of this width and height (world units; fruitRadius unless fruitSizeFollows names a dimension).
-    public float FruitRadiusFor(float canopyWidth, float canopyHeight)
-    {
-        if (fruitSizeFollows == FruitSizeFollows.Nothing)
-        {
-            return fruitRadius;
-        }
-
-        Vector2 range = fruitSizeFollows == FruitSizeFollows.Height ? canopyHeightRange : canopyWidthRange;
-        float half = Mathf.Abs(range.y - range.x) / 2f;
-        if (half < 1e-4f)
-        {
-            return fruitRadius;
-        }
-
-        float size = fruitSizeFollows == FruitSizeFollows.Height ? canopyHeight : canopyWidth;
-        return fruitRadius * (1f + fruitSizeSlope * (size - (range.x + range.y) / 2f) / half);
-    }
     public int TargetFrameRate => targetFrameRate;
     public float UploadGraceSeconds => uploadGraceSeconds;
     public float PlayerMoveSpeed => playerMoveSpeed;

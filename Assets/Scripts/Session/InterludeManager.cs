@@ -138,6 +138,11 @@ public class InterludeManager : MonoBehaviour
             resume = null;
             _order = (Trial[])file.trials.Clone();
             // The order is part of the data (and what a resume must restore).
+            if (sessionConfig.InterludeTrialLimit > 0 && sessionConfig.InterludeTrialLimit < _order.Length)
+            {
+                Array.Resize(ref _order, sessionConfig.InterludeTrialLimit);        // local quick testing: the file's first trials only
+            }
+
             dataLogger?.LogInterludePlan(Array.ConvertAll(_order, trial => trial.index));
         }
 

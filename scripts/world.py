@@ -13,6 +13,8 @@ SeedSequence (the order below is part of the format; add new streams at the end)
     4 per-fruit reward noise                5 mountain ridge noise
     6 mountain rock-edge noise              7 mountain snow-edge noise
     8 bush id order (a shuffle of the finished bush table: an id says nothing about where a bush is)
+    9 per-bush random value (`randomBushValueRange`; drawn only when the range is not (0, 0))
+    10 spatial balance (`spatialBalance`; used only when it is not Off, see spatial.py)
 
 This module mirrors TreeGenerator.GenerateSites, TerrainManager (moisture field, mountain ramp,
 tree-site mask), Tree.ApplyAttributes (canopy radius) and RewardFunction/HarvestManager (bush value,
@@ -36,6 +38,8 @@ from types import SimpleNamespace
 
 import numpy as np
 import yaml
+
+import spatial
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SESSION_DIR = PROJECT_ROOT / "Assets" / "ScriptableObjects" / "SessionConfig"
@@ -78,6 +82,17 @@ def _convert(value):
     return value
 
 
+# Fields an older asset file does not have yet (Unity adds a field to an asset only when it is saved): their defaults, snake_case names.
+FIELD_DEFAULTS = {"spatial_balance": 0, "shape_varies": True, "color_varies": True, "shape_when_fixed": 0.5, "color_when_fixed": 0.5, "random_bush_value_range": (0.0, 0.0)}
+
+
+def moisture_matters(params):
+    """Whether the reward depends on moisture. If not, moisture (the ground colour and the elevation) is decoration: it is out of the Interlude's
+    feature gap (the designer knows the reward; the simulated agents sense moisture like participants do)."""
+    rf = getattr(params, "reward_function", None)
+    return rf is None or abs(float(rf["moistureComponent"]["weight"])) > 0.0
+
+
 def load_session(name="S1", **overrides):
     """Load session parameters as an attribute namespace with snake_case names
     (e.g. tree_spacing, world_half_extent, reward_function). Keyword overrides replace values."""
@@ -87,7 +102,7 @@ def load_session(name="S1", **overrides):
     with open(path) as f:
         doc = yaml.load(f, Loader=_UnityLoader)
     fields = doc["MonoBehaviour"]
-    params = {_snake(k): _convert(v) for k, v in fields.items() if not k.startswith("m_")}
+    params = {**FIELD_DEFAULTS, **{_snake(k): _convert(v) for k, v in fields.items() if not k.startswith("m_")}}
     params["session_name"] = Path(path).stem
     for key, value in overrides.items():
         if key not in params:
@@ -117,14 +132,25 @@ def _basis(component, x):
 
 
 def bush_value(reward_function, shape, color, moisture):
-    """R_bush = w1 f1(shape) + w2 f2(color) + w3 f3(moisture) + the sum of the Gaussian bumps over (shape, color); no normalization."""
+    """R_bush = w1 f1(shape) + w2 f2(color) + w3 f3(moisture) + the sum of the Gaussian bumps over (shape, color) + the sum of the product terms (one feature
+    linear times a Gaussian of the other); no normalization."""
     value = (_basis(reward_function["shapeComponent"], shape)
              + _basis(reward_function["colorComponent"], color)
              + _basis(reward_function["moistureComponent"], moisture))
     for b in reward_function.get("bumps") or []:
-        sigma = max(float(b["width"]), 1e-4)
+        sigma_shape = max(float(b["width"]), 1e-4)
+        width_color = float(b.get("widthColor") or 0.0)            # 0 (or absent): the same spread as along shape, a round bump
+        sigma_color = max(width_color, 1e-4) if width_color > 0.0 else sigma_shape
         ds, dc = np.clip(shape, 0.0, 1.0) - float(b["centerShape"]), np.clip(color, 0.0, 1.0) - float(b["centerColor"])
-        value = value + float(b["height"]) * np.exp(-(ds * ds + dc * dc) / (2.0 * sigma * sigma))
+        value = value + float(b["height"]) * np.exp(-(ds * ds / (2.0 * sigma_shape ** 2) + dc * dc / (2.0 * sigma_color ** 2)))
+    for p in reward_function.get("products") or []:
+        in_shape = bool(p["linearInShape"])
+        linear = np.clip(shape if in_shape else color, 0.0, 1.0)
+        if bool(p["linearInverted"]):
+            linear = 1.0 - linear
+        sigma = max(float(p["width"]), 1e-4)
+        d = np.clip(color if in_shape else shape, 0.0, 1.0) - float(p["center"])
+        value = value + float(p["height"]) * linear * np.exp(-(d * d) / (2.0 * sigma * sigma))
     return value
 
 
@@ -433,6 +459,15 @@ def check_values(params):
     for name, key in (("canopyWidthRange", "canopy_width_range"), ("shapeRange", "shape_range")):
         lo, hi = getattr(params, key)
         out[f"{name}.min"], out[f"{name}.max"] = float(lo), float(hi)
+    # the three new fields are written only when they differ from the default, so a world file made before they existed stays byte-identical
+    # (Unity's FindMismatches treats a name missing from the file as the default)
+    for name, value, default in (("spatialBalance", float(params.spatial_balance), 0.0),
+                                 ("shapeVaries", float(bool(params.shape_varies)), 1.0), ("colorVaries", float(bool(params.color_varies)), 1.0),
+                                 ("shapeWhenFixed", float(params.shape_when_fixed), 0.5), ("colorWhenFixed", float(params.color_when_fixed), 0.5),
+                                 ("randomBushValueRange.min", float(params.random_bush_value_range[0]), 0.0),
+                                 ("randomBushValueRange.max", float(params.random_bush_value_range[1]), 0.0)):
+        if value != default:
+            out[name] = value
     for part in REWARD_PARTS:
         comp = params.reward_function[part + "Component"]
         for field in ("basisFunctionType", "weight", "peak", "width"):
@@ -440,6 +475,11 @@ def check_values(params):
     for i, b in enumerate(params.reward_function.get("bumps") or []):
         for field in ("centerShape", "centerColor", "width", "height"):
             out[f"reward.bump{i}.{field}"] = float(b[field])
+        if float(b.get("widthColor") or 0.0) != 0.0:                # (written only when set, so older world files stay identical)
+            out[f"reward.bump{i}.widthColor"] = float(b["widthColor"])
+    for i, p in enumerate(params.reward_function.get("products") or []):
+        for field in ("linearInShape", "linearInverted", "center", "width", "height"):
+            out[f"reward.product{i}.{field}"] = float(p[field])
     return out
 
 
@@ -529,7 +569,7 @@ def _lattice_sites(params, terrain, rng):
 
 def generate_world(params, seed):
     """Build the world for (params, seed). `params` is a namespace from load_session()."""
-    rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(9)]
+    rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(11)]
     terrain = Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]))
 
     pos = _lattice_sites(params, terrain, rngs[2])
@@ -538,6 +578,22 @@ def generate_world(params, seed):
     shape = rngs[3].uniform(0.0, 1.0, n)
     color = rngs[3].uniform(0.0, 1.0, n)
     moisture = terrain.moisture(pos[:, 0], pos[:, 1])
+    if not params.shape_varies:                     # "shapes identical": the draws above are still made, so the other streams do not move
+        shape = np.full(n, float(params.shape_when_fixed))
+    if not params.color_varies:
+        color = np.full(n, float(params.color_when_fixed))
+
+    lo, hi = params.random_bush_value_range
+    extra = rngs[9].uniform(lo, hi, n) if hi > lo else np.zeros(n)             # the practice session's reward: a value per bush that no attribute predicts
+    mode = int(params.spatial_balance)
+    if mode:
+        # Deal the (shape, colour, random value) records to other bushes so the reward is more even over the map (spatial.py). The records are the same, only their
+        # positions change; the reward must not depend on moisture, which stays with the position.
+        if moisture_matters(params):
+            raise ValueError("spatialBalance needs a session whose reward does not depend on moisture")
+        records = bush_value(params.reward_function, shape, color, 0.5) + extra
+        index = spatial.balance(pos, records, rngs[10], mode, half=float(params.world_half_extent))
+        shape, color, extra = shape[index], color[index], extra[index]
 
     # Tree.ApplyAttributes: canopy is a sphere scaled (sx, sy, sx); radius = max horizontal scale / 2.
     lo, hi = params.shape_range
@@ -545,7 +601,7 @@ def generate_world(params, seed):
     w_lo, w_hi = params.canopy_width_range
     canopy_radius = (w_hi + (w_lo - w_hi) * t) * 0.5
 
-    value = bush_value(params.reward_function, shape, color, moisture)
+    value = bush_value(params.reward_function, shape, color, moisture) + extra
 
     # HarvestManager.CollectNextFruit: max(0, round(R_bush + N(0, std))), independent per fruit.
     fruit_count = int(params.fruit_count)

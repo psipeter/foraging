@@ -33,17 +33,17 @@ from world import load_session
 SCRIPTS = Path(__file__).resolve().parent
 ROOT = SCRIPTS.parent
 
-ENGINE_FILES = ("sim.py", "costs.py", "perception.py", "world.py", "interlude.py")
+ENGINE_FILES = ("sim.py", "costs.py", "perception.py", "world.py", "interlude.py", "spatial.py")
 AGENT_FILES = ("agents.py", "specs.py")
 
 SIM_FIELDS = (
-    "camera_field_of_view", "canopy_width_range", "eye_height", "fruit_count", "fruit_harvest_duration", "harvest_max_angle",
+    "camera_field_of_view", "canopy_width_range", "color_varies", "color_when_fixed", "eye_height", "fruit_count", "fruit_harvest_duration", "harvest_max_angle",
     "harvest_range_gap_base", "harvest_range_gap_per_radius", "interlude_bonus_per_correct", "interlude_bush_bearing",
     "interlude_bush_distance", "interlude_for", "interlude_max_feature_gap", "interlude_max_reward_gap", "interlude_min_elevation_difference", "interlude_min_feature_gap",
     "interlude_min_reward_gap", "interlude_mode", "interlude_repeat_count", "interlude_repeat_separation", "interlude_trial_count", "is_interlude", "is_practice", "moisture_terrace_levels",
     "moisture_terrace_residual", "moisture_terrace_sharpness", "mountain_band_width", "mountain_block_threshold",
     "mountain_boundary_jitter", "mountain_height", "mountain_noise_scale", "placement_jitter", "player_move_speed",
-    "reward_function", "reward_std", "session_duration", "session_name", "shape_range", "snow_line_fraction",
+    "random_bush_value_range", "reward_function", "reward_std", "session_duration", "session_name", "shape_range", "shape_varies", "shape_when_fixed", "spatial_balance", "snow_line_fraction",
     "start_clearing_radius", "terrain_max_elevation", "terrain_mesh_resolution", "terrain_noise_frequency",
     "terrain_noise_octaves", "tree_edge_margin", "tree_spacing", "world_half_extent",
 )

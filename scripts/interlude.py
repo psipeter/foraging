@@ -45,7 +45,7 @@ from pathlib import Path
 
 import numpy as np
 
-from world import (PROJECT_ROOT, _basis, bush_value, check_values, generate_world, load_session,
+from world import (PROJECT_ROOT, _basis, bush_value, check_values, generate_world, load_session, moisture_matters,
                    unity_world_path)
 
 FEATURES = ["shape", "color", "moisture"]
@@ -80,11 +80,24 @@ GRADED_TARGETS = [0.15, 1.2]  # range of |R difference| in units of the spread o
 PRACTICE_GRADED_TARGET = 1.5
 
 
-def feature_gap(a, b):
+def feature_weights(params):
+    """The channels `feature_gap` counts for a session: a feature that does not vary (shapeVaries / colorVaries off) or that is decoration
+    (moisture with no reward weight) is left out, so a gap is 0 for identical bushes and 1 for opposite ends of every counted channel."""
+    w = dict(FEATURE_WEIGHTS)
+    if not params.shape_varies:
+        w["shape"] = 0.0
+    if not params.color_varies:
+        w["color"] = 0.0
+    if not moisture_matters(params):
+        w["moisture"] = 0.0
+    return w
+
+
+def feature_gap(a, b, weights=None):
     """Perceptual distance of two bushes: the weighted root mean square of their differences in shape, colour and moisture, each on its
-    0-1 scale, so 0 = identical and 1 = opposite ends of every channel. All three channels count, relevant to the reward or not,
-    because a participant sees them all."""
-    w = FEATURE_WEIGHTS
+    0-1 scale, so 0 = identical and 1 = opposite ends of every channel. The channels that vary and pay count (`feature_weights`; all
+    three with the default weights), relevant to the reward or not, because a participant sees them all."""
+    w = weights or FEATURE_WEIGHTS
     return math.sqrt(sum(w[f] * (a[f] - b[f]) ** 2 for f in FEATURES) / sum(w.values()))
 
 
@@ -183,8 +196,8 @@ KIND_MASKS = {
 def relevant_features(params):
     rf = params.reward_function
     w = {f: abs(float(rf[f + "Component"]["weight"])) for f in FEATURES}
-    for b in rf.get("bumps") or []:
-        w["shape"] += abs(float(b["height"]))          # a bump makes both of its features relevant
+    for b in list(rf.get("bumps") or []) + list(rf.get("products") or []):
+        w["shape"] += abs(float(b["height"]))          # a bump or a product term makes both of its features relevant
         w["color"] += abs(float(b["height"]))
     return sorted(FEATURES, key=lambda f: -w[f]), [f for f in FEATURES if w[f] > 0.0]
 
@@ -196,6 +209,8 @@ class Designer:
         self.pool = pool
         self.rng = rng
         self.order, self.relevant = relevant_features(params)
+        self.weights = feature_weights(params)
+        self.no_correct_side = params.random_bush_value_range[1] > params.random_bush_value_range[0]   # a random reward: no attribute predicts it
         self.used = []                                  # spawn points already taken
         self._masks = {}
         self._cache = {}
@@ -284,7 +299,8 @@ class Designer:
     def bush(self, i, side, shape, color):
         """A bush on placement `i`. Its position comes from its own canopy radius, and its moisture is the terrain's
         moisture at that final position."""
-        shape = round(float(shape), 2)
+        shape = round(float(shape), 2) if self.p.shape_varies else float(self.p.shape_when_fixed)
+        color = color if self.p.color_varies else float(self.p.color_when_fixed)
         key = (i, side, shape)
         if key not in self._cache:
             r = float(canopy_radius(self.p, shape))
@@ -358,7 +374,7 @@ class Designer:
                 lt = self.bush(i, "left", *self.rng.uniform(0, 1, 2))
                 rt = self.bush(i, "right", *self.rng.uniform(0, 1, 2))
                 d = self.value(lt) - self.value(rt)
-                if abs(d) < TIE_TOLERANCE or (want_left_better is not None and (d > 0) != want_left_better):
+                if not self.no_correct_side and (abs(d) < TIE_TOLERANCE or (want_left_better is not None and (d > 0) != want_left_better)):
                     continue
                 if self.elevation_apart(abs(lt["moisture"] - rt["moisture"])) < self.min_elevation_apart():
                     continue            # the final positions (they shift with the radii) are too level: another draw
@@ -382,7 +398,7 @@ class Designer:
                 rt = self.bush(i, "right", *self.rng.uniform(0, 1, 2))
                 d = self.value(lt) - self.value(rt)
                 if abs(d) >= TIE_TOLERANCE:
-                    rows.append((i, lt, rt, abs(d), feature_gap(lt, rt), d > 0))
+                    rows.append((i, lt, rt, abs(d), feature_gap(lt, rt, self.weights), d > 0))
         return rows
 
     def _extreme(self, feature):
@@ -452,8 +468,10 @@ def build_trials(params, terrain, pool, rng):
 
     kinds = ["contrast"] * mix["contrast"] + ["graded"] * mix["graded"] + ["extrapolation"] * mix["extrapolation"]
     # contrasts cover every relevant feature, plus one irrelevant feature as an ignored-feature check (not in practice)
-    irrelevant = [f for f in des.order if f not in des.relevant]
+    irrelevant = [f for f in des.order if f not in des.relevant and des.weights[f] > 0]
     seq = list(des.relevant) + (irrelevant[:1] if not practice else [])
+    if not seq:
+        raise ValueError("no feature pays in this session: a designed-mode Interlude needs one (use interludeMode Random)")
     varied_for, c = {}, 0
     for j, k in enumerate(kinds):
         if k == "contrast":
@@ -619,7 +637,7 @@ def _finish_trials(trials, des, rng, ordered=False, separation=0):
     if ordered:
         perms = [rng.permutation(len(trials)) for _ in range(ORDER_DRAWS)]
         def key(perm):
-            cost = _order_penalty([(trials[j]["correct"], abs(trials[j]["delta_value"]), feature_gap(trials[j]["left"], trials[j]["right"])) for j in perm])
+            cost = _order_penalty([(trials[j]["correct"], abs(trials[j]["delta_value"]), feature_gap(trials[j]["left"], trials[j]["right"], des.weights)) for j in perm])
             rank = {id(trials[j]): r for r, j in enumerate(perm)}
             return cost + sum(1000.0 for t in trials if "repeat_source" in t and abs(rank[id(t)] - rank[id(t["repeat_source"])]) < separation)
         perm = min(perms, key=key)
@@ -673,7 +691,7 @@ def generate_interlude(name, pool_samples=None, seed=None, mode=None, extras=Non
     terrain = generate_world(base, seed).terrain
     rngs = [np.random.default_rng(c) for c in np.random.SeedSequence([seed, 913]).spawn(3)]
     mode = interlude_mode(params, mode)
-    if mode == "designed" and params.reward_function.get("bumps"):
+    if mode == "designed" and (params.reward_function.get("bumps") or params.reward_function.get("products")):
         raise ValueError(f"{name}: designed Interludes assume additive reward terms (contrasts, extrapolation); use a random or gap mode")
     if mode == "random" or mode in GAP_MODES:
         pool = make_pool(params, terrain, rngs[0], RANDOM_POOL_SAMPLES if pool_samples is None else pool_samples)
@@ -734,7 +752,7 @@ def generate_interlude(name, pool_samples=None, seed=None, mode=None, extras=Non
         sidecar["mode"] = mode            # (designed files stay byte-identical to those written before modes existed)
         for entry, t in zip(sidecar["trials"], trials):
             entry["rewardGap"] = abs(float(t["delta_value"]))
-            entry["featureGap"] = feature_gap(t["left"], t["right"])
+            entry["featureGap"] = feature_gap(t["left"], t["right"], des.weights)
     for entry, t in zip(sidecar["trials"], trials):
         if "repeat_of" in t:
             entry["repeatOf"] = t["repeat_of"]      # (the loader ignores it; analysis uses it to pair a trial with its repeat)

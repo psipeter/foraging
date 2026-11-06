@@ -293,12 +293,18 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 91b2738dc6972c82ba4b215b4588941e, type: 2}
   - {fileID: 11400000, guid: 45f20c00f9a142cb28d96fa60cf9fac4, type: 2}
   - {fileID: 11400000, guid: 8cffaec0ecb2d456fa1f274dc00fca94, type: 2}
-  - {fileID: 11400000, guid: 70d0a86c90c759779a1bbd61114eb02d, type: 2}
-  - {fileID: 11400000, guid: 5d3d4f3f37d1ecd39a86a0305e7302fd, type: 2}
-  - {fileID: 11400000, guid: 1798e31453c98d8d2ac732c983af1112, type: 2}
-  - {fileID: 11400000, guid: 3df5e1233a52378fc95e9ca49c17c6f5, type: 2}
-  - {fileID: 11400000, guid: 77c8dc0e18ee76cf486591d9d4d996c5, type: 2}
-  - {fileID: 11400000, guid: dc7163bfedd27e41281c843e5ae7461c, type: 2}
+  - {fileID: 11400000, guid: 4c831058075f96f2aa72b7e56e4b8e5a, type: 2}
+  - {fileID: 11400000, guid: 6792f70f9aa5c83bdaa494c1a7ef5d32, type: 2}
+  - {fileID: 11400000, guid: d27337c0a045b20c1a63caa568c63abf, type: 2}
+  - {fileID: 11400000, guid: 100eeb8049b5c1e1db6440746f43a00d, type: 2}
+  - {fileID: 11400000, guid: 039e62015b4b27f1687f43f02dcd7e26, type: 2}
+  - {fileID: 11400000, guid: 74874205ec843c037a2430815d5a262c, type: 2}
+  - {fileID: 11400000, guid: 568be039323a10425bce74fff0718238, type: 2}
+  - {fileID: 11400000, guid: b3b60620628afae7395a8fab91811e98, type: 2}
+  - {fileID: 11400000, guid: 4ab63561636f4387ea70b65dcb0876e1, type: 2}
+  - {fileID: 11400000, guid: a91acb546db8d0280b116b7aa9b28f03, type: 2}
+  design: 0
+  variantOverride: -1
   sunController: {fileID: 419207779}
   harvestManager: {fileID: 528505460}
   terrainManager: {fileID: 1847944418}
@@ -312,6 +318,9 @@ MonoBehaviour:
   ambientAudio: {fileID: 1968310339}
   instructionsPanel: {fileID: 269841567}
   interludeManager: {fileID: 2081684507}
+  quickPracticeSeconds: 15
+  quickSessionSeconds: 30
+  quickInterludeTrials: 5
 --- !u!4 &205307911
 Transform:
   m_ObjectHideFlags: 0
