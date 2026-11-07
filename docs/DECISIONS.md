@@ -1861,3 +1861,41 @@ One participant (peter1) played the Tutorial (TUT, 2 sessions) and Complex Featu
 ## Review of the experiments work (PI, 2026-11-06)
 
 Adversarial review of everything since `8b25ee0` in the server, the experiment flow and the data tools (red-team and simplifier; full test run 556 passed). **Server (a new migration, `20261108000000_finish_run_checks.sql`; the two earlier ones are applied to production and stay as they are, so the simplifier's proposal to fold the points migration into the experiments one was refused):** (1) `finish_run` returns the **completion code only for a run the database confirms finished** (it used to return it with the problems, so a scripted call with nothing played got the real code), (2) a run whose build no longer lists the experiment is a problem, not a skipped check (it used to be marked finished at any session count, unlocking the next experiment), (3) the points of a run are defined once (`server.run_points`), used by the menu and returned by `finish_run`, and the completion screen shows the server's number instead of the client adding scores up (the client's running totals, `RestoreTotals` and the Interlude bonus static are gone; an offline run shows no points). **Admin:** `register-release --experiment CODE` reads the session count from the experiment asset at the commit (a mistyped count used to leave an experiment unfinishable and its successor locked), the release rows are replaced in one transaction, and `register-experiment` refuses a prerequisite that is not registered. **Client:** a browser build without `consent.txt` fails with a message instead of skipping consent; an experiment played directly (the Editor window, `-experiment`) ends in the menu and does not restart; `downloadPerSession` and the next-session prefetch are removed (never used by either experiment, never exercised; an experiment's files are downloaded when it is chosen); the session-numbering helpers that `{part}` made dead are gone. **Kept on purpose:** `experiments.payout` (payout ratios are decided per experiment, the column waits for them), the second `unknown_build` check in `start_run` (the error label is part of the tests; changing it needs a second copy of that large function). **Deferred:** `Refresh` answering `needs_consent` keeps the old standings silently (only reachable by deleting consent rows by hand); the session-count mismatch when a resume runs on a build with a different session count is not checked (a build is never changed mid-experiment, see the experiments entry); the human data download stamps every run with the participant's latest consent version (one consent text so far); `humans.sqlite` from before the experiments must be deleted and downloaded again (`_add_missing_columns` was removed).
+
+## Experiments split by question (2026-11-06)
+
+**What was decided (PI, with a design discussion; nothing built).** The single Complex Features ladder (CF_S1 to CF_S7) is to be split, and
+extended, into experiments that each vary one family of things; the designs are in `docs/EXPERIMENTS.md`, the summary in `docs/SCIENCE.md`
+("Planned experiments"). **Why:** the ladder changes the number of rewarded features, the nonlinearity and the interaction together (S5 goes back
+to linear after S4's peaks, S6 adds nonlinearity and interaction at once), and duration, order and practice grow with the session number, so a
+difference between two sessions cannot be assigned to one cause; each cell was also a single world with a single draw of weights and centres,
+so one participant's S5 curve is one noisy sample. **Repeats:** a session is an instance from a pool (new seed, features, directions,
+positions, weights), several per cell, so a per-participant per-condition estimate exists and the instance index is a regressor (practice at the
+class is a result, not a confound). The order is an ease-in of the simplest cases, then intermixed in random order, so a participant cannot
+assume the next session is harder (for example that three visible features mean three paying ones).
+
+**Rejected or dropped along the way.**
+- *Discrete cells for the number of rewarded features (visible and rewarded counts 2 of 3, 2 of 2 and so on).* Replaced by long sessions with
+  three visible features and continuously varied weights, so the weak-weight detection threshold is a curve and the two- and one-feature cases
+  are its corners (weights of zero). The distribution of the weights stays a TODO.
+- *An oblique Gaussian ridge, and XOR (a saddle) or a reversal of one feature's direction across a gate.* The ridge was an unbounded line,
+  effectively one feature in a rotated basis, and an axis-aligned 2D Gaussian with different spreads is separable (each feature's peak can be
+  found alone); a **tilted, elongated 2D Gaussian** is the non-separable case with a place to find, so it replaced the ridge. XOR is two
+  opposite-corner peaks tied by one rule: it overlaps the two-peak sessions of the sparse-rewards experiment and only tests inferring the second
+  corner from the first. A gate with a flat off-region and the linear-times-Gaussian session (the old S6) are one family, so the interaction types
+  became additive, sigmoid × sigmoid (the product is its shallow limit), sigmoid × Gaussian and the tilted bump. Three of those four are
+  products of a function of each feature (additive in the log of the reward), so the analysis fits a multiplicative model besides an additive and
+  a joint one; only the tilted bump is non-separable. A continuous mixture between additive and interaction was dropped as too hard as it stands.
+- *Sparsity as the width of a bump.* A narrow 2D bump with the same width as a 1D bump is far sparser, so sparsity is defined in feature space
+  (the fraction of the interval or plane in the top x% of reward) and matched across types where types are compared.
+- *Knowledge of the reward function as a hint (patch experiments).* It is inferred from a participant's choices instead; the reward function is made
+  easy to learn (linear in one feature, or additive in two) and redrawn per instance, with long sessions so the explore/exploit transition shows.
+- *Time scarcity and patch contrast as experiments of their own.* Scarcity is always on (a session is too short to harvest every tile) and held at a
+  fixed ratio; contrast is a variable in both patch experiments (crossed with travel cost in patch leaving; high early and low later in patch
+  assessment, which confounds contrast with practice unless a second group runs the reverse or a random order).
+
+**Not done, and the cautions.** The first draft of the patch-leaving hypothesis said the shortfall from the optimum grows with travel cost; that was
+the assistant's addition, with no basis in the PI's design or a clean literature prediction, and was removed. `spatialBalance` evens the reward over
+the map and conflicts with the patch experiments (off, or inside tiles); a moisture-paying reward conflicts with spatial balancing too, which bears
+on FN's third feature; the Interlude's pair choice by reward gap does not cover typed pairs (RW), per-feature pairs (FN) or flat regions (FI). All are
+listed as open items in `docs/EXPERIMENTS.md`.

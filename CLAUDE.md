@@ -2,8 +2,9 @@
 
 Source of truth for conventions and workflow. For the scientific goals,
 task design, session/reward-function inventory, and open questions, see
-`docs/SCIENCE.md`. For why past design choices were made (including
-rejected alternatives), see `docs/DECISIONS.md`. `README.md` is a short
+`docs/SCIENCE.md`. The planned experiments (FN, RW, FI, PL, PA; a plan,
+nothing built) are in `docs/EXPERIMENTS.md`. For why past design choices were
+made (including rejected alternatives), see `docs/DECISIONS.md`. `README.md` is a short
 human-facing description only. Read this file fully before making changes.
 
 ---
@@ -186,7 +187,7 @@ Assets/
   Materials/ Prefabs/ Resources/Textures
 supabase/    migrations/ (online database), functions/ (Edge Functions participant-start, run-start, append, run-finish, feedback; _shared/), local/serve.ts (runs them
              without Docker); deployed to the Supabase project emdgczidpqdhftzujyte; deploy with the CLI, see docs/ONLINE_DATA_PLAN.md
-docs/        SCIENCE.md, DECISIONS.md, ONLINE_DATA_PLAN.md (planned online data collection: schema, upload protocol, resume, build
+docs/        SCIENCE.md, DECISIONS.md, EXPERIMENTS.md (the planned experiments FN, RW, FI, PL, PA: full designs; a plan, nothing built), ONLINE_DATA_PLAN.md (planned online data collection: schema, upload protocol, resume, build
              phases; nothing built yet, the "Data logging" section below still describes the current logger), REVIEW_POLICY.md (what
              code review optimizes; see "Adversarial review")
 .claude/     agents/ (simplifier, red-team, arbiter) and skills/adversarial-review/

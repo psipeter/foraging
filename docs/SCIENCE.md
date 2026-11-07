@@ -31,8 +31,7 @@ dependent variable is which trees participants harvest and in what order
 outlast any single question.
 
 **Hypothesis (first study, PI, 2026-11-05):** adding more features, feature nonlinearity and feature interaction to the reward function makes the
-mapping harder to learn: learning is slower and the performance ceiling lower. The session structure that tests it is "Session structure" (built 2026-11-05; practice and S1 to S7). Experiments on reward scarcity, explore/exploit, patch leaving, and priors and unlearning are
-separate, later experiments with their own designs (they will use the terrain and spatial reward structure that the first study
+mapping harder to learn: learning is slower and the performance ceiling lower. The session structure that tests it is "Session structure" (built 2026-11-05; practice and S1 to S7). The ladder is planned to be split into experiments that each vary one thing, and followed by experiments on reward sparsity, patch leaving and patch assessment ("Planned experiments", `docs/EXPERIMENTS.md`); priors and unlearning is a further experiment not yet designed. The later experiments have their own designs (they will use the terrain and spatial reward structure that the first study
 leaves decorative, and the switch that evens the reward over the map, `spatialBalance`, which they can turn off).
 
 Key constraint: attributes must be clearly visible and perceptually
@@ -504,8 +503,7 @@ likely to be revisited (TODO below). Design decision and alternatives: DECISIONS
 
 **Hypothesis:** adding more features, feature nonlinearity and feature interaction to the reward function makes the mapping harder to learn, so learning is slower and the ceiling lower. **Why this ladder:** each
 step adds one thing, and the jump into the last sessions is smaller than the old one (a pilot found the two-bump S5 too large a step from S4: Interlude accuracy 75% and then 55%, chance 50%). Moisture is
-not a reward feature: it was the regional, position-confounded one (patches, hidden bushes, a prior of its own), and patch structure belongs to the later experiments on reward scarcity, explore/exploit,
-patch leaving, and priors and unlearning (each its own design). Rationale and rejected alternatives: DECISIONS, "Session structure revised (2026-11-05)".
+not a reward feature: it was the regional, position-confounded one (patches, hidden bushes, a prior of its own), and patch structure belongs to the patch experiments (patch leaving and patch assessment, "Planned experiments" below), with priors and unlearning a further one not yet designed. Rationale and rejected alternatives: DECISIONS, "Session structure revised (2026-11-05)".
 
 **Environment (all sessions).** Bushes on the jittered hexagonal lattice, a terraced decorative terrain of relief 6, moisture weight 0, and the reward spread evenly over the map by tile balancing and
 swaps (`spatialBalance` TilesAndSwaps; "Open questions"). Reward features are shape (the canopy aspect ratio) and fruit colour (the plasma ramp). A feature that "does not vary" gives every bush the middle
@@ -551,6 +549,31 @@ picture of the learned value function across these sessions, within and across p
 **Provisional, not done:** the durations are first values; the reward spread across sessions is not matched; the instruction files are the old texts (S6 and S7 copies of S5's); the carry-over scripts
 (`prior_carryover.py`, `carryover_decay.py`) summarise a session's rules as a count of bumps and do not know products, and the human analyses still use moisture as a choice regressor (useful for testing whether the
 decoration steers choices); the simulated agents' critics are unchanged (an additive critic cannot represent either interaction; the joint-kernel GP can); the ABAB design (archived, below) is not part of it.
+
+### Planned experiments (2026-11-06)
+
+The single Complex Features ladder above changes the number of rewarded features, the nonlinearity and the feature interaction together, and
+duration and practice with them. The plan is to split it into experiments that each vary one family of things, and to add experiments on
+foraging policy. **Nothing is built**; the game plays `TUT` and `CF`. The full designs (hypotheses, session types, order and hints, open
+items, analyses) are in **`docs/EXPERIMENTS.md`**; the reasoning and rejected alternatives in DECISIONS, "Experiments split by question (2026-11-06)".
+
+| Experiment | Hypothesis in one line | Sessions |
+|---|---|---|
+| Learning with more rewarded features (FN) | Visible but unrewarded features slow discovery a little; rewarded features slow it much more; a weak feature is noticed only when its effect is large against the per-fruit noise | three short baselines (one feature pays, one to three visible), then long sessions with three visible features and varied weights |
+| Learning with sparse rewards (RW) | Narrower (sparser) peaks mean more exploration and fewer points; with a local and a global maximum people settle on the local one more when peaks are narrow, far apart, close in height or noisy | one 1D peak, one 2D peak, two 1D peaks, two 2D peaks (short to quite long), the last two with varied sparsity, separation, height ratio and noise |
+| Learning with feature interactions (FI) | The more the reward depends on the combination of shape and color, the slower the learning and the lower the ceiling; sharper sigmoids at matched sparsity are harder | additive, sigmoid × sigmoid, sigmoid × Gaussian, tilted 2D Gaussian, at matched sparsity |
+| Patch leaving (PL) | People take a cluster down and move to another, staying longer when the walk is longer and leaving sooner when others are richer; efficiency improves over sessions | easy (linear, one feature) reward; travel cost × patch contrast |
+| Patch assessment (PA) | When a patch's value is hard to judge, people are less efficient but improve their explore/exploit policy over sessions, with heuristics that never reach the optimum | two-feature additive reward; patch size × diversity; contrast high early, low later |
+
+**Shared rules.** Each session is an instance drawn from a pool (own world seed, own draw of features, directions, weights and positions); an
+ease-in of the simplest cases comes first, the later instances are intermixed in random order; hints say which features matter in the early
+sessions and are dropped later (the patch experiments give none); the knowledge state in PL and PA is inferred from a participant's choices,
+not told. **Sparsity** is defined in feature space (the fraction of the interval or plane whose reward is in the top x% of the range) so one-
+and two-feature sessions are on one scale. **Efficiency** is the reward relative to an oracle following the marginal value theorem in the
+same world. **Open:** the distribution of FN's weak weights and of RW's peak parameters (TODO in `docs/EXPERIMENTS.md`), durations and
+Interlude trial counts (they wait for measured timing), moisture as FN's third feature (spatial balancing needs a reward that does not
+depend on it), typed or per-feature Interlude trials for FN, RW and FI, and a clustered placement mode with `spatialBalance` off or within
+tiles for the patch experiments.
 
 ### Earlier session progression (P–S5, superseded 2026-11-05 by "Session structure" above)
 
@@ -890,7 +913,7 @@ moisture as a reward feature in S3 and S4, the terraced-terrain TODO, the baseli
   discriminability, and screen for colour vision.
 - **Session structure (2026-11-05):** open items are in "Session structure" above: the matching of reward across sessions (and what "ceiling" means),
   hints against no hints, the counterbalancing of the colour and shape order, session durations, and the Interlude's trial count for the 2-D sessions. The
-  later experiments on reward scarcity, explore/exploit, patch leaving, and priors and unlearning are not designed yet; they need the terrain and carry-over machinery
+  later experiments are designed in `docs/EXPERIMENTS.md` (reward sparsity, patch leaving, patch assessment; priors and unlearning is not designed yet); they need the terrain and carry-over machinery
   (terraced moisture; same-features-in-successive-sessions, the opposite of the ABAB alternation), so both are kept.
 - **TODO(PI): clean up the machinery for the old pilot configurations (later; keep it until then).** The pre-ladder sessions (P, S1 to S5 as they were:
   moisture-paying, continuous or terraced terrain, bumps) live on as `scripts/legacy_sessions.py` with `scripts/fixtures/legacy_S3-S5.asset`, the
