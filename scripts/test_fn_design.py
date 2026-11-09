@@ -49,7 +49,7 @@ def test_the_assets_say_what_the_design_says():
             comp = p.reward_function[f"{f}Component"]
             assert comp["weight"] == pytest.approx(FN.REWARD_SCALE * i.design["weights"].get(f, 0.0), abs=5e-4)
             assert comp["basisFunctionType"] == i.design["direction"][f] and not p.reward_function.get("bumps") and not p.reward_function.get("products")
-        assert int(p.spatial_balance) == 2 and int(p.moisture_terrace_levels) == 0 and float(p.reward_std) == FN.REWARD_STD
+        assert int(p.spatial_balance) == 0 and int(p.feature_balance) == 2 and int(p.moisture_terrace_mode) == FN.TERRACE["moistureTerraceMode"] and float(p.terrain_noise_frequency) == FN.TERRACE["terrainNoiseFrequency"] and int(p.terrace_diffusion_iterations) == 500 and float(p.terrace_diffusion_edge) == 0.1 and float(p.reward_std) == FN.REWARD_STD
         assert json.loads(p.design_json)["instance"] == i.name
         interlude = load_session(i.name.replace("_S", "_I"))
         assert interlude.is_interlude and interlude.interlude_for == i.name and interlude.reward_function == p.reward_function

@@ -8,7 +8,10 @@ using UnityEngine;
 public class ExperimentPlayer : EditorWindow
 {
     private const string ExperimentKey = "Foraging.Experiment";
+    private const string StartPartKey = "Foraging.StartPart";
     private const string BootScene = "Assets/Scenes/Boot.unity";
+
+    private int _startPart = 1;
 
     [MenuItem("Foraging/Experiments")]
     private static void Open() => GetWindow<ExperimentPlayer>("Experiments");
@@ -22,7 +25,8 @@ public class ExperimentPlayer : EditorWindow
             return;
         }
 
-        EditorGUILayout.LabelField("Play an experiment from its first session", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Play an experiment", EditorStyles.boldLabel);
+        _startPart = Mathf.Max(1, EditorGUILayout.IntField(new GUIContent("Start at part", "1 = the first part. A part is a session or an Interlude, in play order (\"Part 3 of 18\" on the screens). Applies to Play below, not to Play with the menu."), _startPart));
         foreach (ExperimentConfig experiment in catalog.Experiments)
         {
             if (experiment == null)
@@ -35,7 +39,7 @@ public class ExperimentPlayer : EditorWindow
                 EditorGUILayout.LabelField($"{experiment.Title} ({experiment.Code}, {experiment.Sessions.Count} parts)");
                 if (GUILayout.Button("Play", GUILayout.Width(120)))
                 {
-                    Play(experiment.Code);
+                    Play(experiment.Code, _startPart);
                 }
             }
         }
@@ -43,15 +47,16 @@ public class ExperimentPlayer : EditorWindow
         EditorGUILayout.Space();
         if (GUILayout.Button("Play with the menu (Boot scene)"))
         {
-            Play("");
+            Play("", 1);
         }
 
-        EditorGUILayout.HelpBox("Play starts at the Boot scene and skips the menu; afterwards the Editor is as it was (the play button starts the open scene with the GameManager's default experiment). The quick-test toggle (Foraging > Quick test) still applies.", MessageType.None);
+        EditorGUILayout.HelpBox("Play starts at the Boot scene and skips the menu, at the part chosen above (a part past the end starts at the last); afterwards the Editor is as it was (the play button starts the open scene with the GameManager's default experiment). The quick-test toggle (Foraging > Quick test) still applies.", MessageType.None);
     }
 
-    private static void Play(string code)
+    private static void Play(string code, int startPart)
     {
         EditorPrefs.SetString(ExperimentKey, code);
+        EditorPrefs.SetInt(StartPartKey, startPart);
         EditorSceneManager.playModeStartScene = AssetDatabase.LoadAssetAtPath<SceneAsset>(BootScene);
         EditorApplication.playModeStateChanged -= Restore;
         EditorApplication.playModeStateChanged += Restore;
@@ -64,6 +69,7 @@ public class ExperimentPlayer : EditorWindow
         if (change == PlayModeStateChange.EnteredEditMode)
         {
             EditorPrefs.DeleteKey(ExperimentKey);
+            EditorPrefs.DeleteKey(StartPartKey);
             EditorSceneManager.playModeStartScene = null;
             EditorApplication.playModeStateChanged -= Restore;
         }

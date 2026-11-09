@@ -23,6 +23,15 @@ FIRST_WORLD_SEED = 301
 FEATURES = ("shape", "color", "moisture")
 REWARD_SCALE = 4.0                  # the best bush pays about 4 per fruit when the weights sum to one, as in every earlier session
 REWARD_STD = 0.6
+# Each visible feature (shape, colour) balanced over the map on its own, the same way for each (PI, 2026-11-09): reward balancing (spatialBalance) made the rewarded feature much
+# more regular than the others, a layout cue to which feature pays, and coupled shape and colour to the moisture patches. Scales 40 to 240 world units, target 0.7 (a local spread of
+# about 0.8 of chance: even, not conspicuously regular).
+FEATURE_BALANCE = {"featureBalance": 2, "featureBalanceTarget": 0.7, "featureBalanceScales.Array.size": 4, "featureBalanceScales.Array.data[0]": 40.0,
+                   "featureBalanceScales.Array.data[1]": 60.0, "featureBalanceScales.Array.data[2]": 120.0, "featureBalanceScales.Array.data[3]": 240.0}
+TERRACE = {"moistureTerraceMode": 2, "moistureTerraceLevels": 0, "moistureTerraceSharpness": 0.7, "moistureTerraceResidual": 0.03, "moistureTerraceUnevenness": 0.0,
+           "terrainNoiseFrequency": 3.0,
+           "terraceMeanWidth": 0.14, "terraceWidthSpread": 0.7, "terraceMaxBand": 0.3, "terraceMinStep": 0.08, "terracePhaseShift": 0.4, "terracePhaseFrequency": 0.6,
+           "terraceStrength": 1.0, "terraceDiffusionIterations": 500, "terraceDiffusionEdge": 0.1}      # the ground (PI, 2026-11-09): the Diffusion mode (edge-preserving diffusion of a smooth field: flat regions with soft slopes and steps), noise frequency 3 (PI, 2026-11-09; small regions of one to three bushes, steep edges), the other terrace fields at their defaults (the Staircase ones unused here)
 # The weighted sessions: weights proportional to (1, r, r^2) over a random ranking of the features; r = 1 is equal weights, small r a strong feature and two weak ones.
 WEIGHT_RATIOS = (1.0, 0.7, 0.5, 0.35, 0.2, 0.1)
 BASELINE_SECONDS = (60, 75, 90)
@@ -74,7 +83,7 @@ def _component(cell, feature):
 
 def _fields(cell, seed):
     visible = set(cell["visible"])
-    f = {"worldSeed": seed, "rewardStd": REWARD_STD, "spatialBalance": 2, "moistureTerraceLevels": 0, "interludeMode": 4,
+    f = {"worldSeed": seed, "rewardStd": REWARD_STD, "spatialBalance": 0, **FEATURE_BALANCE, **TERRACE, "interludeMode": 4,
          "shapeVaries": "shape" in visible, "colorVaries": "color" in visible, "moistureVaries": "moisture" in visible,
          "moistureIsFeature": "moisture" in visible, "rewardFunction.bumps.Array.size": 0, "rewardFunction.products.Array.size": 0}
     for feature in FEATURES:

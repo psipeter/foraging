@@ -41,7 +41,7 @@ SIM_FIELDS = (
     "harvest_range_gap_base", "harvest_range_gap_per_radius", "interlude_bonus_per_correct", "interlude_bush_bearing",
     "interlude_bush_distance", "interlude_feature_trials", "interlude_for", "interlude_max_feature_gap", "interlude_max_reward_gap", "interlude_min_feature_gap",
     "interlude_min_reward_gap", "interlude_mode", "interlude_repeat_count", "interlude_repeat_separation", "interlude_trial_count", "is_interlude", "is_practice", "layout", "assignment", "reward_stage", "moisture_varies", "moisture_when_fixed", "moisture_is_feature", "moisture_terrace_levels",
-    "moisture_terrace_residual", "moisture_terrace_sharpness", "mountain_band_width", "mountain_block_threshold",
+    "moisture_terrace_residual", "moisture_terrace_unevenness", "feature_balance", "feature_balance_target", "feature_balance_scales", "moisture_terrace_mode", "terrace_mean_width", "terrace_width_spread", "terrace_max_band", "terrace_min_step", "terrace_phase_shift", "terrace_phase_frequency", "terrace_strength", "terrace_diffusion_iterations", "terrace_diffusion_edge", "moisture_terrace_sharpness", "mountain_band_width", "mountain_block_threshold",
     "mountain_boundary_jitter", "mountain_height", "mountain_noise_scale", "placement_jitter", "player_move_speed",
     "random_bush_value_range", "reward_function", "reward_std", "session_duration", "session_name", "shape_range", "shape_varies", "shape_when_fixed", "spatial_balance", "snow_line_fraction",
     "start_clearing_radius", "terrain_max_elevation", "terrain_mesh_resolution", "terrain_noise_frequency",

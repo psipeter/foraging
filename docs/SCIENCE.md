@@ -577,7 +577,7 @@ ease-in of the simplest cases comes first, the later instances are intermixed in
 sessions and are dropped later (the patch experiments give none); the knowledge state in PL and PA is inferred from a participant's choices,
 not told. **Sparsity** is defined in feature space (the fraction of the interval or plane whose reward is in the top x% of the range) so one-
 and two-feature sessions are on one scale. **Efficiency** is the reward relative to an oracle following the marginal value theorem in the
-same world. **Open:** the distribution of FN's weak weights and of RW's peak parameters (TODO in `docs/EXPERIMENTS.md`), durations and
+same world. **FN's balancing (2026-11-09):** the old reward balancing made the rewarded feature conspicuously regular (a cue to which feature pays) and coupled shape and colour to moisture; FN balances each visible feature on its own instead (DECISIONS, "Reward balancing leaks which feature pays"). **FN's ground (2026-11-09):** moisture, which sets ground colour and height, is the Diffusion terrace mode (flat regions with soft slopes and steps, plateaus of varied size and height, no level count; DECISIONS, "Terrace modes without a level count"). **Open:** the distribution of FN's weak weights and of RW's peak parameters (TODO in `docs/EXPERIMENTS.md`), durations and
 Interlude trial counts (they wait for measured timing), moisture as FN's third feature (built: spatial balancing now evens the totals including a moisture term; `moistureVaries` gives a flat valley), typed Interlude trials for RW and FI (FN's per-feature trials exist), and a clustered placement mode with `spatialBalance` off or within
 tiles for the patch experiments.
 

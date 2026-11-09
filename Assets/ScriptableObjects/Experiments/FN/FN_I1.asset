@@ -133,7 +133,14 @@ MonoBehaviour:
   shapeRange: {x: 0, y: 1}
   canopyWidthRange: {x: 1, y: 6}
   canopyHeightRange: {x: 1, y: 15}
-  spatialBalance: 2
+  spatialBalance: 0
+  featureBalance: 2
+  featureBalanceTarget: 0.7
+  featureBalanceScales:
+  - 40
+  - 60
+  - 120
+  - 240
   layout: 
   assignment: 
   rewardStage: 
@@ -157,12 +164,23 @@ MonoBehaviour:
   fruitExposureCompensation: 1
   canopyTintDark: {r: 0.55, g: 0.7, b: 0.65, a: 1}
   canopyTintLight: {r: 1.3, g: 1.2, b: 1.3, a: 1}
-  terrainNoiseFrequency: 2
+  terrainNoiseFrequency: 3
   terrainNoiseOctaves: 1
   terrainMaxElevation: 6
   moistureTerraceLevels: 0
-  moistureTerraceSharpness: 0.3
-  moistureTerraceResidual: 0.1
+  moistureTerraceSharpness: 0.7
+  moistureTerraceResidual: 0.03
+  moistureTerraceUnevenness: 0
+  moistureTerraceMode: 2
+  terraceMeanWidth: 0.14
+  terraceWidthSpread: 0.7
+  terraceMaxBand: 0.3
+  terraceMinStep: 0.08
+  terracePhaseShift: 0.4
+  terracePhaseFrequency: 0.6
+  terraceStrength: 1
+  terraceDiffusionIterations: 500
+  terraceDiffusionEdge: 0.1
   terrainMeshResolution: 449
   worldHalfExtent: 350
   sunStartElevation: 30

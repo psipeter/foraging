@@ -78,3 +78,52 @@ def test_a_moisture_reward_is_balanced_on_the_totals_and_with_no_offset_nothing_
     a, _ = spatial.optimise(pos, values, np.random.default_rng(4), half=300.0, steps=3000)
     b, _ = spatial.optimise(pos, values, np.random.default_rng(4), half=300.0, steps=3000, offset=np.zeros(600))
     assert (a == b).all()                                                                                                       # a zero offset is no offset
+
+
+# ---- feature balancing: every visible feature balanced the same way, independently ----
+
+def _balanced(seed, weights, **extra):
+    plain = synthetic.overrides(synthetic.FEATURES, weights, moisture_is_feature=False)
+    return world.generate_world(world.load_session(synthetic.TEMPLATE, **{**plain, "feature_balance": 2, "spatial_balance": 0, **extra}), seed)
+
+
+def _ratio(w, v, scale=60.0):
+    return spatial.local_ratio(spatial.Disks(w.pos, scale, float(w.params.world_half_extent)), v)
+
+
+def test_feature_balancing_treats_every_visible_feature_the_same_whichever_one_pays():
+    """The leak of balancing the reward is that the rewarded feature is much more regular than the others (a local ratio near 0.45 against 1.0). Balancing each visible feature
+    on its own leaves no such difference: over several worlds the rewarded feature is as even as the unrewarded one, and both are more even than chance."""
+    gaps = []
+    for seed in (5, 6, 7, 8, 9):
+        for pays, other in (("shape", "color"), ("color", "shape")):
+            w = _balanced(seed, {pays: 1.0})
+            a, b = _ratio(w, getattr(w, pays)), _ratio(w, getattr(w, other))
+            assert a < 0.95 and b < 0.95
+            gaps.append(a - b)
+    assert abs(np.mean(gaps)) < 0.06 and np.std(gaps) < 0.15, (np.mean(gaps), np.std(gaps))        # no systematic difference, only the swaps' own variation
+    off = world.generate_world(world.load_session(synthetic.TEMPLATE, **synthetic.overrides(synthetic.FEATURES, {"shape": 1.0}, moisture_is_feature=False)), 5)
+    assert abs(_ratio(off, off.shape) - 1.0) < 0.15 and abs(_ratio(off, off.color) - 1.0) < 0.15       # (the unbalanced world is at chance)
+
+
+def test_feature_balancing_keeps_the_values_and_the_independence_of_the_features_and_of_moisture():
+    w = _balanced(6, {"shape": 0.5, "color": 0.3, "moisture": 0.2})
+    off = world.generate_world(world.load_session(synthetic.TEMPLATE, **synthetic.overrides(synthetic.FEATURES, {"shape": 0.5, "color": 0.3, "moisture": 0.2}, moisture_is_feature=False)), 6)
+    assert np.array_equal(w.pos, off.pos) and np.allclose(np.sort(w.shape), np.sort(off.shape)) and np.allclose(np.sort(w.color), np.sort(off.color))   # the same values, dealt elsewhere
+    assert abs(np.corrcoef(w.shape, w.color)[0, 1]) < 0.12 and abs(np.corrcoef(w.moisture, w.shape)[0, 1]) < 0.12 and abs(np.corrcoef(w.moisture, w.color)[0, 1]) < 0.12
+
+
+def test_the_target_sets_how_even_the_features_are_and_the_reward_is_evened_when_shape_and_colour_pay():
+    loose, tight = _balanced(7, {"shape": 0.5, "color": 0.5}, feature_balance_target=0.9), _balanced(7, {"shape": 0.5, "color": 0.5}, feature_balance_target=0.5)
+    assert _ratio(tight, tight.shape) < _ratio(loose, loose.shape) < 1.0
+    off = world.generate_world(world.load_session(synthetic.TEMPLATE, **synthetic.overrides(synthetic.FEATURES, {"shape": 0.5, "color": 0.5}, moisture_is_feature=False)), 7)
+    assert spatial.metrics(tight.pos, tight.value)["cost"] < 0.85 * spatial.metrics(off.pos, off.value)["cost"]               # the reward is more even without being balanced itself
+
+
+def test_feature_balancing_is_in_the_world_check_and_cannot_be_combined_with_reward_balancing():
+    import pytest
+    v = world.check_values(world.load_session(synthetic.TEMPLATE, **{**synthetic.overrides(), "feature_balance": 2}))
+    assert v["featureBalance"] == 2.0 and v["featureBalanceTarget"] == 0.7 and v["featureBalanceScales.count"] == 4.0
+    assert "featureBalance" not in world.check_values(world.load_session(synthetic.TEMPLATE, **synthetic.overrides()))
+    with pytest.raises(ValueError):
+        world.generate_world(world.load_session(synthetic.TEMPLATE, **{**synthetic.overrides(), "feature_balance": 2, "spatial_balance": 2}), 1)

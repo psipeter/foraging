@@ -298,3 +298,92 @@ def test_a_session_defaults_to_the_lattice_independent_terms_stages_and_balances
     assert stage_names(synthetic.session(**DEFAULT, spatial_balance=2))[1] == "balanced"
     assert stage_names(synthetic.session(**DEFAULT, assignment="independent", spatial_balance=2))[1] == "independent"     # a named stage wins
     assert {"lattice"} <= set(LAYOUTS) and {"independent", "balanced"} <= set(ASSIGNMENTS) and "terms" in REWARDS
+
+
+def test_uneven_terrace_levels_keep_their_regions_and_the_order_but_not_the_spacing():
+    kw = dict(moisture_terrace_levels=6, moisture_terrace_sharpness=1.0, moisture_terrace_residual=0.0, spatial_balance=0)
+    even = make(3, **kw)
+    uneven = make(3, moisture_terrace_unevenness=1.0, **kw)
+    other = make(4, moisture_terrace_unevenness=1.0, **kw)
+    assert np.array_equal(even.pos, uneven.pos)                                                     # the same bushes: only the ground's values changed
+    levels = generate_world(synthetic.session(**DEFAULT, **kw, moisture_terrace_unevenness=1.0), 3).terrain.terrace_levels()
+    assert len(levels) == 6 and levels[0] == 0.0 and levels[-1] == 1.0 and (np.diff(levels) > 0).all()   # in order, the whole range
+    assert not np.allclose(np.diff(levels), 0.2)                                                    # not evenly spaced
+    near = np.abs(uneven.moisture[:, None] - levels[None]).min(axis=1)
+    assert (near < 0.02).mean() > 0.9                                                               # still plateaus: most bushes stand on one of the six values
+    assert not np.allclose(generate_world(synthetic.session(**DEFAULT, **kw, moisture_terrace_unevenness=1.0), 4).terrain.terrace_levels(), levels)   # each seed has its own
+    half = generate_world(synthetic.session(**DEFAULT, **kw, moisture_terrace_unevenness=0.5), 3).terrain.terrace_levels()
+    assert np.allclose(half, 0.5 * np.linspace(0, 1, 6) + 0.5 * levels)                             # a mix of the even and the random levels
+    assert check_values(synthetic.session(**DEFAULT, **kw, moisture_terrace_unevenness=0.5))["moistureTerraceUnevenness"] == 0.5
+    assert "moistureTerraceUnevenness" not in check_values(synthetic.session(**DEFAULT, **kw))       # (older world files stay identical)
+
+
+# ---- the staircase and diffusion terrace modes (no level count) ----
+
+def _ground(seed, mode, **extra):
+    return generate_world(synthetic.session(**DEFAULT, moisture_terrace_mode=mode, terrain_noise_frequency=0.8, moisture_terrace_sharpness=0.7, moisture_terrace_residual=0.0,
+                                            spatial_balance=0, **extra), seed)
+
+
+def test_the_new_terrace_modes_leave_the_default_mode_and_the_bushes_alone():
+    smooth = _ground(3, 0)
+    for mode in (1, 2):
+        w = _ground(3, mode)
+        assert np.array_equal(w.pos, smooth.pos) and np.array_equal(w.shape, smooth.shape)          # the same bushes: only the ground changed
+        assert 0.0 <= w.moisture.min() and w.moisture.max() <= 1.0
+    assert "moistureTerraceMode" not in check_values(synthetic.session(**DEFAULT))                  # (older world files stay identical)
+
+
+def _flat_share(terrain, reference):
+    """The share of the valley (a grid) whose moisture gradient is below 12% of the median gradient of `reference`'s field: its flat ground."""
+    g = np.linspace(-300, 300, 129)
+    gx, gz = np.meshgrid(g, g, indexing="ij")
+    ref = np.median(np.hypot(*np.gradient(reference._rank(reference._raw_moisture(gx, gz)))))
+    return float(np.mean(np.hypot(*np.gradient(terrain.moisture(gx, gz))) < 0.12 * ref))
+
+
+def test_the_staircase_makes_plateaus_whose_number_nobody_set():
+    counts = []
+    for seed in (1, 2, 3, 4, 5, 6):
+        centres, values = _ground(seed, 1).terrain.staircase_levels()
+        counts.append(len(values))
+        assert values[0] == 0.0 and values[-1] == 1.0 and (np.diff(values) >= 0.08 - 1e-9).all()           # the whole range, in order, no step below the minimum
+        assert (np.diff(centres) > 0).all() and centres[0] > 0.0 and centres[-1] < 1.0
+    assert len(set(counts)) > 1 and min(counts) >= 3                                                # the count comes out of the draw, different for each seed
+
+
+def test_the_staircase_has_flat_ground_and_the_strength_mixes_it_with_the_smooth_field():
+    smooth_world = _ground(2, 0)
+    stepped, none, half = _ground(2, 1), _ground(2, 1, terrace_strength=0.0), _ground(2, 1, terrace_strength=0.5)
+    ref = smooth_world.terrain
+    pos = stepped.pos
+    assert np.allclose(none.moisture, ref._rank(ref._raw_moisture(pos[:, 0], pos[:, 1])))             # strength 0: the smooth rank field, no terracing
+    assert np.allclose(half.moisture, 0.5 * stepped.moisture + 0.5 * none.moisture, atol=1e-9)
+    assert _flat_share(stepped.terrain, ref) > _flat_share(ref, ref) + 0.15                            # plateaus: a good share of the ground is flat
+
+
+def test_a_larger_mean_width_gives_fewer_plateaus_and_a_larger_minimum_step_merges_them():
+    plateaus = lambda **kw: np.mean([len(_ground(s, 1, **kw).terrain.staircase_levels()[1]) for s in range(1, 9)])
+    assert plateaus(terrace_mean_width=0.30) < plateaus(terrace_mean_width=0.07)
+    assert max(len(_ground(s, 1, terrace_min_step=0.25).terrain.staircase_levels()[1]) for s in range(1, 9)) <= 5      # steps of at least 0.25 leave at most 5 plateaus
+
+
+def test_diffusion_flattens_regions_and_a_lower_edge_quantile_keeps_more_of_them():
+    from world import edge_preserving_diffusion
+    smooth = _ground(4, 0).terrain
+    g = np.linspace(-300, 300, 129)
+    gx, gz = np.meshgrid(g, g, indexing="ij")
+    t = smooth._rank(smooth._raw_moisture(gx, gz))
+    flat = lambda u: np.mean(np.hypot(*np.gradient(u)) < 0.12 * np.median(np.hypot(*np.gradient(t))))
+    soft = edge_preserving_diffusion(t, 400, 0.5)
+    assert flat(soft) > flat(t) + 0.05 and soft.min() >= t.min() - 1e-9 and soft.max() <= t.max() + 1e-9      # smoothing does not leave the range
+    assert np.allclose(edge_preserving_diffusion(t, 0, 0.5), t)                                       # no iterations, no change
+    w = _ground(4, 2)
+    assert w.terrain.moisture(np.array([-1000.0]), np.array([0.0])).size == 1                          # outside the valley it reads the edge
+    assert w.moisture.std() > 0.2 and abs(_ground(4, 2).moisture - w.moisture).max() == 0.0            # deterministic, and it uses the range
+
+
+def test_the_new_modes_write_their_mode_and_parameters_into_the_world_check():
+    for mode in (1, 2):
+        v = check_values(synthetic.session(**DEFAULT, moisture_terrace_mode=mode))
+        assert v["moistureTerraceMode"] == mode and {"terraceMeanWidth", "terracePhaseShift", "terraceStrength", "terraceDiffusionIterations", "terraceDiffusionEdge"} <= set(v)

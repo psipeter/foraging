@@ -82,6 +82,11 @@ BASIS_NAMES = ["Linear", "InvertedLinear", "GaussianPeak", "InvertedGaussian", "
 # Session parameters (read from the Unity .asset YAML)
 # --------------------------------------------------------------------------------------------------
 
+def _camel(name):
+    head, *rest = name.split("_")
+    return head + "".join(w.capitalize() for w in rest)
+
+
 def _snake(name):
     out = []
     for ch in name:
@@ -115,7 +120,10 @@ def _convert(value):
 
 # Fields an older asset file does not have yet (Unity adds a field to an asset only when it is saved): their defaults, snake_case names.
 FIELD_DEFAULTS = {"spatial_balance": 0, "shape_varies": True, "color_varies": True, "shape_when_fixed": 0.5, "color_when_fixed": 0.5, "random_bush_value_range": (0.0, 0.0), "design_json": "",
-                  "moisture_varies": True, "moisture_when_fixed": 0.5, "moisture_is_feature": False, "interlude_feature_trials": 0,
+                  "moisture_varies": True, "moisture_when_fixed": 0.5, "moisture_is_feature": False, "moisture_terrace_unevenness": 0.0,
+                  "feature_balance": 0, "feature_balance_target": 0.7, "feature_balance_scales": (40.0, 60.0, 120.0, 240.0),
+                  "moisture_terrace_mode": 0, "terrace_mean_width": 0.14, "terrace_width_spread": 0.7, "terrace_max_band": 0.30, "terrace_min_step": 0.08, "terrace_phase_shift": 0.4,
+                  "terrace_phase_frequency": 0.6, "terrace_strength": 1.0, "terrace_diffusion_iterations": 500, "terrace_diffusion_edge": 0.1, "interlude_feature_trials": 0,
                   "layout": None, "assignment": None, "reward_stage": None}      # (stage names: None = the default, see stage_names)
 
 
@@ -253,9 +261,83 @@ class Perlin:
 # Terrain fields that matter for the task (moisture, valley mask)
 # --------------------------------------------------------------------------------------------------
 
+TERRACE_PARAMS = ("terrace_mean_width", "terrace_width_spread", "terrace_max_band", "terrace_min_step", "terrace_phase_shift", "terrace_phase_frequency", "terrace_strength",
+                  "terrace_diffusion_iterations", "terrace_diffusion_edge")
+DIFFUSION_GRID = 257            # points across the valley of the grid the diffusion mode works on (about 2.7 world units at the usual size)
+
+
+def _smooth(x):
+    x = np.clip(x, 0.0, 1.0)
+    return x * x * (3.0 - 2.0 * x)
+
+
+def staircase_map(t, centres, values, sharp):
+    """Piecewise map of the rank t: plateau value `values[i]` at `centres[i]`, joined by ramps that fill 1 - sharp of each gap (a smoothstep)."""
+    t = np.asarray(t, dtype=float)
+    idx = np.clip(np.searchsorted(centres, t, side="right") - 1, 0, len(centres) - 2)
+    c0, c1 = centres[idx], centres[idx + 1]
+    f = np.clip((t - c0) / (c1 - c0), 0.0, 1.0)
+    width = max(0.02, 1.0 - float(sharp))
+    out = values[idx] + _smooth((f - (1.0 - width) / 2.0) / width) * (values[idx + 1] - values[idx])
+    out = np.where(t <= centres[0], values[0], out)
+    return np.where(t >= centres[-1], values[-1], out)
+
+
+def random_staircase(rng, mean_width, spread, max_band, min_step, min_plateaus=3):
+    """The plateaus of a random staircase over the rank 0..1 of a field: (centres, values). Band widths are drawn lognormal around `mean_width` (log spread `spread`,
+    none wider than `max_band`) until the ranks are used up, so the number of plateaus is whatever comes out. A plateau's value is its band's middle plus a jitter within
+    the band, all rescaled to span 0 to 1 (monotone: the order of the field is kept). Neighbours whose values differ by less than `min_step` are merged."""
+    while True:
+        widths = []
+        while sum(widths) < 1.0:
+            widths.append(float(min(max(np.exp(rng.normal(np.log(mean_width), spread)), 0.02), max_band)))
+        widths = np.array(widths)
+        widths[-1] = max(1.0 - widths[:-1].sum(), 0.0)
+        if widths[-1] < 0.02:
+            widths[-2] += widths[-1]
+            widths = widths[:-1]
+        if len(widths) >= min_plateaus:
+            break
+    widths = widths / widths.sum()
+    edges = np.concatenate([[0.0], np.cumsum(widths)])
+    values = (edges[:-1] + edges[1:]) / 2.0 + rng.uniform(-1.0, 1.0, len(widths)) * 0.35 * widths
+    values = np.maximum.accumulate(values)
+    for _ in range(100):
+        span = values[-1] - values[0]
+        values = (values - values[0]) / span if span > 0 else np.linspace(0.0, 1.0, len(values))
+        gaps = np.diff(values)
+        i = int(np.argmin(gaps))
+        if gaps[i] >= min_step or len(values) <= min_plateaus:
+            break
+        merged = (widths[i] * values[i] + widths[i + 1] * values[i + 1]) / (widths[i] + widths[i + 1])            # the pair becomes one plateau
+        widths = np.concatenate([widths[:i], [widths[i] + widths[i + 1]], widths[i + 2:]])
+        values = np.concatenate([values[:i], [merged], values[i + 2:]])
+    edges = np.concatenate([[0.0], np.cumsum(widths)])
+    return (edges[:-1] + edges[1:]) / 2.0, values
+
+
+def edge_preserving_diffusion(u, iterations, edge_quantile, dt=0.2):
+    """Perona-Malik diffusion of a 2-D field: it flattens where the gradient is small and keeps the steps where it is large. The edge threshold is the
+    `edge_quantile` quantile of the field's gradient magnitude (a lower quantile keeps more edges, so more and smaller plateaus); the border is reflected."""
+    u = np.array(u, dtype=float)
+    gy, gx = np.gradient(u)
+    k = float(np.quantile(np.hypot(gx, gy), edge_quantile))
+    for _ in range(int(iterations)):
+        gy, gx = np.gradient(np.pad(u, 1, mode="reflect"))
+        g = 1.0 / (1.0 + (np.hypot(gx, gy) / k) ** 2)
+        div = np.gradient(g * gy, axis=0) + np.gradient(g * gx, axis=1)
+        u = u + dt * div[1:-1, 1:-1]
+    return u
+
+
 class Terrain:
-    def __init__(self, params, moisture_noise, boundary_noise, ridge_noise=None, rock_noise=None, snow_noise=None):
+    def __init__(self, params, moisture_noise, boundary_noise, ridge_noise=None, rock_noise=None, snow_noise=None, level_rng=None, phase_noise=None):
         self.p = params
+        self._level_rng = level_rng
+        self._levels = None
+        self._phase_noise = phase_noise
+        self._stairs = None
+        self._diffused = None
         self._moisture_noise = moisture_noise
         self._boundary_noise = boundary_noise
         self._ridge_noise = ridge_noise
@@ -265,8 +347,8 @@ class Terrain:
 
     @staticmethod
     def from_seed(params, seed):
-        rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(8)]
-        return Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]))
+        rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(16)]
+        return Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]), rngs[11], Perlin(rngs[12]))
 
     def _raw_moisture(self, x, z):
         """Octave sum of noise at frequency * 0.01 (the continuous moisture field, before any terracing)."""
@@ -284,6 +366,75 @@ class Terrain:
             amplitude *= 0.5
             freq *= 2.0
         return np.clip(value / total, 0.0, 1.0)
+
+    def _rank(self, raw):
+        """The rank (0..1, uniform over the valley) of a raw field value."""
+        cdf = self._valley_quantiles()
+        return np.interp(raw, cdf, np.linspace(0.0, 1.0, cdf.size))
+
+    def _staircase(self, x, z, raw):
+        """Staircase mode: the rank of the field, shifted by a low-frequency noise (so plateau edges stop following the field's own contours and a plateau's height
+        varies from place to place), put through a random staircase (`random_staircase`: no level count), then mixed with the smooth rank by `terrace_strength`."""
+        p = self.p
+        t = self._rank(raw)
+        centres, values = self.staircase_levels()
+        f = float(p.terrace_phase_frequency) * 0.01
+        shift = float(p.terrace_phase_shift) * 2.0 * (self._phase_noise(np.asarray(x, dtype=float) * f + 3.1, np.asarray(z, dtype=float) * f + 7.7) - 0.5)
+        stepped = staircase_map(np.clip(t + shift, 0.0, 1.0), centres, values, float(getattr(p, "moisture_terrace_sharpness", 0.7)))
+        s = float(np.clip(p.terrace_strength, 0.0, 1.0))
+        return (1.0 - s) * t + s * stepped
+
+    def staircase_levels(self):
+        """The plateaus of this seed's staircase, (centres, values) over the rank 0..1 (drawn once, from stream 11)."""
+        if self._stairs is None:
+            p = self.p
+            self._stairs = random_staircase(self._level_rng, float(p.terrace_mean_width), float(p.terrace_width_spread), float(p.terrace_max_band), float(p.terrace_min_step))
+        return self._stairs
+
+    def _diffusion(self, x, z):
+        """Diffusion mode: the rank field smoothed by edge-preserving diffusion on a grid over the valley (computed once), rescaled linearly to 0..1 (not equalised:
+        that would turn the tiny differences on a plateau into a slope), mixed with the smooth rank by `terrace_strength`, and read at (x, z) by bilinear interpolation."""
+        p = self.p
+        half = float(p.world_half_extent - p.mountain_band_width)
+        if self._diffused is None:
+            axis = np.linspace(-half, half, DIFFUSION_GRID)
+            gx, gz = np.meshgrid(axis, axis, indexing="ij")
+            t = self._rank(self._raw_moisture(gx, gz))
+            u = edge_preserving_diffusion(t, p.terrace_diffusion_iterations, p.terrace_diffusion_edge)
+            u = (u - u.min()) / (u.max() - u.min())
+            s = float(np.clip(p.terrace_strength, 0.0, 1.0))
+            self._diffused = (1.0 - s) * t + s * u
+        grid = self._diffused
+        step = 2.0 * half / (DIFFUSION_GRID - 1)
+        fx = np.clip((np.asarray(x, dtype=float) + half) / step, 0.0, DIFFUSION_GRID - 1.000001)
+        fz = np.clip((np.asarray(z, dtype=float) + half) / step, 0.0, DIFFUSION_GRID - 1.000001)
+        i, j = np.floor(fx).astype(int), np.floor(fz).astype(int)
+        a, b = fx - i, fz - j
+        return (grid[i, j] * (1 - a) * (1 - b) + grid[i + 1, j] * a * (1 - b) + grid[i, j + 1] * (1 - a) * b + grid[i + 1, j + 1] * a * b)
+
+    def _finish(self, level, x, z):
+        """The small undulation on plateau tops (`moisture_terrace_residual`) and the clip, shared by the modes that build their own plateaus."""
+        amp = float(np.clip(getattr(self.p, "moisture_terrace_residual", 0.0), 0.0, 0.45))
+        level = amp + (1.0 - 2.0 * amp) * level
+        if amp > 0.0:
+            fx = 2.0 * 0.01
+            level = level + amp * 2.0 * (self._moisture_noise(np.asarray(x, dtype=float) * fx + 101.3, np.asarray(z, dtype=float) * fx + 57.1) - 0.5)
+        return np.clip(level, 0.0, 1.0)
+
+    def terrace_levels(self):
+        """The moisture value of each of the `moisture_terrace_levels` plateaus, dry to wet, from 0 to 1. Evenly spaced when `moisture_terrace_unevenness` is 0; at 1 each
+        level is drawn at random within its own n-th of the range (so the order is kept and the whole range is still used), then all are rescaled to span 0 to 1; between
+        0 and 1 a mix. A seed's levels are fixed (stream 11), so the plateaus are consistent regions with values anywhere in the continuum."""
+        if self._levels is None:
+            n = int(getattr(self.p, "moisture_terrace_levels", 0))
+            even = np.linspace(0.0, 1.0, max(n, 2))
+            u = float(np.clip(getattr(self.p, "moisture_terrace_unevenness", 0.0), 0.0, 1.0))
+            if u > 0.0 and n >= 2:
+                jittered = (np.arange(n) + self._level_rng.uniform(0.0, 1.0, n)) / n
+                jittered = (jittered - jittered[0]) / (jittered[-1] - jittered[0])
+                even = (1.0 - u) * even + u * jittered
+            self._levels = even
+        return self._levels
 
     def _valley_quantiles(self):
         """Sorted raw moisture over the valley, used to rank-normalise the field so each terrace level
@@ -306,6 +457,9 @@ class Terrain:
         if not getattr(p, "moisture_varies", True):                  # one moisture over the valley: a flat, single-coloured ground
             return np.full(np.shape(x), float(getattr(p, "moisture_when_fixed", 0.5)))
         raw = self._raw_moisture(x, z)
+        mode = int(getattr(p, "moisture_terrace_mode", 0))
+        if mode:
+            return self._finish(self._staircase(x, z, raw) if mode == 1 else self._diffusion(x, z), x, z)
         n = int(getattr(p, "moisture_terrace_levels", 0))
         if n < 2:
             return raw
@@ -317,7 +471,12 @@ class Terrain:
         ramp = self._smoothstep((g - j - (1.0 - width) / 2.0) / width)
         amp = float(np.clip(getattr(p, "moisture_terrace_residual", 0.0), 0.0, 0.45))
         # levels are inset by `amp` so the undulation is not clipped at moisture 0 and 1
-        level = amp + (1.0 - 2.0 * amp) * (j + ramp) / (n - 1)
+        if float(getattr(p, "moisture_terrace_unevenness", 0.0)) > 0.0:
+            levels = self.terrace_levels()
+            k = j.astype(int)
+            level = amp + (1.0 - 2.0 * amp) * (levels[k] + ramp * (levels[k + 1] - levels[k]))
+        else:
+            level = amp + (1.0 - 2.0 * amp) * (j + ramp) / (n - 1)          # evenly spaced (the original expression, kept exactly: worlds are compared byte for byte)
         if amp > 0.0:
             fx = 2.0 * 0.01     # same ~50-unit scale as the old continuous field
             x = np.asarray(x, dtype=float)
@@ -514,10 +673,20 @@ def check_values(params):
                                  ("moistureVaries", float(bool(params.moisture_varies)), 1.0),
                                  ("shapeWhenFixed", float(params.shape_when_fixed), 0.5), ("colorWhenFixed", float(params.color_when_fixed), 0.5),
                                  ("moistureWhenFixed", float(params.moisture_when_fixed), 0.5),
+                                 ("moistureTerraceUnevenness", float(params.moisture_terrace_unevenness), 0.0),
                                  ("randomBushValueRange.min", float(params.random_bush_value_range[0]), 0.0),
                                  ("randomBushValueRange.max", float(params.random_bush_value_range[1]), 0.0)):
         if value != default:
             out[name] = value
+    if int(params.feature_balance):                                # feature balancing writes its mode, target and scales (a session without it writes none)
+        out["featureBalance"] = float(params.feature_balance)
+        out["featureBalanceTarget"] = float(params.feature_balance_target)
+        out["featureBalanceScales.count"] = float(len(params.feature_balance_scales))
+        out["featureBalanceScales.sum"] = float(sum(params.feature_balance_scales))
+    if int(params.moisture_terrace_mode):                          # the new modes write their mode and every parameter they read (a session in the Levels mode writes none)
+        out["moistureTerraceMode"] = float(params.moisture_terrace_mode)
+        for name in TERRACE_PARAMS:
+            out[_camel(name)] = float(getattr(params, name))
     for part in REWARD_PARTS:
         comp = params.reward_function[part + "Component"]
         for field in ("basisFunctionType", "weight", "peak", "width"):
@@ -660,8 +829,21 @@ def assign_balanced(params, pos, terrain, rngs, reward):
     return shape[index], color[index], extra[index]
 
 
+def assign_balanced_features(params, pos, terrain, rngs, reward):
+    """The independent draw, then each visible feature (shape, colour, and the practice session's random value) balanced over space on its own (spatial.py: tiles at
+    several scales, then swaps, until the evenness reaches `feature_balance_target`), each with a stream of its own. The features are dealt separately, so they stay
+    independent of one another and of moisture, every visible feature is treated the same whether or not it pays (no feature is more regular than the others), and the
+    reward, a sum over the features, is evened where the weights are on shape and colour. It uses no reward, so the reward function does not matter."""
+    shape, color, extra = assign_independent(params, pos, terrain, rngs, reward)
+    mode, scales, half, target = int(params.feature_balance), tuple(float(x) for x in params.feature_balance_scales), float(params.world_half_extent), float(params.feature_balance_target)
+    out = []
+    for values, visible, stream in ((shape, params.shape_varies, 13), (color, params.color_varies, 14), (extra, np.ptp(extra) > 0.0, 15)):
+        out.append(values[spatial.balance(pos, values, rngs[stream], mode, scales=scales, half=half, target=target)] if visible else values)
+    return tuple(out)
+
+
 LAYOUTS = {"lattice": layout_lattice}
-ASSIGNMENTS = {"independent": assign_independent, "balanced": assign_balanced}
+ASSIGNMENTS = {"independent": assign_independent, "balanced": assign_balanced, "balanced_features": assign_balanced_features}
 REWARDS = {"terms": bush_value}
 RELEVANCE = {"terms": terms_relevance}          # per reward stage: {feature: how much it matters}, for the Interlude and the instruction texts
 
@@ -679,7 +861,9 @@ def session_features(params):
 
 def stage_names(params):
     """(layout, assignment, reward) names of a session: its own fields, else the defaults (balanced when `spatialBalance` is not Off)."""
-    assignment = getattr(params, "assignment", None) or ("balanced" if int(params.spatial_balance) else "independent")
+    if int(params.feature_balance) and int(params.spatial_balance):
+        raise ValueError("featureBalance and spatialBalance are two ways of balancing: set one of them")
+    assignment = getattr(params, "assignment", None) or ("balanced_features" if int(params.feature_balance) else "balanced" if int(params.spatial_balance) else "independent")
     return (getattr(params, "layout", None) or "lattice", assignment, getattr(params, "reward_stage", None) or "terms")
 
 
@@ -687,8 +871,8 @@ def generate_world(params, seed):
     """Build the world for (params, seed). `params` is a namespace from load_session()."""
     layout_name, assignment_name, reward_name = stage_names(params)
     reward = REWARDS[reward_name]
-    rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(11)]
-    terrain = Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]))
+    rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(16)]          # (streams 11 to 15, the terrace levels, the phase noise and the balancing of shape, colour and the random value, were added after the first 11)
+    terrain = Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]), rngs[11], Perlin(rngs[12]))
 
     pos = LAYOUTS[layout_name](params, terrain, rngs)
     n = len(pos)

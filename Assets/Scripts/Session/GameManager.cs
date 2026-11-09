@@ -21,10 +21,10 @@ public class GameManager : MonoBehaviour
     [SerializeField] private InterludeManager interludeManager;
 
     [Tooltip("Local quick testing (the Foraging > Quick test menu item in the Editor, or -quick on a standalone build): a practice session lasts this long, ...")]
-    [SerializeField] private float quickPracticeSeconds = 15f;
+    [SerializeField] private float quickPracticeSeconds = 20f;
     [Tooltip("... any other session this long, and an Interlude plays at most this many of its trials. Used on a copy of the session asset; the assets are never changed.")]
-    [SerializeField] private float quickSessionSeconds = 30f;
-    [SerializeField] private int quickInterludeTrials = 5;
+    [SerializeField] private float quickSessionSeconds = 20f;
+    [SerializeField] private int quickInterludeTrials = 3;
 
     public static int CurrentSessionIndex = 0;
     public static List<SessionConfig> AllSessionConfigs;
@@ -70,6 +70,13 @@ public class GameManager : MonoBehaviour
                 ? new List<SessionConfig>(chosen)
                 : new List<SessionConfig>();
             CurrentSessionIndex = 0;
+#if UNITY_EDITOR
+            // Foraging > Experiments > "Start at part": the Editor plays an experiment from a later part (1 = the first). Never in a build.
+            if (!string.IsNullOrEmpty(UnityEditor.EditorPrefs.GetString("Foraging.Experiment", "")))
+            {
+                CurrentSessionIndex = Mathf.Clamp(UnityEditor.EditorPrefs.GetInt("Foraging.StartPart", 1) - 1, 0, Mathf.Max(0, AllSessionConfigs.Count - 1));
+            }
+#endif
         }
 
         if (AllSessionConfigs == null || AllSessionConfigs.Count == 0)

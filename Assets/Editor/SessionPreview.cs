@@ -123,11 +123,19 @@ public static class SessionPreview
     }
 
     // The session shown for a GameManager: the last one of its defaultExperiment that is not an Interlude.
+    // Set by Foraging > Terrain preview: preview this session instead of the last one of the default experiment (null: the default).
+    public static SessionConfig Chosen;
+
     private static SessionConfig PreviewSessionOf(GameManager manager)
     {
         if (manager == null)
         {
             return null;
+        }
+
+        if (Chosen != null)
+        {
+            return Chosen;
         }
 
         var experiment = new SerializedObject(manager).FindProperty("defaultExperiment").objectReferenceValue as ExperimentConfig;

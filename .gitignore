@@ -114,3 +114,7 @@ Assets/StreamingAssets/streaming_files.txt.meta
 
 # Simulated-agent results database (scripts/results.py)
 /results/
+
+# throwaway sessions of Foraging > Terrain preview (and their worlds)
+Assets/ScriptableObjects/Experiments/*/*_PREVIEW.asset*
+Assets/StreamingAssets/Experiments/*/*_PREVIEW_seed*

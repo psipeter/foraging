@@ -300,9 +300,9 @@ MonoBehaviour:
   ambientAudio: {fileID: 1968310339}
   instructionsPanel: {fileID: 269841567}
   interludeManager: {fileID: 2081684507}
-  quickPracticeSeconds: 15
-  quickSessionSeconds: 30
-  quickInterludeTrials: 5
+  quickPracticeSeconds: 20
+  quickSessionSeconds: 20
+  quickInterludeTrials: 3
 --- !u!4 &205307911
 Transform:
   m_ObjectHideFlags: 0

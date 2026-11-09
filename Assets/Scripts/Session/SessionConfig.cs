@@ -30,6 +30,14 @@ public enum SpatialBalance
     TilesAndSwaps   // Tiles, then pairs of bushes swap records while that lowers the patchiness of the reward over disks at those scales
 }
 
+// How scripts/world.py shapes the moisture (ground colour and height) field. The order is part of the logged format (the session row stores the number).
+public enum MoistureTerraceMode
+{
+    Levels,     // the smooth field (moistureTerraceLevels < 2) or that many plateau levels, evenly or unevenly spaced (moistureTerraceUnevenness)
+    Staircase,  // a random staircase over the field's ranks (plateaus of varied size and height, no level count), with a noise-shifted phase
+    Diffusion   // the field smoothed by edge-preserving diffusion: flat regions where it is gentle, steps where it is steep
+}
+
 [CreateAssetMenu(
     fileName = "SessionConfig",
     menuName = "Foraging/Session Config")]
@@ -208,6 +216,12 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private Vector2 canopyHeightRange = new Vector2(1.2f, 2.8f);
     [Tooltip("Spatial evenness of the reward over the map (scripts/spatial.py): Off = independent draws, Tiles = the (shape, color, random value) records dealt evenly over tiles at several scales, TilesAndSwaps = then swapped between bushes to lower the patchiness further. The marginal distribution of every attribute and of the reward is unchanged, only which bush has which record. Needs a reward that does not depend on moisture. Read by scripts/world.py: regenerate the world after changing it.")]
     [SerializeField] private SpatialBalance spatialBalance = SpatialBalance.Off;
+    [Tooltip("Balances each visible feature (shape, color) over the map on its own, the same way for each, so every feature is evener than chance and none is more regular than the others, whether or not it pays; the reward, a sum over the features, is then also more even (not when moisture carries the weight). Off = independent draws. Tiles = dealt evenly over tiles at several scales, TilesAndSwaps = then swapped between bushes until featureBalanceTarget. Use this or spatialBalance, not both (spatialBalance evens the reward itself, which makes the rewarded feature much more regular than the others: a visible cue). Read by scripts/world.py: regenerate the world after changing it.")]
+    [SerializeField] private SpatialBalance featureBalance = SpatialBalance.Off;
+    [Tooltip("featureBalance only: how even the features become: the swaps stop when the evenness cost (1 = chance, lower = more even and more regular) reaches this. Lower looks more regular; about 0.7 gives a spread of local means of about 0.8 of chance.")]
+    [SerializeField] [Range(0.3f, 1f)] private float featureBalanceTarget = 0.7f;
+    [Tooltip("featureBalance only: the sizes (world units) of the tiles and disks the features are evened at; a variety keeps the evenness from showing at any one scale.")]
+    [SerializeField] private float[] featureBalanceScales = { 40f, 60f, 120f, 240f };
     [Tooltip("Which world-generator stage lays out the bushes (scripts/world.py LAYOUTS). Empty = the default, the seeded hex lattice. Read by scripts/world.py: regenerate the world after changing it.")]
     [SerializeField] private string layout = "";
     [Tooltip("Which stage gives each bush its attributes (scripts/world.py ASSIGNMENTS). Empty = independent draws, or the spatially balanced assignment when spatialBalance is not Off.")]
@@ -256,6 +270,29 @@ public class SessionConfig : ScriptableObject
     [SerializeField] [Range(0f, 1f)] private float moistureTerraceSharpness = 0.5f;
     [Tooltip("Amplitude (moisture units, +-) of the undulation on plateau tops. Only used when moistureTerraceLevels >= 2.")]
     [SerializeField] [Range(0f, 0.45f)] private float moistureTerraceResidual = 0f;
+    [Tooltip("How uneven the plateau levels are: 0 = evenly spaced between 0 and 1, 1 = each level drawn at random within its own share of the range (the order and the full range are kept), so the plateaus are consistent regions whose values are anywhere in the continuum and differ from seed to seed. Only used when moistureTerraceLevels >= 2. Read by scripts/world.py: regenerate the world after changing it.")]
+    [SerializeField] [Range(0f, 1f)] private float moistureTerraceUnevenness = 0f;
+    [Header("Terrain: plateaus without a level count (read by scripts/world.py: regenerate the world after changing any of them)")]
+    [Tooltip("Levels = the smooth field or moistureTerraceLevels plateaus. Staircase = a random staircase over the field's ranks. Diffusion = edge-preserving diffusion of the field. The terrace fields below are used only by Staircase and Diffusion; moistureTerraceSharpness (the ramps between staircase plateaus) and moistureTerraceResidual (the undulation on their tops) apply to Staircase and Levels, the residual also to Diffusion; terrainNoiseFrequency sets the size of the field's features (lower = larger regions).")]
+    [SerializeField] private MoistureTerraceMode moistureTerraceMode = MoistureTerraceMode.Levels;
+    [Tooltip("Staircase: the typical width of a plateau's band, as a share of the field's range (smaller = more, narrower plateaus; larger = fewer, broader ones).")]
+    [SerializeField] [Range(0.04f, 0.6f)] private float terraceMeanWidth = 0.14f;
+    [Tooltip("Staircase: how unequal the band widths are (the log spread of the draw): 0 = all alike, 1 = a few very wide plateaus and some narrow ones.")]
+    [SerializeField] [Range(0f, 1.5f)] private float terraceWidthSpread = 0.7f;
+    [Tooltip("Staircase: no plateau's band is wider than this share of the field's range (it caps how much of the world one plateau can take).")]
+    [SerializeField] [Range(0.05f, 1f)] private float terraceMaxBand = 0.3f;
+    [Tooltip("Staircase: neighbouring plateaus whose moisture differs by less than this are merged, so every step is at least this visible.")]
+    [SerializeField] [Range(0f, 0.4f)] private float terraceMinStep = 0.08f;
+    [Tooltip("Staircase: how far a low-frequency noise shifts the field before it is put through the staircase (in the field's rank units). 0 = plateau edges follow the field's own contours; about 0.4 lets a plateau's height vary from place to place.")]
+    [SerializeField] [Range(0f, 1f)] private float terracePhaseShift = 0.4f;
+    [Tooltip("Staircase: the frequency of that shifting noise (times 0.01 per world unit; lower = broader waves).")]
+    [SerializeField] [Range(0.1f, 3f)] private float terracePhaseFrequency = 0.6f;
+    [Tooltip("Staircase and Diffusion: how terraced the ground is. 1 = fully, 0 = the smooth field, in between a mix (gently sloping shoulders).")]
+    [SerializeField] [Range(0f, 1f)] private float terraceStrength = 1f;
+    [Tooltip("Diffusion: the number of smoothing steps (more = larger, flatter regions and fewer of them).")]
+    [SerializeField] [Range(0, 6000)] private int terraceDiffusionIterations = 500;
+    [Tooltip("Diffusion: the edge threshold as a quantile of the field's slopes. Lower keeps more of the steep edges (more, smaller plateaus); higher smooths across them.")]
+    [SerializeField] [Range(0.05f, 0.95f)] private float terraceDiffusionEdge = 0.1f;
     [SerializeField] private int terrainMeshResolution = 64;
     [SerializeField] private float worldHalfExtent = 50f;
 
@@ -412,6 +449,9 @@ public class SessionConfig : ScriptableObject
     public int FruitCount => fruitCount;
     public float FruitRadius => fruitRadius;
     public SpatialBalance SpatialBalance => spatialBalance;
+    public SpatialBalance FeatureBalance => featureBalance;
+    public float FeatureBalanceTarget => featureBalanceTarget;
+    public float[] FeatureBalanceScales => featureBalanceScales;
     public string Layout => layout;
     public string Assignment => assignment;
     public string RewardStage => rewardStage;
@@ -420,6 +460,17 @@ public class SessionConfig : ScriptableObject
     public float ShapeWhenFixed => shapeWhenFixed;
     public float ColorWhenFixed => colorWhenFixed;
     public bool ColorVaries => colorVaries;
+    public float MoistureTerraceUnevenness => moistureTerraceUnevenness;
+    public MoistureTerraceMode MoistureTerraceMode => moistureTerraceMode;
+    public float TerraceMeanWidth => terraceMeanWidth;
+    public float TerraceWidthSpread => terraceWidthSpread;
+    public float TerraceMaxBand => terraceMaxBand;
+    public float TerraceMinStep => terraceMinStep;
+    public float TerracePhaseShift => terracePhaseShift;
+    public float TerracePhaseFrequency => terracePhaseFrequency;
+    public float TerraceStrength => terraceStrength;
+    public int TerraceDiffusionIterations => terraceDiffusionIterations;
+    public float TerraceDiffusionEdge => terraceDiffusionEdge;
     public bool MoistureVaries => moistureVaries;
     public float MoistureWhenFixed => moistureWhenFixed;
     public bool MoistureIsFeature => moistureIsFeature;
