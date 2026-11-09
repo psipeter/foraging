@@ -11,6 +11,8 @@ import replay
 from agents import REGISTRY
 from test_sim import tiny_world
 
+pytestmark = pytest.mark.frozen_sessions        # the old session aliases resolve to frozen copies (conftest.py)
+
 
 def toy_log(events, duration=3.0):
     """A participant standing at the origin facing +z for `duration` seconds; bush 0 is ahead (0, 10), bush 1 behind (0, -10)."""

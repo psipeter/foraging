@@ -3,18 +3,31 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+import synthetic
 from legacy_sessions import legacy
-from world import PROJECT_ROOT, Perlin, Terrain, World, _basis, bush_value, check_values, generate_world, load_session, make_world
+from world import FEATURES, PROJECT_ROOT, Perlin, Terrain, World, _basis, bush_value, check_values, generate_world, load_session
+
+DEFAULT = dict(visible=FEATURES, weights={"shape": 0.5, "color": 0.3, "moisture": 0.2}, direction={"color": 1})      # what the generic world tests build
+
+
+def make(seed=1, **extra):
+    """A world of the default configuration (all three features visible and paying, one inverted); `extra` are load_session overrides or configuration keys."""
+    return generate_world(synthetic.session(**{**DEFAULT, **extra}), seed)
+
+
+def make_old(name, seed=1, **extra):
+    """A world of an old terraced or bump session (legacy_sessions.py: the archived assets), built on the template."""
+    return generate_world(load_session(synthetic.TEMPLATE, **{**legacy(name), **extra}), seed)
 
 
 def test_deterministic_and_seed_dependent():
-    a, b, c = make_world("S1", 3), make_world("S1", 3), make_world("S1", 4)
+    a, b, c = make(3), make(3), make(4)
     assert np.array_equal(a.pos, b.pos) and np.array_equal(a.fruit_reward, b.fruit_reward)
     assert not (a.n == c.n and np.array_equal(a.pos, c.pos))
 
 
 def test_lattice_rules():
-    p = load_session("S1")
+    p = synthetic.session(**DEFAULT)
     for seed in range(5):
         w = generate_world(p, seed)
         d = np.hypot(*(w.pos[:, None] - w.pos[None]).transpose(2, 0, 1))
@@ -27,7 +40,7 @@ def test_lattice_rules():
 
 
 def test_bush_ids_are_not_spatially_ordered():
-    w = make_world("S1", 0)
+    w = make(0)
     consecutive = np.hypot(*(w.pos[1:] - w.pos[:-1]).T).mean()
     random_pairs = np.hypot(*(w.pos - w.pos[np.random.default_rng(0).permutation(w.n)]).T).mean()
     assert consecutive > 0.8 * random_pairs
@@ -35,7 +48,7 @@ def test_bush_ids_are_not_spatially_ordered():
 
 
 def test_overrides_change_density():
-    assert make_world("S1", 1, tree_spacing=40).n < make_world("S1", 1).n * 0.5
+    assert make(1, tree_spacing=40).n < make(1).n * 0.5
 
 
 def _weights(w):
@@ -55,37 +68,41 @@ def _nonzero(w):
 
 
 def test_attributes_and_rewards():
-    w = make_world("S1", 1)   # S1: one rewarded feature, linear (either direction)
+    w = make(1, weights={"color": 1.0}, direction={"color": 1})                  # one rewarded feature, linear
     (rewarded,) = _nonzero(w)
     assert rewarded["basisFunctionType"] in (0, 1)
     assert np.allclose(w.value, _expected(w))
     assert ((0 <= w.moisture) & (w.moisture <= 1)).all()
-    assert w.canopy_radius.min() >= 0.5 - 1e-9 and w.canopy_radius.max() <= 3 + 1e-9
-    assert w.fruit_reward.min() >= 0 and w.fruit_reward.shape == (w.n, 10)
-    assert abs(w.fruit_reward.mean() - w.value.mean()) < 0.1   # rounding and clipping at 0 barely bias the mean at the asset's reward_std
+    lo, hi = w.params.canopy_width_range
+    assert w.canopy_radius.min() >= lo / 2 - 1e-9 and w.canopy_radius.max() <= hi / 2 + 1e-9
+    assert w.fruit_reward.min() >= 0 and w.fruit_reward.shape == (w.n, int(w.params.fruit_count))
+    assert abs(w.fruit_reward.mean() - w.value.mean()) < 0.1   # rounding and clipping at 0 barely bias the mean at the reward_std
 
 
-def test_s2_gaussian_component():
-    w = make_world("S2", 1)
+def test_a_gaussian_component_peaks_where_it_is_told_to():
+    rf = synthetic.reward_function({"shape": 1.0})
+    rf["shapeComponent"] = {"basisFunctionType": 2, "weight": 4.0, "peak": 0.4, "width": 0.2}
+    w = make(1, reward_function=rf)
     (rewarded,) = _nonzero(w)                  # one rewarded feature, a Gaussian peak inside the range
     assert rewarded["basisFunctionType"] == 2 and 0.2 < rewarded["peak"] < 0.8
     assert np.allclose(w.value, _expected(w))
+    assert abs(w.shape[np.argmax(w.value)] - 0.4) < 0.05
 
 
 def test_s3_two_features_and_one_irrelevant():
-    w = make_world("S2", 1, **legacy("S3"))                     # (the old S3: moisture and one other feature pay)
+    w = make_old("S3")                                           # (the old S3: moisture and one other feature pay)
     assert len(_nonzero(w)) == 2 and _weights(w)[2]["weight"] != 0 and all(c["basisFunctionType"] in (0, 1) for c in _nonzero(w))
     assert np.allclose(w.value, _expected(w))
 
 
 def test_s4_all_features_additive_with_one_inverted():
-    w = make_world("S2", 1, **legacy("S4"))                     # (the old S4)
+    w = make_old("S4")                                           # (the old S4)
     assert len(_nonzero(w)) == 3 and sorted(c["basisFunctionType"] for c in _nonzero(w)) == [0, 0, 1]
     assert np.allclose(w.value, _expected(w))
 
 
 def test_s5_one_gaussian_bump_over_shape_and_color_plus_linear_moisture():
-    w = make_world("S2", 1, **legacy("S5"))                     # (the old S5)
+    w = make_old("S5")                                           # (the old S5)
     shape, color, moisture = _weights(w)
     bumps = w.params.reward_function["bumps"]
     assert shape["weight"] == 0 and color["weight"] == 0 and moisture["weight"] != 0 and moisture["basisFunctionType"] in (0, 1)
@@ -119,7 +136,7 @@ def test_noise_range_and_smoothness():
 
 
 def test_save_load_roundtrip(tmp_path):
-    w = make_world("S2", 5)
+    w = make(5)
     w.save(tmp_path / "w.npz")
     r = World.load(tmp_path / "w.npz")
     assert r.seed == 5 and np.array_equal(r.pos, w.pos) and np.array_equal(r.fruit_reward, w.fruit_reward)
@@ -128,20 +145,20 @@ def test_save_load_roundtrip(tmp_path):
 
 def test_unity_export_roundtrip(tmp_path):
     from world import export_unity, read_unity_world
-    w = make_world("S1", 1)
+    w = make(1)
     export_unity(w, tmp_path / "w.world")
     h, g = read_unity_world(tmp_path / "w.world")
     res = int(w.params.terrain_mesh_resolution)
     assert h["treeCount"] == w.n and h["res"] == res and set(g) == {"moisture", "elevation", "rock", "snow", "ramp"}
     assert np.allclose(np.array(h["treePos"]).reshape(-1, 2), w.pos)
     assert np.array_equal(np.array(h["fruitRewards"]).reshape(w.n, -1), w.fruit_reward)
-    assert dict(zip(h["checkNames"], h["checkValues"]))["treeSpacing"] == 23.0
+    assert dict(zip(h["checkNames"], h["checkValues"]))["treeSpacing"] == float(w.params.tree_spacing)
     for a in g.values():
         assert a.shape == (res, res) and np.isfinite(a).all()
 
 
 def test_terrain_grids_match_rules():
-    w = make_world("S1", 1, moisture_terrace_levels=0)           # (continuous moisture: the grid then matches the bushes' moisture closely; terraces have sharp ramps)
+    w = make(1, moisture_terrace_levels=0)                       # (continuous moisture: the grid then matches the bushes' moisture closely; terraces have sharp ramps)
     g = w.terrain.grids()
     half, res = w.params.world_half_extent, g["ramp"].shape[0]
     assert g["ramp"][res // 2, res // 2] == 0 and g["elevation"][res // 2, res // 2] < w.params.terrain_max_elevation + 1e-3
@@ -155,18 +172,18 @@ def test_terrain_grids_match_rules():
 
 
 def test_terrace_off_when_the_levels_are_zero():
-    # with no terrace levels moisture is the plain continuous field (every session of the ladder is terraced, with a relief of 6)
-    p = load_session("S1", moisture_terrace_levels=0)
-    assert int(load_session("S1").moisture_terrace_levels) == 4 and p.terrain_max_elevation <= 14
-    t = Terrain.from_seed(p, 1)
+    # with no terrace levels moisture is the plain continuous field; with levels it is snapped to them
     g = np.linspace(-100, 100, 50)
     x, z = np.meshgrid(g, g)
-    assert np.array_equal(t.moisture(x, z), t._raw_moisture(x, z))
+    flat = Terrain.from_seed(synthetic.session(**DEFAULT, moisture_terrace_levels=0), 1)
+    assert np.array_equal(flat.moisture(x, z), flat._raw_moisture(x, z))
+    terraced = Terrain.from_seed(synthetic.session(**DEFAULT, moisture_terrace_levels=4), 1)
+    assert not np.array_equal(terraced.moisture(x, z), terraced._raw_moisture(x, z))
 
 
 def test_terrace_levels_balanced_and_in_range():
     for name, seed in [("S3", 3), ("S4", 4)]:
-        p = load_session("S2", **legacy(name))                  # (the old terraced sessions)
+        p = load_session(synthetic.TEMPLATE, **legacy(name))    # (the old terraced sessions)
         n, amp = int(p.moisture_terrace_levels), p.moisture_terrace_residual
         assert n == 4
         w = generate_world(p, seed)
@@ -177,7 +194,7 @@ def test_terrace_levels_balanced_and_in_range():
 
 
 def test_terrace_snaps_to_levels_when_sharp_and_no_residual():
-    w = make_world("S2", 3, **{**legacy("S3"), "moisture_terrace_sharpness": 1.0, "moisture_terrace_residual": 0.0})
+    w = make_old("S3", 3, moisture_terrace_sharpness=1.0, moisture_terrace_residual=0.0)
     levels = np.array([0, 1 / 3, 2 / 3, 1])
     nearest = np.abs(w.moisture[:, None] - levels[None]).min(axis=1)
     assert (nearest < 0.02).mean() > 0.9
@@ -187,7 +204,7 @@ def test_canopy_ranges_are_staleness_checked_and_mirrored_in_unity():
     # Unity recomputes the canopy radius from these ranges; the file stores the radius, so a changed range must make
     # the file stale. Every checked name must also be compared by WorldData.FindMismatches (a name Unity does not know
     # is always reported stale).
-    params = load_session("S1")
+    params = synthetic.session(**DEFAULT)
     base = check_values(params)
     wide = SimpleNamespace(**{**vars(params), "canopy_width_range": (params.canopy_width_range[0], params.canopy_width_range[1] + 1)})
     shaped = SimpleNamespace(**{**vars(params), "shape_range": (0.0, params.shape_range[1] + 0.5)})
@@ -200,7 +217,7 @@ def test_canopy_ranges_are_staleness_checked_and_mirrored_in_unity():
 
 def test_canopy_radius_runs_from_wide_for_squat_to_narrow_for_tall():
     # Tree.ApplyAttributes: width = lerp(widthRange.max, widthRange.min, shape), radius = width / 2 (S1: width 2..5).
-    p = load_session("S1", shape_varies=True)             # (S1 of the new ladder has identical shapes)
+    p = synthetic.session(**DEFAULT)
     w = generate_world(p, 1)
     lo, hi = p.canopy_width_range
     assert np.corrcoef(w.shape, w.canopy_radius)[0, 1] < -0.999
@@ -212,7 +229,7 @@ def test_canopy_radius_runs_from_wide_for_squat_to_narrow_for_tall():
 
 def test_exported_grids_hold_the_terrains_values_under_their_names(tmp_path):
     from world import export_unity, read_unity_world
-    w = make_world("S1", 1)
+    w = make(1)
     export_unity(w, tmp_path / "w.world")
     h, g = read_unity_world(tmp_path / "w.world")
     expected = w.terrain.grids()
@@ -229,7 +246,7 @@ def test_exported_grids_hold_the_terrains_values_under_their_names(tmp_path):
 
 
 def test_checked_parameters_cover_the_world_shaping_ones():
-    names = set(check_values(load_session("S3")))
+    names = set(check_values(synthetic.session(**DEFAULT)))
     assert {"rewardStd", "fruitCount", "treeSpacing", "mountainHeight", "terrainMaxElevation",
             "canopyWidthRange.min", "shapeRange.max", "reward.shape.weight"} <= names
 
@@ -240,7 +257,9 @@ def test_committed_world_files_are_fresh(tmp_path):
     SessionConfig assets must reproduce them exactly (this also pins the RNG streams and draw order); Unity warns at
     startup about stale parameters, but not about a changed generator."""
     from world import export_unity, unity_world_path
-    for name in ("P", "S1", "S2", "S3", "S4", "S5", "S6", "S7"):
+    from world import EXPERIMENTS_DIR
+    for path in sorted(EXPERIMENTS_DIR.glob("*/*_S*.asset")):                 # every session of every experiment
+        name = path.stem
         p = load_session(name)
         seed = int(p.world_seed)
         committed = unity_world_path(name, seed)
@@ -275,7 +294,7 @@ def test_new_reward_terms_agree_with_unity():
 
 def test_a_session_defaults_to_the_lattice_independent_terms_stages_and_balances_when_asked():
     from world import ASSIGNMENTS, LAYOUTS, REWARDS, stage_names
-    assert stage_names(load_session("S2", spatial_balance=0)) == ("lattice", "independent", "terms")
-    assert stage_names(load_session("S2", spatial_balance=2))[1] == "balanced"
-    assert stage_names(load_session("S2", assignment="independent", spatial_balance=2))[1] == "independent"     # a named stage wins
+    assert stage_names(synthetic.session(**DEFAULT, spatial_balance=0)) == ("lattice", "independent", "terms")
+    assert stage_names(synthetic.session(**DEFAULT, spatial_balance=2))[1] == "balanced"
+    assert stage_names(synthetic.session(**DEFAULT, assignment="independent", spatial_balance=2))[1] == "independent"     # a named stage wins
     assert {"lattice"} <= set(LAYOUTS) and {"independent", "balanced"} <= set(ASSIGNMENTS) and "terms" in REWARDS

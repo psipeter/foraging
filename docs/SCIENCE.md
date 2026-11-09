@@ -561,12 +561,12 @@ decoration steers choices); the simulated agents' critics are unchanged (an addi
 
 The single Complex Features ladder above changes the number of rewarded features, the nonlinearity and the feature interaction together, and
 duration and practice with them. The plan is to split it into experiments that each vary one family of things, and to add experiments on
-foraging policy. **Nothing is built**; the game plays `TUT` and `CF`. The full designs (hypotheses, session types, order and hints, open
+foraging policy. **FN is built (2026-11-09, provisional numbers; see `scripts/design/FN.py`); the others are not**; the game plays `TUT` and `FN` (the CF experiment, the ladder described above, was removed 2026-11-09; its sessions are kept as frozen test and simulation environments `S1` to `S7` in `scripts/fixtures/sessions/`, and in git). The full designs (hypotheses, session types, order and hints, open
 items, analyses) are in **`docs/EXPERIMENTS.md`**; the reasoning and rejected alternatives in DECISIONS, "Experiments split by question (2026-11-06)".
 
 | Experiment | Hypothesis in one line | Sessions |
 |---|---|---|
-| Learning with more rewarded features (FN) | Visible but unrewarded features slow discovery a little; rewarded features slow it much more; a weak feature is noticed only when its effect is large against the per-fruit noise | three short baselines (one feature pays, one to three visible), then long sessions with three visible features and varied weights |
+| Learning with more rewarded features (FN) | Visible but unrewarded features slow discovery a little; more rewarded features slow learning much more and lower the probability of learning the true value function; the probability of learning a rewarded feature rises with its weight against the other weights and the per-fruit noise | three short baselines (one feature pays, one to three visible), then long sessions with three visible features and varied weights |
 | Learning with sparse rewards (RW) | Narrower (sparser) peaks mean more exploration and fewer points; with a local and a global maximum people settle on the local one more when peaks are narrow, far apart, close in height or noisy | one 1D peak, one 2D peak, two 1D peaks, two 2D peaks (short to quite long), the last two with varied sparsity, separation, height ratio and noise |
 | Learning with feature interactions (FI) | The more the reward depends on the combination of shape and color, the slower the learning and the lower the ceiling; sharper sigmoids at matched sparsity are harder | additive, sigmoid × sigmoid, sigmoid × Gaussian, tilted 2D Gaussian, at matched sparsity |
 | Patch leaving (PL) | People take a cluster down and move to another, staying longer when the walk is longer and leaving sooner when others are richer; efficiency improves over sessions | easy (linear, one feature) reward; travel cost × patch contrast |
@@ -578,8 +578,7 @@ sessions and are dropped later (the patch experiments give none); the knowledge 
 not told. **Sparsity** is defined in feature space (the fraction of the interval or plane whose reward is in the top x% of the range) so one-
 and two-feature sessions are on one scale. **Efficiency** is the reward relative to an oracle following the marginal value theorem in the
 same world. **Open:** the distribution of FN's weak weights and of RW's peak parameters (TODO in `docs/EXPERIMENTS.md`), durations and
-Interlude trial counts (they wait for measured timing), moisture as FN's third feature (spatial balancing needs a reward that does not
-depend on it), typed or per-feature Interlude trials for FN, RW and FI, and a clustered placement mode with `spatialBalance` off or within
+Interlude trial counts (they wait for measured timing), moisture as FN's third feature (built: spatial balancing now evens the totals including a moisture term; `moistureVaries` gives a flat valley), typed Interlude trials for RW and FI (FN's per-feature trials exist), and a clustered placement mode with `spatialBalance` off or within
 tiles for the patch experiments.
 
 ### Earlier session progression (P–S5, superseded 2026-11-05 by "Session structure" above)

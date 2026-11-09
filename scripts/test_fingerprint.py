@@ -15,6 +15,7 @@ from perception import ConePercept
 from test_agents import Script
 
 
+
 # --- the session parameters that count ------------------------------------------------------------------------------
 
 def test_params_hash_is_stable_and_follows_simulation_parameters_only():

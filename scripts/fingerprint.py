@@ -39,8 +39,8 @@ AGENT_FILES = ("agents.py", "specs.py")
 SIM_FIELDS = (
     "camera_field_of_view", "canopy_width_range", "color_varies", "color_when_fixed", "eye_height", "fruit_count", "fruit_harvest_duration", "harvest_max_angle",
     "harvest_range_gap_base", "harvest_range_gap_per_radius", "interlude_bonus_per_correct", "interlude_bush_bearing",
-    "interlude_bush_distance", "interlude_for", "interlude_max_feature_gap", "interlude_max_reward_gap", "interlude_min_feature_gap",
-    "interlude_min_reward_gap", "interlude_mode", "interlude_repeat_count", "interlude_repeat_separation", "interlude_trial_count", "is_interlude", "is_practice", "layout", "assignment", "reward_stage", "moisture_varies", "moisture_terrace_levels",
+    "interlude_bush_distance", "interlude_feature_trials", "interlude_for", "interlude_max_feature_gap", "interlude_max_reward_gap", "interlude_min_feature_gap",
+    "interlude_min_reward_gap", "interlude_mode", "interlude_repeat_count", "interlude_repeat_separation", "interlude_trial_count", "is_interlude", "is_practice", "layout", "assignment", "reward_stage", "moisture_varies", "moisture_when_fixed", "moisture_is_feature", "moisture_terrace_levels",
     "moisture_terrace_residual", "moisture_terrace_sharpness", "mountain_band_width", "mountain_block_threshold",
     "mountain_boundary_jitter", "mountain_height", "mountain_noise_scale", "placement_jitter", "player_move_speed",
     "random_bush_value_range", "reward_function", "reward_std", "session_duration", "session_name", "shape_range", "shape_varies", "shape_when_fixed", "spatial_balance", "snow_line_fraction",

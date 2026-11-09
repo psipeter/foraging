@@ -6,6 +6,7 @@ import results
 from agents import REGISTRY
 from battery import Battery, run_battery, session_readout
 
+
 TINY = Battery("tiny", {"P": 20, "S1": 30}, (0.0, 0.5, 1.0), seeds=(0, 1), interlude_trials=6)
 
 

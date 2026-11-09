@@ -10,6 +10,8 @@ import rundata
 import trajectory_codec as codec
 import world as world_mod
 
+pytestmark = pytest.mark.frozen_sessions        # the old session aliases resolve to frozen copies (conftest.py)
+
 CFG = {"harvestRangeGapBase": 7.0, "harvestRangeGapPerRadius": 0.0, "harvestMaxAngle": 35.0, "fruitHarvestDuration": 0.8}
 RUN = "11111111-2222-3333-4444-555555555555"
 

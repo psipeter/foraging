@@ -1,11 +1,14 @@
 """human_curves.py: participants' curves from the tidy tables, and how plots.py draws them (first colour and style, thin line per participant)."""
 
 import numpy as np
+import pytest
 import pandas as pd
 
 import human_curves
 import human_data
 import plots
+
+pytestmark = pytest.mark.frozen_sessions        # the old session aliases resolve to frozen copies (conftest.py)
 
 
 def _humans():

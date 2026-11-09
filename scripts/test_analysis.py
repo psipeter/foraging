@@ -7,6 +7,7 @@ from agents import ComposedAgent, DeltaRuleCritic, FullKnowledge, FullMemory, Or
 from results import Store, record_run
 
 
+
 @pytest.fixture
 def store(tmp_path):
     with Store(tmp_path / "r.sqlite") as s:

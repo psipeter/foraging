@@ -209,6 +209,7 @@ import costs
 from agents import Explore, FullKnowledge, Look, OracleCritic, Stop
 
 
+
 class Sequence(Actor):
     """Plays a fixed list of actions, then stops."""
     def __init__(self, *actions):

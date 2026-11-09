@@ -11,6 +11,7 @@ import rundata
 import world as world_mod
 from replay import Bushes, SessionLog, load_session_log, replay_harvests, steps, verify
 
+
 CFG = {"harvestRangeGapBase": 7.0, "harvestRangeGapPerRadius": 0.0, "harvestMaxAngle": 35.0, "fruitHarvestDuration": 0.8}
 HZ = 100.0
 

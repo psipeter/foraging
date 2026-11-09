@@ -1920,3 +1920,35 @@ placement, three attributes, a reward summed from per-bush terms, an Interlude b
   writes the instruction texts and generates the worlds and Interludes. An instance's `design` dict is stored as JSON in the asset's `designJson`, so the logged `SessionConfig` carries it and the session row needs no new column
   (rejected: a `design` column, which would have needed a database migration for no extra information). `ladder.py` stays for the CF ladder until CF is deleted.
 - The edits moved the engine-code hash and added fields to `SIM_FIELDS`, so every recorded simulation result is now "stale" by hash (none is wrong).
+
+
+## FN built on the new generators (2026-11-09)
+
+- **Moisture is FN's third feature.** `SessionConfig.moistureVaries` / `moistureWhenFixed` give a flat, single-coloured valley where moisture is not visible (the baselines with one or two visible features), `moistureIsFeature` declares a visible moisture that
+  pays nothing so the Interlude's feature gap counts it, and moisture pays through the ordinary linear component. The FN assets set `moistureTerraceLevels` 0: plateaus would make a linear mapping a four-level one.
+  Rejected: a separate "visible" switch per reward stage; leaving moisture decoration and using only shape and colour (it would cap FN at two features).
+- **Spatial balance with a moisture term.** The swap step takes an `offset` (what the site adds to the record it holds, here the moisture term) and evens the totals; the top bushes are those in the top decile of the total at the start. With no offset it is
+  exactly the old code (all shipped worlds are byte-identical). The tile step still deals the records by value only; the swaps correct it. The refusal ("spatialBalance needs a reward that does not depend on moisture") is gone.
+- **No new reward stage for FN.** A linear or inverted-linear component per feature with weight 4 x its share (the best bush pays about 4, as before) is the existing `terms` stage.
+- **Per-feature Interlude trials** (`interludeFeatureTrials`, `TRIAL_KINDS["per_feature"]`): for each visible feature that pays enough to show (it must be able to make a reward gap of at least 0.15, three tie tolerances, so a feature that pays nothing, or the r = 0.1 weak ones, get none) a pair that differs in that feature only (others equal; moisture matched within 0.03 where it comes from the terrain), the true reward gap spread
+  geometrically from 0.5 to at most 3 noise units (`rewardStd`), capped by what the feature can produce. They are taken out of `interludeTrialCount`, before the Hybrid trials, so the other sessions' stimuli do not move. The gap is a design value, not a threshold: the detection curve in the analysis estimates the threshold.
+- **Provisional design numbers** (all in `design/FN.py`): weak weights from the family (1, r, r^2) with r in 1, 0.7, 0.5, 0.35, 0.2, 0.1 over a random ranking of the features (a stand-in for the open TODO), baselines of 60, 75 and 90 s with 8 Interlude trials, weighted sessions of
+  150 s with 24 trials (2 repeats, 2 per-feature trials per feature). The weak weights at r = 0.1 are below one noise unit: they are deliberately beyond detection.
+- **FN hints name the features (PI, 2026-11-09).** The baselines' hint says which features the answer is among ("The bush shape determines how many points a fruit gives", "Either the ... or the ... does", "One of the bush shape, the fruit color or the ground moisture does"), since
+  hints are about structure and this is true; the weighted sessions say all three matter but some more than others. One text per baseline (the named features differ per instance), one shared text for the weighted sessions. The hypothesis on weak features changed
+  from a detection threshold to "the probability of learning a rewarded feature is proportional to its weight relative to the others and the noise".
+
+
+## Tests state a configuration (PI, 2026-11-09)
+
+The tests had grown around the CF ladder: sessions called by name (`S1`, `S3_Interlude`, ...), assertions about what a particular shipped session pays or varies, and old terraced or bump sessions reached through overrides on a live asset. Deleting CF, or building FN, would have broken or silently changed them.
+- **Generator tests** build their session from a stated configuration (`scripts/synthetic.py`) on the tutorial's asset, and `test_realization.py` asks whether the intended variance appears in the generated worlds and Interludes (which features vary, what each pays, the noise, what an Interlude pair differs in), for several configurations and for every built design. These are the tests that say a design does what it claims.
+- **Engine-level tests** (simulator, agents, battery, results, analysis, fingerprint, replay) need an arbitrary environment, not a particular one. They keep their `S1`-style names, which now resolve to frozen copies in `scripts/fixtures/sessions/` under the `frozen_sessions` marker, so they test the engine and not the current design. Rewriting them around synthetic sessions was rejected: it would change tests of the engine for no gain in what they check.
+- **Not converted:** `test_ladder.py` (about `ladder.py` and the CF assets; retired with CF) and the freshness tests, which are about the live files and now loop over every session and Interlude asset instead of a list of names.
+
+
+## CF removed (PI, 2026-11-09)
+
+FN replaces the CF ladder as the game's experiment (RW, FI, PL and PA will replace the rest). The CF assets, world files and Interlude files are deleted from the build and the catalog (they are in git history), `scripts/ladder.py` and its test moved to `archive/cf_ladder/`, and the scene's default experiment is FN.
+The old aliases `P`, `S1` to `S7` (and their Interludes) that the simulator, the agent battery, the results database and the engine tests use now name frozen copies of those sessions in `scripts/fixtures/sessions/`, so the environments recorded results were made in are unchanged and the battery keeps running on them until it is redefined on the new experiments' sessions.
+Participant data from CF, if any is ever collected, would carry its own experiment code in the database; none exists.

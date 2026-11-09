@@ -26,7 +26,8 @@ its own radius; the two centres are therefore not exactly symmetric about the he
 Trials. The default mode is `hybrid`: pairs of random bushes chosen so that both the true reward gap and the perceptual (feature) gap are spread evenly over their
 ranges, over the features the session declares (`world.session_features`), with some exact repeats; `reward_gap`, `feature_gap` and `random` are the simpler modes.
 A bush's moisture is whatever the terrain has at its position, as in the main task; moisture is a feature channel of the gap only when the session declares it.
-Designed trial types (contrast, graded, extrapolation) were removed (2026-11-09) and come back, one kind at a time, in `TRIAL_KINDS` when an experiment needs them.
+Designed trial types (contrast, graded, extrapolation) were removed (2026-11-09) and come back, one kind at a time, in `TRIAL_KINDS` when an experiment needs them. The one registered so far is
+`per_feature` (FN): `interludeFeatureTrials` trials for each visible feature that pays enough to show, a pair that differs in that feature only, with the true reward gap spread in noise units (`rewardStd`).
 
 Usage:
     python scripts/interlude.py TUT_I1 CF_I1 CF_I2 CF_I3 CF_I4 CF_I5 CF_I6 CF_I7
@@ -58,6 +59,11 @@ GAP_SEARCH_STEPS = 30_000     # swaps tried when choosing the trials from the ca
 ORDER_DRAWS = 3000            # gap modes: random orders tried for the file order (the same for every participant)
 REPEAT_SEPARATION = 8         # gap modes with repeats: the fewest trials between a pair and its repeat
 ORDER_MAX_RUN = 3             # ... which may not put the same correct side more than this many times in a row
+PER_FEATURE_EFFECTS = (0.5, 3.0)   # per-feature trials: the true reward gap, in units of rewardStd, from the smallest to the largest asked of a feature (provisional)
+PER_FEATURE_MIN_GAP = 0.15    # a feature gets per-feature trials only if it can make a reward gap at least this large (three times the tie tolerance)
+PER_FEATURE_DRAWS = 600       # value pairs tried on a placement for a per-feature trial
+MOISTURE_REACH_QUANTILE = 0.97   # per-feature trials on moisture ask for at most the moisture difference that this share of placements offers
+MATCHED_MOISTURE = 0.03       # |moisture difference| of two bushes that are to be "the same" in moisture
 FEATURE_WEIGHTS = {"shape": 1.0, "color": 1.0, "moisture": 1.0}   # perceptual weight of each channel in `feature_gap` (no measured JNDs yet: equal)
 MIN_SITE_SPACING = 80.0       # trials' spawn points are at least this far apart (relaxed if the pool is thin)
 MAX_SPAWN_SLOPE = 0.6         # rise/run at the spawn point
@@ -143,7 +149,8 @@ def has_hump(terrain, spawn, pos, params=None):
 
 def make_pool(params, terrain, rng, n=None):
     """Random placements (spawn, heading) in the valley, with the moisture at the left bush position for a canopy of the mean radius (the Designer
-    samples it for the spread of R; the final positions shift slightly with each bush's actual radius and are checked again)."""
+    samples it for the spread of R) and the moisture difference `dm` of the two nominal bush positions (a trial that needs equal or different moisture picks
+    placements by it; the final positions shift slightly with each bush's actual radius and are checked again)."""
     n = POOL_SAMPLES if n is None else int(n)
     half = float(params.world_half_extent)
     fwd, lat = bush_offsets(params, nominal_radius(params))
@@ -157,7 +164,8 @@ def make_pool(params, terrain, rng, n=None):
     ok = terrain.is_tree_site(spawn[:, 0], spawn[:, 1]) & terrain.is_tree_site(left[:, 0], left[:, 1]) \
         & terrain.is_tree_site(right[:, 0], right[:, 1])
     spawn, yaw, left, right = spawn[ok], yaw[ok], left[ok], right[ok]
-    return {"spawn": spawn, "yaw": yaw, "m_left": terrain.moisture(left[:, 0], left[:, 1])}
+    m_left, m_right = terrain.moisture(left[:, 0], left[:, 1]), terrain.moisture(right[:, 0], right[:, 1])
+    return {"spawn": spawn, "yaw": yaw, "m_left": m_left, "dm": np.abs(m_left - m_right)}
 
 
 # --------------------------------------------------------------------------------------------------
@@ -210,9 +218,13 @@ class Designer:
                 return False
         return True
 
-    def pick(self):
-        """A placement away from the spawn points already used, with a gentle slope and a clear view of the nominal bush positions."""
-        cand = self.rng.permutation(len(self.pool["spawn"]))
+    def pick(self, dm=None):
+        """A placement away from the spawn points already used, with a gentle slope and a clear view of the nominal bush positions. `dm` = (low, high): only
+        placements whose two nominal bushes differ in moisture by an amount in that window."""
+        if dm is None:
+            cand = self.rng.permutation(len(self.pool["spawn"]))
+        else:
+            cand = self.rng.permutation(np.flatnonzero((self.pool["dm"] >= dm[0]) & (self.pool["dm"] <= dm[1])))
         for spacing in (MIN_SITE_SPACING, MIN_SITE_SPACING / 2.0, 0.0):
             for i in cand[:6000]:
                 s = self.pool["spawn"][i]
@@ -224,11 +236,11 @@ class Designer:
                 return int(i)
         raise RuntimeError("no placement found")
 
-    def attempt(self, builder):
-        """Pick placements until `builder(i)` returns a valid (left, right) pair, with every final bush position in the
-        valley and in view of the spawn point."""
+    def attempt(self, builder, dm=None):
+        """Pick placements (with the moisture difference window `dm`, see `pick`) until `builder(i)` returns a valid (left, right) pair, with every final bush
+        position in the valley and in view of the spawn point."""
         for _ in range(MAX_ATTEMPTS):
-            i = self.pick()
+            i = self.pick(dm)
             pair = builder(i)
             if pair is not None and self._final_ok(i, *pair):
                 return i, pair[0], pair[1]
@@ -294,9 +306,75 @@ class Designer:
                     rows.append((i, lt, rt, abs(d), feature_gap(lt, rt, self.weights), d > 0))
         return rows
 
-# Trial kinds an experiment adds: name -> builder(designer, ...) returning (placement, left bush, right bush). None are registered yet (the designed
-# contrast / graded / extrapolation kinds were removed); a kind goes here with the experiment whose analysis needs it.
-TRIAL_KINDS = {}
+def per_feature_trial(des, feature, effect, want_left_better):
+    """A pair of bushes that differ in `feature` only (the other features equal; moisture, which comes from the terrain, within MATCHED_MOISTURE), with a true
+    reward gap of about `effect` noise units (`rewardStd`). For shape and colour the two values are searched for the gap; for moisture the placement is."""
+    target = effect * float(des.p.reward_std)
+    tolerance = 0.2 * target
+
+    def close(lt, rt):
+        d = des.value(lt) - des.value(rt)
+        return abs(abs(d) - target) <= tolerance and (want_left_better is None or (d > 0) == want_left_better)
+
+    if feature == "moisture":
+        def build(i):
+            shape, color = (round(float(des.rng.uniform(0.3, 0.7)), 2) for _ in range(2))
+            lt, rt = des.bush(i, "left", shape, color), des.bush(i, "right", shape, color)
+            return (lt, rt) if close(lt, rt) else None
+        dm0 = target / max(reachable_gap(des, "moisture") / moisture_reach(des), 1e-9)      # the moisture difference that gives the gap (the reward being near linear in it)
+        return des.attempt(build, dm=(0.7 * dm0, 1.3 * dm0))
+
+    def build(i):
+        base = [round(float(des.rng.uniform(0.3, 0.7)), 2) for _ in range(2)]
+        slot = 0 if feature == "shape" else 1
+        for _ in range(PER_FEATURE_DRAWS):
+            a, b = (round(float(des.rng.uniform(0.0, 1.0)), 2) for _ in range(2))
+            left, right = list(base), list(base)
+            left[slot], right[slot] = a, b
+            lt, rt = des.bush(i, "left", *left), des.bush(i, "right", *right)
+            if abs(lt["moisture"] - rt["moisture"]) <= MATCHED_MOISTURE and close(lt, rt):
+                return lt, rt
+        return None
+    return des.attempt(build, dm=(0.0, MATCHED_MOISTURE / 2.0))
+
+
+def moisture_reach(des):
+    """The largest moisture difference two bushes of a trial can have on this terrain: the 97th percentile over the placements (the two bushes stand about
+    28 units apart, so a continuous field gives far less than its whole range)."""
+    return float(np.quantile(des.pool["dm"], MOISTURE_REACH_QUANTILE))
+
+
+def reachable_gap(des, feature):
+    """The largest true reward gap two bushes can have when they differ in `feature` only (searched over random values; moisture over the placements)."""
+    if feature == "moisture":
+        dm = moisture_reach(des)
+        return abs(float(des.reward(des.p.reward_function, 0.5, 0.5, 0.5 + dm / 2) - des.reward(des.p.reward_function, 0.5, 0.5, 0.5 - dm / 2)))
+    v = np.linspace(0.0, 1.0, 21)
+    args = [np.full(21, 0.5), np.full(21, 0.5), np.full(21, 0.5)]
+    args[{"shape": 0, "color": 1}[feature]] = v
+    values = np.asarray(des.reward(des.p.reward_function, *args))
+    return float(values.max() - values.min())
+
+
+# Trial kinds an experiment adds: name -> builder(designer, ...) returning (placement, left bush, right bush).
+TRIAL_KINDS = {"per_feature": per_feature_trial}
+
+
+def feature_trials(des, per_feature, rng):
+    """`per_feature` trials for each visible feature, effect sizes spread evenly (geometric) from PER_FEATURE_EFFECTS[0] to its largest noise-unit effect the
+    feature can produce (at most PER_FEATURE_EFFECTS[1]); sides alternate. Returns trial dicts of type "per_feature", `varied` the feature."""
+    std = float(des.p.reward_std)
+    trials, side = [], bool(rng.integers(2))
+    for feature, declared in session_features(des.p).items():
+        if not declared["visible"] or per_feature <= 0 or reachable_gap(des, feature) < PER_FEATURE_MIN_GAP:
+            continue                  # (a feature that pays nothing, or too little to make a pair with a clear better side, has no per-feature trial)
+        top = min(PER_FEATURE_EFFECTS[1], 0.9 * reachable_gap(des, feature) / std)
+        low = min(PER_FEATURE_EFFECTS[0], top)
+        for effect in np.geomspace(low, top, per_feature) if top > 0 else []:
+            i, lt, rt = TRIAL_KINDS["per_feature"](des, feature, float(effect), side)
+            trials.append({"type": "per_feature", "varied": feature, "place": i, "left": lt, "right": rt})
+            side = not side
+    return trials
 
 
 def build_random_trials(params, terrain, pool, rng):
@@ -362,8 +440,12 @@ def build_gap_trials(params, terrain, pool, rng, mode):
     from the world seed. No elevation rule is needed: moisture is one of the feature channels and a reward feature in S3/S4."""
     n_total = int(params.interlude_trial_count)
     repeats = min(int(getattr(params, "interlude_repeat_count", 0) or 0), n_total // 2)         # (at most half the trials repeat a pair: a short Interlude keeps its pairs)
-    n = n_total - repeats
     des = Designer(params, terrain, pool, rng)
+    per_feature = int(getattr(params, "interlude_feature_trials", 0) or 0)
+    typed = feature_trials(des, per_feature, rng) if per_feature else []        # (the scarcest placements first; none by default, so the stimuli of the other sessions do not move)
+    n = n_total - repeats - len(typed)
+    if n < 1:
+        raise ValueError(f"interludeTrialCount {n_total} has no room for the {len(typed)} per-feature trials and {repeats} repeats")
     axes = {"reward_gap": (3,), "feature_gap": (4,), "hybrid": (3, 4)}[mode]
     minima = {3: float(getattr(params, "interlude_min_reward_gap", 0.25)), 4: float(getattr(params, "interlude_min_feature_gap", 0.1))}
     # optional ceilings (reward units for the reward gap, 0-1 for the feature gap); 0 or absent: the gaps spread up to GAP_TOP_QUANTILE of the candidates
@@ -375,7 +457,7 @@ def build_gap_trials(params, terrain, pool, rng, mode):
         if not hidden:
             break
         rows = [r for r in rows if not any(r is h for h in hidden)]          # a chosen pair not in view: choose again without it
-    trials = [{"type": mode, "varied": "", "place": r[0], "left": r[1], "right": r[2]} for r in chosen]
+    trials = typed + [{"type": mode, "varied": "", "place": r[0], "left": r[1], "right": r[2]} for r in chosen]
     trials += pick_repeats(trials, repeats, des)
     des.gap_span = {("reward", "feature")[a - 3]: span[a] for a in axes}
     return _finish_trials(trials, des, rng, ordered=True, separation=int(getattr(params, "interlude_repeat_separation", REPEAT_SEPARATION))), des

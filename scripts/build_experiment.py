@@ -16,10 +16,10 @@ import json
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
-from ladder import interlude_name
-from world import EXPERIMENTS_DIR, PROJECT_ROOT, STREAMING_EXPERIMENTS
+from world import EXPERIMENTS_DIR, PROJECT_ROOT, STREAMING_EXPERIMENTS, interlude_name
 
 UNITY = [str(Path.home() / ".local/bin/unity"), "--no-banner", "--no-pager", "command"]
 ASSET_ROOT = "Assets/ScriptableObjects/Experiments"
@@ -68,14 +68,20 @@ def build_spec(module, remove_stale=False):
             "countsTowardTotal": bool(getattr(module, "COUNTS_TOWARD_TOTAL", True)), "removeStale": bool(remove_stale), "sessions": sessions}
 
 
-def run_editor_builder(spec):
+def run_editor_builder(spec, attempts=4):
+    """Run the Editor builder. The pipeline server gives an Editor call 5 s on the main thread, and creating a batch of assets can take longer: the Editor then
+    finishes the work anyway, and the builder is idempotent, so a timeout is answered by calling it again (the second call only finds the assets done)."""
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / f"{spec['code']}_spec.json"
         path.write_text(json.dumps(spec, indent=1))
-        out = subprocess.run(UNITY + ["eval", "--timeout", "180000", "--code", f'return ExperimentBuilder.Build(@"{path}");'], capture_output=True, text=True)
-    print(out.stdout.strip())
-    if out.returncode != 0 or "Success\tfalse" in out.stdout:
-        raise RuntimeError(f"the Editor builder failed:\n{out.stdout}\n{out.stderr}")
+        for attempt in range(attempts):
+            out = subprocess.run(UNITY + ["eval", "--timeout", "180000", "--code", f'return ExperimentBuilder.Build(@"{path}");'], capture_output=True, text=True)
+            if out.returncode == 0 and "Success\tfalse" not in out.stdout and "timed out" not in out.stdout + out.stderr:
+                print(out.stdout.strip())
+                return
+            print(f"Editor call {attempt + 1} did not finish in time; calling again")
+            time.sleep(10)
+    raise RuntimeError(f"the Editor builder failed:\n{out.stdout}\n{out.stderr}")
 
 
 def write_texts(module):

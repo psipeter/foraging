@@ -3,7 +3,13 @@
 import numpy as np
 
 import spatial
+import synthetic
 import world
+
+
+def PLAIN(**extra):
+    """A session of a stated plain configuration (both features pay, moisture decoration) on the template asset."""
+    return world.load_session(synthetic.TEMPLATE, **{**synthetic.overrides(synthetic.FEATURES, {"shape": 0.6, "color": 0.4}, moisture_is_feature=False), **extra})
 
 
 def lattice(n=600, half=300.0, seed=0):
@@ -44,22 +50,31 @@ def test_off_is_the_identity_and_the_assignment_is_deterministic():
 
 
 def test_the_world_switch_rearranges_records_without_changing_them_and_off_changes_nothing():
-    off = world.generate_world(world.load_session("S2", spatial_balance=0), 3)
-    tiles = world.generate_world(world.load_session("S2", spatial_balance=1), 3)
+    off = world.generate_world(PLAIN(spatial_balance=0), 3)
+    tiles = world.generate_world(PLAIN(spatial_balance=1), 3)
     assert np.array_equal(off.pos, tiles.pos) and np.array_equal(off.moisture, tiles.moisture)
     assert np.allclose(np.sort(off.shape), np.sort(tiles.shape)) and np.allclose(np.sort(off.value), np.sort(tiles.value))
     assert spatial.metrics(tiles.pos, tiles.value)["cost"] < spatial.metrics(off.pos, off.value)["cost"]
-    assert world.check_values(world.load_session("S2", spatial_balance=1))["spatialBalance"] == 1.0
-    assert "spatialBalance" not in world.check_values(world.load_session("S2", spatial_balance=0))     # (older world files stay identical)
-    assert world.check_values(world.load_session("S2"))["spatialBalance"] == 2.0                       # the ladder's assets balance (TilesAndSwaps)
+    assert world.check_values(PLAIN(spatial_balance=1))["spatialBalance"] == 1.0
+    assert "spatialBalance" not in world.check_values(PLAIN(spatial_balance=0))     # (older world files stay identical)
+    assert world.check_values(PLAIN(spatial_balance=2))["spatialBalance"] == 2.0
 
 
-def test_the_practice_session_balances_its_random_values_and_a_moisture_reward_is_refused():
-    p = world.load_session("P", spatial_balance=1)
-    tiles, off = world.generate_world(p, 5), world.generate_world(world.load_session("P", spatial_balance=0), 5)
+def test_the_practice_session_balances_its_random_values():
+    p = world.load_session(synthetic.TEMPLATE, **{**synthetic.overrides(weights={"shape": 1.0}), "random_bush_value_range": (1.0, 3.0), "spatial_balance": 1})
+    tiles, off = world.generate_world(p, 5), world.generate_world(world.load_session(synthetic.TEMPLATE, **{**synthetic.overrides(weights={"shape": 1.0}), "random_bush_value_range": (1.0, 3.0), "spatial_balance": 0}), 5)
     assert np.allclose(np.sort(tiles.value), np.sort(off.value))
     assert spatial.metrics(tiles.pos, tiles.value)["cost"] < spatial.metrics(off.pos, off.value)["cost"]   # the random value moves with its record
-    import pytest
-    from legacy_sessions import legacy
-    with pytest.raises(ValueError):
-        world.generate_world(world.load_session("S2", **{**legacy("S3"), "spatial_balance": 1}), 1)
+
+
+def test_a_moisture_reward_is_balanced_on_the_totals_and_with_no_offset_nothing_changes():
+    rf = synthetic.reward_function({"shape": 0.5, "color": 0.5, "moisture": 0.5})
+    pays = PLAIN(reward_function=rf, spatial_balance=2)
+    off, swaps = world.generate_world(PLAIN(reward_function=rf, spatial_balance=0), 5), world.generate_world(pays, 5)
+    assert np.allclose(np.sort(off.shape), np.sort(swaps.shape)) and np.allclose(np.sort(off.color), np.sort(swaps.color))      # the same records, dealt elsewhere
+    assert np.allclose(swaps.moisture[np.argsort(swaps.pos[:, 0])], world.generate_world(pays, 5).moisture[np.argsort(swaps.pos[:, 0])])
+    assert spatial.metrics(swaps.pos, swaps.value)["cost"] < 0.8 * spatial.metrics(off.pos, off.value)["cost"]                    # the totals, moisture included, are more even
+    pos, values = lattice(), np.random.default_rng(3).uniform(0, 1, 600)
+    a, _ = spatial.optimise(pos, values, np.random.default_rng(4), half=300.0, steps=3000)
+    b, _ = spatial.optimise(pos, values, np.random.default_rng(4), half=300.0, steps=3000, offset=np.zeros(600))
+    assert (a == b).all()                                                                                                       # a zero offset is no offset

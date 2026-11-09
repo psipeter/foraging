@@ -1329,6 +1329,7 @@ def test_the_ladder_agents_differ_from_the_gp_one_step_at_a_time_and_round_trip(
 from agents import FullSweeps, PrioritizedReplay, SampledReplay
 
 
+
 def test_replay_policies_choose_which_stored_bushes_to_present_again():
     errors = np.array([0.1, -2.0, 0.5, 2.0])
     assert list(FullSweeps(2).indices(errors)) == [0, 1, 2, 3, 0, 1, 2, 3] and len(FullSweeps(0).indices(errors)) == 0

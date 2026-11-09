@@ -78,6 +78,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float interludeMaxFeatureGap = 0f;
     [Tooltip("RewardGap / FeatureGap / Hybrid Interludes only: how many of the interludeTrialCount trials are exact repeats of an earlier pair (same place, same bushes, same sides; the file gives the repeat bush entries of its own), a check of how consistent a participant's choices are. 0 = none. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
     [SerializeField] private int interludeRepeatCount = 0;
+    [Tooltip("RewardGap / FeatureGap / Hybrid Interludes only: per-feature trials for each visible feature (a pair that differs in that feature only, the true reward gap spread in units of rewardStd), taken out of interludeTrialCount. 0 = none. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
+    [SerializeField] private int interludeFeatureTrials = 0;
     [Tooltip("The fewest trials between a repeated pair and its repeat. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
     [SerializeField] private int interludeRepeatSeparation = 8;
 
@@ -222,6 +224,12 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private bool colorVaries = true;
     [Tooltip("The color value of every bush when colorVaries is off (0..1). Read by scripts/world.py and scripts/interlude.py.")]
     [SerializeField] private float colorWhenFixed = 0.5f;
+    [Tooltip("False: the valley has one moisture value (moistureWhenFixed), so the ground is one colour and flat (elevation follows moisture), and moisture cannot pay. Read by scripts/world.py: regenerate the world after changing it.")]
+    [SerializeField] private bool moistureVaries = true;
+    [Tooltip("The moisture of the whole valley when moistureVaries is off (0..1).")]
+    [SerializeField] private float moistureWhenFixed = 0.5f;
+    [Tooltip("Declare moisture a feature of the task even though it pays nothing: scripts/interlude.py then counts it in the feature gap. Moisture that pays is always counted; with this off and a zero weight it is decoration. Read by scripts/interlude.py.")]
+    [SerializeField] private bool moistureIsFeature = false;
     [Tooltip("A per-bush point value drawn uniformly from (min, max) and added to the reward function, independent of every attribute: the practice session's random reward. (0, 0) = off. Pre-drawn in the world file by scripts/world.py; an Interlude of such a session has no correct side.")]
     [SerializeField] private Vector2 randomBushValueRange = Vector2.zero;
     [Tooltip("Harvest becomes available when the player is within gap(R) = base + perRadius * canopyRadius of the canopy EDGE (horizontal distance). ~7 shows the whole bush at the 5.1 eye height / 75 deg vertical FOV (the near foot is visible from 5.1 / tan(37.5 deg) = 6.6).")]
@@ -345,6 +353,7 @@ public class SessionConfig : ScriptableObject
     public string ExperimentCode => name.Split('_')[0];
     public InterludeMode InterludeMode => interludeMode;
     public int InterludeTrialCount => interludeTrialCount;
+    public int InterludeFeatureTrials => interludeFeatureTrials;
     public int InterludeTrialLimit => interludeTrialLimit;
 
     // A copy for local quick testing (never the asset itself, which would be saved into the file): a session lasts practiceSeconds or sessionSeconds, an
@@ -411,6 +420,9 @@ public class SessionConfig : ScriptableObject
     public float ShapeWhenFixed => shapeWhenFixed;
     public float ColorWhenFixed => colorWhenFixed;
     public bool ColorVaries => colorVaries;
+    public bool MoistureVaries => moistureVaries;
+    public float MoistureWhenFixed => moistureWhenFixed;
+    public bool MoistureIsFeature => moistureIsFeature;
     public Vector2 RandomBushValueRange => randomBushValueRange;
 
     public int TargetFrameRate => targetFrameRate;

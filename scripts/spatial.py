@@ -141,20 +141,30 @@ def tile_assignment(pos, values, rng, scales=SCALES, half=350.0):
     return result
 
 
-def optimise(pos, values, rng, scales=SCALES, half=350.0, steps=SWAP_STEPS, target=TARGET, start=None):
-    """Swap the records of pairs of bushes, keeping a swap when `cost` falls; returns (assignment, final cost). `start` is the assignment to begin from (default: the identity)."""
+def optimise(pos, values, rng, scales=SCALES, half=350.0, steps=SWAP_STEPS, target=TARGET, start=None, offset=None):
+    """Swap the records of pairs of bushes, keeping a swap when `cost` falls; returns (assignment, final cost). `start` is the assignment to begin from (default: the identity).
+    `offset` is an optional reward each site adds to the record it holds (the part of the reward that belongs to the place, such as a moisture term): it is the totals,
+    record plus offset, that are made even, and the top bushes are those whose total is in the top decile at the start. None (no offset) is the plain record values."""
     values = np.asarray(values, dtype=float)
     n = len(values)
     index = np.arange(n) if start is None else np.array(start, dtype=int)         # index[i]: the record at bush i
-    threshold = np.quantile(values, TOP_QUANTILE)
-    chans = [values, (values >= threshold).astype(float)]                             # by record
+    off = np.zeros(n) if offset is None else np.asarray(offset, dtype=float)
+    base = values if offset is None else values[index] + off                         # the totals at the start (by record, without an offset)
+    threshold = np.quantile(base, TOP_QUANTILE)
+    chans = [base, (base >= threshold).astype(float)]                                 # the two channels, for the null spread and the mean
     disks = [Disks(pos, s, half) for s in scales]
     null = [[d.null_variance(c) for c in chans] for d in disks]
+
+    def channel(ci, record, site):
+        """The channel value of a record (index or array) held by a site (index or array)."""
+        total = values[record] + off[site]
+        return total if ci == 0 else (total >= threshold).astype(float)
+
     state = []                                                                         # per scale and channel: the disk sums, and the sum of squared deviations of the means
     for d in disks:
         row = []
-        for c in chans:
-            cur = c[index]
+        for ci in range(2):
+            cur = channel(ci, index, np.arange(n))
             sums = np.array([cur[m].sum() for m in d.members])
             row.append(sums)
         state.append(row)
@@ -173,6 +183,7 @@ def optimise(pos, values, rng, scales=SCALES, half=350.0, steps=SWAP_STEPS, targ
         i, j = rng.integers(0, n, 2)
         if i == j or values[index[i]] == values[index[j]]:
             continue
+        ri, rj = index[i], index[j]
         change, new_sums = 0.0, []
         for si, d in enumerate(disks):
             affected = np.union1d(d.of_bush[i], d.of_bush[j])
@@ -182,8 +193,8 @@ def optimise(pos, values, rng, scales=SCALES, half=350.0, steps=SWAP_STEPS, targ
             in_i = np.isin(affected, d.of_bush[i]).astype(float)
             in_j = np.isin(affected, d.of_bush[j]).astype(float)
             per = []
-            for ci, c in enumerate(chans):
-                delta = (c[index[j]] - c[index[i]]) * (in_i - in_j)                      # bush i takes j's record and j takes i's
+            for ci in range(2):
+                delta = (channel(ci, rj, i) - channel(ci, ri, i)) * in_i + (channel(ci, ri, j) - channel(ci, rj, j)) * in_j        # bush i takes j's record and j takes i's
                 old = state[si][ci][affected]
                 new = old + delta
                 size = d.size[affected]
@@ -201,12 +212,12 @@ def optimise(pos, values, rng, scales=SCALES, half=350.0, steps=SWAP_STEPS, targ
     return index, cost
 
 
-def balance(pos, values, rng, mode, scales=SCALES, half=350.0, steps=SWAP_STEPS, target=TARGET):
-    """The assignment of records to bushes for a spatial-balance mode (OFF: the identity)."""
+def balance(pos, values, rng, mode, scales=SCALES, half=350.0, steps=SWAP_STEPS, target=TARGET, offset=None):
+    """The assignment of records to bushes for a spatial-balance mode (OFF: the identity). `offset`: see `optimise` (the swap step only; the tile step deals the records)."""
     n = len(values)
     if mode == OFF:
         return np.arange(n)
     index = tile_assignment(pos, values, rng, scales, half)
     if mode == TILES_AND_SWAPS:
-        index, _ = optimise(pos, values, rng, scales, half, steps, target, start=index)
+        index, _ = optimise(pos, values, rng, scales, half, steps, target, start=index, offset=offset)
     return index

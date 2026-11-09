@@ -45,30 +45,34 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXPERIMENTS_DIR = PROJECT_ROOT / "Assets" / "ScriptableObjects" / "Experiments"            # <code>/<code>_S1.asset, <code>_I1.asset, <code>.asset
 STREAMING_EXPERIMENTS = PROJECT_ROOT / "Assets" / "StreamingAssets" / "Experiments"        # <code>/<name>_seed<N>.world, .interlude.json, instruction texts
 
-# The names the sessions had before they belonged to experiments (the practice session, S1 to S7 and their Interludes), still accepted
-# wherever a session name is: the tests, the agent battery and the results database call sessions by them.
-LEGACY_NAMES = {"P": "TUT_S1", "P_Interlude": "TUT_I1",
-                **{f"S{n}": f"CF_S{n}" for n in range(1, 8)}, **{f"S{n}_Interlude": f"CF_I{n}" for n in range(1, 8)}}
+# The names the sessions had before they belonged to experiments (the practice session, S1 to S7 and their Interludes), still accepted wherever a session name
+# is: the simulator, the agent battery, the results database and the engine tests call sessions by them. Since the CF experiment was removed (2026-11-09) they
+# are frozen copies of the tutorial and the CF ladder in `scripts/fixtures/sessions/` (the environment the recorded results were made in), not live assets.
+FIXTURE_SESSIONS = Path(__file__).resolve().parent / "fixtures" / "sessions"
+LEGACY_NAMES = {"P": "FIX_S0", "P_Interlude": "FIX_I0",
+                **{f"S{n}": f"FIX_S{n}" for n in range(1, 8)}, **{f"S{n}_Interlude": f"FIX_I{n}" for n in range(1, 8)}}
 
 
 def canonical(name):
-    """The session's current asset name (`S1` -> `CF_S1`); a name that is already current, or a path, is returned as it is."""
+    """The session's current asset name (`S1` -> `FIX_S1`); a name that is already current, or a path, is returned as it is."""
     return LEGACY_NAMES.get(name, name)
 
 
 def experiment_of(name):
-    """The experiment code of a session name: the part before the first underscore (`CF_S1` -> `CF`), as `SessionConfig.ExperimentCode`."""
+    """The experiment code of a session name: the part before the first underscore (`FN_S1` -> `FN`), as `SessionConfig.ExperimentCode`."""
     return canonical(name).split("_")[0]
 
 
 def interlude_name(session):
-    """The Interlude of a session: CF_S1 -> CF_I1 (the practice names too: P -> TUT_I1)."""
+    """The Interlude of a session: FN_S1 -> FN_I1 (the practice names too: P -> FIX_I0)."""
     code, tail = canonical(session).split("_", 1)
     return f"{code}_I{tail[1:]}"
 
 
 def session_asset_path(name):
     name = canonical(name)
+    if name.startswith("FIX_"):
+        return FIXTURE_SESSIONS / f"{name}.asset"
     return EXPERIMENTS_DIR / experiment_of(name) / f"{name}.asset"
 
 BASIS_NAMES = ["Linear", "InvertedLinear", "GaussianPeak", "InvertedGaussian", "Constant"]
@@ -111,7 +115,8 @@ def _convert(value):
 
 # Fields an older asset file does not have yet (Unity adds a field to an asset only when it is saved): their defaults, snake_case names.
 FIELD_DEFAULTS = {"spatial_balance": 0, "shape_varies": True, "color_varies": True, "shape_when_fixed": 0.5, "color_when_fixed": 0.5, "random_bush_value_range": (0.0, 0.0), "design_json": "",
-                  "layout": None, "assignment": None, "reward_stage": None, "moisture_varies": None}      # (stage names and the moisture declaration: None = the default, see stage_names / session_features)
+                  "moisture_varies": True, "moisture_when_fixed": 0.5, "moisture_is_feature": False, "interlude_feature_trials": 0,
+                  "layout": None, "assignment": None, "reward_stage": None}      # (stage names: None = the default, see stage_names)
 
 
 FEATURES = ("shape", "color", "moisture")
@@ -298,6 +303,8 @@ class Terrain:
         inset by that amount so the whole range 0..1 is still used without clipping). With
         levels < 2 (default) it is the plain continuous field."""
         p = self.p
+        if not getattr(p, "moisture_varies", True):                  # one moisture over the valley: a flat, single-coloured ground
+            return np.full(np.shape(x), float(getattr(p, "moisture_when_fixed", 0.5)))
         raw = self._raw_moisture(x, z)
         n = int(getattr(p, "moisture_terrace_levels", 0))
         if n < 2:
@@ -504,7 +511,9 @@ def check_values(params):
     # (Unity's FindMismatches treats a name missing from the file as the default)
     for name, value, default in (("spatialBalance", float(params.spatial_balance), 0.0),
                                  ("shapeVaries", float(bool(params.shape_varies)), 1.0), ("colorVaries", float(bool(params.color_varies)), 1.0),
+                                 ("moistureVaries", float(bool(params.moisture_varies)), 1.0),
                                  ("shapeWhenFixed", float(params.shape_when_fixed), 0.5), ("colorWhenFixed", float(params.color_when_fixed), 0.5),
+                                 ("moistureWhenFixed", float(params.moisture_when_fixed), 0.5),
                                  ("randomBushValueRange.min", float(params.random_bush_value_range[0]), 0.0),
                                  ("randomBushValueRange.max", float(params.random_bush_value_range[1]), 0.0)):
         if value != default:
@@ -638,12 +647,16 @@ def assign_independent(params, pos, terrain, rngs, reward):
 
 def assign_balanced(params, pos, terrain, rngs, reward):
     """The independent draw, then its (shape, colour, random value) records dealt to other bushes so the reward is more even over the map (spatial.py, stream 10).
-    The records are the same, only their positions change; the reward must not depend on moisture, which stays with the position."""
+    The records are the same, only their positions change. Moisture stays with the position; a moisture term in the reward is the sites' offset, so the totals
+    (record plus the moisture term) are what the swap step evens."""
     shape, color, extra = assign_independent(params, pos, terrain, rngs, reward)
-    if moisture_matters(params):
-        raise ValueError("spatialBalance needs a session whose reward does not depend on moisture")
     records = reward(params.reward_function, shape, color, 0.5) + extra
-    index = spatial.balance(pos, records, rngs[10], int(params.spatial_balance), half=float(params.world_half_extent))
+    offset = None
+    if moisture_matters(params):
+        moisture = terrain.moisture(pos[:, 0], pos[:, 1])
+        offset = reward(params.reward_function, np.full(len(pos), 0.5), np.full(len(pos), 0.5), moisture) \
+            - reward(params.reward_function, np.full(len(pos), 0.5), np.full(len(pos), 0.5), np.full(len(pos), 0.5))
+    index = spatial.balance(pos, records, rngs[10], int(params.spatial_balance), half=float(params.world_half_extent), offset=offset)
     return shape[index], color[index], extra[index]
 
 
@@ -655,13 +668,12 @@ RELEVANCE = {"terms": terms_relevance}          # per reward stage: {feature: ho
 
 def session_features(params):
     """The features a session declares: {name: {"visible": bool, "rewarded": bool, "relevance": float}}, in FEATURES order. Visible = it varies between
-    bushes (`shapeVaries`, `colorVaries`; moisture: `moistureVaries` when the asset has it, else only when it pays, so a decoration moisture is not a
-    declared feature). Rewarded = the session's reward stage gives it a nonzero relevance."""
+    bushes (`shapeVaries`, `colorVaries`; moisture: `moistureVaries`, and then only if it pays or the asset declares it with `moistureIsFeature`, so a
+    decoration moisture is not a declared feature). Rewarded = the session's reward stage gives it a nonzero relevance."""
     rf = getattr(params, "reward_function", None)
     relevance = RELEVANCE[stage_names(params)[2]](rf) if rf is not None else {f: 1.0 for f in FEATURES}
-    visible = {"shape": bool(params.shape_varies), "color": bool(params.color_varies)}
-    moisture = getattr(params, "moisture_varies", None)
-    visible["moisture"] = relevance["moisture"] > 0.0 if moisture is None else bool(moisture)
+    visible = {"shape": bool(params.shape_varies), "color": bool(params.color_varies),
+               "moisture": bool(params.moisture_varies) and (relevance["moisture"] > 0.0 or bool(params.moisture_is_feature))}
     return {f: {"visible": visible[f], "rewarded": relevance[f] > 0.0, "relevance": relevance[f]} for f in FEATURES}
 
 

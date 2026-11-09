@@ -58,46 +58,44 @@ bonus design for sparse sessions.
 
 1. **Display name:** feature number (FN)
 2. **Hypothesis:**
-   1. Visibly varying features that do not pay slow the discovery of the relevant feature a little.
-   2. Rewarded features slow learning much more, and lower the performance ceiling.
-   3. A weaker rewarded feature is noticed only when its effect on reward is large compared with the per-fruit noise. The weight needed to
-      notice the third feature is higher than the weight needed to notice the second.
+   1. Visibly varying features that do not influence reward slow the discovery of the relevant features slightly.
+   2. Increasing the number of rewarded features slows learning much more and lowers the probability of learning the true value function.
+   3. The probability of learning to evaluate a rewarded feature (at a nonzero value) is proportional to its weight in the reward function
+      (relative to the other feature weights and the per-fruit noise).
 3. **Experiment:**
    1. *Features and terms.* Shape, color and moisture are the three attributes a bush can vary in. A feature is *visible* if it varies
       across bushes, and *rewarded* if its weight is nonzero. All mappings are linear. The direction of each feature's mapping (which end
-      pays) and which features pay are drawn per instance.
-   2. *Instances.* Each session is an instance drawn from a pool, with its own world seed and its own draw of weights and directions.
-   3. *Baseline sessions: one feature pays, one to three features are visible.*
-      * One visible feature, and it pays. Goal: find the better end of the spectrum.
-      * Two visible features, one pays. Goal: find which one, and the better end.
-      * Three visible features, one pays. Goal: find which one, and the better end.
+      pays) and which features pay are drawn per instance. Bushes sit on a hexagonal lattice, and reward density is roughly uniform in space.
+   2. *Instances.* Each session is an instance drawn from a pool, with its own world seed and its own draw of weights and directions, so a
+      participant never replays the same world.
+   3. *Baseline sessions: one feature pays, one to three features are visible.* The hint names the features.
+      * One visible feature, and it pays. Goal: find the better end of the spectrum. Hint: feature X determines reward.
+      * Two visible features, one pays. Goal: find which one, and the better end. Hint: one of feature X or Y determines reward.
+      * Three visible features, one pays. Goal: find which one, and the better end. Hint: one of X, Y or Z determines reward.
 
       These are short, with few repeats and few Interlude trials. They measure the cost of perceptual variance when only one feature pays.
    4. *Weighted sessions: three visible features, all of which can pay.* These are long, with more repeats and more Interlude trials.
-      The three weights sum to one, and a variety of weight breakdowns across the three features is simulated to get broad coverage of
-      the complexity and threshold space. Goal: find the relative weights.
-   5. *Order and intermixing.* The three baseline sessions come first, from simple to complex. The weighted sessions follow, in a random
-      order of their weights. Hints for the baseline sessions say how many features matter, which is true in them. The hint for every
-      weighted session is the same ("some features matter more than others, and some may not matter") because the structure is what
-      participants are finding out.
-   6. **TODO, distribution of the weak weights.** This needs careful thought to give even coverage of the weight space and differences we
-      can analyze. Considerations so far: express a weak feature's strength in noise units (its weight times its range of values, over
-      `rewardStd`); joint sampling of the two weak weights over a grid including zeros against a one-parameter family such as (1, r, r²);
-      a fixed strongest weight against a fixed total; how many instances a participant sees from a larger pool; whether to adapt the
-      weights to a participant's previous Interlude (a staircase on a pregenerated pool).
-   7. *Other open items.* Session durations and Interlude trial counts (these depend on measured Interlude timing); whether moisture is the
-      third feature, given that spatial balancing of the reward currently needs a reward that does not depend on moisture; per-feature
-      Interlude trials that vary one weak feature while holding the others matched.
+      * Three randomized weights sum to one, and a variety of weight breakdowns across the three features is simulated to get broad coverage
+        of the complexity and threshold space.
+      * Goal: find the relative weights. Hint: all three features matter, but some matter more than others.
+      * **TODO:** how to distribute the normalized weights so that they cover the weight space in a way that makes hypothesis testing
+        straightforward. Considerations so far: express a weak feature's strength in noise units (its weight times its range of values, over
+        `rewardStd`); joint sampling of the two weak weights over a grid including zeros against a one-parameter family such as (1, r, r²); a
+        fixed strongest weight against a fixed total; how many instances a participant sees from a larger pool; whether to adapt the weights
+        to a participant's previous Interlude.
+   5. *Order.* The three baseline sessions come first, from simple to complex; the weighted sessions follow in a random order of their weights.
+   6. *Status (2026-11-09).* Built as `scripts/design/FN.py` with provisional numbers: the weak weights use the stand-in family (1, r, r²)
+      for r = 1, 0.7, 0.5, 0.35, 0.2, 0.1 over a random ranking of the features; baselines last 60, 75 and 90 s with 8 Interlude trials;
+      weighted sessions last 150 s with 24 trials (2 repeats, 2 per-feature trials for each feature that pays enough to show). Durations
+      and trial counts wait for measured Interlude timing. Moisture is the third feature (flat, single-coloured ground where it is not
+      visible). See DECISIONS, "FN built on the new generators".
 4. **Analysis:**
-   1. Point trajectories of reward against time in each session. The rate and curvature of increase show performance, periods of
-      learning, and the trade-off between exploration and exploitation.
-   2. Interlude choices give each participant's estimated weights per feature. Compare them with the true weights by the slope of estimated
-      against true weight for each feature rank.
-   3. A detection curve: the probability that a weak feature is learned, against its strength in noise units, as a mixed model with a random
-      effect per participant.
-   4. Baseline sessions compared with each other for the effect of perceptual variance; weighted sessions compared with the baselines for
-      the effect of rewarded features.
-   5. Instance index as a covariate, to test whether people learn to look for weaker features over repeats.
+   1. Point trajectories of reward against time in each session. The rate and curvature of increase show performance and periods of learning.
+   2. Interlude choices can be analyzed to estimate a participant's feature weights, and hence how well they learned the true value function.
+   3. A detection curve: the probability that a weak feature is learned, against its strength in noise units, as a mixed model with a
+      random effect per participant.
+   4. Baseline sessions compared with each other for the effect of perceptual variance on learning speed and top performance.
+   5. Weighted sessions compared with the baselines for the effect of the rewarded-feature breakdown on learning speed and top performance.
 
 ---
 

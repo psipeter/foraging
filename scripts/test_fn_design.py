@@ -1,0 +1,88 @@
+"""The FN design (scripts/design/FN.py) and the assets and generated files built from it."""
+
+import json
+
+import numpy as np
+import pytest
+
+from design import FN
+from interlude import generate_interlude, sidecar_path
+from world import check_values, export_unity, generate_world, load_session, session_features, unity_world_path
+
+
+def test_three_baselines_then_six_weighted_sessions_in_order():
+    inst = FN.instances()
+    assert [i.name for i in inst] == [f"FN_S{n}" for n in range(1, 10)]
+    base, weighted = inst[:3], inst[3:]
+    assert [i.design["kind"] for i in base] == ["baseline"] * 3 and [i.design["kind"] for i in weighted] == ["weighted"] * 6
+    assert [i.design["n_visible"] for i in base] == [1, 2, 3]
+    pays = [next(iter(i.design["weights"])) for i in base]
+    assert sorted(pays) == sorted(FN.FEATURES)                                                     # each feature pays in one baseline
+    for i in base:
+        (pay,) = i.design["weights"]
+        assert pay in i.design["visible"] and i.design["weights"][pay] == 1.0 and i.design["hint"] == "named"
+
+
+def test_weighted_sessions_have_weights_summing_to_one_over_the_ratio_family_in_a_random_order():
+    weighted = FN.instances()[3:]
+    ratios = [i.design["ratio"] for i in weighted]
+    assert sorted(ratios) == sorted(FN.WEIGHT_RATIOS) and ratios != sorted(ratios, reverse=True)       # all of them, not in the listed order
+    for i in weighted:
+        w = i.design["weights"]
+        assert sum(w.values()) == pytest.approx(1.0, abs=2e-4) and set(w) == set(FN.FEATURES) and i.design["hint"] == "weighted"
+        ranked = sorted(w.values(), reverse=True)
+        assert ranked[1] / ranked[0] == pytest.approx(i.design["ratio"], abs=1e-3) and ranked[2] / ranked[0] == pytest.approx(i.design["ratio"] ** 2, abs=1e-3)
+        assert i.design["noise_units"] == {f: pytest.approx(FN.REWARD_SCALE * x / FN.REWARD_STD, abs=2e-3) for f, x in w.items()}
+
+
+def test_the_draws_do_not_change_from_build_to_build():
+    assert [i.design for i in FN.instances()] == [i.design for i in FN.instances()]
+
+
+def test_the_assets_say_what_the_design_says():
+    for i in FN.instances():
+        p = load_session(i.name)
+        feats = session_features(p)
+        assert {f: d["visible"] for f, d in feats.items()} == {f: f in i.design["visible"] for f in FN.FEATURES}
+        assert {f for f, d in feats.items() if d["rewarded"]} == {f for f, w in i.design["weights"].items() if w > 0}
+        for f in FN.FEATURES:
+            comp = p.reward_function[f"{f}Component"]
+            assert comp["weight"] == pytest.approx(FN.REWARD_SCALE * i.design["weights"].get(f, 0.0), abs=5e-4)
+            assert comp["basisFunctionType"] == i.design["direction"][f] and not p.reward_function.get("bumps") and not p.reward_function.get("products")
+        assert int(p.spatial_balance) == 2 and int(p.moisture_terrace_levels) == 0 and float(p.reward_std) == FN.REWARD_STD
+        assert json.loads(p.design_json)["instance"] == i.name
+        interlude = load_session(i.name.replace("_S", "_I"))
+        assert interlude.is_interlude and interlude.interlude_for == i.name and interlude.reward_function == p.reward_function
+        assert check_values(interlude) == check_values(p) and int(interlude.world_seed) == int(p.world_seed)
+
+
+def test_a_session_with_hidden_features_has_identical_bushes_and_a_flat_valley_where_moisture_is_hidden():
+    first, second = (generate_world(load_session(n), 301 + k) for k, n in enumerate(("FN_S1", "FN_S2")))
+    for w, visible in ((first, FN.instances()[0].design["visible"]), (second, FN.instances()[1].design["visible"])):
+        assert (len(set(w.shape)) > 1) == ("shape" in visible) and (len(set(w.color)) > 1) == ("color" in visible)
+        assert set(w.moisture) == {0.5}                                                                  # moisture is not visible in either baseline
+
+
+@pytest.mark.slow
+def test_committed_fn_files_are_fresh(tmp_path):
+    for i in FN.instances():
+        p = load_session(i.name)
+        seed = int(p.world_seed)
+        committed = unity_world_path(i.name, seed)
+        assert committed.exists(), f"{committed} is missing: run scripts/build_experiment.py FN"
+        export_unity(generate_world(p, seed), tmp_path / committed.name)
+        assert (tmp_path / committed.name).read_bytes() == committed.read_bytes(), f"{committed.name} is stale: re-run scripts/build_experiment.py FN"
+        name = i.name.replace("_S", "_I")
+        sidecar = generate_interlude(name)[0]
+        on_disk = json.load(open(sidecar_path(name, sidecar["seed"])))
+        assert on_disk == json.loads(json.dumps(sidecar)), f"{name} Interlude file is stale: re-run scripts/build_experiment.py FN"
+
+
+def test_baseline_hints_name_the_visible_features_and_the_weighted_hint_is_shared():
+    texts = FN.texts()
+    for k, i in enumerate(FN.instances()[:3], start=1):
+        hint = texts[f"instructions_S{k}.txt"]
+        assert all(FN.NAMES[f] in hint for f in i.design["visible"]) and all(FN.NAMES[f] not in hint for f in FN.FEATURES if f not in i.design["visible"])
+    assert {i.design["hint"] for i in FN.instances()[3:]} == {"weighted"}
+    assert len({i.session_fields["instructionsFile"] for i in FN.instances()[3:]}) == 1
+    assert len({i.session_fields["instructionsFile"] for i in FN.instances()[:3]}) == 3

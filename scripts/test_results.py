@@ -11,6 +11,7 @@ from agents import ComposedAgent, DeltaRuleCritic, FullMemory, UtilityActor, REG
 from perception import ConePercept
 from results import Store, record_run
 
+
 SEEDS = [0, 1, 2]
 OVERRIDES = {"session_duration": 20}
 

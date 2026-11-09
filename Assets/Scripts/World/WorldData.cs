@@ -252,6 +252,8 @@ public class WorldData
             { "colorVaries", config.ColorVaries ? 1f : 0f },
             { "shapeWhenFixed", config.ShapeWhenFixed },
             { "colorWhenFixed", config.ColorWhenFixed },
+            { "moistureVaries", config.MoistureVaries ? 1f : 0f },
+            { "moistureWhenFixed", config.MoistureWhenFixed },
             { "randomBushValueRange.min", config.RandomBushValueRange.x },
             { "randomBushValueRange.max", config.RandomBushValueRange.y }
         };
@@ -300,7 +302,7 @@ public class WorldData
 
         // Names the generator writes only when they differ from the default (1 for the "varies" flags, 0.5 for the "when fixed" values, 0 for the random value range):
         // a file without one was made with the default, so a config that now differs is stale.
-        foreach (string name in new[] { "shapeVaries", "colorVaries", "shapeWhenFixed", "colorWhenFixed", "randomBushValueRange.min", "randomBushValueRange.max", "spatialBalance" })
+        foreach (string name in new[] { "shapeVaries", "colorVaries", "moistureVaries", "shapeWhenFixed", "colorWhenFixed", "moistureWhenFixed", "randomBushValueRange.min", "randomBushValueRange.max", "spatialBalance" })
         {
             float fallback = name.StartsWith("randomBushValueRange") || name == "spatialBalance" ? 0f : name.EndsWith("WhenFixed") ? 0.5f : 1f;
             if (Array.IndexOf(_checkNames, name) < 0 && current.TryGetValue(name, out float now) && !Mathf.Approximately(now, fallback))

@@ -14,4 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ExperimentCatalog
   experiments:
   - {fileID: 11400000, guid: da4ccf54d87ae0074b644cdc7cae037e, type: 2}
-  - {fileID: 11400000, guid: 984f2dee87cf16dbe9c0eed41d4625d4, type: 2}
+  - {fileID: 11400000, guid: 74a95d2b9d56ad3be8839286b89c35bd, type: 2}
