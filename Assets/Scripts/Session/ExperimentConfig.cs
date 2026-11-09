@@ -23,6 +23,21 @@ public class ExperimentConfig : ScriptableObject
     public string Title => title;
     public IReadOnlyList<string> Requires => requires;
     public List<SessionConfig> Sessions => sessions;
+
+    // What participants count: sessions, not their Interludes (each session is Part A, its Interlude Part B).
+    public int SessionCount
+    {
+        get
+        {
+            int count = 0;
+            foreach (SessionConfig session in sessions)
+            {
+                count += session != null && session.IsInterlude ? 0 : 1;
+            }
+
+            return count;
+        }
+    }
     public bool CountsTowardTotal => countsTowardTotal;
 
     // The StreamingAssets files a session reads: its world, its Interlude file and its instruction text.

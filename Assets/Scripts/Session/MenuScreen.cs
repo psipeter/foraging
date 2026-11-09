@@ -65,7 +65,7 @@ public class MenuScreen : MonoBehaviour
                     row.Progress = s.n_sessions > 0 ? Mathf.Clamp01(s.sessions_done / (float)s.n_sessions) : 0f;
                     break;
                 case "none":
-                    row.Detail = s.unlocked ? $"{s.n_sessions} parts" : PrerequisiteText(config, standings).Replace("finish", "Finish");
+                    row.Detail = s.unlocked ? $"{(config != null ? config.SessionCount : s.n_sessions)} sessions" : PrerequisiteText(config, standings).Replace("finish", "Finish");
                     row.PillStyle = s.unlocked ? 0 : 2;
                     row.Action = "Start";
                     row.Enabled = s.unlocked;
@@ -99,7 +99,7 @@ public class MenuScreen : MonoBehaviour
             {
                 if (experiment != null)
                 {
-                    rows.Add(new Row { Code = experiment.Code, Title = experiment.Title, Detail = $"{experiment.Sessions.Count} parts", Action = "Start", Enabled = true });
+                    rows.Add(new Row { Code = experiment.Code, Title = experiment.Title, Detail = $"{experiment.SessionCount} sessions", Action = "Start", Enabled = true });
                 }
             }
         }
@@ -132,6 +132,8 @@ public class MenuScreen : MonoBehaviour
         return "finish " + string.Join(" and ", titles) + " first";
     }
 
+    private const string MenuTitle = "Foraging Study";
+
     private void Build(IList<Row> rows, string header, string footer)
     {
         UiStyle.Backdrop(transform);
@@ -162,6 +164,8 @@ public class MenuScreen : MonoBehaviour
             UiStyle.Text(panel, "TotalLabel", "Total points", UiStyle.Heading, TextAlignmentOptions.MidlineLeft, -292f, lineY - 48f, 640f, 60f).font = UiStyle.DisplayFont;
             UiStyle.Text(panel, "TotalPoints", $"{total:F0}", UiStyle.Heading, TextAlignmentOptions.MidlineRight, 275f, lineY - 48f, 150f, 60f).font = UiStyle.DisplayFont;
         }
+
+        UiStyle.Text(transform, "Title", MenuTitle, UiStyle.Title, TextAlignmentOptions.Center, 0f, height / 2f + 84f, 1288f, 100f).font = UiStyle.DisplayFont;
 
         if (!string.IsNullOrEmpty(footer))
         {
