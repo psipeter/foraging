@@ -101,7 +101,7 @@ public class OnlineSettings
 
         string query = url.Substring(q + 1);
         int hash = query.IndexOf('#');
-        foreach (string pair in (hash >= 0 ? query.Substring(0, hash) : query).Split('&'))
+        foreach (string pair in (hash >= 0 ? query.Substring(0, hash) : query).Split('&', '?'))
         {
             int eq = pair.IndexOf('=');
             if (eq > 0 && Uri.UnescapeDataString(pair.Substring(0, eq)) == name)

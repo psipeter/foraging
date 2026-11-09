@@ -251,12 +251,15 @@ public static class UiStyle
         }
 
         Canvas canvas = Canvas("BootBackdrop", null, 50);
-        BuildBackdrop(canvas.transform, 0.72f);
+        BuildBackdrop(canvas.transform, BackdropScrim);
         _bootBackdrop = canvas.gameObject;                               // set after the build: Backdrop skips itself once it exists
     }
 
     // The backdrop of the screens before the game: a still frame of the world (Resources/Backdrops/menu) under a dark scrim; the plain panel colour when the image is missing.
-    public static void Backdrop(Transform parent, float scrimAlpha = 0.72f)
+    // How dark the scrim over the backdrop picture is (0 = the picture as it is, 1 = black): enough for the text, not so much that the picture is lost (0.72 until 2026-11-09).
+    public const float BackdropScrim = 0.5f;
+
+    public static void Backdrop(Transform parent, float scrimAlpha = BackdropScrim)
     {
         if (_bootBackdrop != null)
         {

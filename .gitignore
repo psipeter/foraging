@@ -118,3 +118,5 @@ Assets/StreamingAssets/streaming_files.txt.meta
 # throwaway sessions of Foraging > Terrain preview (and their worlds)
 Assets/ScriptableObjects/Experiments/*/*_PREVIEW.asset*
 Assets/StreamingAssets/Experiments/*/*_PREVIEW_seed*
+# pictures saved by Foraging > Capture Scene view
+/Captures/

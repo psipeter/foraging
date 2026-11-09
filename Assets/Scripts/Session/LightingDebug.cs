@@ -7,12 +7,13 @@ using UnityEngine.Rendering.Universal;
 // does not look like the Editor:
 //   ?quality=<n>   switches to quality level n at start (0 Mobile, 1 PC): the WebGL build defaults to level 0, whose pipeline asset has a shadow distance of 50, one
 //                  cascade, no soft shadows and a render scale of 0.8, against 300, four cascades, soft shadows and 1 for the PC level.
-//   ?lightinfo=1   a readout in the corner: the quality level and pipeline asset, the shadow settings in force, the sun (intensity, colour, shadow type, elevation), the
+//   ?lightinfo=1   (the options are joined with &; a second ? is accepted too) a readout in the top left corner, also written to the browser's console every 10 seconds: the quality level and pipeline asset, the shadow settings in force, the sun (intensity, colour, shadow type, elevation), the
 //                  ambient (mode, intensity, the probe's brightness upward, sideways and downward) and the fog.
 public class LightingDebug : MonoBehaviour
 {
     private string _text = "";
     private float _next;
+    private float _nextLog;
     private GUIStyle _style;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -49,9 +50,14 @@ public class LightingDebug : MonoBehaviour
         {
             _text = Describe();
             _next = Time.unscaledTime + 1f;
+            if (Time.unscaledTime >= _nextLog)
+            {
+                Debug.Log("LightingDebug\n" + _text);                    // also in the browser's console (F12), in case the readout is off screen
+                _nextLog = Time.unscaledTime + 10f;
+            }
         }
 
-        GUI.Box(new Rect(8f, 8f, 620f, 24f * (1 + _text.Split('\n').Length)), _text, _style);
+        GUI.Box(new Rect(8f, 8f, Mathf.Min(900f, Screen.width - 16f), 24f * (1 + _text.Split('\n').Length)), _text, _style);
     }
 
     private static string Describe()

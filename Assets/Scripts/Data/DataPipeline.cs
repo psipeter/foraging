@@ -196,9 +196,10 @@ public class DataPipeline : MonoBehaviour
         _overlay = _message.canvas.gameObject;
         _overlay.SetActive(false);
         Application.wantsToQuit += OnWantsToQuit;
-        if (StreamingData.NeedsPreload && !_online)
+        if (StreamingData.NeedsPreload && !_online && !(Debug.isDebugBuild && OnlineSettings.UrlParameter("offline") != null))
         {
-            // A browser has no file to keep the data in: without a server it would be lost.
+            // A browser has no file to keep the data in: without a server it would be lost. (A development build with ?offline=1 plays anyway, to look at the game
+            // without a server; its data is lost.)
             _fatal = "This version of the game is not connected to a data server.";
         }
 
