@@ -31,7 +31,14 @@ import human_data
 import interlude
 import plots
 
-SESSIONS = tuple(f"CF_S{n}" for n in range(1, 8))      # Complex Features; the Tutorial's TUT_S1 is left out (the pilot data: S1 to S5 by their old names)
+def experiment_sessions(code):
+    """The session names of an experiment (`<code>_S<n>` assets in its folder), in order of their number."""
+    from world import EXPERIMENTS_DIR
+    found = [p.stem for p in (EXPERIMENTS_DIR / code).glob(f"{code}_S*.asset")]
+    return tuple(sorted(found, key=lambda name: int(name.rsplit("_S", 1)[1])))
+
+
+SESSIONS = experiment_sessions("CF")      # the default experiment; the Tutorial's TUT_S1 is left out (the pilot data: S1 to S5 by their old names)
 
 
 def _footer(h, run_ids):
@@ -115,7 +122,8 @@ def agent_curves(store, tag="human-worlds", sessions=SESSIONS):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--sessions", default=",".join(SESSIONS))
+    parser.add_argument("--experiment", default=None, help="draw this experiment's sessions (its code, e.g. FN) instead of the default")
+    parser.add_argument("--sessions", default=None, help="comma-separated session names (overrides --experiment)")
     parser.add_argument("--agents-tag", default="human-worlds", help="tag of the agents recorded in the humans' worlds ('' to draw the participants only)")
     parser.add_argument("--exclude", nargs="*", default=[], help="leave out participants whose ID or signed name contains any of these")
     parser.add_argument("--mode", default=plots.DEFAULT_MODE, choices=sorted(plots.MODES))
@@ -124,7 +132,7 @@ def main(argv=None):
     import results
     out = args.out or results.DEFAULT_PATH.parent
     h = human_data.load(exclude=args.exclude, status="finished")
-    sessions = tuple(args.sessions.split(","))
+    sessions = tuple(args.sessions.split(",")) if args.sessions else experiment_sessions(args.experiment) if args.experiment else SESSIONS
     people = (reward_curves(h, sessions), interlude_curves(h, sessions))
     figures = [(people, "humans_points", "humans: points", None)]
     if args.agents_tag:

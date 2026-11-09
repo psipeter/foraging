@@ -110,7 +110,11 @@ def _convert(value):
 
 
 # Fields an older asset file does not have yet (Unity adds a field to an asset only when it is saved): their defaults, snake_case names.
-FIELD_DEFAULTS = {"spatial_balance": 0, "shape_varies": True, "color_varies": True, "shape_when_fixed": 0.5, "color_when_fixed": 0.5, "random_bush_value_range": (0.0, 0.0)}
+FIELD_DEFAULTS = {"spatial_balance": 0, "shape_varies": True, "color_varies": True, "shape_when_fixed": 0.5, "color_when_fixed": 0.5, "random_bush_value_range": (0.0, 0.0), "design_json": "",
+                  "layout": None, "assignment": None, "reward_stage": None, "moisture_varies": None}      # (stage names and the moisture declaration: None = the default, see stage_names / session_features)
+
+
+FEATURES = ("shape", "color", "moisture")
 
 
 def moisture_matters(params):
@@ -179,6 +183,16 @@ def bush_value(reward_function, shape, color, moisture):
         d = np.clip(color if in_shape else shape, 0.0, 1.0) - float(p["center"])
         value = value + float(p["height"]) * linear * np.exp(-(d * d) / (2.0 * sigma * sigma))
     return value
+
+
+def terms_relevance(reward_function):
+    """How much each feature matters to a `terms` reward: |weight| of its component, plus the height of every bump and product term (each makes
+    both of its features, shape and colour, relevant)."""
+    w = {f: abs(float(reward_function[f + "Component"]["weight"])) for f in FEATURES}
+    for b in list(reward_function.get("bumps") or []) + list(reward_function.get("products") or []):
+        w["shape"] += abs(float(b["height"]))
+        w["color"] += abs(float(b["height"]))
+    return w
 
 
 # --------------------------------------------------------------------------------------------------
@@ -596,33 +610,78 @@ def _lattice_sites(params, terrain, rng):
     return np.array(sites, dtype=float).reshape(-1, 2)
 
 
-def generate_world(params, seed):
-    """Build the world for (params, seed). `params` is a namespace from load_session()."""
-    rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(11)]
-    terrain = Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]))
+# --------------------------------------------------------------------------------------------------
+# The three stages of a world: layout (where the bushes are), assignment (which attributes each has) and reward (what a bush pays).
+# A session names them (`layout`, `assignment`, `reward_stage`; absent = the defaults below, which are what every session so far used); a
+# stage is a function in the table of its kind, so a new experiment adds an entry and leaves the others alone. The random streams are
+# numbered per use (see the module docstring), not per stage, so a world is the same whichever way the code is organised.
+# --------------------------------------------------------------------------------------------------
 
-    pos = _lattice_sites(params, terrain, rngs[2])
+def layout_lattice(params, terrain, rngs):
+    """Bush positions on the seeded hex lattice (stream 2)."""
+    return _lattice_sites(params, terrain, rngs[2])
+
+
+def assign_independent(params, pos, terrain, rngs, reward):
+    """Shape and colour drawn independently of position (stream 3), plus the practice session's per-bush value (stream 9)."""
     n = len(pos)
-
     shape = rngs[3].uniform(0.0, 1.0, n)
     color = rngs[3].uniform(0.0, 1.0, n)
-    moisture = terrain.moisture(pos[:, 0], pos[:, 1])
     if not params.shape_varies:                     # "shapes identical": the draws above are still made, so the other streams do not move
         shape = np.full(n, float(params.shape_when_fixed))
     if not params.color_varies:
         color = np.full(n, float(params.color_when_fixed))
-
     lo, hi = params.random_bush_value_range
     extra = rngs[9].uniform(lo, hi, n) if hi > lo else np.zeros(n)             # the practice session's reward: a value per bush that no attribute predicts
-    mode = int(params.spatial_balance)
-    if mode:
-        # Deal the (shape, colour, random value) records to other bushes so the reward is more even over the map (spatial.py). The records are the same, only their
-        # positions change; the reward must not depend on moisture, which stays with the position.
-        if moisture_matters(params):
-            raise ValueError("spatialBalance needs a session whose reward does not depend on moisture")
-        records = bush_value(params.reward_function, shape, color, 0.5) + extra
-        index = spatial.balance(pos, records, rngs[10], mode, half=float(params.world_half_extent))
-        shape, color, extra = shape[index], color[index], extra[index]
+    return shape, color, extra
+
+
+def assign_balanced(params, pos, terrain, rngs, reward):
+    """The independent draw, then its (shape, colour, random value) records dealt to other bushes so the reward is more even over the map (spatial.py, stream 10).
+    The records are the same, only their positions change; the reward must not depend on moisture, which stays with the position."""
+    shape, color, extra = assign_independent(params, pos, terrain, rngs, reward)
+    if moisture_matters(params):
+        raise ValueError("spatialBalance needs a session whose reward does not depend on moisture")
+    records = reward(params.reward_function, shape, color, 0.5) + extra
+    index = spatial.balance(pos, records, rngs[10], int(params.spatial_balance), half=float(params.world_half_extent))
+    return shape[index], color[index], extra[index]
+
+
+LAYOUTS = {"lattice": layout_lattice}
+ASSIGNMENTS = {"independent": assign_independent, "balanced": assign_balanced}
+REWARDS = {"terms": bush_value}
+RELEVANCE = {"terms": terms_relevance}          # per reward stage: {feature: how much it matters}, for the Interlude and the instruction texts
+
+
+def session_features(params):
+    """The features a session declares: {name: {"visible": bool, "rewarded": bool, "relevance": float}}, in FEATURES order. Visible = it varies between
+    bushes (`shapeVaries`, `colorVaries`; moisture: `moistureVaries` when the asset has it, else only when it pays, so a decoration moisture is not a
+    declared feature). Rewarded = the session's reward stage gives it a nonzero relevance."""
+    rf = getattr(params, "reward_function", None)
+    relevance = RELEVANCE[stage_names(params)[2]](rf) if rf is not None else {f: 1.0 for f in FEATURES}
+    visible = {"shape": bool(params.shape_varies), "color": bool(params.color_varies)}
+    moisture = getattr(params, "moisture_varies", None)
+    visible["moisture"] = relevance["moisture"] > 0.0 if moisture is None else bool(moisture)
+    return {f: {"visible": visible[f], "rewarded": relevance[f] > 0.0, "relevance": relevance[f]} for f in FEATURES}
+
+
+def stage_names(params):
+    """(layout, assignment, reward) names of a session: its own fields, else the defaults (balanced when `spatialBalance` is not Off)."""
+    assignment = getattr(params, "assignment", None) or ("balanced" if int(params.spatial_balance) else "independent")
+    return (getattr(params, "layout", None) or "lattice", assignment, getattr(params, "reward_stage", None) or "terms")
+
+
+def generate_world(params, seed):
+    """Build the world for (params, seed). `params` is a namespace from load_session()."""
+    layout_name, assignment_name, reward_name = stage_names(params)
+    reward = REWARDS[reward_name]
+    rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(11)]
+    terrain = Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]))
+
+    pos = LAYOUTS[layout_name](params, terrain, rngs)
+    n = len(pos)
+    shape, color, extra = ASSIGNMENTS[assignment_name](params, pos, terrain, rngs, reward)
+    moisture = terrain.moisture(pos[:, 0], pos[:, 1])
 
     # Tree.ApplyAttributes: canopy is a sphere scaled (sx, sy, sx); radius = max horizontal scale / 2.
     lo, hi = params.shape_range
@@ -630,7 +689,7 @@ def generate_world(params, seed):
     w_lo, w_hi = params.canopy_width_range
     canopy_radius = (w_hi + (w_lo - w_hi) * t) * 0.5
 
-    value = bush_value(params.reward_function, shape, color, moisture) + extra
+    value = reward(params.reward_function, shape, color, moisture) + extra
 
     # HarvestManager.CollectNextFruit: max(0, round(R_bush + N(0, std))), independent per fruit.
     fruit_count = int(params.fruit_count)

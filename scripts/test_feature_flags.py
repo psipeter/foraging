@@ -65,6 +65,16 @@ def test_moisture_matters_follows_the_reward_weight():
     assert not moisture_matters(decoration) and moisture_matters(pays)
 
 
+def test_session_features_declare_what_is_visible_and_what_pays():
+    from world import session_features
+    f = session_features(load_session("S2", color_varies=False, reward_function=moisture_weight(0.0)))
+    assert (f["shape"]["visible"], f["color"]["visible"], f["moisture"]["visible"]) == (True, False, False)     # a decoration moisture is not declared
+    assert f["shape"]["rewarded"] == (f["shape"]["relevance"] > 0.0) and not f["moisture"]["rewarded"]
+    pays = session_features(load_session("S2", reward_function=moisture_weight(1.5)))
+    assert pays["moisture"]["visible"] and pays["moisture"]["rewarded"] and pays["moisture"]["relevance"] == 1.5
+    assert session_features(load_session("S2", reward_function=moisture_weight(0.0), moisture_varies=True))["moisture"]["visible"]   # declared, though it pays nothing
+
+
 def test_feature_gap_counts_only_the_channels_that_vary_and_pay():
     a, b = {"shape": 0.0, "color": 0.0, "moisture": 0.0}, {"shape": 1.0, "color": 0.0, "moisture": 1.0}
     assert feature_gap(a, b) == (2 / 3) ** 0.5                                                      # the default: all three channels

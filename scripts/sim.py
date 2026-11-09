@@ -370,7 +370,7 @@ def _interlude_for(session, seed, mode, overrides):
 
 def get_interlude(session, seed, mode=None, **overrides):
     """The Interlude the game shows for this session at this world seed (the same generator and search the human files come
-    from; seconds per call, so cached). `mode` is "designed", "random", "reward_gap", "feature_gap" or "hybrid" (None: the Interlude asset's own `interludeMode`);
+    from; seconds per call, so cached). `mode` is "random", "reward_gap", "feature_gap" or "hybrid" (None: the Interlude asset's own `interludeMode`);
     `overrides` as for get_worlds, e.g. interlude_trial_count=50. The caller gets its own copy of the sidecar, so editing
     it cannot change what later calls (or other agents) are scored on."""
     key = tuple(sorted((k, _freeze(v)) for k, v in overrides.items() if k not in NON_INTERLUDE_OVERRIDES))
@@ -496,8 +496,8 @@ def main():
     ap.add_argument("--checkpoints", default=None, metavar="T1,T2,...",
                     help="with --interlude: also score a copy of each agent as it was at these session times (seconds), a learning "
                          "curve from one session per seed (for an agent that plans for the end of the session, the agent as it stood at that time of a session of this length)")
-    ap.add_argument("--interlude-mode", default=None, choices=["designed", "random", "reward_gap", "feature_gap", "hybrid"],
-                    help="with --interlude: which trials (default: the Interlude asset's own interludeMode, designed). Set the trial "
+    ap.add_argument("--interlude-mode", default=None, choices=["random", "reward_gap", "feature_gap", "hybrid"],
+                    help="with --interlude: which trials (default: the Interlude asset's own interludeMode, hybrid). Set the trial "
                          "count with --set interlude_trial_count=N")
     ap.add_argument("--db", default=None, help="results database path (default results/results.sqlite)")
     args = ap.parse_args()

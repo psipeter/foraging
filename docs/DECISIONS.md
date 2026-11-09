@@ -1899,3 +1899,24 @@ the assistant's addition, with no basis in the PI's design or a clean literature
 the map and conflicts with the patch experiments (off, or inside tiles); a moisture-paying reward conflicts with spatial balancing too, which bears
 on FN's third feature; the Interlude's pair choice by reward gap does not cover typed pairs (RW), per-feature pairs (FN) or flat regions (FI). All are
 listed as open items in `docs/EXPERIMENTS.md`.
+
+
+## Generators split into stages; Designed Interludes removed (2026-11-09)
+
+Phase 0 of building the five planned experiments (`docs/EXPERIMENTS.md`). The world generator and the Interlude designer were written for the CF ladder: one lattice
+placement, three attributes, a reward summed from per-bush terms, an Interlude built from three designed trial kinds.
+
+- **Three stages in `world.py`: layout, assignment, reward.** Each is a table of functions chosen per session (`layout`, `assignment`, `rewardStage` in `SessionConfig`; empty = the lattice, the independent draw, the summed terms, which is
+  what every session so far used). The random streams stayed numbered by use, not by stage, so every shipped world regenerates byte-identically. Spatial balance is an
+  assignment (it needs the reward of the records it deals); the patch experiments will add a tile layout and a tile-mean assignment instead of using it, because their patch means are the design.
+  Rejected: one `generate_world` with a branch per experiment (each experiment would edit shared code); a class hierarchy for stages (three small tables are enough).
+- **Declared features.** `world.session_features(params)` says which features are visible and which are rewarded, and each reward stage reports its own relevance, so the Interlude designer, the instruction texts and the analysis read one source
+  and a new reward term needs no edit to them. Moisture is declared only if it pays or the asset says `moistureVaries` (not yet a `SessionConfig` field: FN adds it with flat terrain), so a decoration moisture is not a channel of the feature gap, as before.
+- **Designed Interludes removed.** They searched placements for moisture relations that only the old terraced S3/S4 needed, and their trial mix assumed additive terms. The default is Hybrid, which already
+  serves the continuous-terrain ladder. `interludeMode` 0 is kept as `RetiredDesigned` so the numbers in logged manifests do not move, and the generator refuses it. `TRIAL_KINDS` is an empty registry:
+  each experiment adds the kinds its analysis needs (RW's global/local/median/valley trials, FN's per-feature trials, FI's trials along and across a tilted axis), recreated when that session is implemented, not carried ahead of need.
+  For a session where moisture pays the Interlude may need rethinking (PI, 2026-11-09); nothing is assumed now.
+- **Experiments are built from a design module.** `scripts/design/<code>.py` lists the instances of an experiment (fields, hint arm, durations); `scripts/build_experiment.py` makes the assets through `Assets/Editor/ExperimentBuilder.cs`,
+  writes the instruction texts and generates the worlds and Interludes. An instance's `design` dict is stored as JSON in the asset's `designJson`, so the logged `SessionConfig` carries it and the session row needs no new column
+  (rejected: a `design` column, which would have needed a database migration for no extra information). `ladder.py` stays for the CF ladder until CF is deleted.
+- The edits moved the engine-code hash and added fields to `SIM_FIELDS`, so every recorded simulation result is now "stale" by hash (none is wrong).

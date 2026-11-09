@@ -240,6 +240,13 @@ is deterministic and independent of the reward and the bush, so position is not 
 
 ### Interlude (between-session forced choice)
 
+> **Generator changes, 2026-11-09 (Phase 0 of building the planned experiments).** The Designed mode (contrast, graded and extrapolation trials) and everything
+> built for it were removed from `scripts/interlude.py`: the stimulus types, the moisture placement relations (*same*, *one level apart*, *two or more levels apart*,
+> and the 500 000-placement search for them) and the elevation floor `interludeMinElevationDifference` (the field still exists in `SessionConfig` and is ignored). The default mode is
+> Hybrid, over the features the session declares visible (`world.session_features`); a moisture that pays nothing is not a feature of the gap unless the asset declares it. An experiment that needs
+> a designed kind adds it to `TRIAL_KINDS` (none yet). The shipped Interlude files were unchanged by this (they are all Hybrid or Random). The bullets below that describe Designed mode,
+> the stimulus types, the moisture relations or the elevation floor describe the removed generator and are kept as the record of what past data saw.
+
 A short block after every session that reads out what the participant learned, separated from how well they
 explored and planned. Flow: P → Interlude (practice) → S1 → Interlude 1 → … → S7 → Interlude 7 → final screen (16 entries in all, 7 sessions analyzed). The practice session's reward is a random value per bush that no
 feature predicts, so its Interlude has no correct side (every trial's `correct` is "either"; no bonus is awarded).
@@ -310,7 +317,7 @@ feature predicts, so its Interlude has no correct side (every trial's `correct` 
   does not refill a harvested bush between trials); it repeats the pairs whose reward gap is nearest the median, one with the left bush correct and one with the right, so the sides stay balanced (10 and 10). The later trial of a pair carries `repeatOf` in the
   `.interlude.json` (the data has equal attributes and different bush ids; no new column). **Purpose of the repeats:** how consistent a participant's choices are (two agreements out of two per participant: a screen, not a noise estimate, and memory of the first pick adds to it).
   Participants who played before 2026-11-04 saw the earlier 20 distinct pairs: their Interludes are not comparable trial for trial.
-- **Random mode** (`interludeMode: Random`; the field's default is Designed; the practice Interlude uses it). The practice Interlude is then three random pairs, not easy contrasts. Instead of the three designed stimulus types, every
+- **Random mode** (`interludeMode: Random`; the field's default is now Hybrid; the practice Interlude uses it). The practice Interlude is then three random pairs, not easy contrasts. Instead of the three designed stimulus types, every
   trial is a pair of bushes with independent uniform random shape and colour (moisture is still the terrain's at the final positions, so
   relevant-moisture sessions still see moisture differences; roughly a quarter to a half of random pairs differ by more than 0.2). Pairs whose
   true rewards are within the tie tolerance are redrawn, so every trial has a definite correct side, half of them on the left; the geometry

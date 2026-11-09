@@ -271,3 +271,11 @@ def test_new_reward_terms_agree_with_unity():
     points = [(0.2, 0.7), (0.9, 0.5), (0.3, 0.7), (0.6, 0.1)]
     for rf, expected in ((s6, [0.738493, 3.323219, 1.107740, 0.324805]), (s7, [3.692465, 0.092311, 4.000000, 0.000653])):
         assert np.allclose([float(bush_value(rf, a, b, 0.5)) for a, b in points], expected, atol=2e-6)
+
+
+def test_a_session_defaults_to_the_lattice_independent_terms_stages_and_balances_when_asked():
+    from world import ASSIGNMENTS, LAYOUTS, REWARDS, stage_names
+    assert stage_names(load_session("S2", spatial_balance=0)) == ("lattice", "independent", "terms")
+    assert stage_names(load_session("S2", spatial_balance=2))[1] == "balanced"
+    assert stage_names(load_session("S2", assignment="independent", spatial_balance=2))[1] == "independent"     # a named stage wins
+    assert {"lattice"} <= set(LAYOUTS) and {"independent", "balanced"} <= set(ASSIGNMENTS) and "terms" in REWARDS

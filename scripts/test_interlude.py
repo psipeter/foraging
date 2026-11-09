@@ -4,11 +4,11 @@ import json
 import numpy as np
 import pytest
 
-from interlude import (FEATURES, ONE_LEVEL, SAME_TOL, TIE_TOLERANCE, TWO_LEVELS_MIN, bush_position, canopy_radius,
-                       check_geometry, generate_interlude, has_hump, sidecar_path, trial_mix, write_sidecar)
+from interlude import (FEATURES, TIE_TOLERANCE, bush_position, canopy_radius,
+                       check_geometry, generate_interlude, has_hump, sidecar_path, write_sidecar)
 from interlude import CANOPY_AIM_HEIGHT, HUMP_TOLERANCE
 from legacy_sessions import legacy
-from world import _basis, bush_value, check_values, generate_world, load_session
+from world import bush_value, check_values, generate_world, load_session, session_features
 
 NAMES = ["P_Interlude", "S1_Interlude", "S2_Interlude", "S3_Interlude", "S4_Interlude"]
 
@@ -35,10 +35,10 @@ def design_overrides(name):
 
 
 def get(name):
-    """The designed-mode Interlude of an asset (whatever the asset's own interludeMode is; the designed-stimulus tests are about this),
-    with the design's own length (3 trials practice, 5 otherwise), not the asset's, which is for the random trials the game plays."""
+    """A short random-mode Interlude of an asset (whatever the asset's own interludeMode is; the geometry and view tests are about any kind),
+    with its own length (3 trials practice, 10 otherwise), not the asset's."""
     if name not in _CACHE:
-        _CACHE[name] = generate_interlude(name, mode="designed", interlude_trial_count=3 if name.startswith("P_") else 5, **design_overrides(name))
+        _CACHE[name] = generate_interlude(name, mode="random", interlude_trial_count=3 if name.startswith("P_") else 10, **design_overrides(name))
     return _CACHE[name]
 
 
@@ -80,19 +80,19 @@ def built_random(request):
     return request.param, sidecar, params, terrain
 
 
-@pytest.fixture(scope="module", params=[(n, "designed") for n in NAMES] + [(n, "random") for n in RANDOM_NAMES])
+@pytest.fixture(scope="module", params=[(n, "short") for n in NAMES] + [(n, "random") for n in RANDOM_NAMES])
 def built_any(request):
     """Every kind of generated Interlude: the generic geometry, terrain and view checks hold for each."""
     name, mode = request.param
-    sidecar, params, terrain = get(name) if mode == "designed" else get_random(name)
+    sidecar, params, terrain = get(name) if mode == "short" else get_random(name)
     return name, sidecar, params, terrain
 
 
 @pytest.mark.slow
 def test_deterministic():
     # a smaller search keeps this fast; the property (same inputs, same output) does not depend on its size
-    a, *_ = generate_interlude("S3_Interlude", pool_samples=120_000, mode="designed")
-    b, *_ = generate_interlude("S3_Interlude", pool_samples=120_000, mode="designed")
+    a, *_ = generate_interlude("S3_Interlude", pool_samples=120_000, mode="random")
+    b, *_ = generate_interlude("S3_Interlude", pool_samples=120_000, mode="random")
     assert a == b
 
 
@@ -127,15 +127,11 @@ def test_interlude_assets_copy_the_session_they_probe(built):
     assert check_values(params) == check_values(base)           # every terrain parameter is a copy
 
 
-def test_trial_counts_and_mix(built):
+def test_trial_counts(built):
     name, sidecar, params, terrain = built
     n = int(params.interlude_trial_count)
     assert sidecar["n"] == n == len(sidecar["trials"]) and len(sidecar["shape"]) == 2 * n
-    kinds = [t["type"] for t in sidecar["trials"]]
-    if bool(params.is_practice):
-        assert n == 3 and "extrapolation" not in kinds and kinds.count("graded") == 1
-    else:
-        assert n == 5 and kinds.count("contrast") == 2
+    assert n == (3 if bool(params.is_practice) else 10)
 
 
 def test_bush_table_matches_trials_and_reward_function(built_any):
@@ -205,62 +201,6 @@ def test_correct_side_matches_true_values_and_is_roughly_balanced(built):
     assert abs(sides.count("left") - sides.count("right")) <= len(sides) // 2 + 1     # 3-2 or 4-1 passes, all one side does not
 
 
-def test_contrasts_differ_in_exactly_one_feature(built):
-    name, sidecar, params, terrain = built
-    for t in sidecar["trials"]:
-        if t["type"] != "contrast":
-            continue
-        diff = [f for f in FEATURES if abs(t["left"][f] - t["right"][f]) > SAME_TOL + 1e-9]
-        assert diff == [t["varied"]]
-
-
-def test_contrasts_cover_relevant_features_and_one_irrelevant():
-    for name in ["S1_Interlude", "S3_Interlude", "S4_Interlude"]:
-        sidecar, params, _ = get(name)
-        rf = params.reward_function
-        relevant = {f for f in FEATURES if rf[f + "Component"]["weight"] != 0}
-        varied = [t["varied"] for t in sidecar["trials"] if t["type"] == "contrast"]
-        # With fewer contrasts than relevant features (5 trials in S4: 2 contrasts for 3 features) coverage is partial.
-        if len(varied) >= len(relevant):
-            assert relevant <= set(varied)
-        else:
-            assert set(varied) <= relevant
-        if relevant != set(FEATURES) and len(varied) > len(relevant):
-            assert set(varied) - relevant        # an ignored-feature check
-
-
-def test_moisture_contrasts_use_the_largest_available_difference():
-    for name in ["S3_Interlude", "S4_Interlude"]:
-        sidecar, params, _ = get(name)
-        mc = [t for t in sidecar["trials"] if t["varied"] == "moisture"]
-        assert len(mc) <= 1
-        if not mc:        # S4 at 5 trials: the contrasts go to shape and color
-            continue
-        assert abs(mc[0]["left"]["moisture"] - mc[0]["right"]["moisture"]) >= TWO_LEVELS_MIN
-        assert abs(mc[0]["deltaValue"]) > 0.3                           # a clear true-reward difference
-
-
-def test_extrapolation_pairs_are_tradeoffs_when_several_features_matter():
-    for name in ["S3_Interlude", "S4_Interlude"]:
-        sidecar, params, _ = get(name)
-        rf = params.reward_function
-        extras = [t for t in sidecar["trials"] if t["type"] == "extrapolation"]
-        assert len(extras) == trial_mix(len(sidecar["trials"]), False, 3)["extrapolation"]
-        for t in extras:
-            assert abs(t["deltaValue"]) >= 0.15            # clear difference (the generator's floor is 0.3 x the spread of R, ~0.17 here)
-            ca = {f: float(_basis(rf[f + "Component"], t["left"][f])) for f in FEATURES}
-            cb = {f: float(_basis(rf[f + "Component"], t["right"][f])) for f in FEATURES}
-            assert any(ca[f] > cb[f] + 1e-9 for f in FEATURES) and any(cb[f] > ca[f] + 1e-9 for f in FEATURES)
-            assert abs(t["left"]["moisture"] - t["right"]["moisture"]) >= ONE_LEVEL[0]
-
-
-def test_non_moisture_contrasts_have_matching_moisture(built):
-    name, sidecar, params, terrain = built
-    for t in sidecar["trials"]:
-        if t["type"] == "contrast" and t["varied"] != "moisture":
-            assert abs(t["left"]["moisture"] - t["right"]["moisture"]) <= SAME_TOL + 1e-9
-
-
 def test_spawn_points_are_spread_out(built_any):
     name, sidecar, params, terrain = built_any
     s = np.array([t["start"] for t in sidecar["trials"]])
@@ -290,16 +230,8 @@ def test_export_writes_only_the_sidecar(tmp_path):
     assert path == sidecar_path("S3_Interlude", 3, tmp_path)
     assert path.name == "CF_I3_seed3.interlude.json"
     assert list(tmp_path.glob("*.world")) == []                      # the terrain is the session's own world file
-    assert json.load(open(path))["n"] == 5
+    assert json.load(open(path))["n"] == 10
     assert path.stat().st_size < 50_000
-
-
-def test_trial_mix_rules():
-    assert trial_mix(3, True) == {"contrast": 2, "graded": 1, "extrapolation": 0}
-    assert trial_mix(10, False) == {"contrast": 3, "graded": 4, "extrapolation": 3}
-    assert trial_mix(10, False, n_relevant=1) == {"contrast": 3, "graded": 6, "extrapolation": 1}
-    assert trial_mix(5, False) == {"contrast": 2, "graded": 1, "extrapolation": 2}
-    assert trial_mix(5, False, n_relevant=1) == {"contrast": 2, "graded": 2, "extrapolation": 1}
 
 
 def test_no_hill_between_the_spawn_and_either_bush(built_any):
@@ -362,28 +294,18 @@ def test_random_mode_is_reproducible_and_depends_on_the_seed():
     assert a == b and a["trials"] != c["trials"]
 
 
-def test_the_mode_comes_from_the_asset_unless_given_and_designed_files_carry_no_mode_key():
+def test_the_mode_comes_from_the_asset_unless_given_and_designed_is_retired():
     from interlude import interlude_mode
     from types import SimpleNamespace as NS
-    assert interlude_mode(NS(interlude_mode=1)) == "random" and interlude_mode(NS(interlude_mode=0)) == "designed"
-    assert interlude_mode(NS()) == "designed" and interlude_mode(NS(interlude_mode=1), "designed") == "designed"
+    assert interlude_mode(NS(interlude_mode=1)) == "random" and interlude_mode(NS(interlude_mode=4)) == "hybrid"
+    assert interlude_mode(NS()) == "hybrid" and interlude_mode(NS(interlude_mode=1), "reward_gap") == "reward_gap"
+    with pytest.raises(ValueError):
+        interlude_mode(NS(interlude_mode=0))
     with pytest.raises(ValueError):
         interlude_mode(NS(), "shuffled")
-    designed = get("S1_Interlude")[0]
-    assert "mode" not in designed and {t["type"] for t in designed["trials"]} <= {"contrast", "graded", "extrapolation"}
-
-
-def test_random_mode_elevation_floor_applies_only_where_the_asset_sets_it():
-    for name in ("S3_Interlude", "S4_Interlude"):
-        # (the old S3 and S4 Interlude assets set a floor of 3 world units; the new assets do not, so the floor is set here)
-        sidecar, params, terrain = generate_interlude(name, mode="random", interlude_trial_count=50, **{**design_overrides(name), "interlude_min_elevation_difference": 3.0})
-        assert params.interlude_min_elevation_difference == 3.0
-        m = np.array(sidecar["moisture"])
-        assert (np.abs(m[0::2] - m[1::2]) * params.terrain_max_elevation >= 3.0).all()
-    sidecar, params, _ = get_random("S1_Interlude")
-    m = np.array(sidecar["moisture"])
-    assert getattr(params, "interlude_min_elevation_difference", 0.0) == 0.0
-    assert (np.abs(m[0::2] - m[1::2]) * params.terrain_max_elevation < 3.0).any()       # without a floor, level pairs occur
+    with pytest.raises(ValueError):
+        interlude_mode(NS(), "designed")
+    assert get("S1_Interlude")[0]["mode"] == "random"
 
 
 # ---- gap modes: trials spread evenly over the reward gap, the feature gap or both ----
@@ -445,13 +367,10 @@ def test_gap_mode_file_order_has_no_structure():
 
 # ---- S5: the reward function has bumps over (shape, colour) ----
 
-def test_bumps_make_shape_and_colour_relevant_and_designed_mode_is_refused():
-    from interlude import relevant_features
+def test_bumps_make_shape_and_colour_relevant():
     params = load_session("S5_Interlude", **legacy("S5"))                          # (the old S5: a bump over shape and colour, plus moisture)
-    order, relevant = relevant_features(params)
-    assert set(relevant) == set(FEATURES)                                          # moisture by its weight, shape and colour by the bumps
-    with pytest.raises(ValueError):
-        generate_interlude("S5_Interlude", mode="designed", **legacy("S5"))
+    features = session_features(params)
+    assert all(d["rewarded"] and d["visible"] for d in features.values())          # moisture by its weight, shape and colour by the bumps
 
 
 @pytest.mark.slow

@@ -4,8 +4,7 @@ An Interlude looks like its session: the same world (terrain, mountains, sun), b
 The player turns toward the one they think pays more, walks to it and harvests it. Outcomes are never shown. This
 module is the source of truth for the stimulus set and bush placement (Unity only plays the file back), mirroring
 how world.py works for the main sessions. There is no Interlude-specific terrain: a bush's moisture and elevation
-come from the session's own terrain at the position it stands on, exactly as in the main task, so the design
-searches that terrain for places where the two bush positions have the moisture a trial needs.
+come from the session's own terrain at the position it stands on, exactly as in the main task.
 
 Inputs are two SessionConfig assets, read through world.load_session:
   <name>              an Interlude asset (isInterlude, interludeFor, interludeTrialCount, interludeBushDistance /
@@ -24,18 +23,13 @@ canopy's inner edge from the heading (`interludeBushBearing`, on opposite sides)
 turning and walking to either is the same. A canopy's radius depends on its shape, so each bush's centre is placed from
 its own radius; the two centres are therefore not exactly symmetric about the heading when the radii differ.
 
-Stimulus types (see DECISIONS "Interlude"):
-  contrast       the two bushes differ in one feature only (others equal): isolates a feature's effect
-  graded         two bushes whose true reward differs by a chosen amount: a psychometric curve
-  extrapolation  bushes built from extreme values of the relevant features, as trade-offs when several features
-                 matter: tests the rule and the relative weights away from typical bushes
-Moisture cannot be chosen freely: it is whatever the terrain has at the two final positions, so the design picks a
-placement with the moisture relation a trial needs ("same", one plateau level apart, two or more levels apart), then
-chooses shape and colour, and checks the relation again at the final positions. The practice Interlude has only easy
-contrasts on the relevant feature and one large graded pair.
+Trials. The default mode is `hybrid`: pairs of random bushes chosen so that both the true reward gap and the perceptual (feature) gap are spread evenly over their
+ranges, over the features the session declares (`world.session_features`), with some exact repeats; `reward_gap`, `feature_gap` and `random` are the simpler modes.
+A bush's moisture is whatever the terrain has at its position, as in the main task; moisture is a feature channel of the gap only when the session declares it.
+Designed trial types (contrast, graded, extrapolation) were removed (2026-11-09) and come back, one kind at a time, in `TRIAL_KINDS` when an experiment needs them.
 
 Usage:
-    python scripts/interlude.py TUT_I1 CF_I1 CF_I2 CF_I3 CF_I4 CF_I5 CF_I6 CF_I7     (P_Interlude, S1_Interlude, ... are accepted too)
+    python scripts/interlude.py TUT_I1 CF_I1 CF_I2 CF_I3 CF_I4 CF_I5 CF_I6 CF_I7
 """
 
 import argparse
@@ -45,18 +39,17 @@ from pathlib import Path
 
 import numpy as np
 
-from world import (PROJECT_ROOT, _basis, bush_value, check_values, generate_world, load_session, moisture_matters,
-                   unity_world_path)
+from world import (FEATURES, PROJECT_ROOT, REWARDS, check_values, generate_world, load_session, session_features,
+                   stage_names, unity_world_path)
 
-FEATURES = ["shape", "color", "moisture"]
 TIE_TOLERANCE = 0.05          # |R_left - R_right| below this: either answer is "correct"
 
 # Placement search (module constants: they shape the stimulus set, not the game)
-POOL_SAMPLES = 500_000        # random (spawn, heading) placements searched for the moisture relations below
-RANDOM_POOL_SAMPLES = 40_000  # placements for the random mode (it needs no particular moisture relation, only valid sites)
+POOL_SAMPLES = 40_000         # random (spawn, heading) placements searched for valid sites
 RANDOM_DRAWS = 300            # (shape, colour) pairs tried on a placement before moving to another
-MODES = ("designed", "random", "reward_gap", "feature_gap", "hybrid")
-MODE_CODES = {0: "designed", 1: "random", 2: "reward_gap", 3: "feature_gap", 4: "hybrid"}   # SessionConfig.interludeMode (InterludeMode enum order)
+MODES = ("random", "reward_gap", "feature_gap", "hybrid")
+MODE_CODES = {1: "random", 2: "reward_gap", 3: "feature_gap", 4: "hybrid"}   # SessionConfig.interludeMode (InterludeMode enum order; 0 = Designed, retired)
+DEFAULT_MODE = "hybrid"
 GAP_MODES = ("reward_gap", "feature_gap", "hybrid")
 GAP_SITES = 60                # placements whose bush pairs the gap modes choose their trials from (one trial per placement)
 GAP_PAIRS = 150               # (shape, colour) pairs drawn on each of them
@@ -66,9 +59,6 @@ ORDER_DRAWS = 3000            # gap modes: random orders tried for the file orde
 REPEAT_SEPARATION = 8         # gap modes with repeats: the fewest trials between a pair and its repeat
 ORDER_MAX_RUN = 3             # ... which may not put the same correct side more than this many times in a row
 FEATURE_WEIGHTS = {"shape": 1.0, "color": 1.0, "moisture": 1.0}   # perceptual weight of each channel in `feature_gap` (no measured JNDs yet: equal)
-SAME_TOL = 0.02               # |moisture difference| for "the same moisture"
-ONE_LEVEL = (0.20, 0.34)      # |moisture difference| for "one plateau level apart" (levels are ~0.27 apart)
-TWO_LEVELS_MIN = 0.45         # ... and for "two or more levels apart"
 MIN_SITE_SPACING = 80.0       # trials' spawn points are at least this far apart (relaxed if the pool is thin)
 MAX_SPAWN_SLOPE = 0.6         # rise/run at the spawn point
 LOS_SAMPLES = 14              # terrain samples checked along the line of sight to each bush
@@ -76,27 +66,18 @@ CANOPY_AIM_HEIGHT = 1.0       # line of sight is checked to a point this far abo
 PROFILE_SAMPLES = 30          # terrain samples along the path from the spawn point to each bush
 HUMP_TOLERANCE = 0.5          # a rise then a fall of more than this (world units) between the spawn and a bush is a hump
 MAX_ATTEMPTS = 300            # placements tried per trial before giving up
-GRADED_TARGETS = [0.15, 1.2]  # range of |R difference| in units of the spread of R across random bushes (geometric steps)
-PRACTICE_GRADED_TARGET = 1.5
 
 
 def feature_weights(params):
-    """The channels `feature_gap` counts for a session: a feature that does not vary (shapeVaries / colorVaries off) or that is decoration
-    (moisture with no reward weight) is left out, so a gap is 0 for identical bushes and 1 for opposite ends of every counted channel."""
-    w = dict(FEATURE_WEIGHTS)
-    if not params.shape_varies:
-        w["shape"] = 0.0
-    if not params.color_varies:
-        w["color"] = 0.0
-    if not moisture_matters(params):
-        w["moisture"] = 0.0
-    return w
+    """The channels `feature_gap` counts for a session: the features it declares visible (`world.session_features`), so a gap is 0 for identical
+    bushes and 1 for opposite ends of every counted channel."""
+    return {f: FEATURE_WEIGHTS[f] if d["visible"] else 0.0 for f, d in session_features(params).items()}
 
 
 def feature_gap(a, b, weights=None):
     """Perceptual distance of two bushes: the weighted root mean square of their differences in shape, colour and moisture, each on its
-    0-1 scale, so 0 = identical and 1 = opposite ends of every channel. The channels that vary and pay count (`feature_weights`; all
-    three with the default weights), relevant to the reward or not, because a participant sees them all."""
+    0-1 scale, so 0 = identical and 1 = opposite ends of every channel. The declared visible channels count (`feature_weights`), relevant to the
+    reward or not, because a participant sees them all."""
     w = weights or FEATURE_WEIGHTS
     return math.sqrt(sum(w[f] * (a[f] - b[f]) ** 2 for f in FEATURES) / sum(w.values()))
 
@@ -161,8 +142,8 @@ def has_hump(terrain, spawn, pos, params=None):
 
 
 def make_pool(params, terrain, rng, n=None):
-    """Random placements (spawn, heading) in the valley, with the moisture at the two bush positions for a canopy of the
-    mean radius (the final positions shift slightly with each bush's actual radius and are checked again)."""
+    """Random placements (spawn, heading) in the valley, with the moisture at the left bush position for a canopy of the mean radius (the Designer
+    samples it for the spread of R; the final positions shift slightly with each bush's actual radius and are checked again)."""
     n = POOL_SAMPLES if n is None else int(n)
     half = float(params.world_half_extent)
     fwd, lat = bush_offsets(params, nominal_radius(params))
@@ -176,31 +157,12 @@ def make_pool(params, terrain, rng, n=None):
     ok = terrain.is_tree_site(spawn[:, 0], spawn[:, 1]) & terrain.is_tree_site(left[:, 0], left[:, 1]) \
         & terrain.is_tree_site(right[:, 0], right[:, 1])
     spawn, yaw, left, right = spawn[ok], yaw[ok], left[ok], right[ok]
-    m_left = terrain.moisture(left[:, 0], left[:, 1])
-    m_right = terrain.moisture(right[:, 0], right[:, 1])
-    return {"spawn": spawn, "yaw": yaw, "m_left": m_left, "m_right": m_right, "dm": np.abs(m_left - m_right)}
-
-
-KIND_MASKS = {
-    "same": lambda dm: dm <= SAME_TOL,
-    "one": lambda dm: (dm >= ONE_LEVEL[0]) & (dm <= ONE_LEVEL[1]),
-    "two": lambda dm: dm >= TWO_LEVELS_MIN,
-    "any": lambda dm: np.ones_like(dm, dtype=bool),
-}
+    return {"spawn": spawn, "yaw": yaw, "m_left": terrain.moisture(left[:, 0], left[:, 1])}
 
 
 # --------------------------------------------------------------------------------------------------
 # Stimulus design
 # --------------------------------------------------------------------------------------------------
-
-def relevant_features(params):
-    rf = params.reward_function
-    w = {f: abs(float(rf[f + "Component"]["weight"])) for f in FEATURES}
-    for b in list(rf.get("bumps") or []) + list(rf.get("products") or []):
-        w["shape"] += abs(float(b["height"]))          # a bump or a product term makes both of its features relevant
-        w["color"] += abs(float(b["height"]))
-    return sorted(FEATURES, key=lambda f: -w[f]), [f for f in FEATURES if w[f] > 0.0]
-
 
 class Designer:
     def __init__(self, params, terrain, pool, rng):
@@ -208,20 +170,19 @@ class Designer:
         self.t = terrain
         self.pool = pool
         self.rng = rng
-        self.order, self.relevant = relevant_features(params)
         self.weights = feature_weights(params)
+        self.reward = REWARDS[stage_names(params)[2]]
         self.no_correct_side = params.random_bush_value_range[1] > params.random_bush_value_range[0]   # a random reward: no attribute predicts it
         self.used = []                                  # spawn points already taken
-        self._masks = {}
         self._cache = {}
         self._site_ok = {}
         # spread of R_bush over typical bushes: shape and colour uniform, moisture as the terrain has it
         m = pool["m_left"][rng.integers(0, len(pool["m_left"]), 4000)]
         sh, co = rng.uniform(0, 1, 4000), rng.uniform(0, 1, 4000)
-        self.scale = float(np.asarray(bush_value(params.reward_function, sh, co, m)).std())
+        self.scale = float(np.asarray(self.reward(params.reward_function, sh, co, m)).std())
 
     def value(self, bush):
-        return float(bush_value(self.p.reward_function, bush["shape"], bush["color"], bush["moisture"]))
+        return float(self.reward(self.p.reward_function, bush["shape"], bush["color"], bush["moisture"]))
 
     # ---- placements ---------------------------------------------------------------------------
     def _los_ok(self, spawn, pos):
@@ -249,20 +210,9 @@ class Designer:
                 return False
         return True
 
-    def elevation_apart(self, dm):
-        """Elevation difference (world units) of two valley points whose moisture differs by `dm`: elevation is (1 - moisture) * terrainMaxElevation."""
-        return np.asarray(dm) * float(self.p.terrain_max_elevation)
-
-    def min_elevation_apart(self):
-        return float(getattr(self.p, "interlude_min_elevation_difference", 0.0))
-
-    def pick(self, kind):
-        """A placement whose (nominal) moisture relation is `kind`, away from the spawn points already used. `apart` is the placements
-        whose nominal bushes differ in elevation by at least `interludeMinElevationDifference`."""
-        if kind not in self._masks:
-            mask = self.elevation_apart(self.pool["dm"]) >= self.min_elevation_apart() if kind == "apart" else KIND_MASKS[kind](self.pool["dm"])
-            self._masks[kind] = np.flatnonzero(mask)
-        cand = self.rng.permutation(self._masks[kind])
+    def pick(self):
+        """A placement away from the spawn points already used, with a gentle slope and a clear view of the nominal bush positions."""
+        cand = self.rng.permutation(len(self.pool["spawn"]))
         for spacing in (MIN_SITE_SPACING, MIN_SITE_SPACING / 2.0, 0.0):
             for i in cand[:6000]:
                 s = self.pool["spawn"][i]
@@ -272,18 +222,18 @@ class Designer:
                     continue
                 self.used.append(s.copy())
                 return int(i)
-        raise RuntimeError(f"no placement found for moisture relation '{kind}'")
+        raise RuntimeError("no placement found")
 
-    def attempt(self, kind, builder):
+    def attempt(self, builder):
         """Pick placements until `builder(i)` returns a valid (left, right) pair, with every final bush position in the
         valley and in view of the spawn point."""
         for _ in range(MAX_ATTEMPTS):
-            i = self.pick(kind)
+            i = self.pick()
             pair = builder(i)
             if pair is not None and self._final_ok(i, *pair):
                 return i, pair[0], pair[1]
             self.used.pop()
-        raise RuntimeError(f"could not build a '{kind}' trial after {MAX_ATTEMPTS} placements")
+        raise RuntimeError(f"could not build a trial after {MAX_ATTEMPTS} placements")
 
     def _final_ok(self, i, lt, rt):
         s = self.pool["spawn"][i]
@@ -309,65 +259,10 @@ class Designer:
         pos, r, m = self._cache[key]
         return {"shape": shape, "color": round(float(color), 2), "moisture": m, "pos": pos, "radius": r}
 
-    def contributions(self, bush):
-        rf = self.p.reward_function
-        return {f: float(_basis(rf[f + "Component"], bush[f])) for f in FEATURES}
-
-    def orient(self, i, x, y, want_left_better):
-        """Put the (shape, colour) pair x on the left and y on the right, or the reverse, so that the requested side
-        is the better one when either orientation allows it."""
-        opts = []
-        for x_left in (True, False):
-            lt = self.bush(i, "left", *(x if x_left else y))
-            rt = self.bush(i, "right", *(y if x_left else x))
-            opts.append((lt, rt, self.value(lt) - self.value(rt)))
-        if want_left_better is not None:
-            for lt, rt, d in opts:
-                if abs(d) >= TIE_TOLERANCE and (d > 0) == want_left_better:
-                    return lt, rt
-        choice = opts[int(self.rng.integers(2))]
-        return choice[0], choice[1]
-
-    # ---- trial types --------------------------------------------------------------------------
-    def contrast(self, feature, easy, want_left_better):
-        kind = "two" if feature == "moisture" else "same"
-
-        def build(i):
-            shape, color = (round(float(self.rng.uniform(0.3, 0.7)), 2) for _ in range(2))
-            if feature == "moisture":
-                # moisture comes from the placement; the other features (and so the radii) are equal
-                lt, rt = self.bush(i, "left", shape, color), self.bush(i, "right", shape, color)
-                return (lt, rt) if abs(lt["moisture"] - rt["moisture"]) >= TWO_LEVELS_MIN else None
-            lo, hi = (0.1, 0.9) if easy else (0.15, 0.85)
-            a, b = [shape, color], [shape, color]
-            slot = 0 if feature == "shape" else 1
-            a[slot], b[slot] = lo, hi
-            lt, rt = self.orient(i, tuple(a), tuple(b), want_left_better)
-            return (lt, rt) if abs(lt["moisture"] - rt["moisture"]) <= SAME_TOL else None
-
-        return self.attempt(kind, build)
-
-    def graded(self, target_fraction, want_left_better):
-        target = target_fraction * self.scale
-
-        def build(i):
-            best = None
-            for _ in range(1500):
-                lt = self.bush(i, "left", *self.rng.uniform(0, 1, 2))
-                rt = self.bush(i, "right", *self.rng.uniform(0, 1, 2))
-                d = self.value(lt) - self.value(rt)
-                if want_left_better is not None and (d > 0) != want_left_better:
-                    continue
-                score = abs(abs(d) - target)
-                if best is None or score < best[0]:
-                    best = (score, lt, rt)
-            return None if best is None else (best[1], best[2])
-
-        return self.attempt("any", build)
-
+    # ---- trials -------------------------------------------------------------------------------
     def random_trial(self, want_left_better):
         """Random mode: both bushes get independent uniform shape and colour (moisture is the terrain's at the final position, as
-        everywhere; with `interludeMinElevationDifference` > 0 the pair must also stand on ground that differs in elevation by at least that much). A pair whose true rewards are within the tie tolerance is redrawn, so a trial always has a correct side;
+        everywhere). A pair whose true rewards are within the tie tolerance is redrawn, so a trial always has a correct side;
         `want_left_better` (or None) picks which side that is."""
         def build(i):
             for _ in range(RANDOM_DRAWS):
@@ -376,12 +271,10 @@ class Designer:
                 d = self.value(lt) - self.value(rt)
                 if not self.no_correct_side and (abs(d) < TIE_TOLERANCE or (want_left_better is not None and (d > 0) != want_left_better)):
                     continue
-                if self.elevation_apart(abs(lt["moisture"] - rt["moisture"])) < self.min_elevation_apart():
-                    continue            # the final positions (they shift with the radii) are too level: another draw
                 return lt, rt
             return None
 
-        return self.attempt("apart" if self.min_elevation_apart() > 0.0 else "any", build)
+        return self.attempt(build)
 
     def gap_candidates(self):
         """Gap modes: bush pairs on GAP_SITES placements, GAP_PAIRS random (shape, colour) pairs each, as rows
@@ -390,7 +283,7 @@ class Designer:
         rows = []
         for _ in range(GAP_SITES):
             try:
-                i = self.pick("any")
+                i = self.pick()
             except RuntimeError:
                 break
             for _ in range(GAP_PAIRS):
@@ -401,117 +294,13 @@ class Designer:
                     rows.append((i, lt, rt, abs(d), feature_gap(lt, rt, self.weights), d > 0))
         return rows
 
-    def _extreme(self, feature):
-        if feature not in self.relevant:
-            return float(self.rng.uniform(0, 1))
-        return float(self.rng.uniform(0.0, 0.12) if self.rng.random() < 0.5 else self.rng.uniform(0.88, 1.0))
-
-    def extrapolation(self, want_left_better, taken):
-        """Extreme-valued bushes. With several relevant features the pair is a genuine trade-off (each bush is better on
-        some relevant feature and worse on another, by a clear margin) with a moderate true-reward difference, which is
-        what exposes the relative weights; with one relevant feature it is an opposed pair of tail values."""
-        lo, hi = 0.3 * self.scale, 1.0 * self.scale
-        conflict = len(self.relevant) >= 2
-        kind = ["one", "two"][int(self.rng.integers(2))] if "moisture" in self.relevant else "any"
-        margin = {f: 0.2 * abs(float(self.p.reward_function[f + "Component"]["weight"])) for f in self.relevant}
-
-        def pair_for(i, allow_repeat):
-            for _ in range(1500):
-                lt = self.bush(i, "left", self._extreme("shape"), self._extreme("color"))
-                rt = self.bush(i, "right", self._extreme("shape"), self._extreme("color"))
-                d = self.value(lt) - self.value(rt)
-                if abs(d) < lo or (conflict and abs(d) > hi):
-                    continue
-                if want_left_better is not None and (d > 0) != want_left_better:
-                    continue
-                if conflict:
-                    cl, cr = self.contributions(lt), self.contributions(rt)
-                    if not (any(cl[f] - cr[f] > margin[f] for f in self.relevant)
-                            and any(cr[f] - cl[f] > margin[f] for f in self.relevant)):
-                        continue
-                else:
-                    f = self.relevant[0] if self.relevant else None
-                    if f is not None and f != "moisture" and (lt[f] < 0.5) == (rt[f] < 0.5):
-                        continue                  # one tail on each side
-                key = tuple(round(lt[f] * 4) / 4 for f in ("shape", "color") if f in self.relevant) + \
-                    tuple(round(rt[f] * 4) / 4 for f in ("shape", "color") if f in self.relevant) + (kind,)
-                if not allow_repeat and key in taken:
-                    continue
-                taken.add(key)
-                return lt, rt
-            return None
-
-        for allow_repeat in (False, True):
-            try:
-                return self.attempt(kind, lambda i: pair_for(i, allow_repeat))
-            except RuntimeError:
-                continue
-        raise RuntimeError("no extrapolation pair found; relax the constraints")
-
-
-def trial_mix(n, practice, n_relevant=3):
-    """Trials per type. With a single relevant feature extrapolation is nearly redundant with the contrasts (it is
-    one pair of opposed tails), so it gets one trial and the rest go to graded pairs."""
-    if practice:
-        return {"contrast": max(n - 1, 0), "graded": min(1, n), "extrapolation": 0}
-    contrast = int(round(0.3 * n))
-    extrapolation = int(round(0.3 * n)) if n_relevant >= 2 else min(1, n - contrast)
-    return {"contrast": contrast, "graded": n - contrast - extrapolation, "extrapolation": extrapolation}
-
-
-def build_trials(params, terrain, pool, rng):
-    """List of dicts: type, varied, placement index and the two bushes' attributes."""
-    n = int(params.interlude_trial_count)
-    practice = bool(params.is_practice)
-    des = Designer(params, terrain, pool, rng)
-    mix = trial_mix(n, practice, len(des.relevant))
-
-    kinds = ["contrast"] * mix["contrast"] + ["graded"] * mix["graded"] + ["extrapolation"] * mix["extrapolation"]
-    # contrasts cover every relevant feature, plus one irrelevant feature as an ignored-feature check (not in practice)
-    irrelevant = [f for f in des.order if f not in des.relevant and des.weights[f] > 0]
-    seq = list(des.relevant) + (irrelevant[:1] if not practice else [])
-    if not seq:
-        raise ValueError("no feature pays in this session: a designed-mode Interlude needs one (use interludeMode Random)")
-    varied_for, c = {}, 0
-    for j, k in enumerate(kinds):
-        if k == "contrast":
-            varied_for[j] = seq[c % len(seq)]
-            c += 1
-    k_graded = mix["graded"]
-    if practice:
-        targets = [PRACTICE_GRADED_TARGET] * k_graded
-    elif k_graded > 1:
-        targets = [float(t) for t in np.geomspace(GRADED_TARGETS[0], GRADED_TARGETS[-1], k_graded)]
-    else:
-        targets = [0.6] * k_graded
-    # requested sides: half of the trials put the better bush on the left (a moisture contrast cannot be steered)
-    n_left = (n + int(rng.integers(0, 2))) // 2
-    wants = [bool(w) for w in rng.permutation([True] * n_left + [False] * (n - n_left))]
-
-    # moisture contrasts first (their placements are the scarcest), then the rest
-    order = sorted(range(n), key=lambda j: 0 if (kinds[j] == "contrast" and varied_for.get(j) == "moisture") else 1)
-    taken, graded_i, trials = set(), 0, [None] * n
-    for j in order:
-        k = kinds[j]
-        if k == "contrast":
-            f = varied_for[j]
-            i, lt, rt = des.contrast(f, practice, None if f == "moisture" else wants[j])
-            varied = f
-        elif k == "graded":
-            i, lt, rt = des.graded(targets[graded_i], wants[j])
-            graded_i += 1
-            varied = ""
-        else:
-            i, lt, rt = des.extrapolation(wants[j], taken)
-            varied = ""
-        trials[j] = {"type": k, "varied": varied, "place": i, "left": lt, "right": rt}
-
-    return _finish_trials(trials, des, rng), des
+# Trial kinds an experiment adds: name -> builder(designer, ...) returning (placement, left bush, right bush). None are registered yet (the designed
+# contrast / graded / extrapolation kinds were removed); a kind goes here with the experiment whose analysis needs it.
+TRIAL_KINDS = {}
 
 
 def build_random_trials(params, terrain, pool, rng):
-    """Random mode: `interludeTrialCount` pairs of bushes with independent random shape and colour (no trial types, no designed
-    contrasts), each with a definite better side, half of them on the left."""
+    """Random mode: `interludeTrialCount` pairs of bushes with independent random shape and colour (no trial types), each with a definite better side, half of them on the left."""
     n = int(params.interlude_trial_count)
     des = Designer(params, terrain, pool, rng)
     n_left = (n + int(rng.integers(0, 2))) // 2
@@ -651,9 +440,13 @@ def _finish_trials(trials, des, rng, ordered=False, separation=0):
 # --------------------------------------------------------------------------------------------------
 
 def interlude_mode(params, mode=None):
-    """The generation mode: `mode` if given (a name), else the asset's `interludeMode` field (absent = designed)."""
+    """The generation mode: `mode` if given (a name), else the asset's `interludeMode` field (absent = hybrid; 0, the retired Designed, is refused)."""
     if mode is None:
-        mode = getattr(params, "interlude_mode", 0)
+        mode = getattr(params, "interlude_mode", None)
+        if mode is None:
+            return DEFAULT_MODE
+        if mode == 0:
+            raise ValueError("interludeMode 0 (Designed) was retired; use Random, RewardGap, FeatureGap or Hybrid")
     mode = MODE_CODES.get(mode, mode)
     if mode not in MODES:
         raise ValueError(f"unknown Interlude mode '{mode}' (expected one of {MODES})")
@@ -664,8 +457,7 @@ def generate_interlude(name, pool_samples=None, seed=None, mode=None, extras=Non
     """Build the sidecar dict (bush table + trials) for the Interlude asset `name`; returns (sidecar, params, terrain).
     `pool_samples` overrides POOL_SAMPLES (the tests use a smaller search to run fast). `seed` replaces the world seed of
     the Interlude and of the session it probes, and `overrides` (snake_case SessionConfig fields) apply to both, so the
-    simulator can build, for any world it plays, the very Interlude the game would show for that world. `mode` is "designed" (the
-    contrast / graded / extrapolation trials) or "random" (random pairs); None reads the asset's `interludeMode`. `extras` sets generator
+    simulator can build, for any world it plays, the very Interlude the game would show for that world. `mode` is "random", "reward_gap", "feature_gap" or "hybrid"; None reads the asset's `interludeMode`. `extras` sets generator
     options of the gap modes for an asset that has no field for them (older assets; the same names as the SessionConfig fields): `interlude_max_reward_gap` / `interlude_max_feature_gap` (ceilings of the two gaps),
     `interlude_repeat_count` (how many of the `interludeTrialCount` trials are exact repeats of an earlier pair) and `interlude_repeat_separation`
     (the fewest trials between a pair and its repeat, default REPEAT_SEPARATION)."""
@@ -691,14 +483,8 @@ def generate_interlude(name, pool_samples=None, seed=None, mode=None, extras=Non
     terrain = generate_world(base, seed).terrain
     rngs = [np.random.default_rng(c) for c in np.random.SeedSequence([seed, 913]).spawn(3)]
     mode = interlude_mode(params, mode)
-    if mode == "designed" and (params.reward_function.get("bumps") or params.reward_function.get("products")):
-        raise ValueError(f"{name}: designed Interludes assume additive reward terms (contrasts, extrapolation); use a random or gap mode")
-    if mode == "random" or mode in GAP_MODES:
-        pool = make_pool(params, terrain, rngs[0], RANDOM_POOL_SAMPLES if pool_samples is None else pool_samples)
-        trials, des = build_random_trials(params, terrain, pool, rngs[1]) if mode == "random" else build_gap_trials(params, terrain, pool, rngs[1], mode)
-    else:
-        pool = make_pool(params, terrain, rngs[0], pool_samples)
-        trials, des = build_trials(params, terrain, pool, rngs[1])
+    pool = make_pool(params, terrain, rngs[0], pool_samples)
+    trials, des = build_random_trials(params, terrain, pool, rngs[1]) if mode == "random" else build_gap_trials(params, terrain, pool, rngs[1], mode)
     n = len(trials)
 
     pos = np.zeros((2 * n, 2))
@@ -720,7 +506,7 @@ def generate_interlude(name, pool_samples=None, seed=None, mode=None, extras=Non
             early, late = sorted((t, t["repeat_source"]), key=lambda x: x["index"])
             late["repeat_of"] = early["index"]
 
-    value = np.asarray(bush_value(params.reward_function, shape, color, moisture), dtype=float)
+    value = np.asarray(des.reward(params.reward_function, shape, color, moisture), dtype=float)
     fruit_count = int(params.fruit_count)
     noise = rngs[2].standard_normal((2 * n, fruit_count)) * float(params.reward_std)
     fruit_reward = np.maximum(0, np.rint(value[:, None] + noise)).astype(np.int32)
@@ -748,11 +534,10 @@ def generate_interlude(name, pool_samples=None, seed=None, mode=None, extras=Non
             "right": {"id": 2 * t["index"] + 1, **{k: float(t["right"][k]) for k in FEATURES}, "value": float(t["right_value"])},
         } for t in trials],
     }
-    if mode != "designed":
-        sidecar["mode"] = mode            # (designed files stay byte-identical to those written before modes existed)
-        for entry, t in zip(sidecar["trials"], trials):
-            entry["rewardGap"] = abs(float(t["delta_value"]))
-            entry["featureGap"] = feature_gap(t["left"], t["right"], des.weights)
+    sidecar["mode"] = mode
+    for entry, t in zip(sidecar["trials"], trials):
+        entry["rewardGap"] = abs(float(t["delta_value"]))
+        entry["featureGap"] = feature_gap(t["left"], t["right"], des.weights)
     for entry, t in zip(sidecar["trials"], trials):
         if "repeat_of" in t:
             entry["repeatOf"] = t["repeat_of"]      # (the loader ignores it; analysis uses it to pair a trial with its repeat)

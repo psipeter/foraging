@@ -11,10 +11,10 @@ public enum InterludeSwitchPolicy
 }
 
 // Which trials scripts/interlude.py generates for an Interlude asset (the game only plays the generated file). The order is part of the
-// logged format (the manifest stores the number): Designed 0, Random 1, RewardGap 2, FeatureGap 3, Hybrid 4.
+// logged format (the manifest stores the number): RetiredDesigned 0, Random 1, RewardGap 2, FeatureGap 3, Hybrid 4.
 public enum InterludeMode
 {
-    Designed,   // contrast / graded / extrapolation trials designed to probe the reward function's features
+    RetiredDesigned,   // the contrast / graded / extrapolation trials were removed (2026-11-09); the generator refuses it. Kept so the numbers below do not move.
     Random,     // independent random shape and color for both bushes (a definite better side in every trial)
     RewardGap,  // one pair per bin of the true reward difference, evenly spread from interludeMinRewardGap to the largest the world offers
     FeatureGap, // one pair per bin of the perceptual distance (shape, color, moisture) between the bushes, from interludeMinFeatureGap up
@@ -46,8 +46,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private bool isInterlude;
     [Tooltip("Name of the session asset this Interlude probes (e.g. S1); its world file supplies the terrain.")]
     [SerializeField] private string interludeFor = "";
-    [Tooltip("Which trials scripts/interlude.py generates: Designed (contrast / graded / extrapolation) or Random (random pairs, always a correct side). Read by the generator, not by the game: regenerate the Interlude file after changing it.")]
-    [SerializeField] private InterludeMode interludeMode = InterludeMode.Designed;
+    [Tooltip("Which trials scripts/interlude.py generates: Hybrid (reward gaps and feature gaps both spread evenly, with repeats; the default), RewardGap, FeatureGap or Random (random pairs, always a correct side). Read by the generator, not by the game: regenerate the Interlude file after changing it.")]
+    [SerializeField] private InterludeMode interludeMode = InterludeMode.Hybrid;
     [Tooltip("Number of choice trials.")]
     [SerializeField] private int interludeTrialCount = 10;
     // Set only on the copy GameManager makes for local quick testing (QuickCopy): the Interlude plays only this many of the file's first trials. 0 = all.
@@ -206,6 +206,14 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private Vector2 canopyHeightRange = new Vector2(1.2f, 2.8f);
     [Tooltip("Spatial evenness of the reward over the map (scripts/spatial.py): Off = independent draws, Tiles = the (shape, color, random value) records dealt evenly over tiles at several scales, TilesAndSwaps = then swapped between bushes to lower the patchiness further. The marginal distribution of every attribute and of the reward is unchanged, only which bush has which record. Needs a reward that does not depend on moisture. Read by scripts/world.py: regenerate the world after changing it.")]
     [SerializeField] private SpatialBalance spatialBalance = SpatialBalance.Off;
+    [Tooltip("Which world-generator stage lays out the bushes (scripts/world.py LAYOUTS). Empty = the default, the seeded hex lattice. Read by scripts/world.py: regenerate the world after changing it.")]
+    [SerializeField] private string layout = "";
+    [Tooltip("Which stage gives each bush its attributes (scripts/world.py ASSIGNMENTS). Empty = independent draws, or the spatially balanced assignment when spatialBalance is not Off.")]
+    [SerializeField] private string assignment = "";
+    [Tooltip("Which stage turns a bush's attributes into its reward (scripts/world.py REWARDS). Empty = the sum of the reward function's terms.")]
+    [SerializeField] private string rewardStage = "";
+    [Tooltip("What the experiment's design says about this instance (scripts/design/<code>.py): the instance id, its cell parameters and its hint arm, as JSON. Written by the experiment builder, logged with the rest of this config, read by no game code.")]
+    [SerializeField] private string designJson = "";
     [Tooltip("False: every bush has the value shapeWhenFixed, so all canopies are identical; give the shape component weight 0. Read by scripts/world.py and scripts/interlude.py: regenerate the world and the Interlude after changing it.")]
     [SerializeField] private bool shapeVaries = true;
     [Tooltip("The shape value of every bush when shapeVaries is off (0..1; the canopy size then follows the shape axis). Read by scripts/world.py and scripts/interlude.py.")]
@@ -395,6 +403,10 @@ public class SessionConfig : ScriptableObject
     public int FruitCount => fruitCount;
     public float FruitRadius => fruitRadius;
     public SpatialBalance SpatialBalance => spatialBalance;
+    public string Layout => layout;
+    public string Assignment => assignment;
+    public string RewardStage => rewardStage;
+    public string DesignJson => designJson;
     public bool ShapeVaries => shapeVaries;
     public float ShapeWhenFixed => shapeWhenFixed;
     public float ColorWhenFixed => colorWhenFixed;
