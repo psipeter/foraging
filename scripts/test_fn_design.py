@@ -10,21 +10,48 @@ from interlude import generate_interlude, sidecar_path
 from world import check_values, export_unity, generate_world, load_session, session_features, unity_world_path
 
 
-def test_three_baselines_then_six_weighted_sessions_in_order():
+def _of(kind, v=None, r=None):
+    return [i for i in FN.instances() if i.design["kind"] == kind and (v is None or i.design["n_visible"] == v) and (r is None or i.design["n_rewarded"] == r)]
+
+
+def test_the_cells_the_iterations_and_the_order():
     inst = FN.instances()
-    assert [i.name for i in inst] == [f"FN_S{n}" for n in range(1, 10)]
-    base, weighted = inst[:3], inst[3:]
-    assert [i.design["kind"] for i in base] == ["baseline"] * 3 and [i.design["kind"] for i in weighted] == ["weighted"] * 6
-    assert [i.design["n_visible"] for i in base] == [1, 2, 3]
-    pays = [next(iter(i.design["weights"])) for i in base]
-    assert sorted(pays) == sorted(FN.FEATURES)                                                     # each feature pays in one baseline
-    for i in base:
-        (pay,) = i.design["weights"]
-        assert pay in i.design["visible"] and i.design["weights"][pay] == 1.0 and i.design["hint"] == "named"
+    n = FN.ITERATIONS * len(FN.BASELINE_CELLS) + len(FN.WEIGHT_RATIOS)
+    assert [i.name for i in inst] == [f"FN_S{k}" for k in range(1, n + 1)]
+    for v, r in FN.BASELINE_CELLS:
+        assert len(_of("baseline", v, r)) == FN.ITERATIONS and r <= v
+    assert len(_of("weighted")) == len(FN.WEIGHT_RATIOS)
+    first = [(i.design["n_visible"], i.design["n_rewarded"]) for i in inst[:len(FN.BASELINE_CELLS) + 1]]
+    assert first == list(FN.BASELINE_CELLS) + [(3, 3)]                                               # one pass: row 1, row 2, then a weighted session
+    assert [i.design["iteration"] for i in inst[:6]] == [1] * 6
+    rest = [(i.design["n_visible"], i.design["n_rewarded"]) for i in inst[6:]]
+    assert rest != sorted(rest)                                                                      # the remainder is shuffled
+
+
+def test_baselines_are_counterbalanced_over_the_features():
+    for v, r in FN.BASELINE_CELLS:
+        cell = _of("baseline", v, r)
+        for i in cell:
+            w = i.design["weights"]
+            assert len(w) == r and set(w) <= set(i.design["visible"]) and all(x == pytest.approx(1.0 / r, abs=1e-4) for x in w.values())
+            assert i.design["hint"] == ("two" if r == 2 else "named")
+        if r == 1:
+            assert sorted(next(iter(i.design["weights"])) for i in cell) == sorted(FN.FEATURES)       # each feature pays once
+        elif v == 3:
+            assert sorted(next(f for f in FN.FEATURES if f not in i.design["weights"]) for i in cell) == sorted(FN.FEATURES)   # each is the idle one once
+        if v == 2:
+            assert len({tuple(i.design["visible"]) for i in cell}) == FN.ITERATIONS                  # each visible pair once
+
+
+def test_durations_grow_with_rows_and_columns():
+    for i in FN.instances():
+        d = i.design
+        assert i.session_fields["sessionDuration"] == FN.BASE_SECONDS + FN.STEP_SECONDS * (d["n_visible"] - 1 + d["n_rewarded"] - 1)
+    assert {i.session_fields["sessionDuration"] for i in _of("baseline", 1, 1)} == {FN.BASE_SECONDS}
 
 
 def test_weighted_sessions_have_weights_summing_to_one_over_the_ratio_family_in_a_random_order():
-    weighted = FN.instances()[3:]
+    weighted = _of("weighted")
     ratios = [i.design["ratio"] for i in weighted]
     assert sorted(ratios) == sorted(FN.WEIGHT_RATIOS) and ratios != sorted(ratios, reverse=True)       # all of them, not in the listed order
     for i in weighted:
@@ -60,7 +87,7 @@ def test_a_session_with_hidden_features_has_identical_bushes_and_a_flat_valley_w
     first, second = (generate_world(load_session(n), 301 + k) for k, n in enumerate(("FN_S1", "FN_S2")))
     for w, visible in ((first, FN.instances()[0].design["visible"]), (second, FN.instances()[1].design["visible"])):
         assert (len(set(w.shape)) > 1) == ("shape" in visible) and (len(set(w.color)) > 1) == ("color" in visible)
-        assert set(w.moisture) == {0.5}                                                                  # moisture is not visible in either baseline
+        assert (len(set(w.moisture)) > 1) == ("moisture" in visible)    # a flat valley unless moisture is visible
 
 
 @pytest.mark.slow
@@ -80,9 +107,13 @@ def test_committed_fn_files_are_fresh(tmp_path):
 
 def test_baseline_hints_name_the_visible_features_and_the_weighted_hint_is_shared():
     texts = FN.texts()
-    for k, i in enumerate(FN.instances()[:3], start=1):
+    for k, i in enumerate(FN.instances(), start=1):
+        if i.design["kind"] != "baseline":
+            continue
         hint = texts[f"instructions_S{k}.txt"]
-        assert all(FN.NAMES[f] in hint for f in i.design["visible"]) and all(FN.NAMES[f] not in hint for f in FN.FEATURES if f not in i.design["visible"])
-    assert {i.design["hint"] for i in FN.instances()[3:]} == {"weighted"}
-    assert len({i.session_fields["instructionsFile"] for i in FN.instances()[3:]}) == 1
-    assert len({i.session_fields["instructionsFile"] for i in FN.instances()[:3]}) == 3
+        if i.design["n_rewarded"] == 2 and i.design["n_visible"] == 3:
+            assert "Two of the three features" in hint
+        else:
+            assert all(FN.NAMES[f] in hint for f in i.design["visible"]) and all(FN.NAMES[f] not in hint for f in FN.FEATURES if f not in i.design["visible"])
+    weighted = _of("weighted")
+    assert {i.design["hint"] for i in weighted} == {"weighted"} and len({i.session_fields["instructionsFile"] for i in weighted}) == 1

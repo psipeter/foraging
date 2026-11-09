@@ -74,6 +74,10 @@ bonus design for sparse sessions.
       * Three visible features, one pays. Goal: find which one, and the better end. Hint: one of X, Y or Z determines reward.
 
       These are short, with few repeats and few Interlude trials. They measure the cost of perceptual variance when only one feature pays.
+   3a. *Intermediate sessions: at least two features are visible and two of them pay, with equal weight.* These are of intermediate length and
+      measure more complicated hypothesis testing and search.
+      * Two visible features, both pay. Goal: find both better ends at once. Hint: both of the features X and Y determine reward.
+      * Three visible features, two pay. Goal: find which feature does not pay, and the better ends of the other two. Hint: two of the three features determine reward.
    4. *Weighted sessions: three visible features, all of which can pay.* These are long, with more repeats and more Interlude trials.
       * Three randomized weights sum to one, and a variety of weight breakdowns across the three features is simulated to get broad coverage
         of the complexity and threshold space.
@@ -83,11 +87,15 @@ bonus design for sparse sessions.
         `rewardStd`); joint sampling of the two weak weights over a grid including zeros against a one-parameter family such as (1, r, r²); a
         fixed strongest weight against a fixed total; how many instances a participant sees from a larger pool; whether to adapt the weights
         to a participant's previous Interlude.
-   5. *Order.* The three baseline sessions come first, from simple to complex; the weighted sessions follow in a random order of their weights.
-   6. *Status (2026-11-09).* Built as `scripts/design/FN.py` with provisional numbers: the weak weights use the stand-in family (1, r, r²)
-      for r = 1, 0.7, 0.5, 0.35, 0.2, 0.1 over a random ranking of the features; baselines last 60, 75 and 90 s with 8 Interlude trials;
-      weighted sessions last 150 s with 24 trials (2 repeats, 2 per-feature trials for each feature that pays enough to show). Durations
-      and trial counts wait for measured Interlude timing. Moisture is the third feature (flat, single-coloured ground where it is not
+   5. *Order (PI, 2026-11-09).* One pass through the cells in order: row 1 (one rewarded feature; one, two, three visible), row 2 (two rewarded;
+      two, three visible), then the first weighted session. The remaining iterations of every cell follow in a random order across the whole set.
+      Within a cell the iterations are counterbalanced over the features (each feature pays, or is the idle one, once; each visible pair once).
+   6. *Status (2026-11-09).* Built as `scripts/design/FN.py` with provisional numbers: each of the five baseline cells (V visible, R rewarded:
+      (1,1), (2,1), (3,1), (2,2), (3,2)) is played 3 times, plus 6 weighted sessions (3,3), 21 sessions in all. The weak weights use the stand-in family
+      (1, r, r²) for r = 1, 0.7, 0.5, 0.35, 0.2, 0.1 over a random ranking of the features (the tiling of the weight space is still the TODO above).
+      Duration: 60 s at (1,1) plus 30 s per extra row or column, so 60, 90, 120, 120, 150 and 180 s for the weighted sessions (about 44 minutes
+      of play, Interludes not counted). Interlude trials (PI): 5, 10 and 20 for one, two and three rewarded features (20 = 2 repeats, 2 per-feature trials) for weighted.
+      Durations and trial counts wait for measured Interlude timing. Moisture is the third feature (flat, single-coloured ground where it is not
       visible). See DECISIONS, "FN built on the new generators".
 4. **Analysis:**
    1. Point trajectories of reward against time in each session. The rate and curvature of increase show performance and periods of learning.

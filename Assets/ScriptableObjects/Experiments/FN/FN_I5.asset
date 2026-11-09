@@ -18,7 +18,7 @@ MonoBehaviour:
   isInterlude: 1
   interludeFor: FN_S5
   interludeMode: 4
-  interludeTrialCount: 24
+  interludeTrialCount: 10
   interludeTrialLimit: 0
   interludeTrialSeconds: 10
   interludeHarvestFruits: 10
@@ -32,8 +32,8 @@ MonoBehaviour:
   interludeMinFeatureGap: 0.15
   interludeMaxRewardGap: 2.148
   interludeMaxFeatureGap: 0.55
-  interludeRepeatCount: 2
-  interludeFeatureTrials: 2
+  interludeRepeatCount: 0
+  interludeFeatureTrials: 1
   interludeRepeatSeparation: 8
   instructionsFile: Experiments/FN/instructions_interlude.txt
   controlsReminder: 
@@ -41,18 +41,18 @@ MonoBehaviour:
   controlsReminderOpacity: 0.35
   rewardFunction:
     shapeComponent:
-      basisFunctionType: 0
-      weight: 1.3333
+      basisFunctionType: 1
+      weight: 2
       peak: 0
       width: 0
     colorComponent:
       basisFunctionType: 0
-      weight: 1.3333
+      weight: 0
       peak: 0
       width: 0
     moistureComponent:
-      basisFunctionType: 0
-      weight: 1.3333
+      basisFunctionType: 1
+      weight: 2
       peak: 0
       width: 0
     bumps: []
@@ -144,11 +144,11 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"direction": {"color": 0, "moisture": 0, "shape": 0}, "experiment":
-    "FN", "hint": "weighted", "index": 5, "instance": "FN_S5", "kind": "weighted",
-    "n_visible": 3, "noise_units": {"color": 2.222, "moisture": 2.222, "shape": 2.222},
-    "ratio": 1.0, "visible": ["shape", "color", "moisture"], "weights": {"color":
-    0.3333, "moisture": 0.3333, "shape": 0.3333}}'
+  designJson: '{"direction": {"color": 0, "moisture": 1, "shape": 1}, "experiment":
+    "FN", "hint": "two", "index": 5, "instance": "FN_S5", "iteration": 1, "kind":
+    "baseline", "n_rewarded": 2, "n_visible": 3, "noise_units": {"moisture": 3.333,
+    "shape": 3.333}, "visible": ["shape", "color", "moisture"], "weights": {"moisture":
+    0.5, "shape": 0.5}}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1

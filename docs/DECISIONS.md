@@ -1939,6 +1939,19 @@ placement, three attributes, a reward summed from per-bush terms, an Interlude b
   from a detection threshold to "the probability of learning a rewarded feature is proportional to its weight relative to the others and the noise".
 
 
+## FN progression: a grid of baseline cells (PI, 2026-11-09)
+
+FN's first design was three baselines (V = 1, 2, 3 visible, one paying) and six weighted sessions. It became a grid of cells with R rewarded features out of V visible, R <= V: row 1 (1,1), (2,1), (3,1), row 2 (2,2), (3,2), each played three times, then six weighted (3,3) sessions, 21 in all.
+- **Why:** the (2,2) and (3,2) cells separate "more features visible" from "more features rewarded", which the weighted sessions (always 3,3) cannot, and the repeats give within-participant estimates per cell. Rejected: only more iterations of row 1 (leaves R = 2 unmeasured); a cell (2,2) with random weights (equal weights keep the cell about the number of features, not the breakdown).
+- **Order:** one pass through row 1, row 2, then the first weighted session; everything else shuffled across the whole set, so early sessions are simple and later ones are mixed (no confound of cell with time after the first pass).
+- **Counterbalancing within a cell:** each feature pays once (R = 1), is the idle one once (R = 2, V = 3), each visible pair appears once (V = 2).
+- **Durations:** 60 s at (1,1) plus 30 s per extra row or column (so 180 s for (3,3), longer than the 150 s earlier planned); a stand-in until Interlude timing is measured. Total play about 44 minutes plus Interludes.
+- **Interlude trials (PI):** 5, 10 and 20 for R = 1, 2, 3 (the weighted ones keep 2 repeats and 2 per-feature trials per feature).
+- **Screens count sessions (PI):** "Session n of 21 · Part A" on the instruction and score screens, Part B for the Interlude; the Interlude no longer counts as a numbered part.
+- **Hints:** (2,2) "Both the X and the Y determine how many points a fruit gives."; (3,2) "Two of the three features determine ..." (PI's wording).
+- **Not done:** drawing the per-participant instances from a pool (to cover the weight space beyond six points and balance feature identity across participants; touches run-start, resume and the server's session count); the tiling of the weight space.
+
+
 ## Tests state a configuration (PI, 2026-11-09)
 
 The tests had grown around the CF ladder: sessions called by name (`S1`, `S3_Interlude`, ...), assertions about what a particular shipped session pays or varies, and old terraced or bump sessions reached through overrides on a live asset. Deleting CF, or building FN, would have broken or silently changed them.

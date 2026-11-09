@@ -18,7 +18,7 @@ MonoBehaviour:
   isInterlude: 1
   interludeFor: FN_S7
   interludeMode: 4
-  interludeTrialCount: 24
+  interludeTrialCount: 20
   interludeTrialLimit: 0
   interludeTrialSeconds: 10
   interludeHarvestFruits: 10
@@ -42,17 +42,17 @@ MonoBehaviour:
   rewardFunction:
     shapeComponent:
       basisFunctionType: 1
-      weight: 0.3604
+      weight: 2.7165
       peak: 0
       width: 0
     colorComponent:
-      basisFunctionType: 1
-      weight: 0.036
+      basisFunctionType: 0
+      weight: 0.9508
       peak: 0
       width: 0
     moistureComponent:
       basisFunctionType: 0
-      weight: 3.6036
+      weight: 0.3328
       peak: 0
       width: 0
     bumps: []
@@ -144,11 +144,11 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"direction": {"color": 1, "moisture": 0, "shape": 1}, "experiment":
-    "FN", "hint": "weighted", "index": 7, "instance": "FN_S7", "kind": "weighted",
-    "n_visible": 3, "noise_units": {"color": 0.06, "moisture": 6.006, "shape": 0.601},
-    "ratio": 0.1, "visible": ["shape", "color", "moisture"], "weights": {"color":
-    0.009, "moisture": 0.9009, "shape": 0.0901}}'
+  designJson: '{"direction": {"color": 0, "moisture": 0, "shape": 1}, "experiment":
+    "FN", "hint": "weighted", "index": 7, "instance": "FN_S7", "iteration": 5, "kind":
+    "weighted", "n_rewarded": 3, "n_visible": 3, "noise_units": {"color": 1.585,
+    "moisture": 0.555, "shape": 4.527}, "ratio": 0.35, "visible": ["shape", "color",
+    "moisture"], "weights": {"color": 0.2377, "moisture": 0.0832, "shape": 0.6791}}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1

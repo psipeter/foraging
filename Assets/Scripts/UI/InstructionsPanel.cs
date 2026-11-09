@@ -67,8 +67,8 @@ public class InstructionsPanel : MonoBehaviour
         CreateControlsReminder();
     }
 
-    // The file's first line is the central instruction (the title), the last "Press [Key] to ..." line the prompt, the rest the text; the part number above is
-    // "Part n of m" (a session or an Interlude is just a part), and [Key] in the text becomes a key chip.
+    // The file's first line is the central instruction (the title), the last "Press [Key] to ..." line the prompt, the rest the text; the label above is
+    // "Session n of m · Part A" (B for the Interlude), and [Key] in the text becomes a key chip.
     private void ShowText(string text, bool notice = false)
     {
         string[] lines = text.Replace("\r", "").Trim().Split('\n');
@@ -82,7 +82,7 @@ public class InstructionsPanel : MonoBehaviour
         }
 
         string body = string.Join("\n", lines, 1, Mathf.Max(0, last)).Trim();
-        _screen.Show(notice ? null : $"Part {GameManager.PartNumber} of {GameManager.PartCount}", title, body, prompt, notice);
+        _screen.Show(notice ? null : GameManager.PartLabel, title, body, prompt, notice);
     }
 
     private string LoadInstructions()
@@ -106,8 +106,8 @@ public class InstructionsPanel : MonoBehaviour
         }
 
         return text
-            .Replace("{part}", GameManager.PartNumber.ToString())
-            .Replace("{total}", GameManager.PartCount.ToString())
+            .Replace("{part}", GameManager.SessionNumber.ToString())
+            .Replace("{total}", GameManager.SessionCount.ToString())
             .Replace("{trial_seconds}", (sessionConfig != null ? sessionConfig.InterludeTrialSeconds : 0f).ToString("0"));
     }
 

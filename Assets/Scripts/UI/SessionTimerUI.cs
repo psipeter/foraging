@@ -152,7 +152,7 @@ public class SessionTimerUI : MonoBehaviour
         // An Interlude's points appear only on its end screen, never trial by trial (the practice Interlude shows what it would have paid, and never which
         // choices were right). The totals are on the experiment's completion screen, after the last of these.
         float points = isInterlude ? (interludeManager != null ? interludeManager.Points : 0f) : _lastTotalScore;
-        _score = ScoreScreen.Show(GameManager.PartNumber, GameManager.PartCount, points, "Press [Enter] to continue", FindFirstObjectByType<CameraController>());
+        _score = ScoreScreen.Show(GameManager.PartLabel, points, "Press [Enter] to continue", FindFirstObjectByType<CameraController>());
         Music.PlayScore();
     }
 }

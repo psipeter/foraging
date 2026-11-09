@@ -43,9 +43,39 @@ public class GameManager : MonoBehaviour
     public static int TotalSessions => AllSessionConfigs?.Count ?? 0;
     public static bool IsLastSession => TotalSessions == 0 || CurrentSessionIndex >= TotalSessions - 1;
 
-    // A session and an Interlude are both just parts in the study's screens: "Part 3 of 14".
-    public static int PartNumber => CurrentSessionIndex + 1;
-    public static int PartCount => TotalSessions;
+    // The study's screens count sessions; a session (Part A) and its Interlude (Part B) share a number: "Session 3 of 21 · Part A".
+    public static int SessionCount
+    {
+        get
+        {
+            int count = 0;
+            for (int i = 0; AllSessionConfigs != null && i < AllSessionConfigs.Count; i++)
+            {
+                count += AllSessionConfigs[i].IsInterlude ? 0 : 1;
+            }
+
+            return count;
+        }
+    }
+
+    public static int SessionNumber
+    {
+        get
+        {
+            int number = 0;
+            for (int i = 0; AllSessionConfigs != null && i <= CurrentSessionIndex && i < AllSessionConfigs.Count; i++)
+            {
+                number += AllSessionConfigs[i].IsInterlude ? 0 : 1;
+            }
+
+            return Mathf.Max(1, number);
+        }
+    }
+
+    public static string PartLetter =>
+        AllSessionConfigs != null && CurrentSessionIndex >= 0 && CurrentSessionIndex < AllSessionConfigs.Count && AllSessionConfigs[CurrentSessionIndex].IsInterlude ? "B" : "A";
+
+    public static string PartLabel => $"Session {SessionNumber} of {SessionCount} · Part {PartLetter}";
 
     private void Awake()
     {

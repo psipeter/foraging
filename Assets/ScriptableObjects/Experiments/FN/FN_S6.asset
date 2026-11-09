@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: FN_S6
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
-  sessionDuration: 150
+  sessionDuration: 180
   worldSeed: 306
   isPractice: 0
   isInterlude: 0
@@ -42,17 +42,17 @@ MonoBehaviour:
   rewardFunction:
     shapeComponent:
       basisFunctionType: 0
-      weight: 3.2258
+      weight: 0.5714
       peak: 0
       width: 0
     colorComponent:
-      basisFunctionType: 0
-      weight: 0.129
+      basisFunctionType: 1
+      weight: 1.1429
       peak: 0
       width: 0
     moistureComponent:
       basisFunctionType: 1
-      weight: 0.6452
+      weight: 2.2857
       peak: 0
       width: 0
     bumps: []
@@ -144,11 +144,11 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"direction": {"color": 0, "moisture": 1, "shape": 0}, "experiment":
-    "FN", "hint": "weighted", "index": 6, "instance": "FN_S6", "kind": "weighted",
-    "n_visible": 3, "noise_units": {"color": 0.215, "moisture": 1.075, "shape": 5.376},
-    "ratio": 0.2, "visible": ["shape", "color", "moisture"], "weights": {"color":
-    0.0323, "moisture": 0.1613, "shape": 0.8065}}'
+  designJson: '{"direction": {"color": 1, "moisture": 1, "shape": 0}, "experiment":
+    "FN", "hint": "weighted", "index": 6, "instance": "FN_S6", "iteration": 1, "kind":
+    "weighted", "n_rewarded": 3, "n_visible": 3, "noise_units": {"color": 1.905,
+    "moisture": 3.81, "shape": 0.952}, "ratio": 0.5, "visible": ["shape", "color",
+    "moisture"], "weights": {"color": 0.2857, "moisture": 0.5714, "shape": 0.1429}}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1

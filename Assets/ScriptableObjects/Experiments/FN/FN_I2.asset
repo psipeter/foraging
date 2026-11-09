@@ -18,7 +18,7 @@ MonoBehaviour:
   isInterlude: 1
   interludeFor: FN_S2
   interludeMode: 4
-  interludeTrialCount: 8
+  interludeTrialCount: 5
   interludeTrialLimit: 0
   interludeTrialSeconds: 10
   interludeHarvestFruits: 10
@@ -41,13 +41,13 @@ MonoBehaviour:
   controlsReminderOpacity: 0.35
   rewardFunction:
     shapeComponent:
-      basisFunctionType: 0
-      weight: 0
+      basisFunctionType: 1
+      weight: 4
       peak: 0
       width: 0
     colorComponent:
       basisFunctionType: 1
-      weight: 4
+      weight: 0
       peak: 0
       width: 0
     moistureComponent:
@@ -144,17 +144,17 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"direction": {"color": 1, "moisture": 1, "shape": 0}, "experiment":
-    "FN", "hint": "named", "index": 2, "instance": "FN_S2", "kind": "baseline", "n_visible":
-    2, "noise_units": {"color": 6.667}, "visible": ["color", "shape"], "weights":
-    {"color": 1.0}}'
+  designJson: '{"direction": {"color": 1, "moisture": 1, "shape": 1}, "experiment":
+    "FN", "hint": "named", "index": 2, "instance": "FN_S2", "iteration": 1, "kind":
+    "baseline", "n_rewarded": 1, "n_visible": 2, "noise_units": {"shape": 6.667},
+    "visible": ["shape", "moisture"], "weights": {"shape": 1.0}}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
-  colorVaries: 1
+  colorVaries: 0
   colorWhenFixed: 0.5
-  moistureVaries: 0
+  moistureVaries: 1
   moistureWhenFixed: 0.5
-  moistureIsFeature: 0
+  moistureIsFeature: 1
   randomBushValueRange: {x: 0, y: 0}
   harvestRangeGapBase: 7
   harvestRangeGapPerRadius: 0
