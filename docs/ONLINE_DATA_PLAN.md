@@ -123,8 +123,12 @@ history would grow by that much per deploy).
 1. In `Assets/StreamingAssets/online.json` set `"enabled": true` (the URL and the publishable key are already there; the build refuses
    to run in a browser without it). Registered worlds must match the ones in the build (`server_admin.py register-worlds` again if
    they were regenerated).
-2. Commit the code, then register that commit: `server_admin.py register-release --commit <hash> --experiment <code>=<n> ...` (or the SQL in the
-   walkthrough). A build from a dirty tree is accepted but flagged.
+2. Commit the code (and push it), build (step 3), then register everything with one command: `./venv/bin/python scripts/server_admin.py publish --build Builds/web [--dry-run]`.
+   It reads the experiments from the catalog (code, title, prerequisites, menu order), the commit from the build's own `StreamingAssets/build_info.json`, the number of sessions
+   of each experiment from git at that commit, and registers the world and Interlude files **of the build** (the files participants download). It keeps a completion code
+   already registered (`--completion-code FN=XXXX` sets one) and can be repeated. A new experiment needs no registration step of its own: building it adds it to the catalog and
+   the next `publish` registers it. The connection string is read from `FORAGING_DB_URL` or the first line of `~/.config/foraging/db_url` (mode 600, outside the repository).
+   The single commands (`register-experiment`, `register-worlds`, `register-release`) remain for odd cases. A build from a dirty tree is accepted but flagged.
 3. Unity: File > Build Profiles (or Build Settings) > WebGL, **not** a development build, scenes `Boot` then `SampleScene` (already the
    list), Player Settings > Publishing > Decompression Fallback **on** (already set in this project), output to e.g. `Builds/web`.
    Switching the Editor to WebGL reimports and the first release build takes several minutes; switch back to Linux afterwards.

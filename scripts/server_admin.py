@@ -1,7 +1,9 @@
 """Administration of the online data server: register releases and worlds, list runs, and pull a run's data into the local
 layout (rundata.py) so replay.py, visibility.py and the analyses read it like a local log. Talks to Postgres directly (the
-service connection string from the Supabase dashboard, in FORAGING_DB_URL; never put it in the repo).
+service connection string from the Supabase dashboard, in FORAGING_DB_URL or, so that nothing has to be exported, on the first line of
+~/.config/foraging/db_url (mode 600); never put it in the repo).
 
+    ./venv/bin/python scripts/server_admin.py publish --build Builds/web [--dry-run] [--completion-code FN=XXXX]   # everything below, from the catalog and the build
     ./venv/bin/python scripts/server_admin.py register-experiment --code CF --title "Complex Features" [--requires TUT] [--order 2] [--completion-code XXXX] [--payout '{"..."}']
     ./venv/bin/python scripts/server_admin.py register-release --commit <git hash> --experiment TUT --experiment CF [--note "..."]
     ./venv/bin/python scripts/server_admin.py register-worlds            # hashes Assets/StreamingAssets/Experiments/*/*
@@ -29,13 +31,14 @@ from world import PROJECT_ROOT
 
 def register_experiment(conn, code, title, requires=(), sort_order=0, completion_code=None, payout=None):
     """Create or update an experiment: the menu title, the experiments a participant must have finished first, the order in the menu, its
-    Prolific completion code (none: a dummy is shown) and payout settings (stored for the analysis, not read by the server)."""
+    Prolific completion code (none: a dummy is shown, or the one already registered is kept) and payout settings (stored for the analysis, not read by the server;
+    none keeps the registered ones)."""
     for required in requires:
         if conn.execute("select 1 from public.experiments where code = %s", (required,)).fetchone() is None and required != code:
             raise ValueError(f"{code} requires {required}, which is not registered (register it first: a prerequisite that does not exist locks {code} for everyone)")
     conn.execute("insert into public.experiments (code, title, requires, sort_order, completion_code, payout) values (%s, %s, %s, %s, %s, %s) "
                  "on conflict (code) do update set title = excluded.title, requires = excluded.requires, sort_order = excluded.sort_order, "
-                 "completion_code = excluded.completion_code, payout = excluded.payout",
+                 "completion_code = coalesce(excluded.completion_code, experiments.completion_code), payout = coalesce(excluded.payout, experiments.payout)",
                  (code, title, list(requires), sort_order, completion_code, None if payout is None else json.dumps(payout)))
 
 
@@ -70,6 +73,98 @@ def register_worlds(conn, directory=WORLD_DIR):
                          (hashlib.sha256(path.read_bytes()).hexdigest(), path.name))
             names.append(path.name)
     return names
+
+
+DB_URL_FILE = Path.home() / ".config" / "foraging" / "db_url"
+
+
+def db_url(environ=os.environ, path=DB_URL_FILE):
+    """The database connection string: FORAGING_DB_URL, else the first line of `path` (refused unless only its owner can read it). None when neither is there."""
+    if environ.get("FORAGING_DB_URL"):
+        return environ["FORAGING_DB_URL"]
+    if path.is_file():
+        if path.stat().st_mode & 0o077:
+            raise PermissionError(f"{path} can be read by others: chmod 600 it (it holds the database password)")
+        lines = path.read_text().strip().splitlines()
+        return lines[0].strip() if lines else None
+    return None
+
+
+def _guid_paths(root):
+    """{guid: asset path} of every .asset under `root` (from the .meta files)."""
+    found = {}
+    for meta in Path(root).rglob("*.asset.meta"):
+        for line in meta.read_text().splitlines():
+            if line.startswith("guid:"):
+                found[line.split(":", 1)[1].strip()] = meta.with_suffix("")
+    return found
+
+
+def catalog_experiments(repo=PROJECT_ROOT):
+    """The experiments of the game, in the catalog's order (the menu's order when there is no server): [{code, title, requires, order}], read from the assets,
+    so adding an experiment to the catalog (build_experiment.py does) is all that registering it needs."""
+    import yaml
+    from world import _UnityLoader
+
+    def fields(path):
+        return yaml.load(Path(path).read_text(), Loader=_UnityLoader)["MonoBehaviour"]
+
+    root = Path(repo) / "Assets"
+    by_guid = _guid_paths(root / "ScriptableObjects" / "Experiments")
+    catalog = fields(root / "Resources" / "ExperimentCatalog.asset")
+    out = []
+    for number, ref in enumerate(catalog["experiments"], start=1):
+        f = fields(by_guid[ref["guid"]])
+        out.append({"code": f["code"], "title": f["title"], "requires": list(f.get("requires") or []), "order": number})
+    return out
+
+
+def build_plan(build_dir=None, commit=None, repo=PROJECT_ROOT):
+    """What `publish` registers: the experiments (those the build holds when `build_dir` is given, else every catalog experiment), the commit (the build's own, from its
+    build_info.json, else `commit` or HEAD) with each experiment's session count read from git, the folder whose world and Interlude files are registered (the build's,
+    so the hashes are of the files the participant downloads), and the notes a human should see (a dirty build, a commit that is not HEAD)."""
+    repo = Path(repo)
+    notes = []
+    root = repo / "Assets" / "StreamingAssets" / "Experiments"
+    if build_dir:
+        build_dir = Path(build_dir)
+        info = json.loads((build_dir / "StreamingAssets" / "build_info.json").read_text())
+        commit = commit or info["commit"]
+        root = build_dir / "StreamingAssets" / "Experiments"
+        if info.get("dirty"):
+            notes.append("the build was made from a dirty tree: registered, and flagged by the server")
+    if commit is None:
+        commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    elif len(commit) < 40:
+        commit = subprocess.run(["git", "rev-parse", commit], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    held = {p.name for p in root.iterdir() if p.is_dir()} if root.is_dir() else set()
+    experiments = [e for e in catalog_experiments(repo) if e["code"] in held]
+    if not experiments:
+        raise ValueError(f"no experiment of the catalog has files in {root}")
+    for e in experiments:
+        missing = [r for r in e["requires"] if r not in {x["code"] for x in experiments}]
+        if missing:
+            notes.append(f"{e['code']} requires {', '.join(missing)}, which this build does not offer: it stays locked unless the server already has a finished run of it")
+    sessions = {e["code"]: sessions_in_build(commit, e["code"], repo) for e in experiments}
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
+    if head != commit:
+        notes.append(f"the commit is not HEAD ({head[:7]}): fine for a build made earlier")
+    return {"commit": commit, "experiments": experiments, "sessions": sessions, "worlds": root, "notes": notes}
+
+
+def publish(conn, plan, completion_codes=None, note=None):
+    """Register what `build_plan` found: each experiment (keeping a completion code already registered unless one is given), the build's files, the release.
+    Safe to repeat. Returns a one-line summary per step."""
+    completion_codes = completion_codes or {}
+    done = []
+    for e in plan["experiments"]:
+        register_experiment(conn, e["code"], e["title"], e["requires"], e["order"], completion_codes.get(e["code"]))
+        done.append(f"experiment {e['code']} ({e['title']}, order {e['order']}, requires {e['requires'] or 'nothing'})")
+    names = register_worlds(conn, plan["worlds"])
+    done.append(f"{len(names)} world and Interlude files from {plan['worlds']}")
+    register_release(conn, plan["commit"], plan["sessions"], note)
+    done.append(f"release {plan['commit'][:12]} with {plan['sessions']}")
+    return done
 
 
 def _iso(value):
@@ -156,15 +251,34 @@ def main():
     r.add_argument("--experiment", action="append", required=True, metavar="CODE", help="an experiment of the build (its session count is read from the asset at --commit)")
     r.add_argument("--note")
     sub.add_parser("register-worlds")
+    pub = sub.add_parser("publish", help="register the experiments, the build's world files and the release in one go")
+    pub.add_argument("--build", help="the WebGL build directory (its build_info.json names the commit, its StreamingAssets the experiments and files); default: the catalog and HEAD")
+    pub.add_argument("--commit", help="override the build's commit")
+    pub.add_argument("--completion-code", action="append", default=[], metavar="CODE=VALUE", help="a Prolific completion code for an experiment (kept if already registered)")
+    pub.add_argument("--note")
+    pub.add_argument("--dry-run", action="store_true", help="print the plan; touch nothing and connect to nothing")
     sub.add_parser("runs")
     p = sub.add_parser("pull")
     p.add_argument("--run", required=True)
     p.add_argument("--out", default="ForagingData")
     args = parser.parse_args()
+    if args.command == "publish":
+        plan = build_plan(args.build, args.commit)
+        print(f"commit {plan['commit']}; experiments {[(e['code'], e['order']) for e in plan['experiments']]}; sessions {plan['sessions']}; files from {plan['worlds']}")
+        for line in plan["notes"]:
+            print("note:", line)
+        if args.dry_run:
+            return
     import psycopg
-    if not os.environ.get("FORAGING_DB_URL"):
-        sys.exit("set FORAGING_DB_URL to the database connection string")
-    conn = psycopg.connect(os.environ["FORAGING_DB_URL"], row_factory=psycopg.rows.dict_row, autocommit=True)
+    url = db_url()
+    if not url:
+        sys.exit(f"no database connection string: set FORAGING_DB_URL or put it on the first line of {DB_URL_FILE} (chmod 600)")
+    conn = psycopg.connect(url, row_factory=psycopg.rows.dict_row, autocommit=True)
+    if args.command == "publish":
+        codes = dict(item.split("=", 1) for item in args.completion_code)
+        for line in publish(conn, plan, codes, args.note):
+            print("registered", line)
+        return
     if args.command == "register-experiment":
         register_experiment(conn, args.code, args.title, args.requires, args.order, args.completion_code, json.loads(args.payout) if args.payout else None)
         print(f"registered {args.code}: {args.title}")
