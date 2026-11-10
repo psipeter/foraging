@@ -42,13 +42,14 @@ def register_experiment(conn, code, title, requires=(), sort_order=0, completion
                  (code, title, list(requires), sort_order, completion_code, None if payout is None else json.dumps(payout)))
 
 
-def register_release(conn, commit, experiments, note=None):
+def register_release(conn, commit, experiments, note=None, development=False):
     """Register a build and the experiments it offers: `experiments` maps an experiment code to its number of sessions (practice,
     sessions and Interludes alike) in this build. The experiments must be registered (`register_experiment`); run-start refuses a build
-    that is not listed or an experiment it does not offer."""
+    that is not listed or an experiment it does not offer. `development` marks a release made from a development build: only such a release may start a
+    reduced run (a development build playing fewer sessions; migration 20261110000000_reduced_runs.sql)."""
     with conn.transaction():                                  # run-finish reads these rows: never see them half replaced
-        conn.execute("insert into public.releases (build_commit, note) values (%s, %s) on conflict (build_commit) do update set note = excluded.note",
-                     (commit, note))
+        conn.execute("insert into public.releases (build_commit, note, development) values (%s, %s, %s) "
+                     "on conflict (build_commit) do update set note = excluded.note, development = excluded.development", (commit, note, bool(development)))
         conn.execute("delete from public.release_experiments where build_commit = %s", (commit,))
         for code, n in experiments.items():
             conn.execute("insert into public.release_experiments (build_commit, experiment, n_sessions) values (%s, %s, %s)", (commit, code, n))
@@ -125,6 +126,7 @@ def build_plan(build_dir=None, commit=None, repo=PROJECT_ROOT):
     so the hashes are of the files the participant downloads), and the notes a human should see (a dirty build, a commit that is not HEAD)."""
     repo = Path(repo)
     notes = []
+    development = False
     root = repo / "Assets" / "StreamingAssets" / "Experiments"
     if build_dir:
         build_dir = Path(build_dir)
@@ -133,6 +135,9 @@ def build_plan(build_dir=None, commit=None, repo=PROJECT_ROOT):
         root = build_dir / "StreamingAssets" / "Experiments"
         if info.get("dirty"):
             notes.append("the build was made from a dirty tree: registered, and flagged by the server")
+        development = bool(info.get("development"))
+        if development:
+            notes.append("a development build: registered as a development release, which may start reduced runs (short and repeats)")
     if commit is None:
         commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
     elif len(commit) < 40:
@@ -149,7 +154,7 @@ def build_plan(build_dir=None, commit=None, repo=PROJECT_ROOT):
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
     if head != commit:
         notes.append(f"the commit is not HEAD ({head[:7]}): fine for a build made earlier")
-    return {"commit": commit, "experiments": experiments, "sessions": sessions, "worlds": root, "notes": notes}
+    return {"commit": commit, "experiments": experiments, "sessions": sessions, "worlds": root, "notes": notes, "development": development}
 
 
 def publish(conn, plan, completion_codes=None, note=None):
@@ -162,7 +167,7 @@ def publish(conn, plan, completion_codes=None, note=None):
         done.append(f"experiment {e['code']} ({e['title']}, order {e['order']}, requires {e['requires'] or 'nothing'})")
     names = register_worlds(conn, plan["worlds"])
     done.append(f"{len(names)} world and Interlude files from {plan['worlds']}")
-    register_release(conn, plan["commit"], plan["sessions"], note)
+    register_release(conn, plan["commit"], plan["sessions"], note, plan.get("development", False))
     done.append(f"release {plan['commit'][:12]} with {plan['sessions']}")
     return done
 

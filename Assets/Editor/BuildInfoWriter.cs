@@ -49,8 +49,13 @@ public class BuildInfoWriter : IPreprocessBuildWithReport
         EditorApplication.delayCall += Write;
     }
 
+    // Set by OnPreprocessBuild from the build's options: a development build says so in build_info.json, so that `server_admin.py publish` can register it
+    // as a development release (the only kind that may start a reduced run).
+    private static bool _developmentBuild;
+
     public void OnPreprocessBuild(BuildReport report)
     {
+        _developmentBuild = (report.summary.options & BuildOptions.Development) != 0;
         Write();
         WriteStreamingFileList();
         AssetDatabase.ImportAsset("Assets/StreamingAssets/build_info.json");
@@ -105,7 +110,8 @@ public class BuildInfoWriter : IPreprocessBuildWithReport
             }
 
             string json = "{\n  \"commit\": \"" + commit + "\",\n  \"dirty\": " + (dirty ? "true" : "false") +
-                          ",\n  \"unityVersion\": \"" + UnityEngine.Application.unityVersion + "\"\n}\n";
+                          ",\n  \"unityVersion\": \"" + UnityEngine.Application.unityVersion + "\"" +
+                          ",\n  \"development\": " + (_developmentBuild ? "true" : "false") + "\n}\n";
             string path = Path.Combine(root, "Assets", "StreamingAssets", "build_info.json");
             if (!File.Exists(path) || File.ReadAllText(path) != json)
             {

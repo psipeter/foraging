@@ -20,12 +20,6 @@ public class GameManager : MonoBehaviour
     [SerializeField] private InstructionsPanel instructionsPanel;
     [SerializeField] private InterludeManager interludeManager;
 
-    [Tooltip("Local quick testing (the Foraging > Quick test menu item in the Editor, or -quick on a standalone build): a practice session lasts this long, ...")]
-    [SerializeField] private float quickPracticeSeconds = 20f;
-    [Tooltip("... any other session this long, and an Interlude plays at most this many of its trials. Used on a copy of the session asset; the assets are never changed.")]
-    [SerializeField] private float quickSessionSeconds = 20f;
-    [SerializeField] private int quickInterludeTrials = 3;
-
     public static int CurrentSessionIndex = 0;
     public static List<SessionConfig> AllSessionConfigs;
 
@@ -97,7 +91,7 @@ public class GameManager : MonoBehaviour
 
             List<SessionConfig> chosen = experiment != null ? experiment.Sessions : null;
             AllSessionConfigs = chosen != null
-                ? new List<SessionConfig>(chosen)
+                ? RunModes.Apply(chosen)
                 : new List<SessionConfig>();
             CurrentSessionIndex = 0;
 #if UNITY_EDITOR
@@ -127,10 +121,10 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        if (QuickTestRequested())
+        if (RunModes.Short < 1f)
         {
-            Debug.LogWarning($"GameManager: quick test mode ({quickPracticeSeconds} s practice, {quickSessionSeconds} s sessions, {quickInterludeTrials} Interlude trials).");
-            activeConfig = activeConfig.QuickCopy(quickPracticeSeconds, quickSessionSeconds, quickInterludeTrials);
+            Debug.LogWarning($"GameManager: reduced run, sessions at {RunModes.Short:0.##} of their length.");
+            activeConfig = activeConfig.ScaledCopy(RunModes.Short);
         }
 
         RenderSettings.fog = activeConfig.FogEnabled;
@@ -226,24 +220,6 @@ public class GameManager : MonoBehaviour
         FruitMaterialManager.SetSessionConfig(activeConfig);
         Music.Volume = activeConfig.MusicVolume;
         Music.Stop();                                                    // the score screen's music ended with the last scene; none plays during a session
-    }
-
-    // The Editor's Foraging > Quick test toggle (an EditorPref, so it never reaches a build), -quick on the command line of a standalone build, or ?quick=1 in the
-    // address of a browser development build (a release build ignores it: a link must not be able to shorten a participant's sessions).
-    private static bool QuickTestRequested()
-    {
-#if UNITY_EDITOR
-        if (UnityEditor.EditorPrefs.GetBool("Foraging.QuickTest", false))
-        {
-            return true;
-        }
-#endif
-        if (Application.platform == RuntimePlatform.WebGLPlayer)
-        {
-            return Debug.isDebugBuild && OnlineSettings.UrlParameter("quick") != null;
-        }
-
-        return System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-quick") >= 0;
     }
 
     public static void AdvanceSession()

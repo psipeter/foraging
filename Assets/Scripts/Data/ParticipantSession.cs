@@ -104,10 +104,13 @@ public static class ParticipantSession
     }
 
     // Starts (or continues) the participant's run of an experiment.
-    public static IEnumerator StartRun(OnlineSettings settings, string experiment, Action<RunReply> done, Action<string> failed)
+    // `expectedSessions`: the number of sessions (sessions and Interludes alike) of a reduced run (RunModes.ExpectedSessions); null for a full one.
+    public static IEnumerator StartRun(OnlineSettings settings, string experiment, int? expectedSessions, Action<RunReply> done, Action<string> failed)
     {
-        string body = Json.Obj(("build", new Json.Raw(BuildJson(BuildInfo.Read()))), ("participant_id", ParticipantId),
-            ("participant_token", Token), ("experiment", experiment));
+        string body = expectedSessions.HasValue
+            ? Json.Obj(("build", new Json.Raw(BuildJson(BuildInfo.Read()))), ("participant_id", ParticipantId), ("participant_token", Token), ("experiment", experiment),
+                ("expected_sessions", expectedSessions.Value))
+            : Json.Obj(("build", new Json.Raw(BuildJson(BuildInfo.Read()))), ("participant_id", ParticipantId), ("participant_token", Token), ("experiment", experiment));
         yield return HttpSink.Call(settings.url, settings.apikey, "run-start", System.Text.Encoding.UTF8.GetBytes(body), request =>
         {
             if (request.result != UnityWebRequest.Result.Success)

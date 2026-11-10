@@ -129,7 +129,7 @@ public class Bootstrap : MonoBehaviour
             _status.Set("Foraging study", "Connecting", "Reaching the server.");
             RunReply run = null;
             string error = null;
-            yield return ParticipantSession.StartRun(_settings, menu.ChosenCode, r => run = r, e => error = e);
+            yield return ParticipantSession.StartRun(_settings, menu.ChosenCode, experiment != null ? RunModes.ExpectedSessions(experiment.Sessions) : null, r => run = r, e => error = e);
             if (error != null)
             {
                 Fail(error);

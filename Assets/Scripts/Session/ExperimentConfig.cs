@@ -50,27 +50,28 @@ public class ExperimentConfig : ScriptableObject
     private const float InstructionSecondsPerPart = 20f;       // reading the instructions of a session or an Interlude
     private const float RoundMinutesTo = 5f;
 
-    // The minutes the menu quotes: the stated estimate, else the time the sessions and Interludes take at most, rounded to 5 minutes.
-    public float EstimatedMinutes
+    // The minutes the menu quotes: the stated estimate, else MinutesOf the sessions.
+    public float EstimatedMinutes => estimatedMinutes > 0f ? estimatedMinutes : MinutesOf(sessions, 1f);
+
+    // The time the sessions and Interludes take at most (a session its length, an Interlude its trials at their time limit, `shortFactor` as RunModes.Short applies
+    // it) plus a short allowance for each instruction screen, rounded to 5 minutes.
+    public static float MinutesOf(IList<SessionConfig> list, float shortFactor)
     {
-        get
+        float seconds = 0f;
+        foreach (SessionConfig session in list)
         {
-            if (estimatedMinutes > 0f)
+            if (session == null)
             {
-                return estimatedMinutes;
+                continue;
             }
 
-            float seconds = 0f;
-            foreach (SessionConfig session in sessions)
-            {
-                if (session != null)
-                {
-                    seconds += InstructionSecondsPerPart + (session.IsInterlude ? session.InterludeTrialCount * session.InterludeTrialSeconds : session.SessionDuration);
-                }
-            }
-
-            return Mathf.Max(RoundMinutesTo, Mathf.Round(seconds / 60f / RoundMinutesTo) * RoundMinutesTo);
+            float play = session.IsInterlude
+                ? (RunModes.InterludeTrials(session, shortFactor) is int cap && cap > 0 ? cap : session.InterludeTrialCount) * session.InterludeTrialSeconds
+                : RunModes.SessionSeconds(session, shortFactor);
+            seconds += InstructionSecondsPerPart + play;
         }
+
+        return Mathf.Max(RoundMinutesTo, Mathf.Round(seconds / 60f / RoundMinutesTo) * RoundMinutesTo);
     }
 
     // The StreamingAssets files a session reads: its world, its Interlude file and its instruction text.

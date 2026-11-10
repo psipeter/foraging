@@ -78,7 +78,7 @@ const CONFLICTS = ['no_session', 'session_gap', 'gap_events', 'gap_trajectory', 
 
 export function fromDbError(e: DbError): HttpError {
   if (e.message === 'unauthorized') return new HttpError(401, 'unauthorized');
-  if (['unknown_build', 'unknown_world', 'unknown_experiment', 'prerequisite_unmet'].includes(e.message)) return new HttpError(403, e.message);
+  if (['unknown_build', 'unknown_world', 'unknown_experiment', 'prerequisite_unmet', 'reduced_run_not_allowed'].includes(e.message)) return new HttpError(403, e.message);
   if (CONFLICTS.includes(e.message)) return new HttpError(409, e.message);
   if (/^2[23]/.test(e.code)) return new HttpError(400, 'invalid', 'a field has the wrong type, is missing or violates a constraint');
   console.error('database error', e.code, e.message);
@@ -122,17 +122,21 @@ export function participantStart(db: Db, body: Body) {
   });
 }
 
-// {build, participant_id, participant_token, experiment} starts the participant's run of an experiment, or continues the unfinished one
-// (the participant must satisfy its prerequisites). Returns {run_id, token, status, experiment, resume, has_resume}; a finished run has no
-// token but the experiment's completion code.
+// {build, participant_id, participant_token, experiment, expected_sessions?} starts the participant's run of an experiment, or continues the unfinished one
+// (the participant must satisfy its prerequisites). `expected_sessions` declares a reduced run (a development build playing fewer sessions, see
+// docs/DECISIONS.md "Reduced runs"): how many sessions (practice, sessions, Interludes) it will have; only a build registered as a development release may
+// send it (403 reduced_run_not_allowed). Returns {run_id, token, status, experiment, resume, has_resume}; a finished run has no token but the
+// experiment's completion code.
 export function runStart(db: Db, body: Body) {
   return guarded(async () => {
     const clean = build(body);
     const experiment = str(body, 'experiment', 32) as string;
     if (!/^[A-Za-z0-9]{1,32}$/.test(experiment)) bad('experiment has unexpected characters');
     const participantHash = await sha256Hex(str(body, 'participant_token', 100) as string);
+    const expected = body.expected_sessions ?? null;
+    if (expected !== null && (!Number.isInteger(expected) || (expected as number) < 1 || (expected as number) > 1000)) bad('expected_sessions must be an integer from 1 to 1000');
     const token = newToken();
-    const result = await db.call('server.start_run', [await sha256Hex(token), participantId(body), participantHash, experiment, clean]);
+    const result = await db.call('server.start_run', [await sha256Hex(token), participantId(body), participantHash, experiment, clean, expected]);
     return result.status === 'in_progress' ? { ...result, token, has_resume: result.resume != null } : result;
   });
 }

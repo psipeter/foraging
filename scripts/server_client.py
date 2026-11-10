@@ -66,12 +66,15 @@ class Client:
             self.participant_id, self.participant_token = result["participant_id"], result["token"]
         return result
 
-    def start(self, experiment=EXPERIMENT, prolific_pid=None, consent=None, login=True):
+    def start(self, experiment=EXPERIMENT, prolific_pid=None, consent=None, login=True, expected_sessions=None):
         """The run of `experiment`: a new one, or the continuation of the participant's unfinished one (a finished one answers with its
-        status and completion code). Logs in first (a new participant unless `prolific_pid` names a known one) unless `login` is False."""
+        status and completion code). Logs in first (a new participant unless `prolific_pid` names a known one) unless `login` is False.
+        `expected_sessions` declares a reduced run (only a development release accepts it): the number of sessions it will have."""
         if login:
             self.login(prolific_pid, consent)
         body = {"build": self.build, "participant_id": self.participant_id, "participant_token": self.participant_token, "experiment": experiment}
+        if expected_sessions is not None:
+            body["expected_sessions"] = expected_sessions
         result = self._post("run-start", body)
         self.run_id = result.get("run_id", self.run_id)
         self.token = result.get("token", self.token)

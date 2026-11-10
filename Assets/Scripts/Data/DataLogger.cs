@@ -113,6 +113,11 @@ public class DataLogger : MonoBehaviour
         {
             _sessionJson = SessionJson(false);
             LogEvent("session_start", payload: newRunStage ? Json.Obj(("resumed_run", true)) : PosePayload());
+            string modes = RunModes.Payload();                           // a reduced run (development only) says so in the log
+            if (modes != null)
+            {
+                LogEvent("run_modes", payload: modes);
+            }
         }
 
         Flush();

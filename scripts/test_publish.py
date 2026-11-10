@@ -33,10 +33,10 @@ def test_the_catalog_lists_the_experiments_in_menu_order_with_their_prerequisite
     assert by["TUT"]["requires"] == [] and by["FN"]["requires"] == ["TUT"] and by["FN"]["title"] == "Feature Number"
 
 
-def fake_build(tmp_path, commit, dirty=False, experiments=("TUT", "FN")):
+def fake_build(tmp_path, commit, dirty=False, experiments=("TUT", "FN"), development=None):
     build = tmp_path / "build"
     (build / "StreamingAssets").mkdir(parents=True)
-    (build / "StreamingAssets" / "build_info.json").write_text(json.dumps({"commit": commit, "dirty": dirty}))
+    (build / "StreamingAssets" / "build_info.json").write_text(json.dumps({"commit": commit, "dirty": dirty, **({} if development is None else {"development": development})}))
     for code in experiments:
         (build / "StreamingAssets" / "Experiments" / code).mkdir(parents=True)
     return build
@@ -59,3 +59,9 @@ def test_a_build_without_a_prerequisite_is_noted_and_one_without_experiments_is_
     assert [e["code"] for e in plan["experiments"]] == ["FN"] and any("requires TUT" in note for note in plan["notes"])
     with pytest.raises(ValueError, match="no experiment"):
         server_admin.build_plan(fake_build(tmp_path / "empty", head(), experiments=()))
+
+
+def test_a_development_builds_plan_is_marked_so_its_release_may_start_reduced_runs(tmp_path):
+    assert server_admin.build_plan(fake_build(tmp_path / "a", head(), development=True))["development"] is True
+    assert server_admin.build_plan(fake_build(tmp_path / "b", head(), development=False))["development"] is False
+    assert server_admin.build_plan(fake_build(tmp_path / "c", head()))["development"] is False             # an older build_info.json has no flag: a release

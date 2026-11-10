@@ -36,6 +36,7 @@ ROOT = Path(__file__).resolve().parent.parent
 APIKEY = "test-key"
 COMMIT = "abc1234"
 MENU_COMMIT = "menu123"
+DEV_COMMIT = "dev9999"                                         # registered as a development release: it may start reduced runs
 BUILD = {"commit": COMMIT, "dirty": False, "platform": "TestPlatform", "unity_version": "6000.test"}
 WORLD = "a" * 64
 INTERLUDE = "b" * 64
@@ -74,6 +75,7 @@ def env(tmp_path_factory):
     server_admin.register_experiment(admin, "TWO", "Second", requires=["ONE"], sort_order=2, completion_code="CODE-TWO")
     server_admin.register_release(admin, COMMIT, {"TEST": 2})
     server_admin.register_release(admin, MENU_COMMIT, {"ONE": 1, "TWO": 1})
+    server_admin.register_release(admin, DEV_COMMIT, {"TEST": 2}, development=True)
     admin.execute("insert into public.worlds (sha256, name) values (%s, 'S1_seed1.world'), (%s, 'S1_Interlude_seed1.interlude.json')", (WORLD, INTERLUDE))
     yield {"url": f"http://127.0.0.1:{port}", "db": admin, "dburl": url, "log": log}
     proc.terminate()
@@ -574,3 +576,47 @@ def test_the_load_test_script_runs_clean_against_the_local_server(env):
                            "--ramp", "1"], capture_output=True, text=True, env={**os.environ, "FORAGING_API_KEY": APIKEY}, timeout=120)
     assert done.returncode == 0, done.stdout + done.stderr
     assert env["db"].execute("select count(*) as n from public.runs where build_commit = 'load-test' and status = 'finished'").fetchone()["n"] == 3
+
+
+def two_sessions(c):
+    c.append(0, session=finished_session(), events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end", running_total=4.0)]), frames=frames(20))
+    c.append(1, session=session_row(1, completed=True, ended_at="2026-11-10T12:05:00Z", final_score=1.0),
+             events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end")]), frames=frames(20))
+
+
+def test_only_a_development_release_may_start_a_reduced_run_and_never_one_longer_than_the_experiment(env):
+    with raises(403, "reduced_run_not_allowed"):
+        client(env).start(prolific_pid="PID_reduced_release", expected_sessions=1)               # a release build: refused, nothing created
+    assert env["db"].execute("select count(*) as n from public.runs r join public.pid_registry p using (participant_id) where p.prolific_pid = 'PID_reduced_release'").fetchone()["n"] == 0
+    with raises(403, "reduced_run_not_allowed"):
+        client(env, commit=DEV_COMMIT).start(prolific_pid="PID_reduced_long", expected_sessions=3)        # more than the 2 sessions the experiment has
+    with raises(400, "invalid"):
+        client(env, commit=DEV_COMMIT).start(prolific_pid="PID_reduced_zero", expected_sessions=0)
+    with raises(400, "invalid"):
+        client(env, commit=DEV_COMMIT).start(prolific_pid="PID_reduced_text", expected_sessions="one")
+    assert client(env, commit=DEV_COMMIT).start(prolific_pid="PID_reduced_ok", expected_sessions=1)["status"] == "in_progress"
+
+
+def test_a_reduced_run_finishes_with_its_declared_count_and_the_menu_follows_it(env):
+    c = client(env, commit=DEV_COMMIT)
+    c.start(prolific_pid="PID_reduced_finish", expected_sessions=1)
+    menu = {m["code"]: m for m in c.login("PID_reduced_finish")["experiments"]}
+    assert menu["TEST"]["n_sessions"] == 1                                                    # the run's own count, so the menu's progress is the run's
+    c.start("TEST", login=False, expected_sessions=1)
+    play_one_session(c)                                                                     # (finishes: one session present, one expected)
+    done = client(env, commit=DEV_COMMIT).start(prolific_pid="PID_reduced_finish")
+    assert done["status"] == "finished" and done["completion_code"] == "DUMMY-COMPLETION-CODE"
+
+
+def test_a_full_run_of_a_development_release_still_needs_every_session_and_a_resume_can_drop_the_reduction(env):
+    c = client(env, commit=DEV_COMMIT)
+    c.start(prolific_pid="PID_reduced_full")
+    c.append(0, session=finished_session(), events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end", running_total=4.0)]), frames=frames(20))
+    result = c.finish()
+    assert result["ok"] is False and any("1 sessions present, 2 expected" in p for p in result["problems"])
+    r = client(env, commit=DEV_COMMIT)
+    r.start(prolific_pid="PID_reduced_resume", expected_sessions=1)
+    back = client(env, commit=DEV_COMMIT)
+    back.start(prolific_pid="PID_reduced_resume")                                             # returns without a reduction: the full count applies again
+    two_sessions_ok = back.finish()
+    assert two_sessions_ok["ok"] is False and any("0 sessions present, 2 expected" in p for p in two_sessions_ok["problems"])

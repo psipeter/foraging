@@ -62,7 +62,7 @@ state), reached over a direct database connection (`SUPABASE_DB_URL`). Errors: 4
   finished, terminated), sessions_done, unlocked}]}`: the menu, for the experiments the build offers (`release_experiments`). With a consent version and no
   consent of that version on file the answer is `{needs_consent: true}` and nothing is created; send the `consent` to log in. Consent is stored once per
   participant and version. Without a version no consent is asked (a development build).
-- **`run-start`** `{build, participant_id, participant_token, experiment}` starts the participant's run of an experiment, or continues its unfinished run
+- **`run-start`** `{build, participant_id, participant_token, experiment, expected_sessions?}` (`expected_sessions`: a reduced run of a development release, 403 `reduced_run_not_allowed` otherwise; DECISIONS "Reduced runs") starts the participant's run of an experiment, or continues its unfinished run
   with a fresh run token (the old one stops working). A new run needs the experiment's prerequisites (`requires`) finished (403 `prerequisite_unmet`);
   an experiment the build does not offer is 403 `unknown_experiment`. Returns
   `{run_id, token, status, experiment, resume}`; a finished run is not rerun: it returns its status and the experiment's completion code (the menu's "Completed" screen), no token. A build commit not in `releases` is refused;

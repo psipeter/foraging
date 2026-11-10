@@ -393,18 +393,21 @@ public class SessionConfig : ScriptableObject
     public int InterludeFeatureTrials => interludeFeatureTrials;
     public int InterludeTrialLimit => interludeTrialLimit;
 
-    // A copy for local quick testing (never the asset itself, which would be saved into the file): a session lasts practiceSeconds or sessionSeconds, an
-    // Interlude plays at most interludeTrials of its trials. The copy keeps the asset's name, which names the world and Interlude files.
-    public SessionConfig QuickCopy(float practiceSeconds, float sessionSeconds, int interludeTrials)
+    // A copy for a reduced run (RunModes.Short; never the asset itself, which would be saved into the file): a session lasts `factor` of its length, an Interlude
+    // plays that fraction of its trials. The copy keeps the asset's name, which names the world and Interlude files.
+    public SessionConfig ScaledCopy(float factor)
     {
         SessionConfig copy = Instantiate(this);
         copy.name = name;
         if (!isInterlude)
         {
-            copy.sessionDuration = isPractice ? practiceSeconds : sessionSeconds;
+            copy.sessionDuration = RunModes.SessionSeconds(this, factor);
+        }
+        else
+        {
+            copy.interludeTrialLimit = RunModes.InterludeTrials(this, factor);
         }
 
-        copy.interludeTrialLimit = interludeTrials;
         return copy;
     }
     public float InterludeTrialSeconds => interludeTrialSeconds;
