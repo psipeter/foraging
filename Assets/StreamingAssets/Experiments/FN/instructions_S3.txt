@@ -1,7 +1,7 @@
 Find the best fruit
 
 This is a new area.
-One of the bush shape, the fruit color or the ground moisture determines how many points a fruit gives.
+**One** of the **bush shape**, the **fruit color** or the **ground moisture** determines how many points a fruit gives.
 Collect as many points as you can.
 
 Press [Enter] to begin

@@ -33,10 +33,15 @@ public static class UiStyle
         return $"<mark=#FFFFFF55 padding=\"18,18,6,6\"><b>{key}</b></mark><space=10>";
     }
 
-    // Every [Key] in the text as a key chip.
+    // The colour of an emphasised phrase in the instruction texts: teal, which is neither a colour of the interface (accent blue, "completed" green) nor of the fruit ramp,
+    // so it says nothing about which feature pays. One colour for every phrase.
+    public static readonly Color Emphasis = new Color(0.435f, 0.827f, 0.816f);
+
+    // Every [Key] in the text as a key chip, and every **phrase** in bold teal (the instruction texts mark what is essential that way).
     public static string Chips(string text)
     {
-        return System.Text.RegularExpressions.Regex.Replace(text, @"\[([^\]]+)\]", m => Chip(m.Groups[1].Value));
+        string bold = System.Text.RegularExpressions.Regex.Replace(text, @"\*\*(.+?)\*\*", $"<b><color=#{ColorUtility.ToHtmlStringRGB(Emphasis)}>$1</color></b>");
+        return System.Text.RegularExpressions.Regex.Replace(bold, @"\[([^\]]+)\]", m => Chip(m.Groups[1].Value));
     }
 
     private static TMP_FontAsset _font, _display, _bold;

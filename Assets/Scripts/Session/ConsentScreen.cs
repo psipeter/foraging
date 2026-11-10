@@ -57,6 +57,14 @@ public class ConsentScreen : MonoBehaviour
         return screen;
     }
 
+    // The consent text again, for a participant who has already signed it (from the menu): nothing to sign, one button back.
+    public static ConsentScreen ShowView(bool signed)
+    {
+        ConsentScreen screen = Create();
+        screen.BuildView(signed);
+        return screen;
+    }
+
     private static ConsentScreen Create()
     {
         Canvas canvas = UiStyle.Canvas("ConsentScreen", null, 6000);
@@ -152,6 +160,26 @@ public class ConsentScreen : MonoBehaviour
         _signature.ActivateInputField();
     }
 
+    private void BuildView(bool signed)
+    {
+        ParseText(out _, out string title, out string body);
+        UiStyle.Backdrop(transform);
+        Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, 1340f, 900f, UiStyle.PanelRadius).transform;
+        UiStyle.Eyebrow(panel, "Consent", 0f, 376f, 1228f);
+        UiStyle.Text(panel, "Title", title, 60f, TextAlignmentOptions.Left, 0f, 306f, 1228f, 80f);
+        BuildScroll(panel, body, 0f, -10f, 1228f, 520f);
+        if (signed)
+        {
+            UiStyle.Text(panel, "Signed", "You signed this form when you started.", UiStyle.Small, TextAlignmentOptions.Left, -312f, -358f, 600f, 36f, UiStyle.Muted);
+        }
+
+        UiStyle.Pill(panel, "Back", "Back to the menu", 414f, -358f, 400f, () =>
+        {
+            Done = true;
+            Destroy(gameObject);
+        });
+    }
+
     private void AcceptConsent()
     {
         Consent = new ConsentRecord { version = _version, signature = _signature.text.Trim(), at = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture) };
@@ -159,7 +187,7 @@ public class ConsentScreen : MonoBehaviour
         Destroy(gameObject);
     }
 
-    private void BuildScroll(Transform parent, string body, float x, float y, float w, float h)
+    public static void BuildScroll(Transform parent, string body, float x, float y, float w, float h)
     {
         GameObject view = UiStyle.Rounded(parent, "ConsentText", UiStyle.FieldGlass, x, y, w, h, 16f).gameObject;
         view.AddComponent<RectMask2D>();

@@ -1,5 +1,6 @@
 """The FN design (scripts/design/FN.py) and the assets and generated files built from it."""
 
+import re
 import json
 
 import numpy as np
@@ -110,10 +111,25 @@ def test_baseline_hints_name_the_visible_features_and_the_weighted_hint_is_share
     for k, i in enumerate(FN.instances(), start=1):
         if i.design["kind"] != "baseline":
             continue
-        hint = texts[f"instructions_S{k}.txt"]
+        hint = texts[f"instructions_S{k}.txt"].replace("**", "")
         if i.design["n_rewarded"] == 2 and i.design["n_visible"] == 3:
             assert "Two of the three features" in hint
         else:
             assert all(FN.NAMES[f] in hint for f in i.design["visible"]) and all(FN.NAMES[f] not in hint for f in FN.FEATURES if f not in i.design["visible"])
     weighted = _of("weighted")
     assert {i.design["hint"] for i in weighted} == {"weighted"} and len({i.session_fields["instructionsFile"] for i in weighted}) == 1
+
+
+def test_the_hints_mark_their_essential_words_in_bold():
+    """Every baseline hint bolds its quantifier and the features it names; the markers are balanced and the weighted hint bolds its two claims."""
+    texts = FN.texts()
+    for k, i in enumerate(FN.instances(), start=1):
+        if i.design["kind"] != "baseline":
+            continue
+        raw = texts[f"instructions_S{k}.txt"]
+        assert raw.count("**") % 2 == 0
+        bold = re.findall(r"\*\*(.+?)\*\*", raw)
+        assert bold[0] in ("Both", "Either", "One", "Two") or bold[0] in FN.NAMES.values()
+        if i.design["n_visible"] < 3 or i.design["n_rewarded"] == 1:
+            assert all(FN.NAMES[f] in bold for f in i.design["visible"])
+    assert re.findall(r"\*\*(.+?)\*\*", FN.HINT_WEIGHTED) == ["All three", "some matter more than others"]

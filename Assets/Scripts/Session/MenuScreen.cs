@@ -6,7 +6,10 @@ using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 // The experiment menu, shown by the Boot scene after the login and again whenever the participant comes back from an experiment: one row per
-// experiment with its standing and a button (Start, Continue, or View code for a finished one), the ones whose prerequisites are not finished locked.
+// experiment on one line: its name, its length (sessions and minutes, or the progress and the time left), its prerequisite (the experiments to finish first) and a button
+// (Start, Continue, or View code for a finished one); the ones whose prerequisites are not finished are locked. Online, under the rows the total points, with an (i) that opens
+// the introduction, where the payment is explained. Near the bottom of the screen, buttons open the introduction and the consent form again: they end the menu with a ChosenCode
+// that is not an experiment (IntroductionCode, ConsentCode) and the caller shows the page and the menu again.
 // Built at runtime like the other overlays. Without a data server (the Editor, a lab build) every experiment of the catalog is offered.
 public class MenuScreen : MonoBehaviour
 {
@@ -14,22 +17,27 @@ public class MenuScreen : MonoBehaviour
     {
         public string Code;
         public string Title;
-        public string Detail;
+        public string Detail;      // the length column: "21 sessions · ~65 min", the progress, "Completed", or why the experiment is locked
         public string Action;      // the button's caption
         public bool Enabled;
-        public bool ShowPoints;    // online: the points column has an entry for this row
+        public bool ShowPoints;    // online: the participant's own points count here (the total line is shown)
         public float Points;       // what the participant has earned in it so far (counted in the total only when CountsTowardTotal)
         public bool CountsTowardTotal = true;
-        public int PillStyle;      // 0 accent, 1 good (completed), 2 muted (locked or closed)
-        public float Progress = -1f;   // the share of its parts done, for a bar; negative: no bar
+        public string Requires;    // the titles of the experiments to finish first, "-" for none
+        public bool Unmet;         // locked: a prerequisite is not finished
+        public int PillStyle;      // 0 accent, 1 good (completed), 2 muted (locked or closed): the colour of the length column
+        public float Progress = -1f;   // the share of its sessions done, for a bar under the length; negative: no bar
     }
 
     private const int MaxRows = 6;
 
+    public const string IntroductionCode = "@introduction";
+    public const string ConsentCode = "@consent";
+
     public string ChosenCode { get; private set; }
     public bool Done => ChosenCode != null;
 
-    public static MenuScreen Show(IList<Row> rows, string header, string footer)
+    public static MenuScreen Show(IList<Row> rows, string header, string footer, bool consentLink = false)
     {
         Canvas canvas = UiStyle.Canvas("MenuScreen", null, 6000);
         canvas.gameObject.AddComponent<GraphicRaycaster>();
@@ -39,8 +47,15 @@ public class MenuScreen : MonoBehaviour
         }
 
         var screen = canvas.gameObject.AddComponent<MenuScreen>();
-        screen.Build(rows, header, footer);
+        screen.Build(rows, header, footer, consentLink);
         return screen;
+    }
+
+    // "21 sessions · ~65 min", or without the time when the experiment is not in this build.
+    private static string LengthText(ExperimentConfig config, int sessions)
+    {
+        string count = sessions == 1 ? "1 session" : $"{sessions} sessions";
+        return config != null ? $"{count} · ~{config.EstimatedMinutes:F0} min" : count;
     }
 
     // The rows for a logged-in participant: the server's experiments in its order, each with the standing it reported.
@@ -50,12 +65,18 @@ public class MenuScreen : MonoBehaviour
         foreach (ExperimentStanding s in standings)
         {
             ExperimentConfig config = catalog != null ? catalog.Find(s.code) : null;
-            var row = new Row { Code = s.code, Title = s.title, ShowPoints = true, Points = s.points, CountsTowardTotal = config == null || config.CountsTowardTotal };
+            int sessions = config != null ? config.SessionCount : s.n_sessions;
+            var row = new Row
+            {
+                Code = s.code, Title = s.title, ShowPoints = true, Points = s.points, CountsTowardTotal = config == null || config.CountsTowardTotal,
+                Requires = RequiresText(config, catalog), Unmet = !s.unlocked
+            };
             switch (s.status)
             {
                 case "finished":
                     row.Action = "View code";
                     row.Enabled = true;
+                    row.Detail = "Completed";
                     row.Progress = 1f;
                     row.PillStyle = 1;
                     break;
@@ -63,9 +84,10 @@ public class MenuScreen : MonoBehaviour
                     row.Action = "Continue";
                     row.Enabled = s.unlocked;
                     row.Progress = s.n_sessions > 0 ? Mathf.Clamp01(s.sessions_done / (float)s.n_sessions) : 0f;
+                    row.Detail = config != null ? $"{s.sessions_done} of {sessions} · ~{config.EstimatedMinutes * (1f - row.Progress):F0} min left" : $"{s.sessions_done} of {sessions} sessions";
                     break;
                 case "none":
-                    row.Detail = s.unlocked ? $"{(config != null ? config.SessionCount : s.n_sessions)} sessions" : PrerequisiteText(config, standings).Replace("finish", "Finish");
+                    row.Detail = LengthText(config, sessions);
                     row.PillStyle = s.unlocked ? 0 : 2;
                     row.Action = "Start";
                     row.Enabled = s.unlocked;
@@ -99,7 +121,11 @@ public class MenuScreen : MonoBehaviour
             {
                 if (experiment != null)
                 {
-                    rows.Add(new Row { Code = experiment.Code, Title = experiment.Title, Detail = $"{experiment.SessionCount} sessions", Action = "Start", Enabled = true });
+                    rows.Add(new Row
+                    {
+                        Code = experiment.Code, Title = experiment.Title, Detail = LengthText(experiment, experiment.SessionCount), Action = "Start", Enabled = true,
+                        Requires = RequiresText(experiment, catalog), CountsTowardTotal = experiment.CountsTowardTotal
+                    });
                 }
             }
         }
@@ -107,34 +133,31 @@ public class MenuScreen : MonoBehaviour
         return rows;
     }
 
-    private static string PrerequisiteText(ExperimentConfig config, IReadOnlyList<ExperimentStanding> standings)
+    // The titles of the experiments to finish first, "-" for none.
+    private static string RequiresText(ExperimentConfig config, ExperimentCatalog catalog)
     {
         if (config == null || config.Requires.Count == 0)
         {
-            return "not available yet";
+            return "-";
         }
 
         var titles = new List<string>();
         foreach (string code in config.Requires)
         {
-            string title = code;
-            foreach (ExperimentStanding s in standings)
-            {
-                if (s.code == code)
-                {
-                    title = s.title;
-                }
-            }
-
-            titles.Add(title);
+            ExperimentConfig required = catalog != null ? catalog.Find(code) : null;
+            titles.Add(required != null ? required.Title : code);
         }
 
-        return "finish " + string.Join(" and ", titles) + " first";
+        return string.Join(", ", titles);
     }
 
     private const string MenuTitle = "Foraging Study";
 
-    private void Build(IList<Row> rows, string header, string footer)
+    // The panel's columns (x from the row's centre): the name at the left edge, then the length, the prerequisite and the button.
+    private const float RowWidth = 1388f, NameX = -512f, NameWidth = 300f, LengthX = -185f, LengthWidth = 310f, RequiresX = 135f, RequiresWidth = 320f,
+        ButtonX = 575f, ButtonWidth = 190f;
+
+    private void Build(IList<Row> rows, string header, string footer, bool consentLink)
     {
         UiStyle.Backdrop(transform);
         int n = Mathf.Min(rows.Count, MaxRows);
@@ -146,10 +169,13 @@ public class MenuScreen : MonoBehaviour
             total += rows[i].ShowPoints && rows[i].CountsTowardTotal ? rows[i].Points : 0f;
         }
 
-        const float rowHeight = 150f, rowGap = 20f, headerHeight = 0f, totalHeight = 96f, pad = 56f;
+        const float rowHeight = 96f, rowGap = 16f, headerHeight = 44f, totalHeight = 90f, pad = 48f;
         float height = pad * 2f + headerHeight + n * (rowHeight + rowGap) + (anyPoints ? totalHeight : 0f);
-        Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, 1400f, height, UiStyle.PanelRadius).transform;
+        Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, 1500f, height, UiStyle.PanelRadius).transform;
         float top = height / 2f - pad;
+        Header(panel, "Experiment", NameX, NameWidth, top - headerHeight / 2f);
+        Header(panel, "Length", LengthX, LengthWidth, top - headerHeight / 2f);
+        Header(panel, "Prerequisite", RequiresX, RequiresWidth, top - headerHeight / 2f);
         float y = top - headerHeight - rowHeight / 2f;
         for (int i = 0; i < n; i++)
         {
@@ -159,57 +185,80 @@ public class MenuScreen : MonoBehaviour
 
         if (anyPoints)
         {
-            float lineY = y + rowHeight / 2f + rowGap / 2f - 6f;
-            UiStyle.Rounded(panel, "TotalLine", new Color(1f, 1f, 1f, 0.18f), 0f, lineY, 1288f, 2f, 1f);
-            UiStyle.Text(panel, "TotalLabel", "Total points", UiStyle.Heading, TextAlignmentOptions.MidlineLeft, -292f, lineY - 48f, 640f, 60f).font = UiStyle.DisplayFont;
-            UiStyle.Text(panel, "TotalPoints", $"{total:F0}", UiStyle.Heading, TextAlignmentOptions.MidlineRight, 275f, lineY - 48f, 150f, 60f).font = UiStyle.DisplayFont;
+            float lineY = y + rowHeight / 2f + rowGap / 2f - 4f;
+            UiStyle.Rounded(panel, "TotalLine", new Color(1f, 1f, 1f, 0.18f), 0f, lineY, RowWidth, 2f, 1f);
+            UiStyle.Text(panel, "TotalLabel", "Total points", UiStyle.Heading, TextAlignmentOptions.MidlineLeft, NameX + 170f, lineY - 44f, 640f, 60f).font = UiStyle.DisplayFont;
+            TextMeshProUGUI totalText = UiStyle.Text(panel, "TotalPoints", $"{total:F0}", UiStyle.Heading, TextAlignmentOptions.MidlineLeft, LengthX, lineY - 44f, LengthWidth, 60f);
+            totalText.font = UiStyle.DisplayFont;
+            float valueWidth = totalText.GetPreferredValues($"{total:F0}").x;
+            UiStyle.Pill(panel, "Info", "i", LengthX - LengthWidth / 2f + valueWidth + 34f, lineY - 44f, 34f, () => Choose(IntroductionCode), true, 34f);
         }
 
         UiStyle.Text(transform, "Title", MenuTitle, UiStyle.Title, TextAlignmentOptions.Center, 0f, height / 2f + 84f, 1288f, 100f).font = UiStyle.DisplayFont;
 
+        // near the bottom of the screen: the pages the participant may open again (the consent form to the left of the introduction)
+        float buttonsY = -UiStyle.ReferenceResolution.y / 2f + 130f;
+        const float spacing = 290f;
+        float x = consentLink ? spacing / 2f : 0f;
+        UiStyle.Pill(transform, "Introduction", "Introduction", x, buttonsY, 260f, () => Choose(IntroductionCode), true, 64f);
+        if (consentLink)
+        {
+            UiStyle.Pill(transform, "Consent", "Consent form", x - spacing, buttonsY, 260f, () => Choose(ConsentCode), true, 64f);
+        }
+
         if (!string.IsNullOrEmpty(footer))
         {
-            UiStyle.Text(transform, "Footer", footer, UiStyle.Small, TextAlignmentOptions.Center, 0f, -height / 2f - 40f, 1288f, 36f, UiStyle.Muted);
+            UiStyle.Text(transform, "Footer", footer, UiStyle.Small, TextAlignmentOptions.Center, 0f, buttonsY + 60f, 1288f, 36f, UiStyle.Muted);
         }
+    }
+
+    private void Choose(string code)
+    {
+        ChosenCode = code;
+        Destroy(gameObject);
+    }
+
+    private static void Header(Transform panel, string caption, float x, float width, float y)
+    {
+        UiStyle.Text(panel, "Header_" + caption, caption, 22f, TextAlignmentOptions.MidlineLeft, x, y, width, 34f, UiStyle.Muted).font = UiStyle.BoldFont;
     }
 
     private void BuildRow(Transform panel, Row row, float y, float height)
     {
-        Transform r = UiStyle.Rounded(panel, "Row_" + row.Code, UiStyle.FieldGlass, 0f, y, 1288f, height, 22f).transform;
+        Transform r = UiStyle.Rounded(panel, "Row_" + row.Code, UiStyle.FieldGlass, 0f, y, RowWidth, height, 22f).transform;
         bool dim = !row.Enabled && row.Action != "View code";
-        TextMeshProUGUI name = UiStyle.Text(r, "Name", row.Title, 42f, TextAlignmentOptions.MidlineLeft, -292f, 36f, 640f, 52f, dim ? UiStyle.Muted : UiStyle.Ink);
+        TextMeshProUGUI name = UiStyle.Text(r, "Name", row.Title, 38f, TextAlignmentOptions.MidlineLeft, NameX, 0f, NameWidth, 56f, dim ? UiStyle.Muted : UiStyle.Ink);
         name.font = UiStyle.DisplayFont;
+        name.enableAutoSizing = true;                                  // a long title shrinks to its column
+        name.fontSizeMin = 24f;
+        name.fontSizeMax = 38f;
+        name.textWrappingMode = TextWrappingModes.NoWrap;
 
-        if (row.Progress >= 0f)
+        Color tint = row.PillStyle == 1 ? UiStyle.Good : row.PillStyle == 2 ? UiStyle.Muted : new Color(0.66f, 0.80f, 1f);
+        bool bar = row.Progress >= 0f;
+        TextMeshProUGUI length = UiStyle.Text(r, "Length", row.Detail, 26f, TextAlignmentOptions.MidlineLeft, LengthX, bar ? 12f : 0f, LengthWidth, 40f, tint);
+        length.font = UiStyle.BoldFont;
+        length.textWrappingMode = TextWrappingModes.NoWrap;
+        if (bar)
         {
-            // a finished experiment is a full green bar, one under way a partly filled accent one; neither has a caption
-            UiStyle.Rounded(r, "Bar", new Color(1f, 1f, 1f, 0.12f), -644f + 32f + 260f, -22f, 520f, 12f, 6f);
-            float fillWidth = Mathf.Max(520f * row.Progress, 12f);
-            UiStyle.Rounded(r, "BarFill", row.PillStyle == 1 ? UiStyle.Good : UiStyle.Accent, -644f + 32f + fillWidth / 2f, -22f, fillWidth, 12f, 6f);
-        }
-        else
-        {
-            float pillWidth = Mathf.Min(620f, 46f + row.Detail.Length * 14f);
-            Color tint = row.PillStyle == 2 ? UiStyle.Muted : new Color(0.66f, 0.80f, 1f);
-            Color fill = row.PillStyle == 2 ? new Color(1f, 1f, 1f, 0.10f) : new Color(0.36f, 0.62f, 0.95f, 0.20f);
-            Transform pill = UiStyle.Rounded(r, "Pill", fill, -644f + 32f + pillWidth / 2f, -14f, pillWidth, 38f, 19f).transform;
-            TextMeshProUGUI pillText = UiStyle.Text(pill, "Text", row.Detail, 24f, TextAlignmentOptions.Center, 0f, 0f, pillWidth, 38f, tint);
-            pillText.font = UiStyle.BoldFont;
+            // a finished experiment is a full green bar, one under way a partly filled accent one
+            const float barWidth = 300f;
+            float left = LengthX - LengthWidth / 2f;
+            UiStyle.Rounded(r, "Bar", new Color(1f, 1f, 1f, 0.12f), left + barWidth / 2f, -22f, barWidth, 10f, 5f);
+            float fillWidth = Mathf.Max(barWidth * row.Progress, 10f);
+            UiStyle.Rounded(r, "BarFill", row.PillStyle == 1 ? UiStyle.Good : UiStyle.Accent, left + fillWidth / 2f, -22f, fillWidth, 10f, 5f);
         }
 
-        if (row.ShowPoints)
-        {
-            TextMeshProUGUI points = UiStyle.Text(r, "Points", row.CountsTowardTotal ? $"{row.Points:F0}" : "-", UiStyle.Heading, TextAlignmentOptions.MidlineRight, 275f, 0f, 150f, 60f,
-                row.CountsTowardTotal ? UiStyle.Ink : UiStyle.Muted);
-            points.font = UiStyle.DisplayFont;
-        }
+        TextMeshProUGUI requires = UiStyle.Text(r, "Requires", row.Requires, 26f, TextAlignmentOptions.MidlineLeft, RequiresX, 0f, RequiresWidth, 56f,
+            row.Unmet ? new Color(0.95f, 0.62f, 0.45f) : row.Requires == "-" ? UiStyle.Muted : UiStyle.Ink);
+        requires.font = UiStyle.DisplayFont;
+        requires.enableAutoSizing = true;
+        requires.fontSizeMin = 18f;
+        requires.fontSizeMax = 26f;
+        requires.textWrappingMode = TextWrappingModes.NoWrap;
 
         string code = row.Code;
-        Button button = UiStyle.Pill(r, "Button", row.Action, 497f, 0f, 230f, () =>
-        {
-            ChosenCode = code;
-            Destroy(gameObject);
-        }, row.Action == "View code", 68f);
+        Button button = UiStyle.Pill(r, "Button", row.Action, ButtonX, 0f, ButtonWidth, () => Choose(code), row.Action == "View code", 64f);
         button.interactable = row.Enabled;
     }
 }

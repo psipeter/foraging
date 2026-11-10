@@ -19,6 +19,12 @@ public class ExperimentConfig : ScriptableObject
     [Tooltip("Whether the points earned here are added to the total the menu and the completion screens show. Off for a tutorial or other practice, whose points pay nothing.")]
     [SerializeField] private bool countsTowardTotal = true;
 
+    [Header("What the menu tells participants before they start")]
+    [Tooltip("How long the experiment takes, in minutes. 0: worked out from the sessions (their durations plus each Interlude's trials at their time limit, plus a short allowance for the instruction screens). Replace by the measured median once pilot data exist.")]
+    [SerializeField] private float estimatedMinutes = 0f;
+    [Tooltip("The points a typical participant earns in it (shown as \"~N\"). 0: not known, shown as a dash. PLACEHOLDER until pilot data exist.")]
+    [SerializeField] private float typicalPoints = 0f;
+
     public string Code => code;
     public string Title => title;
     public IReadOnlyList<string> Requires => requires;
@@ -39,6 +45,33 @@ public class ExperimentConfig : ScriptableObject
         }
     }
     public bool CountsTowardTotal => countsTowardTotal;
+    public float TypicalPoints => typicalPoints;
+
+    private const float InstructionSecondsPerPart = 20f;       // reading the instructions of a session or an Interlude
+    private const float RoundMinutesTo = 5f;
+
+    // The minutes the menu quotes: the stated estimate, else the time the sessions and Interludes take at most, rounded to 5 minutes.
+    public float EstimatedMinutes
+    {
+        get
+        {
+            if (estimatedMinutes > 0f)
+            {
+                return estimatedMinutes;
+            }
+
+            float seconds = 0f;
+            foreach (SessionConfig session in sessions)
+            {
+                if (session != null)
+                {
+                    seconds += InstructionSecondsPerPart + (session.IsInterlude ? session.InterludeTrialCount * session.InterludeTrialSeconds : session.SessionDuration);
+                }
+            }
+
+            return Mathf.Max(RoundMinutesTo, Mathf.Round(seconds / 60f / RoundMinutesTo) * RoundMinutesTo);
+        }
+    }
 
     // The StreamingAssets files a session reads: its world, its Interlude file and its instruction text.
     public static List<string> FilesOf(SessionConfig session)

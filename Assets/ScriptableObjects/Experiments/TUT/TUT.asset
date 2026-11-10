@@ -19,4 +19,5 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 70757be5aa5814143bb8323f2b1317b8, type: 2}
   - {fileID: 11400000, guid: 000b4fc98bdc66bc5adb176e59bf30d3, type: 2}
   countsTowardTotal: 0
-  downloadPerSession: 0
+  estimatedMinutes: 0
+  typicalPoints: 0

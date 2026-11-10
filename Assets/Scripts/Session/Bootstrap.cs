@@ -16,6 +16,7 @@ public class Bootstrap : MonoBehaviour
     [SerializeField] private string gameScene = "SampleScene";
 
     private static bool _directPlayed;
+    private static bool _introShown;                                        // the introduction after the login is shown once per run of the game (or page load)
     private StatusScreen _status;
     private OnlineSettings _settings;
     private ExperimentCatalog _catalog;
@@ -87,13 +88,36 @@ public class Bootstrap : MonoBehaviour
             }
         }
 
+        if (_settings.Active && !_introShown)
+        {
+            _status.Hide();
+            IntroScreen intro = IntroScreen.Show("Continue");
+            yield return new WaitUntil(() => intro.Done);
+            _introShown = true;
+        }
+
         while (true)
         {
             _status.Hide();
+            bool consentLink = StreamingData.Exists(ConsentScreen.File);
             MenuScreen menu = _settings.Active
-                ? MenuScreen.Show(MenuScreen.OnlineRows(ParticipantSession.Standings, _catalog), "Signed in as " + ParticipantSession.ProlificId, "")
-                : MenuScreen.Show(MenuScreen.OfflineRows(_catalog), "No data server: the data is saved on this computer only.", "");
+                ? MenuScreen.Show(MenuScreen.OnlineRows(ParticipantSession.Standings, _catalog), "Signed in as " + ParticipantSession.ProlificId, "", consentLink)
+                : MenuScreen.Show(MenuScreen.OfflineRows(_catalog), "No data server: the data is saved on this computer only.", "", consentLink);
             yield return new WaitUntil(() => menu.Done);
+            if (menu.ChosenCode == MenuScreen.IntroductionCode)
+            {
+                IntroScreen again = IntroScreen.Show("Back to the menu");
+                yield return new WaitUntil(() => again.Done);
+                continue;
+            }
+
+            if (menu.ChosenCode == MenuScreen.ConsentCode)
+            {
+                ConsentScreen consent = ConsentScreen.ShowView(_settings.Active);
+                yield return new WaitUntil(() => consent.Done);
+                continue;
+            }
+
             ExperimentConfig experiment = _catalog.Find(menu.ChosenCode);
 
             if (!_settings.Active)

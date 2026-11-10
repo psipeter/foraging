@@ -60,3 +60,5 @@ MonoBehaviour:
   - {fileID: 11400000, guid: ae34a60f22d196ddfb0df7cd7dc42b4c, type: 2}
   - {fileID: 11400000, guid: 3954d2cd53719612ab7a7af70679aed3, type: 2}
   countsTowardTotal: 1
+  estimatedMinutes: 0
+  typicalPoints: 600
