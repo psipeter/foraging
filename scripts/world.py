@@ -122,9 +122,9 @@ def _convert(value):
 # Fields an older asset file does not have yet (Unity adds a field to an asset only when it is saved): their defaults, snake_case names.
 FIELD_DEFAULTS = {"spatial_balance": 0, "shape_varies": True, "color_varies": True, "shape_when_fixed": 0.5, "color_when_fixed": 0.5, "random_bush_value_range": (0.0, 0.0), "design_json": "",
                   "moisture_varies": True, "moisture_when_fixed": 0.5, "moisture_is_feature": False, "moisture_terrace_unevenness": 0.0,
-                  "feature_balance": 0, "feature_balance_target": 0.7, "feature_balance_scales": (40.0, 60.0, 120.0, 240.0),
+                  "feature_balance": 0, "feature_coverage": 0, "feature_balance_target": 0.7, "feature_balance_scales": (40.0, 60.0, 120.0, 240.0),
                   "moisture_terrace_mode": 0, "terrace_mean_width": 0.14, "terrace_width_spread": 0.7, "terrace_max_band": 0.30, "terrace_min_step": 0.08, "terrace_phase_shift": 0.4,
-                  "terrace_phase_frequency": 0.6, "terrace_strength": 1.0, "terrace_diffusion_iterations": 500, "terrace_diffusion_edge": 0.1, "interlude_feature_trials": 0,
+                  "terrace_phase_frequency": 0.6, "terrace_strength": 1.0, "terrace_diffusion_iterations": 500, "terrace_diffusion_edge": 0.1, "interlude_feature_trials": 0, "interlude_peak_trials": 0,
                   "layout": None, "assignment": None, "reward_stage": None}      # (stage names: None = the default, see stage_names)
 
 
@@ -685,6 +685,8 @@ def check_values(params):
         out["featureBalanceTarget"] = float(params.feature_balance_target)
         out["featureBalanceScales.count"] = float(len(params.feature_balance_scales))
         out["featureBalanceScales.sum"] = float(sum(params.feature_balance_scales))
+    if int(getattr(params, "feature_coverage", 0)):                # plane coverage (the sparse-reward experiment) writes its mode; a session without it writes none
+        out["featureCoverage"] = float(params.feature_coverage)
     if int(params.moisture_terrace_mode):                          # the new modes write their mode and every parameter they read (a session in the Levels mode writes none)
         out["moistureTerraceMode"] = float(params.moisture_terrace_mode)
         for name in TERRACE_PARAMS:
@@ -872,8 +874,45 @@ def assign_balanced_features(params, pos, terrain, rngs, reward):
     return tuple(out)
 
 
+PLANE_TILE_BUSHES = 16        # bushes in a tile of the plane-coverage assignment: each tile gets a sample of the plane this size
+
+
+def plane_points(n, rng):
+    """`n` points of the unit square: a scrambled Halton sequence (bases 2 and 3). Any stretch of consecutive points covers the square evenly, however the sequence is cut, which is
+    what lets `assign_plane` give every tile of the map, and every union of tiles, an even sample of the plane."""
+    from scipy.stats import qmc
+    return qmc.Halton(d=2, scramble=True, seed=rng).random(n)
+
+
+def assign_plane(params, pos, terrain, rngs, reward):
+    """(shape, colour) pairs that cover the feature plane evenly, dealt over the map so that every part of it gets an even sample of the plane (stream 16; the sparse-reward
+    experiment needs a narrow peak of the reward to have bushes on it, spread over the map). The pairs are a scrambled Halton sequence; the map is cut into square tiles of about
+    PLANE_TILE_BUSHES bushes, each tile takes a consecutive stretch of the sequence (the tiles in a random order, so no spatial pattern follows the sequence) and deals it to its bushes
+    in a random order. Shape and colour are treated alike and the reward is not used, so nothing shows which feature pays; it needs both to vary. The practice session's random
+    value is drawn as in `assign_independent`."""
+    if not (params.shape_varies and params.color_varies):
+        raise ValueError("featureCoverage deals pairs over the (shape, colour) plane: both features must vary")
+    _, _, extra = assign_independent(params, pos, terrain, rngs, reward)             # (its draws are made, so the other streams do not move)
+    n = len(pos)
+    points = plane_points(n, rngs[16])
+    side = math.sqrt(PLANE_TILE_BUSHES * 0.866 * float(params.tree_spacing) ** 2)       # 0.866 * spacing^2: the area of a hexagonal lattice cell, one bush's share of the map
+    ij = np.floor((pos + float(params.world_half_extent)) / side).astype(int)
+    _, tile_of = np.unique(ij[:, 0] * 100_000 + ij[:, 1], return_inverse=True)
+    shape, color = np.empty(n), np.empty(n)
+    start = 0
+    for tile in rngs[16].permutation(tile_of.max() + 1):
+        members = np.nonzero(tile_of == tile)[0]
+        block = points[start:start + len(members)]
+        start += len(members)
+        block = block[rngs[16].permutation(len(block))]
+        shape[members], color[members] = block[:, 0], block[:, 1]
+    if rngs[16].random() < 0.5:                     # the two axes of the sequence are slightly differently regular (bases 2 and 3): which feature gets which is a coin toss per world
+        shape, color = color, shape
+    return shape, color, extra
+
+
 LAYOUTS = {"lattice": layout_lattice}
-ASSIGNMENTS = {"independent": assign_independent, "balanced": assign_balanced, "balanced_features": assign_balanced_features}
+ASSIGNMENTS = {"independent": assign_independent, "balanced": assign_balanced, "balanced_features": assign_balanced_features, "plane": assign_plane}
 REWARDS = {"terms": bush_value}
 RELEVANCE = {"terms": terms_relevance}          # per reward stage: {feature: how much it matters}, for the Interlude and the instruction texts
 
@@ -891,9 +930,10 @@ def session_features(params):
 
 def stage_names(params):
     """(layout, assignment, reward) names of a session: its own fields, else the defaults (balanced when `spatialBalance` is not Off)."""
-    if int(params.feature_balance) and int(params.spatial_balance):
-        raise ValueError("featureBalance and spatialBalance are two ways of balancing: set one of them")
-    assignment = getattr(params, "assignment", None) or ("balanced_features" if int(params.feature_balance) else "balanced" if int(params.spatial_balance) else "independent")
+    coverage = int(getattr(params, "feature_coverage", 0))
+    if sum(bool(int(v)) for v in (params.feature_balance, params.spatial_balance, coverage)) > 1:
+        raise ValueError("featureBalance, spatialBalance and featureCoverage are three ways of dealing the features: set one of them")
+    assignment = getattr(params, "assignment", None) or ("plane" if coverage else "balanced_features" if int(params.feature_balance) else "balanced" if int(params.spatial_balance) else "independent")
     return (getattr(params, "layout", None) or "lattice", assignment, getattr(params, "reward_stage", None) or "terms")
 
 
@@ -901,7 +941,7 @@ def generate_world(params, seed):
     """Build the world for (params, seed). `params` is a namespace from load_session()."""
     layout_name, assignment_name, reward_name = stage_names(params)
     reward = REWARDS[reward_name]
-    rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(16)]          # (streams 11 to 15, the terrace levels, the phase noise and the balancing of shape, colour and the random value, were added after the first 11)
+    rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(17)]          # (streams 11 to 15, the terrace levels, the phase noise and the balancing of shape, colour and the random value, were added after the first 11, and 16, the plane coverage, after those: spawn(17) gives the same first 16 children as spawn(16), so no world moves)
     terrain = Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]), rngs[11], Perlin(rngs[12]))
 
     pos = LAYOUTS[layout_name](params, terrain, rngs)

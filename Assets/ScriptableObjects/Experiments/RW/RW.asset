@@ -1,0 +1,66 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c43e39085c865c34f80e232be22946f5, type: 3}
+  m_Name: RW
+  m_EditorClassIdentifier: Assembly-CSharp::ExperimentConfig
+  code: RW
+  title: Sparse Rewards
+  requires:
+  - TUT
+  sessions:
+  - {fileID: 11400000, guid: 9af0a1c461b06d891bf20d0de5505026, type: 2}
+  - {fileID: 11400000, guid: 5a5b11d215a1e3a819ea2c80d371ef4d, type: 2}
+  - {fileID: 11400000, guid: 154f339818775ecd581ae3a3fa4899a4, type: 2}
+  - {fileID: 11400000, guid: c0454d9c93e42059c8730bb2835b8d91, type: 2}
+  - {fileID: 11400000, guid: 367a8f101d393600b83a830876a22118, type: 2}
+  - {fileID: 11400000, guid: acf7c0d828863cc3fbe355254270e82b, type: 2}
+  - {fileID: 11400000, guid: 4cc83a81fc0997bd7b51b635fd84dc73, type: 2}
+  - {fileID: 11400000, guid: a01211af5b75ec8eb9ed81b6e14db399, type: 2}
+  - {fileID: 11400000, guid: 8caff16fbec6cd23786de9286e8259b7, type: 2}
+  - {fileID: 11400000, guid: dff64afe39d38a86d87135066f024f8e, type: 2}
+  - {fileID: 11400000, guid: 4dc7e4b36baffd84494e24acd8f684ab, type: 2}
+  - {fileID: 11400000, guid: 0fbc4c1dc809c481a9f19dccead356cc, type: 2}
+  - {fileID: 11400000, guid: 7f9e297084ad9cc538817134fcac8ffb, type: 2}
+  - {fileID: 11400000, guid: 1d9a1658f19ef7c30bea5aa892e59e6c, type: 2}
+  - {fileID: 11400000, guid: acf707de401678e76a7ddbd02377b9e1, type: 2}
+  - {fileID: 11400000, guid: ecb8a2e392538b858aa477e2621beb2d, type: 2}
+  - {fileID: 11400000, guid: d570c212559047a0cbc6208e23957f07, type: 2}
+  - {fileID: 11400000, guid: f0671d3702cc7831b9f9fca10670abb2, type: 2}
+  - {fileID: 11400000, guid: 1d4f0c9b9a83541c3bde017a59288d4f, type: 2}
+  - {fileID: 11400000, guid: 7df2480b6f50edbc1ac37b9165f009a6, type: 2}
+  - {fileID: 11400000, guid: 0985bb478619e0a6592d9eec5c5dc111, type: 2}
+  - {fileID: 11400000, guid: bdc112854d43df2ffb9286881d869662, type: 2}
+  - {fileID: 11400000, guid: eb538b3311fe193d39414ea6b69ab708, type: 2}
+  - {fileID: 11400000, guid: 3daa8917ab66db6ff84847548aa278cf, type: 2}
+  - {fileID: 11400000, guid: b36729fd5a6fdd290a5a4de4f5e89943, type: 2}
+  - {fileID: 11400000, guid: 9e634ba9be13e23c8b0c84af38b2c932, type: 2}
+  - {fileID: 11400000, guid: 7d0d86fdbd027bcdc95567168e858766, type: 2}
+  - {fileID: 11400000, guid: e5b432c0e388cb71bba3a8efda640faf, type: 2}
+  - {fileID: 11400000, guid: 90b30e75b6f6eb56ca4b671a13be8c98, type: 2}
+  - {fileID: 11400000, guid: f97fc3f0acefe4f499d3625e0e1619bc, type: 2}
+  - {fileID: 11400000, guid: 62bd22c28c816b607bfa2982c6caf97e, type: 2}
+  - {fileID: 11400000, guid: d5a8e32261d9451baa6c5579152c1f33, type: 2}
+  - {fileID: 11400000, guid: cb6f2bb92efa1ba138689608a0383220, type: 2}
+  - {fileID: 11400000, guid: 0ad77d77d6e20c818920c92c7dbcfd6b, type: 2}
+  - {fileID: 11400000, guid: 99bfecca7f958c8ee8c52bab52b3d84c, type: 2}
+  - {fileID: 11400000, guid: ff91f5e145769d192b46461e62a49930, type: 2}
+  - {fileID: 11400000, guid: 88b8cc70b546aa4b8a592193dc1ac0bd, type: 2}
+  - {fileID: 11400000, guid: 3bb4499b7c81fcf8aaf5b9aaa86cb6ad, type: 2}
+  - {fileID: 11400000, guid: c1d182eb32809e3c088fc8d396417769, type: 2}
+  - {fileID: 11400000, guid: e571b6291c7ed476cba0492a939f4d43, type: 2}
+  - {fileID: 11400000, guid: 832a1f71e09b2a88fbb873f0e6a4a219, type: 2}
+  - {fileID: 11400000, guid: 56a59c7771e9caed59e334f1a3b0e518, type: 2}
+  - {fileID: 11400000, guid: 38b7ba9defd4c1757a5433de4493839d, type: 2}
+  - {fileID: 11400000, guid: 94636c59071764d259120d74ced9b73d, type: 2}
+  countsTowardTotal: 1
+  estimatedMinutes: 0
+  typicalPoints: 0

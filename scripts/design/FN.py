@@ -50,7 +50,7 @@ def seconds(n_visible, n_rewarded):
     return BASE_SECONDS + VISIBLE_STEP_SECONDS * (n_visible - 1) + REWARDED_STEP_SECONDS * (n_rewarded - 1)
 
 
-NAMES = {"shape": "bush shape", "color": "fruit color", "moisture": "ground moisture"}     # what a participant reads for each feature
+NAMES = {"shape": "bush shape", "color": "fruit color", "moisture": "elevation"}     # what a participant reads for each feature
 HINT_WEIGHTED = "**All three features** matter, but some matter more than others."
 
 

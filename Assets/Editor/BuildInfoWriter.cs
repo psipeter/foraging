@@ -23,11 +23,12 @@ public class BuildInfoWriter : IPreprocessBuildWithReport
     };
 
     // A script's .meta holds its execution order, which decides what each frame's logic reads; other .meta files are
-    // Unity's own churn.
+    // Unity's own churn. The font assets (Assets/Resources/Fonts) are dynamic TextMeshPro atlases that the Editor rewrites whenever it renders a new glyph
+    // (megabytes of YAML on nearly every session) and that change no behaviour, so they never make a build dirty.
     private static bool IsIgnored(string line)
     {
         string trimmed = line.Trim();
-        if (trimmed.Length == 0 || trimmed.Contains("build_info.json"))
+        if (trimmed.Length == 0 || trimmed.Contains("build_info.json") || trimmed.Contains("Assets/Resources/Fonts/"))
         {
             return true;
         }

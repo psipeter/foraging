@@ -1,0 +1,7 @@
+Find the best fruit
+
+This is a new area.
+**Both** the **bush shape** and the **fruit color** matter. Most bushes give few points: look for the **valuable ones**.
+Collect as many points as you can.
+
+Press [Enter] to begin

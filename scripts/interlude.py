@@ -356,8 +356,72 @@ def reachable_gap(des, feature):
     return float(values.max() - values.min())
 
 
+PEAK_TOP = 0.9                # a bush is "in" a peak when that peak alone gives it at least this share of the peak's own height (RW's strict region, the top 10%)
+PEAK_OFF = 0.25               # a bush is "off" the peaks when every peak gives it at most this share of its height
+PEAK_MIN_GAP = 0.25           # the true reward gap of a peak trial is at least this (five times the tie tolerance)
+PEAK_DRAWS = 800              # (shape, colour) pairs tried on a placement for a peak trial
+
+
+def peak_shares(reward_function, shape, color):
+    """For each Gaussian peak of the reward function (`bumps`, the global one first), the share of its own height it gives a bush at (shape, colour)."""
+    out = []
+    for b in reward_function.get("bumps") or []:
+        sigma_shape = max(float(b["width"]), 1e-4)
+        width_color = float(b.get("widthColor") or 0.0)
+        sigma_color = max(width_color, 1e-4) if width_color > 0.0 else sigma_shape
+        ds, dc = shape - float(b["centerShape"]), color - float(b["centerColor"])
+        out.append(float(np.exp(-(ds * ds / (2.0 * sigma_shape ** 2) + dc * dc / (2.0 * sigma_color ** 2)))))
+    return out
+
+
+def _in_class(shares, kind):
+    """Whether a bush with these peak shares belongs to `kind`: a peak's index (its top region, where no other peak is the larger share) or "off" (every share small)."""
+    if kind == "off":
+        return max(shares) <= PEAK_OFF
+    return shares[kind] >= PEAK_TOP and shares[kind] == max(shares)
+
+
+def peak_trial(des, kinds, want_left_better):
+    """A pair of bushes, one from each of `kinds` (a peak's index, the global peak 0 being the highest, or "off": the first is the one worth more), at random features on a placement that
+    shows both. The true reward gap is at least PEAK_MIN_GAP, and the better bush is on the left when `want_left_better`."""
+    def build(i):
+        pair = [None, None]
+        for slot, kind in enumerate(kinds):
+            for _ in range(PEAK_DRAWS):
+                shape, color = (round(float(des.rng.uniform(0.0, 1.0)), 2) for _ in range(2))
+                if _in_class(peak_shares(des.p.reward_function, shape, color), kind):
+                    pair[slot] = (shape, color)
+                    break
+            if pair[slot] is None:
+                return None
+        sides = ("left", "right") if want_left_better else ("right", "left")
+        better, worse = (des.bush(i, sides[0], *pair[0]), des.bush(i, sides[1], *pair[1]))
+        if des.value(better) - des.value(worse) < PEAK_MIN_GAP:
+            return None
+        return (better, worse) if want_left_better else (worse, better)
+    return des.attempt(build, dm=(0.0, MATCHED_MOISTURE / 2.0))
+
+
+def peak_trials(des, n, rng):
+    """`n` peak trials of type "peak" (`varied` names the pair: "0>1" the global peak against the local one, "0>off", "1>off"). Two peaks: the pairs are shared as evenly as possible, the extra
+    trials going to the global-against-local pair (the one that shows whether a participant settled on the lower peak); one peak: peak against off. Sides alternate."""
+    n_peaks = len(des.p.reward_function.get("bumps") or [])
+    if n_peaks < 1:
+        raise ValueError("peak trials need a reward function made of peaks")
+    pairs = [(0, 1), (0, "off"), (1, "off")] if n_peaks >= 2 else [(0, "off")]
+    counts = [n // 3] * 3 if n_peaks >= 2 else [n]
+    counts[0] += n - sum(counts)
+    trials, side = [], bool(rng.integers(2))
+    for pair, count in zip(pairs, counts):
+        for _ in range(count):
+            i, lt, rt = TRIAL_KINDS["peak"](des, pair, side)
+            trials.append({"type": "peak", "varied": f"{pair[0]}>{pair[1]}", "place": i, "left": lt, "right": rt})
+            side = not side
+    return trials
+
+
 # Trial kinds an experiment adds: name -> builder(designer, ...) returning (placement, left bush, right bush).
-TRIAL_KINDS = {"per_feature": per_feature_trial}
+TRIAL_KINDS = {"per_feature": per_feature_trial, "peak": peak_trial}
 
 
 def feature_trials(des, per_feature, rng):
@@ -443,15 +507,18 @@ def build_gap_trials(params, terrain, pool, rng, mode):
     des = Designer(params, terrain, pool, rng)
     per_feature = int(getattr(params, "interlude_feature_trials", 0) or 0)
     typed = feature_trials(des, per_feature, rng) if per_feature else []        # (the scarcest placements first; none by default, so the stimuli of the other sessions do not move)
+    n_peak = int(getattr(params, "interlude_peak_trials", 0) or 0)
+    typed += peak_trials(des, n_peak, rng) if n_peak else []
     n = n_total - repeats - len(typed)
-    if n < 1:
-        raise ValueError(f"interludeTrialCount {n_total} has no room for the {len(typed)} per-feature trials and {repeats} repeats")
+    if n < (0 if n_peak else 1):
+        raise ValueError(f"interludeTrialCount {n_total} has no room for the {len(typed)} typed trials and {repeats} repeats")
     axes = {"reward_gap": (3,), "feature_gap": (4,), "hybrid": (3, 4)}[mode]
     minima = {3: float(getattr(params, "interlude_min_reward_gap", 0.25)), 4: float(getattr(params, "interlude_min_feature_gap", 0.1))}
     # optional ceilings (reward units for the reward gap, 0-1 for the feature gap); 0 or absent: the gaps spread up to GAP_TOP_QUANTILE of the candidates
     maxima = {a: float(v) for a, v in ((3, getattr(params, "interlude_max_reward_gap", 0)), (4, getattr(params, "interlude_max_feature_gap", 0))) if v}
-    rows = des.gap_candidates()
-    while True:
+    chosen, span = [], {a: (0.0, 0.0) for a in axes}                             # (all the trials typed: no gap trials to choose)
+    rows = des.gap_candidates() if n else []
+    while n:
         chosen, span = choose_gap_trials(rows, n, axes, minima, rng, maxima)
         hidden = [r for r in chosen if not des._final_ok(*r[:3])]
         if not hidden:

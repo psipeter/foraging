@@ -299,6 +299,7 @@ public class WorldData
             { "moistureTerraceUnevenness", config.MoistureTerraceUnevenness },
             { "moistureTerraceMode", (float)(int)config.MoistureTerraceMode },
             { "featureBalance", (float)(int)config.FeatureBalance },
+            { "featureCoverage", (float)(int)config.FeatureCoverage },
             { "featureBalanceTarget", config.FeatureBalanceTarget },
             { "featureBalanceScales.count", config.FeatureBalanceScales != null ? config.FeatureBalanceScales.Length : 0 },
             { "featureBalanceScales.sum", SumOf(config.FeatureBalanceScales) },
@@ -359,9 +360,9 @@ public class WorldData
 
         // Names the generator writes only when they differ from the default (1 for the "varies" flags, 0.5 for the "when fixed" values, 0 for the random value range):
         // a file without one was made with the default, so a config that now differs is stale.
-        foreach (string name in new[] { "shapeVaries", "colorVaries", "moistureVaries", "shapeWhenFixed", "colorWhenFixed", "moistureWhenFixed", "moistureTerraceUnevenness", "moistureTerraceMode", "featureBalance", "randomBushValueRange.min", "randomBushValueRange.max", "spatialBalance" })
+        foreach (string name in new[] { "shapeVaries", "colorVaries", "moistureVaries", "shapeWhenFixed", "colorWhenFixed", "moistureWhenFixed", "moistureTerraceUnevenness", "moistureTerraceMode", "featureBalance", "featureCoverage", "randomBushValueRange.min", "randomBushValueRange.max", "spatialBalance" })
         {
-            float fallback = name.StartsWith("randomBushValueRange") || name == "spatialBalance" || name == "moistureTerraceUnevenness" || name == "moistureTerraceMode" || name == "featureBalance" ? 0f : name.EndsWith("WhenFixed") ? 0.5f : 1f;
+            float fallback = name.StartsWith("randomBushValueRange") || name == "spatialBalance" || name == "moistureTerraceUnevenness" || name == "moistureTerraceMode" || name == "featureBalance" || name == "featureCoverage" ? 0f : name.EndsWith("WhenFixed") ? 0.5f : 1f;
             if (Array.IndexOf(_checkNames, name) < 0 && current.TryGetValue(name, out float now) && !Mathf.Approximately(now, fallback))
             {
                 mismatches.Add(name);

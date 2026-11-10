@@ -167,6 +167,129 @@ bonus design for sparse sessions.
       per participant.
    6. Hinted against unhinted sessions, and the instance index as a covariate, to see whether people learn to expect more than one peak.
 
+5. **Build plan (2026-11-10).** RW is built the way FN was: a design module `scripts/design/RW.py` (instances, hints, durations, texts) that `build_experiment.py RW` turns
+   into session and Interlude assets, worlds, Interlude files and instruction texts, with FN's conventions (a `design` record per instance, with the `iteration` of an instance so
+   that the reduced-run `repeats` knob works, bold phrases in the hints, the menu row from `ExperimentConfig`). What exists and what does not:
+   * *Exists:* Gaussian bumps in the reward function (`bumps`: a centre in (shape, color), a height, a spread along shape and, optionally, along color; a one-feature peak is a bump
+     with a very wide spread on the decoration axis) in the generator, the game and the simulator; the Instance contract and the build pipeline; typed Interlude trials in the
+     Interlude file (a trial is an explicit pair with a free-text `type`, so the game needs no change); per-feature balancing; the simulated agents and the battery for screening.
+   * *Does not exist:* the sparsity measure and the peak parameterisation (width, separation in widths, height ratio, positions away from the ends); a draw of the features that
+     covers the feature *plane* evenly (per-feature balancing only evens each feature on its own, and reward-based balancing leaks which feature pays); the typed Interlude trials
+     (global against local, local against the median, global against the median, a valley bush); a check that a built world shows the peaks its design record states.
+   * *Phases, in order, each ending in tests and a decisions entry:*
+     1. **Decisions** (below). Nothing is built before the sparsity level `x`, the pool and the per-participant counts are chosen.
+     2. **Peak model** (`scripts/rw_peaks.py`, **built 2026-11-10**: see DECISIONS "RW peak model"): from (type, width, separation, height ratio, noise, seed) to the `bumps` of the reward function; the sparsity measure
+        (the fraction of the interval or plane in the top x% of the reward range); positions kept a margin from the ends. Tests: the measure on known bumps, the separation in
+        widths and the height ratio as stated, no peak at an edge, the one-feature case flat along the decoration axis. Size: small.
+     3. **Plane coverage** (**built 2026-11-10**: see DECISIONS "RW plane coverage"): a new assignment stage in `world.py` that deals (shape, color) to the lattice positions stratified over the plane (so the marginals are even too) and
+        independent of the reward, with a guaranteed number of bushes inside the narrowest peak's half-width. Tests: coverage statistics, the guarantee for the narrowest width,
+        no relation between a bush's position and its features. Size: medium (the leak problem of `spatialBalance` is the thing to avoid).
+     4. **Screen the parameter space with the simulated agents** (**run 2026-11-10** as tag rw2, 38,340 instances: `scripts/rw_screen.py`, `scripts/rw_screen_analysis.py`; results in DECISIONS "RW screening results (rw2)") before any asset exists: a greedy and an exploring agent on candidate instances, to see that the local peak traps
+        the greedy one and not the exploring one across the width, separation, height-ratio and noise ranges, and to set the ranges and the sessions' durations. Size: small to
+        medium, mostly computing time (run when asked: new conditions, not re-run baselines).
+     5. **Typed Interlude trials** in `interlude.py` (like `feature_trials`): the pair types, their counts per session type, their order, tests that each pair is what its type says
+        (the real reward means, the gap in noise units). Size: medium.
+     6. **The design module and the build**: the instance pool, the order (the two one-peak sessions first, then the two-peak sessions mixed), the hints (one-peak hints name the
+        features; the first two-peak session of each type says there are two kinds of valuable bush; the later ones say nothing), durations, Interlude trial counts, the assets and
+        worlds (about 0.8 MB each), the catalog entry; `test_rw_design.py` like FN's, and `test_realization.py` extended to peak designs. Size: medium.
+     7. **Publish and pilot**: `server_admin.py publish` registers the experiment (set its completion code), a development build, then pilots on friends and labmates with the reduced
+        runs (`repeats = 1` is one instance of each type); the pilots measure the time per session and per Interlude trial, which sets the durations and the menu's minutes.
+   * *Decisions (PI, 2026-11-10):*
+     * The sparsity measure is taken at x = 10, 20 and 30 (the fraction of the feature interval or plane whose reward is in the top 10%, 20% and 30% of the reward range); an
+       instance reports all three. **TODO (confirm): whether the three x are three thresholds at which every instance is measured, or three target sparsity levels of the pool.**
+     * The pool: one instance of each session type for now; how many instances in all, and how many of each type a participant sees, are decided later.
+     * The margin from the ends of the feature range: wide enough that the reward visibly declines between a peak and the feature extreme. Confirmed, as operationalised: a peak's
+       centre is at least about 1.5 spreads from each end, so the reward at the nearer extreme is at most a third of the peak's height.
+     * The prerequisite is the tutorial, for now.
+     * `rewardStd` is constant (the same in every RW instance), for now.
+     * Decided in phase 3: every peak of a built world holds at least 5 bushes in its top-10% region, and the narrowest peak is expected to hold 10 (the draw then gave at least 7 in 300 placements). In spread that is 0.016 for a one-feature peak and 0.147 for a two-feature one at 700 bushes; the one-feature figure is far below what a person can tell apart, so the perceptual bound on the width (phase 4) will be the binding one there.
+     * The bonus rule is the same as everywhere else (bonus per point, a fixed payment for the time). A participant who never finds a peak earns almost no bonus; that is accepted
+       for now. Considered and not chosen: a guaranteed minimum bonus per session, a bonus on the share of the best possible points, a small baseline reward everywhere (it would change
+       the sparsity design).
+   * *No change to the data format is expected:* the world files, the session rows and the database tables stay as they are; the Interlude trial `type` strings are new values of an
+     existing text column.
+
+6. **Session plan, draft v8 (2026-11-10; nothing here is built; v7 plus the rw4 crossing screen).** Built like FN: cells with an `iteration` index in their `design` record (so the reduced-run `repeats` knob works), a first pass
+   through the baseline cells in order, then the rest in a random order, one world seed and one random draw of the peaks per instance (which feature pays in a one-feature session alternates over the
+   instances), hints per cell type, Interlude trial counts by type. **Sparsity is the share of all the bushes that pay at least 70% of the best bush** (about 7 good bushes per percent in a world of 700);
+   **in a two-peak session it is the total, split equally over the two peaks**. A peak's spread follows from its share (share / 1.69 for one feature, sqrt(share / pi) / 0.844 for two). FN covers the number
+   of features, so the sparsity scan (S) and the separation crossing (T) use two features only; the one-feature sessions are only in the baseline (B). **Discovery is reported strict** (PI, 2026-11-10): a
+   fruit from a bush in the global peak's top-10% region, at least 90% of the best bush's value; **lenient** is the top-30% region (at least 70%). A **person** is taken to be 2 to 3 times slower than the
+   agents: the proxy is the agents' discovery at (session length) / 2 and / 3 (`rw_screen_analysis.human_proxy`).
+   * *The design (16 sessions with 2 iterations of S and T; B once, the teaching sessions):* **B** (baseline, 120 s, fixed order): one and two features by one and two peaks at 15%, the two-peak ones at the
+     nearest separation. **S** (one peak, two features, 180 s): 15% and 5%, 2 iterations. **T** (two peaks, two features, 180 s): **proposed (rw4): sparsity 15% and 10% crossed with the height ratio, 0.3 and 0.75, at one separation of 4.5 spreads, with the margin relaxed to 1.0 spread (the 15% cell does not fit with 1.48); 2 iterations** (v7 had 10% and 5% crossed with the separation, 3 and 4.5, at ratio 0.75). Hints: one-peak sessions name the feature(s) that pay; the first two-peak session of each feature count (B3, B4) says there are two kinds of valuable
+     bush. Order: B in order, then S and T in a seeded random order. Interludes: 5 trials (one feature) and 10 (two) for one peak, 20 typed pairs for two peaks (phase 5). Every peak holds at least 3 bushes
+     in its top-30% region (the guarantee replacing 5 in the top-10%; no instance needed a replacement world in rw3). Time: 44 minutes of play, at most 84 with the Interludes (trials at their 7 s cap,
+     20 s per instruction screen); a participant may stop between sessions.
+   * *The agents on the ladder (rw3: nearest, learner, softmax, curious; 100 worlds per cell; learner, softmax and curious pooled, 300 worlds; strict):*
+
+     | id | features | peaks | sparsity total (per peak) | spread | length | separation | found: agents | person k = 2 | k = 3 | trapped: agents | k = 2 | k = 3 | lenient found k = 2 | k = 3 | points (agents) |
+     |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+     | B1 | one | 1 | 15% | 0.089 | 120 s | | 99% | 88% | 71% | 0 | 0 | 0 | 99% | 92% | 399 |
+     | B2 | two | 1 | 15% | 0.259 | 120 s | | 90% | 63% | 46% | 0 | 0 | 0 | 99% | 89% | 530 |
+     | B3 | one | 2 | 15% (7.5%) | 0.044 | 120 s | 3 | 87% | 54% | 38% | 11% | 24% | 26% | 80% | 61% | 361 |
+     | B4 | two | 2 | 15% (7.5%) | 0.183 | 120 s | 3 | 61% | 35% | 20% | 17% | 16% | 13% | 75% | 65% | 437 |
+     | S2F-15 | two | 1 | 15% | 0.259 | 180 s | | 97% | 81% | 64% | 0 | 0 | 0 | 100% | 98% | 805 |
+     | S2F-5 | two | 1 | 5% | 0.149 | 180 s | | 72% | 41% | 24% | 0 | 0 | 0 | 90% | 73% | 431 |
+     | T2F-10-near | two | 2 | 10% (5%) | 0.149 | 180 s | 3 | 65% | 37% | 27% | 24% | 27% | 24% | 73% | 55% | 560 |
+     | T2F-10-far | two | 2 | 10% (5%) | 0.149 | 180 s | 4.5 | 45% | 28% | 20% | 35% | 26% | 18% | 56% | 52% | 449 |
+     | T2F-5-near | two | 2 | 5% (2.5%) | 0.106 | 180 s | 3 | 50% | 25% | 14% | 22% | 14% | 12% | 61% | 42% | 385 |
+     | T2F-5-far | two | 2 | 5% (2.5%) | 0.106 | 180 s | 4.5 | 40% | 22% | 17% | 23% | 13% | 9% | 48% | 32% | 331 |
+
+     (The score of a B session is at 120 s; S2F-15 at 120 s scores 528, the same as B2, which has the same parameters.)
+   * *What rw3 shows.* (1) **The discovery model holds for the one-peak cells** (agents, strict: B1 99% observed against 97% predicted, B2 90 against 93, S2F-15 97 against 98, S2F-5 72 against 74, a
+     two-feature extrapolation to 5%); the **two-peak cells are lower than the model** (B4 61% against 74, T2F-10-far 45 against 74), by the trapped fraction. (2) **The three learners are
+     indistinguishable again; `nearest` (blind to values) finds less when sparse (S2F-5 48% against 68 to 75) and is trapped less in the far cell** (global found 54% against 42 to 44). (3) **Trapping is
+     large wherever there are two peaks** (11% to 35% for the agents) and zero for one peak. (4) **The separation matters at 10% for the agents (trapped 24% near, 35% far; global found 65% against 45%)
+     but little at the people proxy** (k = 2: trapped 27% against 26%, global found 37% against 28%; k = 3: 24% against 18%, 27% against 20%; a proportion of 300 worlds has a 95% half-width of about 5
+     points) **and not at all at 5%** (22% against 23%). (5) **Sparsity matters a lot for points and discovery**: S2F-15 against S2F-5, 805 against 431 points (-46%), strict discovery 81% against 41% (k = 2).
+     (6) **Under the strict definition no cell reaches 85% for a person except B1** (88% at k = 2, 71% at k = 3), and the hardest cells are 14% to 28%.
+   * *The crossing screen (rw4: T at 15% and 10%, separation 3 and 4.5 at ratio 0.75, ratio 0.3, 0.75 and 0.9 at separation 4.5; margin 1.0 spread; the same four agents, 100 worlds per cell; 800 instances, none needed a
+     replacement; the 10% cells reproduce rw3's).* Strict, learners pooled (300 worlds, a 95% half-width of about 7 to 8 points). Trapped fraction, **agents / person k = 2 / k = 3**: 15% sep 3 ratio .75: 15 / 21 / 24%;
+     sep 4.5 ratio .75: 43 / 34 / 29%; sep 4.5 ratio .3: 20 / 20 / 20%; sep 4.5 ratio .9: 46 / 37 / 28%; 10% sep 3: 16 / 19 / 16%; sep 4.5 ratio .75: 36 / 24 / 20%; ratio .3: 6 / 8 / 8%; ratio .9: 32 / 22 / 15%.
+     Found the global peak, same order: 15%: 80 / 53 / 33, 49 / 34 / 25, 76 / 51 / 37, 49 / 32 / 22; 10%: 70 / 45 / 33, 46 / 29 / 20, 76 / 46 / 29, 50 / 32 / 24. Points at 180 s: 15%: 708, 553, 535, 603; 10%: 586, 466, 451, 506.
+     **The effect on trapping of separation 3 to 4.5 and of ratio 0.3 to 0.9** (points of the trapped fraction, agents / k = 2 / k = 3): 15%: +28 / +13 / +5 and +26 / +16 / +8; 10%: +20 / +5 / +4 and +26 / +14 / +7. So **the
+     ratio is the more robust crossing factor at the person proxy** (the separation at 10% is within the noise); **the ratio effect is all between 0.3 and 0.75** (0.75 to 0.9: +3 and -4, nothing), so 0.9 is wasted; the
+     separation costs points (-155 at 15%, -120 at 10%) while a higher ratio gains them (+68, +56: the local peak one is stuck on pays more); 15% and 10% carry more trapping signal than 10% and 5% (k = 2: 20 to 37% against
+     13 to 14%); `nearest` (value-blind) is trapped 16% to 28% whatever the ratio and separation, so the learners' effects are learning, not geometry.
+   * *Open (PI):* **the baselines' target** (the 85% was set on the lenient definition: B1 and B2 meet it at k = 2, B3 80% and B4 75%; B4 cannot be easier, two two-feature peaks above about 8.7% each do
+     not fit the plane); **the T sparsity**: at the people proxy T at 10% has the most trapping (26% to 27%), at 5% it is 13% to 14% with global discovery of 22% to 25%, so 5% is mostly "nobody finds
+     it"; a T pair of 15% and 10% (the 15% far cell needs the margin relaxed from 1.48 to 1.0 spread) or 12% and 8% would keep more signal; **the separation** has a small effect at the people proxy, so the
+     height ratio (0.3 against 0.9 at one separation, which was as strong in rw2) is worth screening as T's crossing factor before deciding.
+
+   * *Proposal v9 (PI, 2026-11-10; replaces the T crossing of v8, which is too much to characterise sparsity).* **S and T both take three sparsities, 15%, 10% and 5%, 3 iterations each; T's height ratio (0.5) and
+     separation (4.5 spreads) are fixed, the margin 1.0 spread** (S 3 x 3 = 9 sessions, T 9, B 4: 22 sessions). Screen rw5 (`rw_screen.py run --tag rw5 --design sparsity`, 150 worlds per cell; learner, softmax, curious pooled, 450 episodes; strict):
+
+     | cell | spread | found: agents | k = 2 | k = 3 | trapped: agents | k = 2 | k = 3 | lenient found k = 2 | points (agents) |
+     |---|---|---|---|---|---|---|---|---|---|
+     | S2F-15 | 0.259 | 98% | 81% | 65% | 0 | 0 | 0 | 100% | 810 |
+     | S2F-10 | 0.211 | 92% | 71% | 54% | 0 | 0 | 0 | 99% | 655 |
+     | S2F-5 | 0.149 | 78% | 42% | 32% | 0 | 0 | 0 | 87% | 438 |
+     | T2F-15 | 0.183 | 64% | 43% | 27% | 32% | 27% | 23% | 65% | 526 |
+     | T2F-10 | 0.149 | 69% | 37% | 26% | 16% | 16% | 12% | 75% | 447 |
+     | T2F-5 | 0.106 | 49% | 22% | 14% | 14% | 13% | 8% | 62% | 311 |
+
+     Discovery falls steadily with sparsity in both stages (S: 81, 71, 42% at k = 2), so three levels give a usable dose-response. T's trapping falls with sparsity (27, 16, 13% at k = 2), and T2F-15 is hardest to
+     get right because its two peaks are wide and close in absolute terms; the T2F-15 global discovery is below T2F-10 at the agents' pace, so T is not monotone in discovery (fewer bushes outside the two peaks to
+     be distracted by, but the margin of 1.0 packs them together). The ratio 0.5 is a new value, untested before rw5.
+     **Power of v9** (`rw_power_sparsity.py`; 3 iterations x 3 sparsities per stage per participant, participant random intercept sd 0.8, cluster-robust t-test at 0.05, 400 reps; the agents' person-proxy
+     slopes, or half as strong). Power to detect the sparsity slope of discovery:
+
+     | person slowdown, effect | S, N = 20 / 40 / 60 | T, N = 20 / 40 / 60 / 100 | stage x sparsity, N = 60 / 100 |
+     |---|---|---|---|
+     | 2x, as agents | 99 / 100 / 100% | 57 / 89 / 99 / 100% | 68 / 88% |
+     | 2x, half as strong | 54 / 84 / 96% | 21 / 33 / 54 / 75% | 20 / 33% |
+     | 3x, as agents | 91 / 99 / 100% | 46 / 76 / 91 / 99% | 67 / 87% |
+     | 3x, half as strong | 32 / 70 / 84% | 14 / 28 / 36 / 56% | 21 / 37% |
+
+     T's trapping slope over sparsity is about as detectable (2x as agents: 46 / 75 / 90 / 99%; half: 21 / 29 / 42 / 60%). S is well powered at N = 40; **T needs about 60 for the full-strength effect and more than 100
+     if people show half the agents' slope**, because T's discovery is low at every level; the stage-by-sparsity contrast is weakest.
+   * *v9.1 (PI, 2026-11-10): T's sparsities become 15%, 11% and 7%* (S stays 15, 10, 5%). Screen rw6 (`--design tsweep`, T at 15, 13, 11, 9, 7, 5%, 200 worlds per cell, strict, 180 s): global found at a person 2x slower
+     48, 43, 42, 38, 26, 22% (3x: 34, 31, 28, 23, 17, 13%); trapped at 2x 24, 20, 16, 13, 15, 13%. 5% is at the floor (22% found), so it is dropped from T; 15/11/7 keeps the range of discovery (49 to 26% at 2x)
+     and raises its level. Power of the T slope of discovery at N = 40 / 60 / 100: 89 / 97 / 100% (2x, as agents), 36 / 59 / 79% (2x, half as strong), 86 / 96 / 100% (3x); that of trapping falls to
+     40 / 57 / 75% (2x), because trapping is flat between 11% and 7%. The cost: S and T no longer share sparsity levels, so the stage-by-sparsity contrast compares slopes, not matched cells. **The levels, lengths, ratio and
+     separation are plain entries of the design table, so the pilot (about 8 to 10 people, to measure the slowdown k) sets the final ladder: fixed in advance, the middle T cell aimed at about 50% global discovery.**
+
 ---
 
 ## Learning with feature interactions (FI)

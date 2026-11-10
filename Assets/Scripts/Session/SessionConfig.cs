@@ -30,6 +30,13 @@ public enum SpatialBalance
     TilesAndSwaps   // Tiles, then pairs of bushes swap records while that lowers the patchiness of the reward over disks at those scales
 }
 
+// How scripts/world.py deals (shape, color) pairs to the bushes besides the independent draw: Plane covers the feature plane evenly (see SessionConfig.featureCoverage).
+public enum FeatureCoverage
+{
+    Off,            // not used: the features are drawn (and balanced) as spatialBalance and featureBalance say
+    Plane           // the pairs are a low-discrepancy sample of the plane, dealt so every part of the map gets an even sample of it
+}
+
 // How scripts/world.py shapes the moisture (ground colour and height) field. The order is part of the logged format (the session row stores the number).
 public enum MoistureTerraceMode
 {
@@ -88,6 +95,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private int interludeRepeatCount = 0;
     [Tooltip("RewardGap / FeatureGap / Hybrid Interludes only: per-feature trials for each visible feature (a pair that differs in that feature only, the true reward gap spread in units of rewardStd), taken out of interludeTrialCount. 0 = none. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
     [SerializeField] private int interludeFeatureTrials = 0;
+    [Tooltip("RewardGap / FeatureGap / Hybrid Interludes only: peak trials for a reward function made of Gaussian peaks (RW), taken out of interludeTrialCount: a pair of bushes from two different peaks' top regions or from a peak and from off every peak, split over the pairs the peaks allow. 0 = none. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
+    [SerializeField] private int interludePeakTrials = 0;
     [Tooltip("The fewest trials between a repeated pair and its repeat. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
     [SerializeField] private int interludeRepeatSeparation = 8;
 
@@ -218,6 +227,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private SpatialBalance spatialBalance = SpatialBalance.Off;
     [Tooltip("Balances each visible feature (shape, color) over the map on its own, the same way for each, so every feature is evener than chance and none is more regular than the others, whether or not it pays; the reward, a sum over the features, is then also more even (not when moisture carries the weight). Off = independent draws. Tiles = dealt evenly over tiles at several scales, TilesAndSwaps = then swapped between bushes until featureBalanceTarget. Use this or spatialBalance, not both (spatialBalance evens the reward itself, which makes the rewarded feature much more regular than the others: a visible cue). Read by scripts/world.py: regenerate the world after changing it.")]
     [SerializeField] private SpatialBalance featureBalance = SpatialBalance.Off;
+    [Tooltip("Deals each bush a (shape, color) pair so that the pairs cover the feature plane evenly and every part of the map gets an even sample of it (the sparse-reward experiment: a narrow peak of the reward must have bushes on it, spread over the map). Shape and color are treated alike and the reward is not used, so nothing shows which feature pays; both must vary. Off = not used. Use this, featureBalance or spatialBalance, not two of them. Read by scripts/world.py: regenerate the world after changing it.")]
+    [SerializeField] private FeatureCoverage featureCoverage = FeatureCoverage.Off;
     [Tooltip("featureBalance only: how even the features become: the swaps stop when the evenness cost (1 = chance, lower = more even and more regular) reaches this. Lower looks more regular; about 0.7 gives a spread of local means of about 0.8 of chance.")]
     [SerializeField] [Range(0.3f, 1f)] private float featureBalanceTarget = 0.7f;
     [Tooltip("featureBalance only: the sizes (world units) of the tiles and disks the features are evened at; a variety keeps the evenness from showing at any one scale.")]
@@ -391,6 +402,7 @@ public class SessionConfig : ScriptableObject
     public InterludeMode InterludeMode => interludeMode;
     public int InterludeTrialCount => interludeTrialCount;
     public int InterludeFeatureTrials => interludeFeatureTrials;
+    public int InterludePeakTrials => interludePeakTrials;
     public int InterludeTrialLimit => interludeTrialLimit;
 
     // A copy for a reduced run (RunModes.Short; never the asset itself, which would be saved into the file): a session lasts `factor` of its length, an Interlude
@@ -453,6 +465,7 @@ public class SessionConfig : ScriptableObject
     public float FruitRadius => fruitRadius;
     public SpatialBalance SpatialBalance => spatialBalance;
     public SpatialBalance FeatureBalance => featureBalance;
+    public FeatureCoverage FeatureCoverage => featureCoverage;
     public float FeatureBalanceTarget => featureBalanceTarget;
     public float[] FeatureBalanceScales => featureBalanceScales;
     public string Layout => layout;
