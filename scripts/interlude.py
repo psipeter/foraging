@@ -356,10 +356,13 @@ def reachable_gap(des, feature):
     return float(values.max() - values.min())
 
 
-PEAK_TOP = 0.9                # a bush is "in" a peak when that peak alone gives it at least this share of the peak's own height (RW's strict region, the top 10%)
+PEAK_TOP = 0.7                # a bush is "in" a peak when that peak alone gives it at least this share of the peak's own height (RW's sparsity region: the bushes that pay at least 70% of the best)
+PEAK_APART = 0.07             # bushes of different trials differ in shape or colour by more than this where the pool allows it (a peak's core is small, and its bushes would look alike)
 PEAK_OFF = 0.25               # a bush is "off" the peaks when every peak gives it at most this share of its height
 PEAK_MIN_GAP = 0.25           # the true reward gap of a peak trial is at least this (five times the tie tolerance)
-PEAK_DRAWS = 800              # (shape, colour) pairs tried on a placement for a peak trial
+PEAK_DRAWS = 40000            # uniform (shape, colour) points drawn to find the bushes of one peak class
+PEAK_POOL = 60                # of them kept per class
+PEAK_GAP_QUANTILE = 0.95      # the hardest-to-easiest spread of a peak trial's reward gap ends at this quantile of what the pair type offers
 
 
 def peak_shares(reward_function, shape, color):
@@ -381,40 +384,75 @@ def _in_class(shares, kind):
     return shares[kind] >= PEAK_TOP and shares[kind] == max(shares)
 
 
-def peak_trial(des, kinds, want_left_better):
-    """A pair of bushes, one from each of `kinds` (a peak's index, the global peak 0 being the highest, or "off": the first is the one worth more), at random features on a placement that
-    shows both. The true reward gap is at least PEAK_MIN_GAP, and the better bush is on the left when `want_left_better`."""
+def _class_draws(des, kind):
+    """Up to PEAK_POOL (shape, colour) points of class `kind`, drawn uniformly over the plane (the world's bushes cover it evenly)."""
+    out = []
+    for _ in range(PEAK_DRAWS):
+        shape, color = (round(float(des.rng.uniform(0.0, 1.0)), 2) for _ in range(2))
+        if _in_class(peak_shares(des.p.reward_function, shape, color), kind):
+            out.append((shape, color))
+            if len(out) >= PEAK_POOL:
+                break
+    return out
+
+
+def peak_trial(des, kinds, want_left_better, features):
+    """The pair of bushes with `features` ((shape, colour) of the better bush, then of the worse; one from each of `kinds`) on a placement that shows both, the better on the left when
+    `want_left_better`."""
     def build(i):
-        pair = [None, None]
-        for slot, kind in enumerate(kinds):
-            for _ in range(PEAK_DRAWS):
-                shape, color = (round(float(des.rng.uniform(0.0, 1.0)), 2) for _ in range(2))
-                if _in_class(peak_shares(des.p.reward_function, shape, color), kind):
-                    pair[slot] = (shape, color)
-                    break
-            if pair[slot] is None:
-                return None
         sides = ("left", "right") if want_left_better else ("right", "left")
-        better, worse = (des.bush(i, sides[0], *pair[0]), des.bush(i, sides[1], *pair[1]))
-        if des.value(better) - des.value(worse) < PEAK_MIN_GAP:
-            return None
+        better, worse = (des.bush(i, sides[0], *features[0]), des.bush(i, sides[1], *features[1]))
         return (better, worse) if want_left_better else (worse, better)
     return des.attempt(build, dm=(0.0, MATCHED_MOISTURE / 2.0))
 
 
+def _spread_pairs(des, kinds, count, rng, taken):
+    """`count` feature pairs, one point from each of `kinds` (the first the better: a peak's index, the global peak 0 being the highest, or "off"), whose true reward gaps are evenly spread
+    from PEAK_MIN_GAP to the PEAK_GAP_QUANTILE of the gaps the class pair offers (the centres of `count` equal bins, as for the gap modes), so the pair type has easy and hard trials."""
+    pools = [_class_draws(des, k) for k in kinds]
+    if not all(pools):
+        raise RuntimeError(f"no bush of class {kinds}: the peaks leave no (shape, colour) in it")
+    value = lambda f: des.value({"shape": f[0], "color": f[1], "moisture": 0.5})
+    values = [[value(f) for f in pool] for pool in pools]
+    cand = [(values[0][i] - values[1][j], i, j) for i in range(len(pools[0])) for j in range(len(pools[1])) if values[0][i] - values[1][j] >= PEAK_MIN_GAP]
+    if len(cand) < count:
+        raise RuntimeError(f"only {len(cand)} pairs of class {kinds} have a reward gap of {PEAK_MIN_GAP} or more; {count} wanted")
+    gaps = np.array([c[0] for c in cand])
+    top = float(np.quantile(gaps, PEAK_GAP_QUANTILE))
+    chosen = []
+    far = lambda f, rule: all(max(abs(f[0] - p[0]), abs(f[1] - p[1])) > rule for p in taken)
+    for k in range(count):
+        target = PEAK_MIN_GAP + (k + 0.5) / count * max(top - PEAK_MIN_GAP, 0.0)
+        for rule in (PEAK_APART, PEAK_APART / 2, 0.0):                           # (the most distinct bushes the pool allows; each bush is used once)
+            for idx in np.argsort(np.abs(gaps - target)):
+                _, i, j = cand[idx]
+                if far(pools[0][i], rule) and far(pools[1][j], rule) and max(abs(pools[0][i][0] - pools[1][j][0]), abs(pools[0][i][1] - pools[1][j][1])) > rule:
+                    taken += [pools[0][i], pools[1][j]]
+                    chosen.append((pools[0][i], pools[1][j]))
+                    break
+            else:
+                continue
+            break
+        else:
+            raise RuntimeError(f"too few distinct bushes of class {kinds} for {count} trials")
+    return chosen
+
+
 def peak_trials(des, n, rng):
-    """`n` peak trials of type "peak" (`varied` names the pair: "0>1" the global peak against the local one, "0>off", "1>off"). Two peaks: the pairs are shared as evenly as possible, the extra
-    trials going to the global-against-local pair (the one that shows whether a participant settled on the lower peak); one peak: peak against off. Sides alternate."""
+    """`n` peak trials of type "peak" (`varied` names the pair: "0>1" the global peak against the local one, "0>off", "1>off"). Two peaks: the pairs are shared as evenly as possible (the extra trials
+    going to "0>1" then "0>off"); one peak: peak against off. Within a pair type the reward gaps are spread evenly (`_spread_pairs`); sides alternate."""
     n_peaks = len(des.p.reward_function.get("bumps") or [])
     if n_peaks < 1:
         raise ValueError("peak trials need a reward function made of peaks")
     pairs = [(0, 1), (0, "off"), (1, "off")] if n_peaks >= 2 else [(0, "off")]
-    counts = [n // 3] * 3 if n_peaks >= 2 else [n]
-    counts[0] += n - sum(counts)
-    trials, side = [], bool(rng.integers(2))
+    counts = [n // len(pairs)] * len(pairs)
+    for k in range(n - sum(counts)):
+        counts[k] += 1
+    trials, side, taken = [], bool(rng.integers(2)), []
     for pair, count in zip(pairs, counts):
-        for _ in range(count):
-            i, lt, rt = TRIAL_KINDS["peak"](des, pair, side)
+        features = _spread_pairs(des, pair, count, rng, taken)
+        for k in rng.permutation(count):                  # (the sides alternate over the hard and easy ends alike)
+            i, lt, rt = TRIAL_KINDS["peak"](des, pair, side, features[k])
             trials.append({"type": "peak", "varied": f"{pair[0]}>{pair[1]}", "place": i, "left": lt, "right": rt})
             side = not side
     return trials
@@ -525,24 +563,28 @@ def build_gap_trials(params, terrain, pool, rng, mode):
             break
         rows = [r for r in rows if not any(r is h for h in hidden)]          # a chosen pair not in view: choose again without it
     trials = typed + [{"type": mode, "varied": "", "place": r[0], "left": r[1], "right": r[2]} for r in chosen]
-    trials += pick_repeats(trials, repeats, des)
+    trials += pick_repeats(trials, repeats, des, by_group=bool(n_peak))
     des.gap_span = {("reward", "feature")[a - 3]: span[a] for a in axes}
     return _finish_trials(trials, des, rng, ordered=True, separation=int(getattr(params, "interlude_repeat_separation", REPEAT_SEPARATION))), des
 
 
-def pick_repeats(trials, k, des):
+def pick_repeats(trials, k, des, by_group=False):
     """`k` exact repeats of chosen trials: the same placement, spawn point, bushes and sides (shallow copies, linked to their source by
     `repeat_source`; the sidecar gives a copy its own bush entries, so the bush the participant harvested the first time is not the
     depleted one). The pairs repeated are those whose reward gap is nearest the median (neither trivial nor a coin flip), alternating
-    the correct side so the sides stay balanced."""
+    the correct side so the sides stay balanced. `by_group`: the repeats go round the trial groups (`varied`, e.g. the peak pairs), each taking its group's median."""
     if k == 0:
         return []
     delta = [des.value(t["left"]) - des.value(t["right"]) for t in trials]
-    middle = float(np.median(np.abs(delta)))
+    group = [t["varied"] if by_group else "" for t in trials]
+    order = list(dict.fromkeys(group))
     free, copies = list(range(len(trials))), []
     for i in range(k):
+        g = order[i % len(order)]
+        middle = float(np.median([abs(d) for d, h in zip(delta, group) if h == g]))
         side = i % 2 == 0                                          # left-correct first, then right-correct, ...
-        pool = [j for j in free if (delta[j] > 0) == side] or free
+        members = [j for j in free if group[j] == g]
+        pool = [j for j in members if (delta[j] > 0) == side] or members
         j = min(pool, key=lambda j: abs(abs(delta[j]) - middle))
         free.remove(j)
         copies.append({**trials[j], "repeat_source": trials[j]})

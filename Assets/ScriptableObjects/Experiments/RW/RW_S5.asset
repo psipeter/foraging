@@ -57,8 +57,8 @@ MonoBehaviour:
       peak: 0
       width: 0
     bumps:
-    - centerShape: 0.40626627
-      centerColor: 0.46477056
+    - centerShape: 0.24343565
+      centerColor: 0.4035713
       width: 0.2587137
       widthColor: 0.2587137
       height: 4
@@ -151,11 +151,11 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"cell": "S2F-15", "centers": [[0.4062662623569289, 0.4647705506656915]],
+  designJson: '{"cell": "S2F-15", "centers": [[0.2434356535215548, 0.4035713194360121]],
     "experiment": "RW", "height_ratio": null, "heights": [4.0], "hint": "two", "index":
-    5, "instance": "RW_S5", "iteration": 1, "kind": "S", "margin": null, "n_peaks":
-    1, "paying": ["shape", "color"], "separation": null, "sparsity": {"10": 0.0437,
-    "20": 0.0926, "30": 0.1479}, "spread": 0.25871, "total_sparsity": 0.15, "world_attempts":
+    5, "instance": "RW_S5", "iteration": 1, "kind": "S", "margin": 0.7, "n_peaks":
+    1, "paying": ["shape", "color"], "separation": null, "sparsity": {"10": 0.0441,
+    "20": 0.0934, "30": 0.1492}, "spread": 0.25871, "total_sparsity": 0.15, "world_attempts":
     1}'
   shapeVaries: 1
   shapeWhenFixed: 0.5

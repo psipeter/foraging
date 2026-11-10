@@ -57,7 +57,7 @@ MonoBehaviour:
       peak: 0
       width: 0
     bumps:
-    - centerShape: 0.3068045
+    - centerShape: 0.27037147
       centerColor: 0.5
       width: 0.08879939
       widthColor: 1000
@@ -151,10 +151,10 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"cell": "B1", "centers": [[0.306804516697239]], "experiment": "RW",
+  designJson: '{"cell": "B1", "centers": [[0.27037147970891356]], "experiment": "RW",
     "height_ratio": null, "heights": [4.0], "hint": "one_sparse", "index": 1, "instance":
-    "RW_S1", "iteration": 1, "kind": "B", "margin": null, "n_peaks": 1, "paying":
-    ["shape"], "separation": null, "sparsity": {"10": 0.0815, "20": 0.1189, "30":
+    "RW_S1", "iteration": 1, "kind": "B", "margin": 0.7, "n_peaks": 1, "paying":
+    ["shape"], "separation": null, "sparsity": {"10": 0.0815, "20": 0.1184, "30":
     0.1499}, "spread": 0.0888, "total_sparsity": 0.15, "world_attempts": 1}'
   shapeVaries: 1
   shapeWhenFixed: 0.5

@@ -42,12 +42,13 @@ T_LEVELS = (15, 11, 7)
 S_SECONDS = T_SECONDS = 180
 T_RATIO = 0.5                        # local peak height over the global peak's
 T_SEPARATION = 4.5                   # in spreads
-T_MARGIN = 1.0                       # how far from the end of a feature a peak's centre is, in spreads (the default 1.48 does not fit two features at 15%)
-# The baseline: (id, paying features, peaks, total sparsity %, seconds, separation in spreads or None, margin in spreads or None for the default).
-BASELINE = (("B1", 1, 1, 15, 120, None, None), ("B2", 2, 1, 15, 120, None, None),
-            ("B3", 1, 2, 15, 120, 3.0, None), ("B4", 2, 2, 15, 120, 3.0, None))
-INTERLUDE_TRIALS = {(1, 1): 5, (2, 1): 10}        # one-peak sessions: (paying features, peaks) -> trials (the hybrid mode); two-peak sessions are all peak trials
-PEAK_TRIALS = 20
+MARGIN = 0.7                         # how far from the end of a feature a peak's centre is, in spreads: the smallest for which no instance's realised sparsity falls more than 10% below the untruncated peak's (PI, 2026-11-10; 0.65 gives 11%; the old 1.48 / 1.0 kept every peak near the middle, so the extremes of a feature were never good; at 0.7 a bush at an extreme can still pay 78% of a peak)
+# The baseline: (id, paying features, peaks, total sparsity %, seconds, separation in spreads or None).
+BASELINE = (("B1", 1, 1, 15, 120, None), ("B2", 2, 1, 15, 120, None),
+            ("B3", 1, 2, 15, 120, 3.0), ("B4", 2, 2, 15, 120, 3.0))
+INTERLUDE_TRIALS = 20                # every session alike, as in FN, so the count gives nothing away: PEAK_TRIALS distinct pairs of the peaks and REPEATS exact repeats
+PEAK_TRIALS = 17                     # two peaks: 6 global against local, 6 global against off, 5 local against off; one peak: all peak against off; reward gaps spread evenly within each pair type
+REPEATS = 3                          # one per pair type with two peaks (round the types: all of them on peak against off with one peak)
 
 HINT_ONE = "Only **one** of the **bush shape** or the **fruit color** matters."
 HINT_TWO = "**Both** the **bush shape** and the **fruit color** matter."
@@ -58,14 +59,14 @@ HINT_SPARSE = "Most bushes give few points: look for the **valuable ones**."
 def cells():
     """Every session cell of the design, in the order of the tables: dicts with the id, stage, paying features, peaks, total sparsity, length, separation, ratio, margin and iteration."""
     out = []
-    for cid, dims, peaks, total, seconds, separation, margin in BASELINE:
+    for cid, dims, peaks, total, seconds, separation in BASELINE:
         out.append({"id": cid, "stage": "B", "dims": dims, "n_peaks": peaks, "total": total / 100, "seconds": seconds, "separation": separation,
-                    "ratio": T_RATIO if peaks == 2 else None, "margin": margin, "iteration": 1})
+                    "ratio": T_RATIO if peaks == 2 else None, "margin": MARGIN, "iteration": 1})
     for stage, levels, peaks, seconds in (("S", S_LEVELS, 1, S_SECONDS), ("T", T_LEVELS, 2, T_SECONDS)):
         for level in levels:
             for k in range(ITERATIONS):
                 out.append({"id": f"{stage}2F-{level}", "stage": stage, "dims": 2, "n_peaks": peaks, "total": level / 100, "seconds": seconds,
-                            "separation": T_SEPARATION if peaks == 2 else None, "ratio": T_RATIO if peaks == 2 else None, "margin": T_MARGIN if peaks == 2 else None,
+                            "separation": T_SEPARATION if peaks == 2 else None, "ratio": T_RATIO if peaks == 2 else None, "margin": MARGIN,
                             "iteration": k + 1})
     return out
 
@@ -114,7 +115,7 @@ def hint(cell, first_two_peak):
         parts.append(HINT_PEAKS)
     elif cell["stage"] == "B":
         parts.append(HINT_SPARSE)
-    return " ".join(parts)
+    return "\n".join(parts)
 
 
 def _hints():
@@ -147,9 +148,8 @@ def instances():
     hints = _hints()
     out = []
     for cell, number, seed, attempt, peaks, spread in _instances_built():
-        two = cell["n_peaks"] == 2
-        interlude = {"interludeMode": 4, "interludeTrialCount": PEAK_TRIALS if two else INTERLUDE_TRIALS[(cell["dims"], 1)], "interludeRepeatCount": 0,
-                     "interludeFeatureTrials": 0, "interludePeakTrials": PEAK_TRIALS if two else 0}
+        interlude = {"interludeMode": 4, "interludeTrialCount": INTERLUDE_TRIALS, "interludeRepeatCount": REPEATS,
+                     "interludeFeatureTrials": 0, "interludePeakTrials": PEAK_TRIALS}
         out.append(Instance(f"{CODE}_S{number}", _fields(peaks, seed),
                             {"sessionDuration": cell["seconds"], "instructionsFile": f"Experiments/{CODE}/instructions_S{number}.txt", "isPractice": False},
                             interlude, _design(cell, number, seed, attempt, peaks, spread, hints[number][0]), f"Experiments/{CODE}/instructions_interlude.txt"))

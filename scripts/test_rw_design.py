@@ -55,13 +55,10 @@ def test_instances_carry_a_design_record_and_the_iteration_for_reduced_runs():
         assert inst.session_fields["sessionDuration"] in (120, 180)
 
 
-def test_interlude_counts_follow_the_peak_count():
-    by_cell = {inst.design["cell"]: inst for inst in RW.instances()}
-    assert by_cell["B1"].interlude_fields["interludeTrialCount"] == 5 and by_cell["B1"].interlude_fields["interludePeakTrials"] == 0
-    assert by_cell["B2"].interlude_fields["interludeTrialCount"] == 10
-    for cid in ("B3", "B4", "T2F-15"):
-        f = by_cell[cid].interlude_fields
-        assert f["interludeTrialCount"] == f["interludePeakTrials"] == RW.PEAK_TRIALS and f["interludeRepeatCount"] == 0
+def test_every_session_has_twenty_trials_seventeen_peak_pairs_and_three_repeats():
+    for inst in RW.instances():
+        f = inst.interlude_fields
+        assert (f["interludeTrialCount"], f["interludePeakTrials"], f["interludeRepeatCount"], f["interludeFeatureTrials"]) == (20, 17, 3, 0)
 
 
 def test_hints_name_the_features_and_only_the_first_two_peak_sessions_say_two_kinds():
@@ -99,9 +96,9 @@ def two_peaks():
 
 def test_peak_trials_pair_the_stated_classes_and_the_better_side_is_correct():
     des = FakeDesigner(two_peaks())
-    trials = interlude.peak_trials(des, 20, np.random.default_rng(1))
+    trials = interlude.peak_trials(des, 17, np.random.default_rng(1))
     kinds = [t["varied"] for t in trials]
-    assert kinds.count("0>1") == 8 and kinds.count("0>off") == 6 and kinds.count("1>off") == 6
+    assert (kinds.count("0>1"), kinds.count("0>off"), kinds.count("1>off")) == (6, 6, 5)
     for t in trials:
         better, worse = (int(x) if x != "off" else x for x in t["varied"].split(">"))
         left_is_better = des.value(t["left"]) > des.value(t["right"])
@@ -109,15 +106,42 @@ def test_peak_trials_pair_the_stated_classes_and_the_better_side_is_correct():
         assert interlude._in_class(interlude.peak_shares(des.p.reward_function, high["shape"], high["color"]), better)
         assert interlude._in_class(interlude.peak_shares(des.p.reward_function, low["shape"], low["color"]), worse)
         assert abs(des.value(t["left"]) - des.value(t["right"])) >= interlude.PEAK_MIN_GAP
-    assert {t["left"]["shape"] > 2 for t in trials} <= {True, False}
     sides = [des.value(t["left"]) > des.value(t["right"]) for t in trials]
     assert 0.3 < np.mean(sides) < 0.7
 
 
+def test_the_reward_gaps_of_a_pair_type_are_spread_not_bunched():
+    des = FakeDesigner(two_peaks())
+    trials = interlude.peak_trials(des, 17, np.random.default_rng(1))
+    for kind in ("0>1", "0>off", "1>off"):
+        gaps = sorted(abs(des.value(t["left"]) - des.value(t["right"])) for t in trials if t["varied"] == kind)
+        assert gaps[-1] - gaps[0] > 0.3 and len(set(np.round(gaps, 3))) == len(gaps)
+
+
+def test_no_two_trials_look_alike():
+    des = FakeDesigner(two_peaks())
+    trials = interlude.peak_trials(des, 17, np.random.default_rng(1))
+    pts = [(t["left"]["shape"], t["left"]["color"], t["right"]["shape"], t["right"]["color"]) for t in trials]
+    near = lambda a, b: abs(a[0] - b[0]) <= 0.05 and abs(a[1] - b[1]) <= 0.05
+    alike = [(i, j) for i in range(len(pts)) for j in range(i + 1, len(pts))
+             if (near(pts[i][:2], pts[j][:2]) and near(pts[i][2:], pts[j][2:])) or (near(pts[i][:2], pts[j][2:]) and near(pts[i][2:], pts[j][:2]))]
+    assert not alike
+
+
 def test_one_peak_trials_are_peak_against_off():
     peaks = rw_peaks.Peaks(("shape", "color"), 0.2, ((0.5, 0.5),), (4.0,))
-    trials = interlude.peak_trials(FakeDesigner(peaks), 6, np.random.default_rng(1))
-    assert {t["varied"] for t in trials} == {"0>off"} and len(trials) == 6
+    trials = interlude.peak_trials(FakeDesigner(peaks), 17, np.random.default_rng(1))
+    assert {t["varied"] for t in trials} == {"0>off"} and len(trials) == 17
+
+
+def test_repeats_go_one_to_each_pair_type_with_the_sides_alternating():
+    des = FakeDesigner(two_peaks())
+    trials = interlude.peak_trials(des, 17, np.random.default_rng(1))
+    copies = interlude.pick_repeats(trials, 3, des, by_group=True)
+    assert sorted(c["varied"] for c in copies) == ["0>1", "0>off", "1>off"]
+    assert all(c["repeat_source"]["left"] is c["left"] for c in copies)
+    left_correct = [des.value(c["left"]) > des.value(c["right"]) for c in copies]
+    assert left_correct == [True, False, True]
 
 
 def test_the_hash_of_a_session_without_peak_trials_is_unchanged_by_the_new_field():

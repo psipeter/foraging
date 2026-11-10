@@ -32,9 +32,9 @@ MonoBehaviour:
   interludeMinFeatureGap: 0.15
   interludeMaxRewardGap: 2.148
   interludeMaxFeatureGap: 0.55
-  interludeRepeatCount: 0
+  interludeRepeatCount: 3
   interludeFeatureTrials: 0
-  interludePeakTrials: 20
+  interludePeakTrials: 17
   interludeRepeatSeparation: 8
   instructionsFile: Experiments/RW/instructions_interlude.txt
   controlsReminder: 
@@ -58,12 +58,12 @@ MonoBehaviour:
       width: 0
     bumps:
     - centerShape: 0.5
-      centerColor: 0.76269984
+      centerColor: 0.78122973
       width: 1000
       widthColor: 0.044399694
       height: 4
     - centerShape: 0.5
-      centerColor: 0.62950075
+      centerColor: 0.6480307
       width: 1000
       widthColor: 0.044399694
       height: 2
@@ -156,9 +156,9 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"cell": "B3", "centers": [[0.7626998261247321], [0.629500746555187]],
+  designJson: '{"cell": "B3", "centers": [[0.7812297629594365], [0.6480306833898913]],
     "experiment": "RW", "height_ratio": 0.5, "heights": [4.0, 2.0], "hint": "one_peaks",
-    "index": 3, "instance": "RW_S3", "iteration": 1, "kind": "B", "margin": null,
+    "index": 3, "instance": "RW_S3", "iteration": 1, "kind": "B", "margin": 0.7,
     "n_peaks": 2, "paying": ["color"], "separation": 3.0, "sparsity": {"10": 0.042,
     "20": 0.062, "30": 0.0785}, "spread": 0.0444, "total_sparsity": 0.15, "world_attempts":
     1}'

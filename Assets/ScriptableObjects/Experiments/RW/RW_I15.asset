@@ -32,9 +32,9 @@ MonoBehaviour:
   interludeMinFeatureGap: 0.15
   interludeMaxRewardGap: 2.148
   interludeMaxFeatureGap: 0.55
-  interludeRepeatCount: 0
+  interludeRepeatCount: 3
   interludeFeatureTrials: 0
-  interludePeakTrials: 20
+  interludePeakTrials: 17
   interludeRepeatSeparation: 8
   instructionsFile: Experiments/RW/instructions_interlude.txt
   controlsReminder: 
@@ -57,13 +57,13 @@ MonoBehaviour:
       peak: 0
       width: 0
     bumps:
-    - centerShape: 0.77826864
-      centerColor: 0.5680402
+    - centerShape: 0.78175515
+      centerColor: 0.56598586
       width: 0.12497058
       widthColor: 0.12497058
       height: 4
-    - centerShape: 0.24157351
-      centerColor: 0.40006486
+    - centerShape: 0.24506007
+      centerColor: 0.39801055
       width: 0.12497058
       widthColor: 0.12497058
       height: 2
@@ -156,10 +156,10 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"cell": "T2F-7", "centers": [[0.7782686084048157, 0.568040186898511],
-    [0.24157351816951, 0.40006485707116096]], "experiment": "RW", "height_ratio":
+  designJson: '{"cell": "T2F-7", "centers": [[0.7817551642383416, 0.5659858779682441],
+    [0.24506007400303587, 0.39801054814089404]], "experiment": "RW", "height_ratio":
     0.5, "heights": [4.0, 2.0], "hint": "two", "index": 15, "instance": "RW_S15",
-    "iteration": 2, "kind": "T", "margin": 1.0, "n_peaks": 2, "paying": ["shape",
+    "iteration": 2, "kind": "T", "margin": 0.7, "n_peaks": 2, "paying": ["shape",
     "color"], "separation": 4.5, "sparsity": {"10": 0.0103, "20": 0.0218, "30": 0.0349},
     "spread": 0.12497, "total_sparsity": 0.07, "world_attempts": 1}'
   shapeVaries: 1

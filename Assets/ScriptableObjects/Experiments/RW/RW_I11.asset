@@ -18,7 +18,7 @@ MonoBehaviour:
   isInterlude: 1
   interludeFor: RW_S11
   interludeMode: 4
-  interludeTrialCount: 10
+  interludeTrialCount: 20
   interludeTrialLimit: 0
   interludeTrialSeconds: 10
   interludeHarvestFruits: 10
@@ -32,9 +32,9 @@ MonoBehaviour:
   interludeMinFeatureGap: 0.15
   interludeMaxRewardGap: 2.148
   interludeMaxFeatureGap: 0.55
-  interludeRepeatCount: 0
+  interludeRepeatCount: 3
   interludeFeatureTrials: 0
-  interludePeakTrials: 0
+  interludePeakTrials: 17
   interludeRepeatSeparation: 8
   instructionsFile: Experiments/RW/instructions_interlude.txt
   controlsReminder: 
@@ -57,8 +57,8 @@ MonoBehaviour:
       peak: 0
       width: 0
     bumps:
-    - centerShape: 0.6177851
-      centerColor: 0.5493723
+    - centerShape: 0.7219393
+      centerColor: 0.593031
       width: 0.21123883
       widthColor: 0.21123883
       height: 4
@@ -151,11 +151,11 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"cell": "S2F-10", "centers": [[0.6177850690265643, 0.5493723281834068]],
+  designJson: '{"cell": "S2F-10", "centers": [[0.7219393025288714, 0.5930309772860983]],
     "experiment": "RW", "height_ratio": null, "heights": [4.0], "hint": "two", "index":
-    11, "instance": "RW_S11", "iteration": 3, "kind": "S", "margin": null, "n_peaks":
+    11, "instance": "RW_S11", "iteration": 3, "kind": "S", "margin": 0.7, "n_peaks":
     1, "paying": ["shape", "color"], "separation": null, "sparsity": {"10": 0.0294,
-    "20": 0.0623, "30": 0.0995}, "spread": 0.21124, "total_sparsity": 0.1, "world_attempts":
+    "20": 0.0624, "30": 0.0996}, "spread": 0.21124, "total_sparsity": 0.1, "world_attempts":
     1}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
