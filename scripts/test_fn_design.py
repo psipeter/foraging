@@ -121,7 +121,8 @@ def test_baseline_hints_name_the_visible_features_and_the_weighted_hint_is_share
 
 
 def test_the_hints_mark_their_essential_words_in_bold():
-    """Every baseline hint bolds its quantifier and the features it names; the markers are balanced and the weighted hint bolds its two claims."""
+    """Every baseline hint bolds its quantifier and the features it names ("three features" in the two-of-three hint); the weighted hint bolds "All three features";
+    the Interlude text has no emphasis. The markers are balanced."""
     texts = FN.texts()
     for k, i in enumerate(FN.instances(), start=1):
         if i.design["kind"] != "baseline":
@@ -132,4 +133,5 @@ def test_the_hints_mark_their_essential_words_in_bold():
         assert bold[0] in ("Both", "Either", "One", "Two") or bold[0] in FN.NAMES.values()
         if i.design["n_visible"] < 3 or i.design["n_rewarded"] == 1:
             assert all(FN.NAMES[f] in bold for f in i.design["visible"])
-    assert re.findall(r"\*\*(.+?)\*\*", FN.HINT_WEIGHTED) == ["All three", "some matter more than others"]
+    assert re.findall(r"\*\*(.+?)\*\*", FN.HINT_WEIGHTED) == ["All three features"]
+    assert "**" not in texts["instructions_interlude.txt"]

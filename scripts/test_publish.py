@@ -65,3 +65,16 @@ def test_a_development_builds_plan_is_marked_so_its_release_may_start_reduced_ru
     assert server_admin.build_plan(fake_build(tmp_path / "a", head(), development=True))["development"] is True
     assert server_admin.build_plan(fake_build(tmp_path / "b", head(), development=False))["development"] is False
     assert server_admin.build_plan(fake_build(tmp_path / "c", head()))["development"] is False             # an older build_info.json has no flag: a release
+
+
+def test_a_builds_description_names_its_kind_commit_size_and_parts_and_the_release_note_follows_it(tmp_path):
+    from datetime import datetime, timezone
+    build = fake_build(tmp_path, head(), dirty=True, development=True)
+    (build / "Build.bin").write_bytes(b"\0" * 3_000_000)
+    now = datetime(2026, 11, 10, 17, 30, tzinfo=timezone.utc)
+    subject, body = server_admin.build_description(build, "reduced runs", now=now)
+    assert subject.startswith(f"Development build {head()[:7]} (dirty): 3 MB, parts TUT ") and "FN " in subject
+    assert body.splitlines()[0] == "Reason: reduced runs" and head() in body and "2026-11-10 17:30 UTC" in body and "uncommitted changes" in body
+    assert server_admin.release_note(subject, "reduced runs") == f"{subject} | reduced runs" and server_admin.release_note(subject) == subject
+    release, _ = server_admin.build_description(fake_build(tmp_path / "r", head(), development=False))
+    assert release.startswith(f"Release build {head()[:7]}:") and "(dirty)" not in release

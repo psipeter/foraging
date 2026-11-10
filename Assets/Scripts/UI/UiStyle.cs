@@ -33,7 +33,7 @@ public static class UiStyle
         return $"<mark=#FFFFFF55 padding=\"18,18,6,6\"><b>{key}</b></mark><space=10>";
     }
 
-    // The colour of an emphasised phrase in the instruction texts: teal, which is neither a colour of the interface (accent blue, "completed" green) nor of the fruit ramp,
+    // The colour of an emphasised phrase in the instruction texts (bold): teal, which is neither a colour of the interface (accent blue, "completed" green) nor of the fruit ramp,
     // so it says nothing about which feature pays. One colour for every phrase.
     public static readonly Color Emphasis = new Color(0.435f, 0.827f, 0.816f);
 

@@ -18,7 +18,7 @@ import os
 import subprocess
 import uuid
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -157,6 +157,30 @@ def build_plan(build_dir=None, commit=None, repo=PROJECT_ROOT):
     return {"commit": commit, "experiments": experiments, "sessions": sessions, "worlds": root, "notes": notes, "development": development}
 
 
+def build_description(build_dir, reason=None, repo=PROJECT_ROOT, now=None):
+    """(subject, body) describing a WebGL build, for the deploy commit in the Pages repository (`deploy_webgl.sh`) and for the release's note (`publish`): its kind,
+    the commit of this repository it was made from (and whether the tree was dirty), its size and what it holds. The Pages repository keeps only its latest commit, so
+    the registered release is where the record of each deploy lives. `reason` is a free line: what this deploy is for."""
+    build_dir = Path(build_dir)
+    plan = build_plan(build_dir, repo=repo)
+    info = json.loads((build_dir / "StreamingAssets" / "build_info.json").read_text())
+    size = sum(f.stat().st_size for f in build_dir.rglob("*") if f.is_file()) / 1e6
+    kind = "Development" if plan["development"] else "Release"
+    dirty = bool(info.get("dirty"))
+    holds = ", ".join(f"{code} {n}" for code, n in plan["sessions"].items())
+    subject = f"{kind} build {plan['commit'][:7]}{' (dirty)' if dirty else ''}: {size:.0f} MB, parts {holds}"
+    when = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M UTC")
+    lines = [f"Reason: {reason}"] if reason else []
+    lines += [f"Made from the foraging commit {plan['commit']}" + (", with uncommitted changes to files that shape the game." if dirty else "."),
+              f"Holds (parts are sessions and Interludes): {holds}.", f"Prepared {when}."]
+    return subject, "\n".join(lines)
+
+
+def release_note(subject, reason=None):
+    """The one-line note a release is registered with: the build's subject line and the reason, if any."""
+    return subject + (f" | {reason}" if reason else "")
+
+
 def publish(conn, plan, completion_codes=None, note=None):
     """Register what `build_plan` found: each experiment (keeping a completion code already registered unless one is given), the build's files, the release.
     Safe to repeat. Returns a one-line summary per step."""
@@ -260,13 +284,20 @@ def main():
     pub.add_argument("--build", help="the WebGL build directory (its build_info.json names the commit, its StreamingAssets the experiments and files); default: the catalog and HEAD")
     pub.add_argument("--commit", help="override the build's commit")
     pub.add_argument("--completion-code", action="append", default=[], metavar="CODE=VALUE", help="a Prolific completion code for an experiment (kept if already registered)")
-    pub.add_argument("--note")
+    pub.add_argument("--note", help="what this deploy is for; the release's note is the build's description (kind, commit, size, parts) followed by this")
     pub.add_argument("--dry-run", action="store_true", help="print the plan; touch nothing and connect to nothing")
     sub.add_parser("runs")
+    d = sub.add_parser("describe", help="print the commit message for a build's deploy (subject line, blank line, body); connects to nothing")
+    d.add_argument("--build", required=True)
+    d.add_argument("--reason")
     p = sub.add_parser("pull")
     p.add_argument("--run", required=True)
     p.add_argument("--out", default="ForagingData")
     args = parser.parse_args()
+    if args.command == "describe":
+        subject, body = build_description(args.build, args.reason)
+        print(subject + "\n\n" + body)
+        return
     if args.command == "publish":
         plan = build_plan(args.build, args.commit)
         print(f"commit {plan['commit']}; experiments {[(e['code'], e['order']) for e in plan['experiments']]}; sessions {plan['sessions']}; files from {plan['worlds']}")
@@ -281,7 +312,8 @@ def main():
     conn = psycopg.connect(url, row_factory=psycopg.rows.dict_row, autocommit=True)
     if args.command == "publish":
         codes = dict(item.split("=", 1) for item in args.completion_code)
-        for line in publish(conn, plan, codes, args.note):
+        note = release_note(build_description(args.build)[0], args.note) if args.build else args.note
+        for line in publish(conn, plan, codes, note):
             print("registered", line)
         return
     if args.command == "register-experiment":

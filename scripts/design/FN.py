@@ -51,12 +51,12 @@ def seconds(n_visible, n_rewarded):
 
 
 NAMES = {"shape": "bush shape", "color": "fruit color", "moisture": "ground moisture"}     # what a participant reads for each feature
-HINT_WEIGHTED = "**All three** features matter, but **some matter more than others**."
+HINT_WEIGHTED = "**All three features** matter, but some matter more than others."
 
 
 def baseline_hint(visible, n_rewarded):
     """What the baseline hint says: one visible feature pays (named); two are visible and both pay; all three are visible and one, or two, pay.
-    The essential words (the quantifier and the named features) are marked **bold**; the game shows them bold (UiStyle.Chips)."""
+    The essential words (the quantifier and the named features) are marked **bold**; the game shows them in bold teal (UiStyle.Chips)."""
     names = [f"**{NAMES[f]}**" for f in FEATURES if f in visible]
     if n_rewarded == 2:
         return f"**Both** the {names[0]} and the {names[1]} determine how many points a fruit gives." if len(names) == 2 else "**Two** of the **three features** determine how many points a fruit gives."
@@ -140,7 +140,7 @@ def instances():
     return out
 
 
-INTERLUDE_TEXT = "Choose the best fruit\n\nChoose the better bush based on **what you learned in the last part**.\nCorrect choices will earn **hidden points**.\n\nPress [Enter] to begin\n"
+INTERLUDE_TEXT = "Choose the best fruit\n\nChoose the better bush based on what you learned in the last part.\nCorrect choices will earn hidden points.\n\nPress [Enter] to begin\n"
 
 
 def _page(hint):

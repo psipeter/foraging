@@ -1,7 +1,7 @@
 Find the best fruit
 
-Collect **as many points as you can** before time runs out.
-**Different bushes give different points.**
+Collect as many **points** as you can before **time** runs out.
+**Different bushes** give different points.
 Walk next to a bush and hold [Space] to harvest.
 
 Press [Enter] to begin
