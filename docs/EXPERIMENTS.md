@@ -93,8 +93,8 @@ bonus design for sparse sessions.
    6. *Status (2026-11-09).* Built as `scripts/design/FN.py` with provisional numbers: each of the five baseline cells (V visible, R rewarded:
       (1,1), (2,1), (3,1), (2,2), (3,2)) is played 3 times, plus 6 weighted sessions (3,3), 21 sessions in all. The weak weights use the stand-in family
       (1, r, r²) for r = 1, 0.7, 0.5, 0.35, 0.2, 0.1 over a random ranking of the features (the tiling of the weight space is still the TODO above).
-      Duration: 60 s at (1,1) plus 30 s per extra row or column, so 60, 90, 120, 120, 150 and 180 s for the weighted sessions (about 44 minutes
-      of play, Interludes not counted). Interlude trials (PI): 5, 10 and 20 for one, two and three rewarded features (20 = 2 repeats, 2 per-feature trials) for weighted.
+      Duration (PI): 60 s at (1,1) plus 15 s per extra visible feature and 30 s per extra rewarded one, so 60, 75, 90, 105 and 120 s for the baseline cells and 150 s
+      for the weighted sessions (about 37 minutes of play, Interludes not counted). Interlude trials (PI): 5, 10 and 20 for one, two and three rewarded features (20 = 2 repeats, 2 per-feature trials) for weighted.
       Durations and trial counts wait for measured Interlude timing. Moisture is the third feature (flat, single-coloured ground where it is not
       visible). See DECISIONS, "FN built on the new generators".
 4. **Analysis:**

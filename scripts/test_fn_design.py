@@ -46,7 +46,7 @@ def test_baselines_are_counterbalanced_over_the_features():
 def test_durations_grow_with_rows_and_columns():
     for i in FN.instances():
         d = i.design
-        assert i.session_fields["sessionDuration"] == FN.BASE_SECONDS + FN.STEP_SECONDS * (d["n_visible"] - 1 + d["n_rewarded"] - 1)
+        assert i.session_fields["sessionDuration"] == FN.seconds(d["n_visible"], d["n_rewarded"]) == FN.BASE_SECONDS + FN.VISIBLE_STEP_SECONDS * (d["n_visible"] - 1) + FN.REWARDED_STEP_SECONDS * (d["n_rewarded"] - 1)
     assert {i.session_fields["sessionDuration"] for i in _of("baseline", 1, 1)} == {FN.BASE_SECONDS}
 
 

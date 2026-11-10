@@ -29,6 +29,7 @@ Run as a script to export worlds:
 """
 
 import argparse
+import gzip
 import json
 import math
 import struct
@@ -654,8 +655,9 @@ CHECK_KEYS = ["worldHalfExtent", "terrainMeshResolution", "terrainNoiseFrequency
               "treeEdgeMargin", "fruitCount", "rewardStd"]
 REWARD_PARTS = ["shape", "color", "moisture"]
 WORLD_MAGIC = b"FWLD"
-WORLD_VERSION = 1
+WORLD_VERSION = 2
 GRID_NAMES = ["moisture", "elevation", "rock", "snow", "ramp"]
+GRID_BITS = {"moisture": 16, "elevation": 16, "rock": 8, "snow": 8, "ramp": 8}          # the masks need 8 bits (a step of 0.002), moisture and elevation 16 (about 0.001 world units of height)
 
 
 def check_values(params):
@@ -709,18 +711,34 @@ def unity_world_path(session, seed, out_dir=None):
     return out_dir / f"{session}_seed{seed}.world"
 
 
-def export_unity(world, path):
-    """Write the world in the binary format Unity's WorldData.Load reads.
+def quantize_grid(grid, bits):
+    """(integer codes, minimum, maximum): the grid rescaled to 0..2^bits-1 between its own extremes (a constant grid has maximum = minimum)."""
+    a = np.asarray(grid, dtype=np.float64)
+    lo, hi = float(a.min()), float(a.max())
+    top = (1 << bits) - 1
+    codes = np.round((a - lo) / (hi - lo) * top) if hi > lo else np.zeros(a.shape)
+    return codes.astype("<u2" if bits == 16 else "u1"), lo, hi
 
-    Layout: b"FWLD", uint32 version, uint32 header length, UTF-8 JSON header, then one float32 little-endian
-    array per name in header["grids"], each res*res values flattened as i*res + j (i across x, j across z).
-    The header holds the bushes (flat arrays) and the parameter echo used for staleness checks.
+
+def dequantize_grid(codes, bits, lo, hi):
+    """Inverse of `quantize_grid`, as float32 (what the game holds); the arithmetic is the loader's (WorldData.Load)."""
+    return (np.float32(lo) + codes.astype(np.float32) * np.float32((hi - lo) / ((1 << bits) - 1))).astype(np.float32)
+
+
+def export_unity(world, path):
+    """Write the world in the binary format Unity's WorldData.Load reads (version 2).
+
+    Layout: b"FWLD", uint32 version, uint32 header length, UTF-8 JSON header, then one gzip stream holding, per name in
+    header["grids"], res*res little-endian unsigned codes (8 or 16 bits, header["gridBits"]) flattened as i*res + j (i across x,
+    j across z); a code c is the value gridMin + c * (gridMax - gridMin) / (2^bits - 1). The header holds the bushes (flat
+    arrays, full precision) and the parameter echo used for staleness checks. Version 1 stored the grids as raw float32.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     grids = world.terrain.grids()
     res = grids["moisture"].shape[0]
     checks = check_values(world.params)
+    coded = {name: quantize_grid(grids[name], GRID_BITS[name]) for name in GRID_NAMES}
     header = {
         "version": WORLD_VERSION,
         "session": world.params.session_name,
@@ -730,6 +748,9 @@ def export_unity(world, path):
         "treeCount": int(world.n),
         "fruitCount": int(world.fruit_count),
         "grids": GRID_NAMES,
+        "gridBits": [GRID_BITS[n] for n in GRID_NAMES],
+        "gridMin": [coded[n][1] for n in GRID_NAMES],
+        "gridMax": [coded[n][2] for n in GRID_NAMES],
         "treePos": world.pos.reshape(-1).tolist(),
         "shape": world.shape.tolist(),
         "color": world.color.tolist(),
@@ -741,24 +762,33 @@ def export_unity(world, path):
         "checkValues": list(checks.values()),
     }
     blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
+    block = b"".join(np.ascontiguousarray(coded[n][0]).tobytes() for n in GRID_NAMES)
     with open(path, "wb") as f:
         f.write(WORLD_MAGIC)
         f.write(struct.pack("<II", WORLD_VERSION, len(blob)))
         f.write(blob)
-        for name in GRID_NAMES:
-            f.write(np.ascontiguousarray(grids[name], dtype="<f4").tobytes())
+        f.write(gzip.compress(block, compresslevel=9, mtime=0))
 
 
 def read_unity_world(path):
-    """Reader for the export_unity format (used by tests). Returns (header dict, {grid name: (res, res) array})."""
+    """Reader for the export_unity format (replay, visibility and the tests; version 1 files still read). Returns (header dict, {grid name: (res, res) float32 array})."""
     with open(path, "rb") as f:
         if f.read(4) != WORLD_MAGIC:
             raise ValueError("not a world file")
         version, n = struct.unpack("<II", f.read(8))
         header = json.loads(f.read(n).decode("utf-8"))
         res = header["res"]
-        grids = {name: np.frombuffer(f.read(res * res * 4), dtype="<f4").reshape(res, res)
-                 for name in header["grids"]}
+        if version == 1:
+            return header, {name: np.frombuffer(f.read(res * res * 4), dtype="<f4").reshape(res, res) for name in header["grids"]}
+        if version != WORLD_VERSION:
+            raise ValueError(f"world file format version {version}; this reader knows 1 and {WORLD_VERSION}")
+        block = gzip.decompress(f.read())
+    grids, offset = {}, 0
+    for name, bits, lo, hi in zip(header["grids"], header["gridBits"], header["gridMin"], header["gridMax"]):
+        size = res * res * bits // 8
+        codes = np.frombuffer(block, dtype="<u2" if bits == 16 else "u1", count=res * res, offset=offset).reshape(res, res)
+        grids[name] = dequantize_grid(codes, bits, lo, hi)
+        offset += size
     return header, grids
 
 

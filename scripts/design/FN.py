@@ -3,7 +3,7 @@
 Baseline cells with R <= V (PI, 2026-11-09), each played ITERATIONS times: row R=1 (V = 1, 2, 3), row R=2 (V = 2, 3; the paying features weigh equally, the hint says only two
 matter). Then the weighted sessions, all three features visible and paying (R = 3), the weights summing to one over the WEIGHT_RATIOS family. Order: one pass through row 1, then
 row 2, then the first weighted session, then every remaining session in a seeded random order. Within a cell the iterations are counterbalanced over the features (each feature pays,
-or is the one that does not, once). Duration: BASE_SECONDS at (V1, R1) plus STEP_SECONDS per extra row or column. Every mapping is linear; which end of a feature pays is drawn per
+or is the one that does not, once). Duration: BASE_SECONDS at (V1, R1) plus 15 s per extra visible feature and 30 s per extra rewarded one. Every mapping is linear; which end of a feature pays is drawn per
 instance. Moisture is a feature like the other two: where it is not visible the valley is flat and one colour.
 
 PROVISIONAL numbers, all in this module so they can change in one place (docs/EXPERIMENTS.md lists them as open): the weight family, durations, Interlude counts, the reward
@@ -38,7 +38,8 @@ TERRACE = {"moistureTerraceMode": 2, "moistureTerraceLevels": 0, "moistureTerrac
 WEIGHT_RATIOS = (1.0, 0.7, 0.5, 0.35, 0.2, 0.1)
 ITERATIONS = 3                      # of each baseline cell (the weighted sessions are WEIGHT_RATIOS, one each)
 BASE_SECONDS = 60                   # the (V1, R1) cell
-STEP_SECONDS = 30                   # per extra row (R) or column (V)
+VISIBLE_STEP_SECONDS = 15           # per extra visible feature (column V)
+REWARDED_STEP_SECONDS = 30          # per extra rewarded feature (row R)
 BASELINE_CELLS = ((1, 1), (2, 1), (3, 1), (2, 2), (3, 2))        # (V, R), in the order of the first pass
 BASELINE_INTERLUDE = {1: {"interludeTrialCount": 5, "interludeRepeatCount": 0, "interludeFeatureTrials": 1},
                       2: {"interludeTrialCount": 10, "interludeRepeatCount": 0, "interludeFeatureTrials": 1}}      # by R
@@ -46,7 +47,7 @@ WEIGHTED_INTERLUDE = {"interludeTrialCount": 20, "interludeRepeatCount": 2, "int
 
 
 def seconds(n_visible, n_rewarded):
-    return BASE_SECONDS + STEP_SECONDS * (n_visible - 1) + STEP_SECONDS * (n_rewarded - 1)
+    return BASE_SECONDS + VISIBLE_STEP_SECONDS * (n_visible - 1) + REWARDED_STEP_SECONDS * (n_rewarded - 1)
 
 
 NAMES = {"shape": "bush shape", "color": "fruit color", "moisture": "ground moisture"}     # what a participant reads for each feature

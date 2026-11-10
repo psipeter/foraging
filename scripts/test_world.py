@@ -233,13 +233,16 @@ def test_exported_grids_hold_the_terrains_values_under_their_names(tmp_path):
     export_unity(w, tmp_path / "w.world")
     h, g = read_unity_world(tmp_path / "w.world")
     expected = w.terrain.grids()
-    for name in expected:
-        assert np.array_equal(g[name], expected[name]), name          # right values under the right name, not just shapes
+    from world import GRID_BITS
+    for name in expected:                                             # right values under the right name, not just shapes, to within the file's quantization step
+        step = np.ptp(expected[name]) / ((1 << GRID_BITS[name]) - 1)
+        assert np.abs(g[name] - expected[name]).max() <= 0.5 * step * 1.001 + 2e-5, name           # plus float32 rounding of the decoded values
     # elevation is the valley's moisture coupling (dry = high) plus the mountains: the game renders and the tools sample it
     res = expected["elevation"].shape[0]
     axis = np.linspace(-w.params.world_half_extent, w.params.world_half_extent, res)
     x, z = np.meshgrid(axis[::25], axis[::25], indexing="ij")
     assert np.allclose(w.terrain.elevation(x, z), expected["elevation"][::25, ::25], atol=1e-3)
+    assert (tmp_path / "w.world").stat().st_size < 0.35 * 5 * res * res * 4              # the grids are stored quantized and compressed (version 1 was 4 bytes each)
     inside = expected["ramp"] == 0
     assert np.corrcoef(expected["moisture"][inside], expected["elevation"][inside])[0, 1] < -0.5
     assert (expected["snow"] < expected["rock"] - 1e-3).any() and expected["snow"].max() > 0
@@ -256,7 +259,7 @@ def test_committed_world_files_are_fresh(tmp_path):
     """The generated .world files are what the game plays and what replay loads. Regenerating from the current
     SessionConfig assets must reproduce them exactly (this also pins the RNG streams and draw order); Unity warns at
     startup about stale parameters, but not about a changed generator."""
-    from world import export_unity, unity_world_path
+    from world import export_unity, read_unity_world, unity_world_path
     from world import EXPERIMENTS_DIR
     for path in sorted(EXPERIMENTS_DIR.glob("*/*_S*.asset")):                 # every session of every experiment
         name = path.stem
@@ -266,7 +269,8 @@ def test_committed_world_files_are_fresh(tmp_path):
         assert committed.exists(), f"{committed} is missing: run scripts/world.py {name} --unity"
         fresh = tmp_path / committed.name
         export_unity(generate_world(p, seed), fresh)
-        assert fresh.read_bytes() == committed.read_bytes(), (
+        (h_new, g_new), (h_old, g_old) = read_unity_world(fresh), read_unity_world(committed)          # the content, not the bytes: they depend on the zlib that compressed them
+        assert h_new == h_old and all(np.array_equal(g_new[k], g_old[k]) for k in g_old), (
             f"{committed.name} is stale: re-run ./venv/bin/python scripts/world.py {name} --unity")
 
 
@@ -387,3 +391,22 @@ def test_the_new_modes_write_their_mode_and_parameters_into_the_world_check():
     for mode in (1, 2):
         v = check_values(synthetic.session(**DEFAULT, moisture_terrace_mode=mode))
         assert v["moistureTerraceMode"] == mode and {"terraceMeanWidth", "terracePhaseShift", "terraceStrength", "terraceDiffusionIterations", "terraceDiffusionEdge"} <= set(v)
+
+
+def test_a_version_1_world_file_still_reads(tmp_path):
+    """The raw-float32 layout of version 1 (before the grids were quantized) stays readable."""
+    import json
+    import struct
+    from world import WORLD_MAGIC, GRID_NAMES, read_unity_world
+    header = {"version": 1, "res": 3, "grids": GRID_NAMES}
+    blob = json.dumps(header).encode()
+    grid = np.arange(9, dtype="<f4").reshape(3, 3)
+    (tmp_path / "old.world").write_bytes(WORLD_MAGIC + struct.pack("<II", 1, len(blob)) + blob + b"".join(grid.tobytes() for _ in GRID_NAMES))
+    h, g = read_unity_world(tmp_path / "old.world")
+    assert set(g) == set(GRID_NAMES) and np.array_equal(g["snow"], grid)
+
+
+def test_a_constant_grid_survives_quantization():
+    from world import dequantize_grid, quantize_grid
+    codes, lo, hi = quantize_grid(np.full((4, 4), 0.37), 16)
+    assert np.allclose(dequantize_grid(codes, 16, lo, hi), 0.37)

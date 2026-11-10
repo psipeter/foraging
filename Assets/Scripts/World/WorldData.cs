@@ -1,16 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Text;
 using UnityEngine;
 
 // A generated world, loaded from StreamingAssets/Experiments/<code>/<session>_seed<seed>.world. The files are written by
 // scripts/world.py (the source of truth for placement, attributes, terrain fields and per-fruit rewards);
-// Unity only renders and plays them. Format: "FWLD", uint32 version, uint32 header length, JSON header, then
-// float32 little-endian grids (res * res each, index i * res + j, i across X, j across Z).
+// Unity only renders and plays them. Format (version 2): "FWLD", uint32 version, uint32 header length, JSON header, then one gzip
+// stream of the terrain grids (res * res each, index i * res + j, i across X, j across Z), each an array of little-endian 8 or 16 bit
+// codes c (header gridBits) meaning gridMin + c * (gridMax - gridMin) / (2^bits - 1). Version 1 stored the grids as raw float32 and
+// still loads.
 public class WorldData
 {
-    public const int FormatVersion = 1;
+    public const int FormatVersion = 2;
 
     [Serializable]
     private class Header
@@ -23,6 +26,9 @@ public class WorldData
         public int treeCount;
         public int fruitCount;
         public string[] grids;
+        public int[] gridBits;
+        public float[] gridMin;
+        public float[] gridMax;
         public float[] treePos;
         public float[] shape;
         public float[] color;
@@ -136,9 +142,9 @@ public class WorldData
             }
 
             int version = BitConverter.ToInt32(bytes, 4);
-            if (version != FormatVersion)
+            if (version != 1 && version != FormatVersion)
             {
-                Debug.LogError($"World file {path} has format version {version}; expected {FormatVersion}.");
+                Debug.LogError($"World file {path} has format version {version}; expected 1 or {FormatVersion}.");
                 return null;
             }
 
@@ -165,13 +171,37 @@ public class WorldData
                 _checkValues = h.checkValues
             };
 
-            int gridBytes = h.res * h.res * sizeof(float);
+            int cells = h.res * h.res;
             int offset = 12 + headerLength;
+            byte[] block = bytes;
+            if (version == FormatVersion)
+            {
+                block = Inflate(bytes, offset);
+                offset = 0;
+            }
+
             for (int g = 0; g < h.grids.Length; g++)
             {
-                var grid = new float[h.res * h.res];
-                Buffer.BlockCopy(bytes, offset, grid, 0, gridBytes);
-                offset += gridBytes;
+                var grid = new float[cells];
+                if (version == 1)
+                {
+                    Buffer.BlockCopy(block, offset, grid, 0, cells * sizeof(float));
+                    offset += cells * sizeof(float);
+                }
+                else
+                {
+                    int bits = h.gridBits[g];
+                    float lo = h.gridMin[g];
+                    float step = (h.gridMax[g] - lo) / ((1 << bits) - 1);
+                    for (int c = 0; c < cells; c++)
+                    {
+                        int code = bits == 16 ? BitConverter.ToUInt16(block, offset + 2 * c) : block[offset + c];
+                        grid[c] = lo + code * step;
+                    }
+
+                    offset += cells * (bits / 8);
+                }
+
                 switch (h.grids[g])
                 {
                     case "moisture": world.MoistureGrid = grid; break;
@@ -200,6 +230,18 @@ public class WorldData
         {
             Debug.LogError($"Failed to read world file {path}: {e}");
             return null;
+        }
+    }
+
+    // The gzip stream that starts at `offset` of the file, decompressed.
+    private static byte[] Inflate(byte[] bytes, int offset)
+    {
+        using (var input = new MemoryStream(bytes, offset, bytes.Length - offset))
+        using (var gzip = new GZipStream(input, CompressionMode.Decompress))
+        using (var output = new MemoryStream())
+        {
+            gzip.CopyTo(output);
+            return output.ToArray();
         }
     }
 
