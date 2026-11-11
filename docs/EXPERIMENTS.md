@@ -289,6 +289,19 @@ bonus design for sparse sessions.
      and raises its level. Power of the T slope of discovery at N = 40 / 60 / 100: 89 / 97 / 100% (2x, as agents), 36 / 59 / 79% (2x, half as strong), 86 / 96 / 100% (3x); that of trapping falls to
      40 / 57 / 75% (2x), because trapping is flat between 11% and 7%. The cost: S and T no longer share sparsity levels, so the stage-by-sparsity contrast compares slopes, not matched cells. **The levels, lengths, ratio and
      separation are plain entries of the design table, so the pilot (about 8 to 10 people, to measure the slowdown k) sets the final ladder: fixed in advance, the middle T cell aimed at about 50% global discovery.**
+   * *Built (2026-11-10 and 11; `scripts/design/RW.py`, `scripts/test_rw_design.py`; development build deployed).* 22 sessions: B1 to B4 (120 s), then the nine S and nine T sessions (180 s: S at 15, 10, 5%, T at 15, 11, 7%
+     total, 3 iterations each, the first iteration of each of the six cells in a seeded random order before the later ones), T at the ratio 0.5 and the separation 4.5 spreads. Every number the pilot may move is a constant of the module;
+     rebuild with `build_experiment.py RW`. **Where it differs from the plan above:**
+     * *Interludes: 20 trials in every session, 17 distinct pairs plus 3 exact repeats* (PI), so the count gives nothing away (FN's baseline had 5 and 10). Two peaks: 6 global against local, 6 global against off, 5 local against off,
+       one repeat of each type; one peak: 17 peak-against-off pairs and 3 repeats. Reward gaps are spread evenly within a type (0.25 up to the 95th percentile of what the type offers), bushes of different trials differ by more than
+       0.07 in shape or colour where the pool allows, repeats are at least 8 trials from their source and alternate the correct side. A peak bush is one that pays at least 70% of its peak (the sparsity definition; the first build used
+       90%, and its peak bushes looked alike from trial to trial). `interludePeakTrials` in `SessionConfig`; the fingerprint leaves it out at 0, so no stored result hash moved.
+     * *The margin is 0.7 spreads for every cell* (was 1.48, and 1.0 for T): the smallest at which no instance's realised sparsity falls more than 10% below the untruncated peak's (600 draws per cell; 0.65 gives 11%). Peaks can sit
+       near an extreme, so extreme feature values are no longer always poor.
+     * *The ground varies* (`moistureVaries` on, `moistureIsFeature` off, weight 0): the screens ran on a flat valley and the first build copied that. The power and screening results above are for a flat valley and the old margins; not re-run.
+     * *Hints:* both features or one feature; B1 and B2 add "most bushes give few points", B3 and B4 add "two kinds of valuable bush"; S and T say only which features matter. The two sentences are on separate lines.
+     * *Time:* about 62 minutes of play, plus the Interludes: at most 20 trials of 7 s per session at the cap (51 minutes over 22 sessions); the one test run showed a median response of 2.3 s, so expect well under that. Not measured end to end.
+     * *Checked:* the built Interlude files of all 11 two-peak sessions (counts, repeats, sides, gaps); a logged run showed the one-peak Interludes (B1, B2) playing and logging as type `peak`. A two-peak Interlude (B3) also played and logged: 10 trials in a `short=0.5` run, type `peak`, all three pair types (`0>1` 5, `0>off` 3, `1>off` 2), no timeouts; its repeats were not in the shortened half. A run resumed across two deployed builds mixes their world files (`pull` warns).
 
 ---
 

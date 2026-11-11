@@ -309,7 +309,7 @@ def main():
     url = db_url()
     if not url:
         sys.exit(f"no database connection string: set FORAGING_DB_URL or put it on the first line of {DB_URL_FILE} (chmod 600)")
-    conn = psycopg.connect(url, row_factory=psycopg.rows.dict_row, autocommit=True)
+    conn = psycopg.connect(url, row_factory=psycopg.rows.dict_row, autocommit=True, prepare_threshold=None)      # (no server-side prepared statements: the pooler hands queries to different server connections)
     if args.command == "publish":
         codes = dict(item.split("=", 1) for item in args.completion_code)
         note = release_note(build_description(args.build)[0], args.note) if args.build else args.note
