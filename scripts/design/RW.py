@@ -99,7 +99,9 @@ def _instances_built():
             seed = FIRST_WORLD_SEED + 100 * number + attempt
             rng = np.random.default_rng([seed, 7])
             peaks = rw_peaks.draw_peaks(rng, ("shape", "color") if paying is None else (paying,), cell["n_peaks"], spread, cell["separation"], cell["ratio"], margin_spreads=cell["margin"])
-            w = world.generate_world(rw_screen.session_params(peaks, TEMPLATE_SESSION), seed)
+            params = rw_screen.session_params(peaks, TEMPLATE_SESSION)
+            params.moisture_varies = True                  # (the ground varies as in FN's later sessions, but pays nothing and is no feature: the screens ran on a flat valley)
+            w = world.generate_world(params, seed)
             if min(rw_peaks.bush_counts(peaks, w.shape, w.color, GUARANTEE_REGION)) >= GUARANTEE_BUSHES:
                 break
         else:
@@ -134,7 +136,7 @@ def _hints():
 
 def _fields(peaks, seed):
     return {"worldSeed": seed, "rewardStd": REWARD_STD, "spatialBalance": 0, "featureBalance": 0, "featureCoverage": 1, **TERRACE, "interludeMode": 4,
-            "shapeVaries": True, "colorVaries": True, "moistureVaries": False, "moistureIsFeature": False, **peaks.session_fields()}
+            "shapeVaries": True, "colorVaries": True, "moistureVaries": True, "moistureIsFeature": False, **peaks.session_fields()}
 
 
 def _design(cell, number, seed, attempt, peaks, spread, hint_key):

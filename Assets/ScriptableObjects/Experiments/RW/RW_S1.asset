@@ -160,7 +160,7 @@ MonoBehaviour:
   shapeWhenFixed: 0.5
   colorVaries: 1
   colorWhenFixed: 0.5
-  moistureVaries: 0
+  moistureVaries: 1
   moistureWhenFixed: 0.5
   moistureIsFeature: 0
   randomBushValueRange: {x: 0, y: 0}
