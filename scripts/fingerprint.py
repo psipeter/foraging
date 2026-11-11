@@ -36,14 +36,14 @@ ROOT = SCRIPTS.parent
 ENGINE_FILES = ("sim.py", "costs.py", "perception.py", "world.py", "interlude.py", "spatial.py")
 AGENT_FILES = ("agents.py", "specs.py")
 
-OMITTED_AT_DEFAULT = {"interlude_peak_trials": 0}      # fields of SIM_FIELDS left out of the hash while they have this value (so that adding them moved no stored result)
+OMITTED_AT_DEFAULT = {"interlude_peak_trials": 0, "interlude_interaction_trials": 0}      # fields of SIM_FIELDS left out of the hash while they have this value (so that adding them moved no stored result)
 
 
 SIM_FIELDS = (
     "camera_field_of_view", "canopy_width_range", "color_varies", "color_when_fixed", "eye_height", "fruit_count", "fruit_harvest_duration", "harvest_max_angle",
     "harvest_range_gap_base", "harvest_range_gap_per_radius", "interlude_bonus_per_correct", "interlude_bush_bearing",
     "interlude_bush_distance", "interlude_feature_trials", "interlude_for", "interlude_max_feature_gap", "interlude_max_reward_gap", "interlude_min_feature_gap",
-    "interlude_min_reward_gap", "interlude_mode", "interlude_peak_trials", "interlude_repeat_count", "interlude_repeat_separation", "interlude_trial_count", "is_interlude", "is_practice", "layout", "assignment", "reward_stage", "moisture_varies", "moisture_when_fixed", "moisture_is_feature", "moisture_terrace_levels",
+    "interlude_min_reward_gap", "interlude_mode", "interlude_peak_trials", "interlude_interaction_trials", "interlude_repeat_count", "interlude_repeat_separation", "interlude_trial_count", "is_interlude", "is_practice", "layout", "assignment", "reward_stage", "moisture_varies", "moisture_when_fixed", "moisture_is_feature", "moisture_terrace_levels",
     "moisture_terrace_residual", "moisture_terrace_unevenness", "feature_balance", "feature_balance_target", "feature_balance_scales", "moisture_terrace_mode", "terrace_mean_width", "terrace_width_spread", "terrace_max_band", "terrace_min_step", "terrace_phase_shift", "terrace_phase_frequency", "terrace_strength", "terrace_diffusion_iterations", "terrace_diffusion_edge", "moisture_terrace_sharpness", "mountain_band_width", "mountain_block_threshold",
     "mountain_boundary_jitter", "mountain_height", "mountain_noise_scale", "placement_jitter", "player_move_speed",
     "random_bush_value_range", "reward_function", "reward_std", "session_duration", "session_name", "shape_range", "shape_varies", "shape_when_fixed", "spatial_balance", "snow_line_fraction",
@@ -60,11 +60,23 @@ def _digest(obj):
 # Environment
 # --------------------------------------------------------------------------------------------------
 
+def _reward_without_new_defaults(rf):
+    """The reward function as it was hashed before `factors` and a bump's `angle` existed: an empty `factors` list and a zero `angle` are left out, so re-saving an asset in the Editor
+    (which writes both) moves no stored hash."""
+    if not isinstance(rf, dict):
+        return rf
+    out = {k: v for k, v in rf.items() if not (k == "factors" and not v)}
+    if out.get("bumps"):
+        out["bumps"] = [{k: v for k, v in b.items() if not (k == "angle" and not v)} for b in out["bumps"]]
+    return out
+
+
 def params_hash(name, overrides=None):
     """Hash of the simulation-relevant fields of the session asset `name` after `overrides` (the audio, visuals, UI text and the world
     seed do not change it)."""
     params = load_session(name, **(overrides or {}))
     fields = {f: getattr(params, f, None) for f in SIM_FIELDS}      # (None: a field an older asset file does not have yet)
+    fields["reward_function"] = _reward_without_new_defaults(fields["reward_function"])
     for f, default in OMITTED_AT_DEFAULT.items():                   # a field added later leaves the hash of every session that does not use it as it was
         if fields[f] in (None, default):
             del fields[f]

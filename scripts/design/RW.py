@@ -21,6 +21,7 @@ import rw_peaks
 import rw_screen
 import world
 from design import Instance
+from design.common import find_world, instruction_page, play_order as _play_order
 from design.FN import TERRACE
 
 CODE = "RW"
@@ -73,13 +74,7 @@ def cells():
 
 def play_order():
     """The cells in play order: B as listed, one pass through the S and T cells (their first iterations), then the rest, both passes shuffled by the master seed."""
-    rng = np.random.default_rng(MASTER_SEED)
-    cs = cells()
-    base = [c for c in cs if c["stage"] == "B"]
-    rest = [c for c in cs if c["stage"] != "B"]
-    first = [c for c in rest if c["iteration"] == 1]
-    later = [c for c in rest if c["iteration"] > 1]
-    return base + [first[i] for i in rng.permutation(len(first))] + [later[i] for i in rng.permutation(len(later))]
+    return _play_order(cells(), MASTER_SEED)
 
 
 @lru_cache(maxsize=None)
@@ -95,17 +90,14 @@ def _instances_built():
         spread = rw_peaks.spread_for_sparsity(cell["total"] / cell["n_peaks"], cell["dims"], 30)
         if cell["n_peaks"] == 2 and not (rw_peaks.fits(spread, cell["dims"], cell["separation"], cell["margin"]) and rw_peaks.separable(cell["separation"], cell["ratio"])):
             raise ValueError(f"{cell['id']}: two peaks {cell['separation']} spreads apart at a ratio of {cell['ratio']} do not fit at a spread of {spread:.3f}")
-        for attempt in range(MAX_ATTEMPTS):
-            seed = FIRST_WORLD_SEED + 100 * number + attempt
+        def build(seed):
             rng = np.random.default_rng([seed, 7])
             peaks = rw_peaks.draw_peaks(rng, ("shape", "color") if paying is None else (paying,), cell["n_peaks"], spread, cell["separation"], cell["ratio"], margin_spreads=cell["margin"])
             params = rw_screen.session_params(peaks, TEMPLATE_SESSION)
             params.moisture_varies = True                  # (the ground varies as in FN's later sessions, but pays nothing and is no feature: the screens ran on a flat valley)
             w = world.generate_world(params, seed)
-            if min(rw_peaks.bush_counts(peaks, w.shape, w.color, GUARANTEE_REGION)) >= GUARANTEE_BUSHES:
-                break
-        else:
-            raise RuntimeError(f"{cell['id']} (session {number}): no world seed in {MAX_ATTEMPTS} gave every peak {GUARANTEE_BUSHES} bushes")
+            return peaks if min(rw_peaks.bush_counts(peaks, w.shape, w.color, GUARANTEE_REGION)) >= GUARANTEE_BUSHES else None
+        seed, attempt, peaks = find_world(number, FIRST_WORLD_SEED, MAX_ATTEMPTS, build, cell["id"])
         out.append((cell, number, seed, attempt, peaks, spread))
     return tuple(out)
 
@@ -161,11 +153,7 @@ def instances():
 INTERLUDE_TEXT = "Choose the best fruit\n\nChoose the better bush based on what you learned in the last part.\nCorrect choices will earn hidden points.\n\nPress [Enter] to begin\n"
 
 
-def _page(hint_text):
-    return f"Find the best fruit\n\nThis is a new area.\n{hint_text}\nCollect as many points as you can.\n\nPress [Enter] to begin"
-
-
 def texts():
-    out = {f"instructions_S{n}.txt": _page(text) for n, (_, text) in _hints().items()}
+    out = {f"instructions_S{n}.txt": instruction_page(text) for n, (_, text) in _hints().items()}
     out["instructions_interlude.txt"] = INTERLUDE_TEXT
     return out

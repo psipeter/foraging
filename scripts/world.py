@@ -124,7 +124,7 @@ FIELD_DEFAULTS = {"spatial_balance": 0, "shape_varies": True, "color_varies": Tr
                   "moisture_varies": True, "moisture_when_fixed": 0.5, "moisture_is_feature": False, "moisture_terrace_unevenness": 0.0,
                   "feature_balance": 0, "feature_coverage": 0, "feature_balance_target": 0.7, "feature_balance_scales": (40.0, 60.0, 120.0, 240.0),
                   "moisture_terrace_mode": 0, "terrace_mean_width": 0.14, "terrace_width_spread": 0.7, "terrace_max_band": 0.30, "terrace_min_step": 0.08, "terrace_phase_shift": 0.4,
-                  "terrace_phase_frequency": 0.6, "terrace_strength": 1.0, "terrace_diffusion_iterations": 500, "terrace_diffusion_edge": 0.1, "interlude_feature_trials": 0, "interlude_peak_trials": 0,
+                  "terrace_phase_frequency": 0.6, "terrace_strength": 1.0, "terrace_diffusion_iterations": 500, "terrace_diffusion_edge": 0.1, "interlude_feature_trials": 0, "interlude_peak_trials": 0, "interlude_interaction_trials": 0,
                   "layout": None, "assignment": None, "reward_stage": None}      # (stage names: None = the default, see stage_names)
 
 
@@ -176,9 +176,23 @@ def _basis(component, x):
     return v * float(component["weight"])
 
 
+def factor_value(factor, x):
+    """One feature's factor of a `factors` term (`RewardFactor.Evaluate`): kind 0 a sigmoid of steepness `scale` about `center`, divided by its value at the paying end (x = 1, or x = 0
+    when `inverted`), so it is 1 there; kind 1 a Gaussian of spread `scale` about `center`."""
+    x = np.clip(x, 0.0, 1.0)
+    center, scale = float(factor["center"]), float(factor["scale"])
+    if int(factor["kind"]) == 1:
+        sigma = max(scale, 1e-4)
+        return np.exp(-((x - center) ** 2) / (2.0 * sigma * sigma))
+    if bool(factor["inverted"]):
+        x = 1.0 - x
+    return (1.0 / (1.0 + np.exp(-scale * (x - center)))) / (1.0 / (1.0 + np.exp(-scale * (1.0 - center))))
+
+
 def bush_value(reward_function, shape, color, moisture):
-    """R_bush = w1 f1(shape) + w2 f2(color) + w3 f3(moisture) + the sum of the Gaussian bumps over (shape, color) + the sum of the product terms (one feature
-    linear times a Gaussian of the other); no normalization."""
+    """R_bush = w1 f1(shape) + w2 f2(color) + w3 f3(moisture) + the sum of the Gaussian bumps over (shape, color), each turned by its `angle` (degrees) about its centre
+    + the sum of the product terms (one feature linear times a Gaussian of the other) + the sum of the `factors` terms (one sigmoid or Gaussian factor per feature, as their
+    product or their mean); no normalization."""
     value = (_basis(reward_function["shapeComponent"], shape)
              + _basis(reward_function["colorComponent"], color)
              + _basis(reward_function["moistureComponent"], moisture))
@@ -187,6 +201,10 @@ def bush_value(reward_function, shape, color, moisture):
         width_color = float(b.get("widthColor") or 0.0)            # 0 (or absent): the same spread as along shape, a round bump
         sigma_color = max(width_color, 1e-4) if width_color > 0.0 else sigma_shape
         ds, dc = np.clip(shape, 0.0, 1.0) - float(b["centerShape"]), np.clip(color, 0.0, 1.0) - float(b["centerColor"])
+        angle = float(b.get("angle") or 0.0)
+        if angle != 0.0:                                           # the spreads lie along the axes turned by `angle`: `width` along the turned shape axis
+            cos, sin = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+            ds, dc = ds * cos + dc * sin, -ds * sin + dc * cos
         value = value + float(b["height"]) * np.exp(-(ds * ds / (2.0 * sigma_shape ** 2) + dc * dc / (2.0 * sigma_color ** 2)))
     for p in reward_function.get("products") or []:
         in_shape = bool(p["linearInShape"])
@@ -196,6 +214,9 @@ def bush_value(reward_function, shape, color, moisture):
         sigma = max(float(p["width"]), 1e-4)
         d = np.clip(color if in_shape else shape, 0.0, 1.0) - float(p["center"])
         value = value + float(p["height"]) * linear * np.exp(-(d * d) / (2.0 * sigma * sigma))
+    for t in reward_function.get("factors") or []:
+        fs, fc = factor_value(t["shapeFactor"], shape), factor_value(t["colorFactor"], color)
+        value = value + float(t["height"]) * (fs * fc if int(t["combine"]) == 0 else 0.5 * (fs + fc))
     return value
 
 
@@ -203,7 +224,7 @@ def terms_relevance(reward_function):
     """How much each feature matters to a `terms` reward: |weight| of its component, plus the height of every bump and product term (each makes
     both of its features, shape and colour, relevant)."""
     w = {f: abs(float(reward_function[f + "Component"]["weight"])) for f in FEATURES}
-    for b in list(reward_function.get("bumps") or []) + list(reward_function.get("products") or []):
+    for b in list(reward_function.get("bumps") or []) + list(reward_function.get("products") or []) + list(reward_function.get("factors") or []):
         w["shape"] += abs(float(b["height"]))
         w["color"] += abs(float(b["height"]))
     return w
@@ -700,9 +721,16 @@ def check_values(params):
             out[f"reward.bump{i}.{field}"] = float(b[field])
         if float(b.get("widthColor") or 0.0) != 0.0:                # (written only when set, so older world files stay identical)
             out[f"reward.bump{i}.widthColor"] = float(b["widthColor"])
+        if float(b.get("angle") or 0.0) != 0.0:
+            out[f"reward.bump{i}.angle"] = float(b["angle"])
     for i, p in enumerate(params.reward_function.get("products") or []):
         for field in ("linearInShape", "linearInverted", "center", "width", "height"):
             out[f"reward.product{i}.{field}"] = float(p[field])
+    for i, t in enumerate(params.reward_function.get("factors") or []):
+        out[f"reward.factor{i}.combine"], out[f"reward.factor{i}.height"] = float(t["combine"]), float(t["height"])
+        for side in ("shape", "color"):
+            for field in ("kind", "center", "scale", "inverted"):
+                out[f"reward.factor{i}.{side}.{field}"] = float(t[side + "Factor"][field])
     return out
 
 

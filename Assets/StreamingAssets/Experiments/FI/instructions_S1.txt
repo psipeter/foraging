@@ -1,0 +1,7 @@
+Find the best fruit
+
+This is a new area.
+**Bush shape** and **fruit color** each add their own part to the reward.
+Collect as many points as you can.
+
+Press [Enter] to begin

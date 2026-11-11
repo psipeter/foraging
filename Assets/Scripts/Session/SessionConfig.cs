@@ -97,6 +97,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private int interludeFeatureTrials = 0;
     [Tooltip("RewardGap / FeatureGap / Hybrid Interludes only: peak trials for a reward function made of Gaussian peaks (RW), taken out of interludeTrialCount: a pair of bushes from two different peaks' top regions or from a peak and from off every peak, split over the pairs the peaks allow. 0 = none. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
     [SerializeField] private int interludePeakTrials = 0;
+    [Tooltip("RewardGap / FeatureGap / Hybrid Interludes only: interaction trials for a reward function of sigmoid, Gaussian or tilted-bump terms (FI), taken out of interludeTrialCount: pairs of bushes in classes of the reward (high, middle and low parts, one feature varied, along and across a bump), split by a plan per kind of rule, reward gaps spread within a class, no pair closer than the tie gap. 0 = none. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
+    [SerializeField] private int interludeInteractionTrials = 0;
     [Tooltip("The fewest trials between a repeated pair and its repeat. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
     [SerializeField] private int interludeRepeatSeparation = 8;
 
@@ -403,6 +405,7 @@ public class SessionConfig : ScriptableObject
     public int InterludeTrialCount => interludeTrialCount;
     public int InterludeFeatureTrials => interludeFeatureTrials;
     public int InterludePeakTrials => interludePeakTrials;
+    public int InterludeInteractionTrials => interludeInteractionTrials;
     public int InterludeTrialLimit => interludeTrialLimit;
 
     // A copy for a reduced run (RunModes.Short; never the asset itself, which would be saved into the file): a session lasts `factor` of its length, an Interlude

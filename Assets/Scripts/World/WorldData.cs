@@ -326,6 +326,7 @@ public class WorldData
             current[$"reward.bump{i}.width"] = bumps[i].Width;
             current[$"reward.bump{i}.height"] = bumps[i].Height;
             current[$"reward.bump{i}.widthColor"] = bumps[i].WidthColor;
+            current[$"reward.bump{i}.angle"] = bumps[i].Angle;
         }
 
         RewardProduct[] products = config.RewardFunction.Products;
@@ -338,6 +339,15 @@ public class WorldData
             current[$"reward.product{i}.height"] = products[i].Height;
         }
 
+        RewardFactors[] factors = config.RewardFunction.Factors;
+        for (int i = 0; i < factors.Length; i++)
+        {
+            current[$"reward.factor{i}.combine"] = (float)(int)factors[i].Combine;
+            current[$"reward.factor{i}.height"] = factors[i].Height;
+            AddFactor(current, $"reward.factor{i}.shape", factors[i].ShapeFactor);
+            AddFactor(current, $"reward.factor{i}.color", factors[i].ColorFactor);
+        }
+
         var mismatches = new List<string>();
         for (int i = 0; i < _checkNames.Length; i++)
         {
@@ -347,11 +357,12 @@ public class WorldData
             }
         }
 
-        // Reward terms newer than the first world files: a product term, and a bump's color spread when it is not 0, are written only when present, so a file
+        // Reward terms newer than the first world files: a product or factor term, and a bump's color spread or angle when it is not 0, are written only when present, so a file
         // without them was made without them and a config that has them now is stale.
         foreach (KeyValuePair<string, float> entry in current)
         {
-            bool newer = entry.Key.StartsWith("reward.product") || (entry.Key.EndsWith(".widthColor") && !Mathf.Approximately(entry.Value, 0f));
+            bool newer = entry.Key.StartsWith("reward.product") || entry.Key.StartsWith("reward.factor")
+                || ((entry.Key.EndsWith(".widthColor") || entry.Key.EndsWith(".angle")) && !Mathf.Approximately(entry.Value, 0f));
             if (newer && Array.IndexOf(_checkNames, entry.Key) < 0)
             {
                 mismatches.Add(entry.Key);
@@ -370,6 +381,14 @@ public class WorldData
         }
 
         return mismatches;
+    }
+
+    private static void AddFactor(Dictionary<string, float> current, string prefix, RewardFactor factor)
+    {
+        current[$"{prefix}.kind"] = (float)(int)factor.Kind;
+        current[$"{prefix}.center"] = factor.Center;
+        current[$"{prefix}.scale"] = factor.Scale;
+        current[$"{prefix}.inverted"] = factor.Inverted ? 1f : 0f;
     }
 
     private static float SumOf(float[] values)

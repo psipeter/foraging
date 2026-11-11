@@ -146,4 +146,13 @@ def test_repeats_go_one_to_each_pair_type_with_the_sides_alternating():
 
 def test_the_hash_of_a_session_without_peak_trials_is_unchanged_by_the_new_field():
     import fingerprint
-    assert "interlude_peak_trials" in fingerprint.SIM_FIELDS and fingerprint.OMITTED_AT_DEFAULT == {"interlude_peak_trials": 0}
+    assert "interlude_peak_trials" in fingerprint.SIM_FIELDS and fingerprint.OMITTED_AT_DEFAULT["interlude_peak_trials"] == 0
+
+
+def test_a_built_rw_interlude_file_is_what_the_generator_makes():
+    """The FI refactor of the peak-trial selection must not move RW's files (the generator is deterministic from the world seed)."""
+    import glob
+    import json
+    sidecar, _, _ = interlude.generate_interlude("RW_I3")
+    path = glob.glob(str(world.PROJECT_ROOT / "Assets/StreamingAssets/Experiments/RW/RW_I3_seed*.interlude.json"))[0]
+    assert json.loads(json.dumps(sidecar)) == json.load(open(path))

@@ -40,7 +40,7 @@ from pathlib import Path
 
 import numpy as np
 
-from world import (FEATURES, PROJECT_ROOT, REWARDS, check_values, generate_world, load_session, session_features,
+from world import (FEATURES, PROJECT_ROOT, REWARDS, bush_value, check_values, generate_world, load_session, session_features,
                    stage_names, unity_world_path)
 
 TIE_TOLERANCE = 0.05          # |R_left - R_right| below this: either answer is "correct"
@@ -406,36 +406,42 @@ def peak_trial(des, kinds, want_left_better, features):
     return des.attempt(build, dm=(0.0, MATCHED_MOISTURE / 2.0))
 
 
-def _spread_pairs(des, kinds, count, rng, taken):
-    """`count` feature pairs, one point from each of `kinds` (the first the better: a peak's index, the global peak 0 being the highest, or "off"), whose true reward gaps are evenly spread
-    from PEAK_MIN_GAP to the PEAK_GAP_QUANTILE of the gaps the class pair offers (the centres of `count` equal bins, as for the gap modes), so the pair type has easy and hard trials."""
-    pools = [_class_draws(des, k) for k in kinds]
-    if not all(pools):
-        raise RuntimeError(f"no bush of class {kinds}: the peaks leave no (shape, colour) in it")
-    value = lambda f: des.value({"shape": f[0], "color": f[1], "moisture": 0.5})
-    values = [[value(f) for f in pool] for pool in pools]
-    cand = [(values[0][i] - values[1][j], i, j) for i in range(len(pools[0])) for j in range(len(pools[1])) if values[0][i] - values[1][j] >= PEAK_MIN_GAP]
+def _select_spread(cand, count, taken, what):
+    """`count` of the candidate pairs `cand` ((reward gap, better point, worse point), a point being (shape, colour)) whose reward gaps are evenly spread from PEAK_MIN_GAP to the PEAK_GAP_QUANTILE
+    of the candidates' gaps (the centres of `count` equal bins, as for the gap modes), so a pair type has easy and hard trials. The points differ from those already `taken` (appended to) by more
+    than PEAK_APART where the candidates allow it, so no two trials look alike. Returns [(better point, worse point)]."""
     if len(cand) < count:
-        raise RuntimeError(f"only {len(cand)} pairs of class {kinds} have a reward gap of {PEAK_MIN_GAP} or more; {count} wanted")
+        raise RuntimeError(f"only {len(cand)} pairs of {what} have a reward gap of {PEAK_MIN_GAP} or more; {count} wanted")
     gaps = np.array([c[0] for c in cand])
     top = float(np.quantile(gaps, PEAK_GAP_QUANTILE))
     chosen = []
     far = lambda f, rule: all(max(abs(f[0] - p[0]), abs(f[1] - p[1])) > rule for p in taken)
     for k in range(count):
         target = PEAK_MIN_GAP + (k + 0.5) / count * max(top - PEAK_MIN_GAP, 0.0)
-        for rule in (PEAK_APART, PEAK_APART / 2, 0.0):                           # (the most distinct bushes the pool allows; each bush is used once)
+        for rule in (PEAK_APART, PEAK_APART / 2, 0.0):                           # (the most distinct bushes the candidates allow; each bush is used once)
             for idx in np.argsort(np.abs(gaps - target)):
-                _, i, j = cand[idx]
-                if far(pools[0][i], rule) and far(pools[1][j], rule) and max(abs(pools[0][i][0] - pools[1][j][0]), abs(pools[0][i][1] - pools[1][j][1])) > rule:
-                    taken += [pools[0][i], pools[1][j]]
-                    chosen.append((pools[0][i], pools[1][j]))
+                _, a, b = cand[idx]
+                if far(a, rule) and far(b, rule) and max(abs(a[0] - b[0]), abs(a[1] - b[1])) > rule:
+                    taken += [a, b]
+                    chosen.append((a, b))
                     break
             else:
                 continue
             break
         else:
-            raise RuntimeError(f"too few distinct bushes of class {kinds} for {count} trials")
+            raise RuntimeError(f"too few distinct bushes of {what} for {count} trials")
     return chosen
+
+
+def _spread_pairs(des, kinds, count, rng, taken):
+    """`count` feature pairs, one point from each of `kinds` (the first the better: a peak's index, the global peak 0 being the highest, or "off")."""
+    pools = [_class_draws(des, k) for k in kinds]
+    if not all(pools):
+        raise RuntimeError(f"no bush of class {kinds}: the peaks leave no (shape, colour) in it")
+    value = lambda f: des.value({"shape": f[0], "color": f[1], "moisture": 0.5})
+    values = [[value(f) for f in pool] for pool in pools]
+    cand = [(values[0][i] - values[1][j], pools[0][i], pools[1][j]) for i in range(len(pools[0])) for j in range(len(pools[1])) if values[0][i] - values[1][j] >= PEAK_MIN_GAP]
+    return _select_spread(cand, count, taken, f"class {kinds}")
 
 
 def peak_trials(des, n, rng):
@@ -454,6 +460,164 @@ def peak_trials(des, n, rng):
         for k in rng.permutation(count):                  # (the sides alternate over the hard and easy ends alike)
             i, lt, rt = TRIAL_KINDS["peak"](des, pair, side, features[k])
             trials.append({"type": "peak", "varied": f"{pair[0]}>{pair[1]}", "place": i, "left": lt, "right": rt})
+            side = not side
+    return trials
+
+
+# --------------------------------------------------------------------------------------------------
+# Interaction trials (FI): classes of pairs by where the reward lies
+# --------------------------------------------------------------------------------------------------
+# Classes (the better bush first): HL, HM, ML, MM = a pair from the high (at least PEAK_TOP of the best reward), middle and low (at most PEAK_OFF of it) parts of the reward, MM two middle ones;
+# S and C = a pair that differs in shape only or colour only, the other feature at a value where the first one matters (the best-to-worst span along it is at least half the best reward);
+# along and across (the bump) = a pair on the bump's long axis through its centre, or on its short one; R = a reversal pair: the best separable (additive) fit to the reward orders it the wrong way.
+# A pair is never shown with a true gap under PEAK_MIN_GAP (the tie rule): two bushes in one flat part of the reward never meet.
+INTERACTION_PLANS = {"sum": (("HL", 3), ("HM", 3), ("ML", 3), ("MM", 2), ("S", 3), ("C", 3), ("R", 0)),                 # (a sum is its own best separable fit: it has no reversal pairs)
+                     "product": (("HL", 2), ("HM", 3), ("ML", 3), ("MM", 2), ("S", 2), ("C", 2), ("R", 3)),
+                     "sigmoid_gaussian": (("HL", 2), ("HM", 3), ("ML", 3), ("MM", 2), ("S", 2), ("C", 2), ("R", 3)),
+                     "bump": (("HL", 2), ("HM", 2), ("ML", 2), ("MM", 2), ("S", 1), ("C", 1), ("along", 2), ("across", 2), ("R", 3))}
+SHORTFALL_CLASS = "HM"        # the class that takes the trials a class cannot supply (a shallow product has hardly any reversal pairs)
+INTERACTION_REPEATS = {"sum": ("HM", "MM", "S"), "product": ("HM", "MM", "S"), "sigmoid_gaussian": ("HM", "MM", "S"), "bump": ("along", "across", "MM")}     # the classes the repeats are of
+INTERACTION_POOL = 60         # points kept per level
+INTERACTION_DRAWS = 6000      # candidate pairs drawn per class
+SPAN_MIN = 0.5                # a context for a one-feature pair: the best reward spans at least this share of the best along the varied feature
+REVERSAL_MARGIN = 0.1         # a reversal pair: the additive fit's predicted gap is at least this share of the best reward
+
+
+def interaction_kind(reward_function):
+    """The kind of rule a reward function is, as `fi_terms.KINDS` names them: a turned bump, or a `factors` term as a mean (sum), with a Gaussian factor (sigmoid_gaussian), or as a product."""
+    if any(float(b.get("angle") or 0.0) != 0.0 for b in reward_function.get("bumps") or []):
+        return "bump"
+    terms = reward_function.get("factors") or []
+    if not terms:
+        raise ValueError("interaction trials need a reward function of factor terms or a turned bump")
+    if int(terms[0]["combine"]) == 1:
+        return "sum"
+    return "sigmoid_gaussian" if any(int(terms[0][side]["kind"]) == 1 for side in ("shapeFactor", "colorFactor")) else "product"
+
+
+class _Plane:
+    """The reward over the plane for the trial classes: its values on a grid, the best, and the best separable fit (a function of shape plus a function of colour)."""
+    def __init__(self, des):
+        self.rf, self.des = des.p.reward_function, des
+        axis = np.linspace(0.0, 1.0, 161)
+        self.shape_grid, self.color_grid = np.meshgrid(axis, axis, indexing="ij")
+        self.grid = np.asarray(bush_value(self.rf, self.shape_grid, self.color_grid, 0.5), dtype=float)
+        self.top = float(self.grid.max())
+        self.axis = axis
+        f, g = np.zeros(len(axis)), np.zeros(len(axis))
+        for _ in range(60):                                       # the best separable model f(shape) + g(colour), by backfitting on the grid
+            f = (self.grid - g[None, :]).mean(axis=1)
+            g = (self.grid - f[:, None]).mean(axis=0)
+        self.f, self.g = f, g
+    def separable(self, shape, color):
+        """What the best separable (additive in a function of each feature) fit to the reward predicts for a bush."""
+        return np.interp(shape, self.axis, self.f) + np.interp(color, self.axis, self.g)
+    def value(self, shape, color):
+        return np.asarray(bush_value(self.rf, shape, color, 0.5), dtype=float)
+    def level(self, v):
+        return np.where(v >= PEAK_TOP * self.top, "H", np.where(v <= PEAK_OFF * self.top, "L", "M"))
+    def uniform(self, rng, n):
+        return np.round(rng.uniform(0.0, 1.0, (n, 2)), 2)
+
+
+def _ordered(plane, a, b):
+    """The candidate (reward gap, better point, worse point) for the points a and b ((n, 2) arrays), those with a gap of at least PEAK_MIN_GAP."""
+    va, vb = plane.value(a[:, 0], a[:, 1]), plane.value(b[:, 0], b[:, 1])
+    out = []
+    for k in np.nonzero(np.abs(va - vb) >= PEAK_MIN_GAP)[0]:
+        better, worse = (a[k], b[k]) if va[k] > vb[k] else (b[k], a[k])
+        out.append((float(abs(va[k] - vb[k])), (float(better[0]), float(better[1])), (float(worse[0]), float(worse[1]))))
+    return out
+
+
+def _level_pools(plane, rng):
+    points = plane.uniform(rng, 40000)
+    levels = plane.level(plane.value(points[:, 0], points[:, 1]))
+    return {name: points[levels == name][:INTERACTION_POOL] for name in "HML"}
+
+
+def _interaction_candidates(plane, cls, pools, rng):
+    """Candidate pairs (reward gap, better point, worse point) of class `cls`."""
+    n = INTERACTION_DRAWS
+    if cls in ("HL", "HM", "ML"):
+        better, worse = pools[cls[0]], pools[cls[1]]
+        ia, ib = np.meshgrid(np.arange(len(better)), np.arange(len(worse)), indexing="ij")
+        return _ordered(plane, better[ia.ravel()], worse[ib.ravel()])
+    if cls == "MM":
+        mid = pools["M"]
+        ia, ib = np.meshgrid(np.arange(len(mid)), np.arange(len(mid)), indexing="ij")
+        keep = ia.ravel() < ib.ravel()
+        return _ordered(plane, mid[ia.ravel()[keep]], mid[ib.ravel()[keep]])
+    if cls in ("S", "C"):
+        grid = plane.grid
+        span = (grid.max(axis=0) - grid.min(axis=0)) if cls == "S" else (grid.max(axis=1) - grid.min(axis=1))        # along the varied feature, at each value of the other
+        contexts = np.nonzero(span >= SPAN_MIN * plane.top)[0]
+        if len(contexts) == 0:
+            contexts = np.nonzero(span >= 0.5 * span.max())[0]
+        fixed = np.round(contexts[rng.integers(0, len(contexts), n)] / (grid.shape[0] - 1), 2)
+        f1, f2 = np.round(rng.uniform(0.0, 1.0, n), 2), np.round(rng.uniform(0.0, 1.0, n), 2)
+        a, b = (np.column_stack([f1, fixed]), np.column_stack([f2, fixed])) if cls == "S" else (np.column_stack([fixed, f1]), np.column_stack([fixed, f2]))
+        return _ordered(plane, a, b)
+    if cls in ("along", "across"):
+        bump = plane.rf["bumps"][0]
+        angle = math.radians(float(bump["angle"]))
+        axis = np.array([math.cos(angle), math.sin(angle)]) if cls == "along" else np.array([-math.sin(angle), math.cos(angle)])
+        sigma = float(bump["width"]) if cls == "along" else float(bump["widthColor"])
+        centre = np.array([float(bump["centerShape"]), float(bump["centerColor"])])
+        reach = 1.0 if cls == "along" else 2.2 * sigma
+        t1, t2 = rng.uniform(-reach, reach, n), rng.uniform(-reach, reach, n)
+        a, b = np.round(centre + t1[:, None] * axis, 2), np.round(centre + t2[:, None] * axis, 2)
+        inside = ((a >= 0) & (a <= 1)).all(axis=1) & ((b >= 0) & (b <= 1)).all(axis=1)
+        return _ordered(plane, a[inside], b[inside])
+    if cls == "R":
+        a, b = plane.uniform(rng, n), plane.uniform(rng, n)
+        predicted = plane.separable(a[:, 0], a[:, 1]) - plane.separable(b[:, 0], b[:, 1])
+        true = plane.value(a[:, 0], a[:, 1]) - plane.value(b[:, 0], b[:, 1])
+        wrong = (np.sign(predicted) != np.sign(true)) & (np.abs(predicted) >= REVERSAL_MARGIN * plane.top)
+        return _ordered(plane, a[wrong], b[wrong])
+    raise ValueError(f"unknown interaction class '{cls}'")
+
+
+def _apportion(n, weights):
+    """`n` shared over `weights` in proportion, whole numbers summing to `n` (largest remainder)."""
+    total = float(sum(weights))
+    exact = [n * w / total for w in weights]
+    counts = [int(math.floor(e)) for e in exact]
+    for k in sorted(range(len(weights)), key=lambda k: exact[k] - counts[k], reverse=True)[:n - sum(counts)]:
+        counts[k] += 1
+    return counts
+
+
+def interaction_trials(des, n, rng):
+    """`n` interaction trials of type "interaction" (`varied` names the class, see INTERACTION_PLANS): the plan of the rule's kind scaled to `n`, the reward gaps spread evenly within a class
+    (`_select_spread`), no gap under PEAK_MIN_GAP, sides alternating. A class that cannot supply its count (reversal pairs of a nearly separable rule) gives the rest to SHORTFALL_CLASS."""
+    kind = interaction_kind(des.p.reward_function)
+    plan = INTERACTION_PLANS[kind]
+    plane = _Plane(des)
+    pools = _level_pools(plane, des.rng)
+    counts = dict(zip([c for c, _ in plan], _apportion(n, [w for _, w in plan])))
+    trials, side, taken, chosen = [], bool(rng.integers(2)), [], {}
+    for cls in ["R"] + [c for c, _ in plan if c != "R"]:                  # (R first: what it cannot supply is known before SHORTFALL_CLASS is chosen)
+        count = counts[cls]
+        if not count:
+            continue
+        candidates = _interaction_candidates(plane, cls, pools, des.rng)
+        while count:
+            try:
+                attempt = list(taken)                                   # (a failed attempt leaves no points taken)
+                chosen[cls] = _select_spread(candidates, count, attempt, f"class {cls} of a '{kind}' rule")
+                taken[:] = attempt
+                break
+            except RuntimeError:
+                if cls != "R":
+                    raise
+                count -= 1
+                counts[SHORTFALL_CLASS] += 1
+        counts[cls] = count
+    for cls, features in chosen.items():
+        for k in rng.permutation(len(features)):
+            i, lt, rt = peak_trial(des, None, side, features[k])
+            trials.append({"type": "interaction", "varied": cls, "place": i, "left": lt, "right": rt})
             side = not side
     return trials
 
@@ -547,8 +711,12 @@ def build_gap_trials(params, terrain, pool, rng, mode):
     typed = feature_trials(des, per_feature, rng) if per_feature else []        # (the scarcest placements first; none by default, so the stimuli of the other sessions do not move)
     n_peak = int(getattr(params, "interlude_peak_trials", 0) or 0)
     typed += peak_trials(des, n_peak, rng) if n_peak else []
+    n_inter = int(getattr(params, "interlude_interaction_trials", 0) or 0)
+    if n_peak and n_inter:
+        raise ValueError("a session has peak trials or interaction trials, not both")
+    typed += interaction_trials(des, n_inter, rng) if n_inter else []
     n = n_total - repeats - len(typed)
-    if n < (0 if n_peak else 1):
+    if n < (0 if (n_peak or n_inter) else 1):
         raise ValueError(f"interludeTrialCount {n_total} has no room for the {len(typed)} typed trials and {repeats} repeats")
     axes = {"reward_gap": (3,), "feature_gap": (4,), "hybrid": (3, 4)}[mode]
     minima = {3: float(getattr(params, "interlude_min_reward_gap", 0.25)), 4: float(getattr(params, "interlude_min_feature_gap", 0.1))}
@@ -563,21 +731,22 @@ def build_gap_trials(params, terrain, pool, rng, mode):
             break
         rows = [r for r in rows if not any(r is h for h in hidden)]          # a chosen pair not in view: choose again without it
     trials = typed + [{"type": mode, "varied": "", "place": r[0], "left": r[1], "right": r[2]} for r in chosen]
-    trials += pick_repeats(trials, repeats, des, by_group=bool(n_peak))
+    trials += pick_repeats(trials, repeats, des, by_group=bool(n_peak or n_inter), groups=INTERACTION_REPEATS[interaction_kind(params.reward_function)] if n_inter else None)
     des.gap_span = {("reward", "feature")[a - 3]: span[a] for a in axes}
     return _finish_trials(trials, des, rng, ordered=True, separation=int(getattr(params, "interlude_repeat_separation", REPEAT_SEPARATION))), des
 
 
-def pick_repeats(trials, k, des, by_group=False):
+def pick_repeats(trials, k, des, by_group=False, groups=None):
     """`k` exact repeats of chosen trials: the same placement, spawn point, bushes and sides (shallow copies, linked to their source by
     `repeat_source`; the sidecar gives a copy its own bush entries, so the bush the participant harvested the first time is not the
     depleted one). The pairs repeated are those whose reward gap is nearest the median (neither trivial nor a coin flip), alternating
-    the correct side so the sides stay balanced. `by_group`: the repeats go round the trial groups (`varied`, e.g. the peak pairs), each taking its group's median."""
+    the correct side so the sides stay balanced. `by_group`: the repeats go round the trial groups (`varied`, e.g. the peak pairs), each taking its group's median; `groups` names the groups
+    to go round (in that order) instead of all of those present."""
     if k == 0:
         return []
     delta = [des.value(t["left"]) - des.value(t["right"]) for t in trials]
     group = [t["varied"] if by_group else "" for t in trials]
-    order = list(dict.fromkeys(group))
+    order = [g for g in groups if g in group] if groups else list(dict.fromkeys(group))
     free, copies = list(range(len(trials))), []
     for i in range(k):
         g = order[i % len(order)]
