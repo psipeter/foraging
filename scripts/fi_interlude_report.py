@@ -1,7 +1,7 @@
 """What the Interlude trials of FI contain: per kind of rule, how many trials of each class, their reward gaps, and how many of them are reversal pairs (the best separable fit to the reward, a function of
 shape plus a function of colour, orders the pair the wrong way), which says whether a class of reversal pairs of its own is needed.
 
-    fi_interlude_report.py                      draws instances of every kind and level (`--draws`, default 6), generates their Interludes and reports
+    fi_interlude_report.py                      draws instances of every kind (`--draws`, default 6), generates their Interludes and reports
     fi_interlude_report.py --experiment FI      reports the built Interlude files of an experiment's sessions (their sessions' reward functions)
 
 A pair is a reversal when the separable fit (backfitted on a grid over the plane) predicts a gap of at least REVERSAL_MARGIN of the best reward in the wrong direction.
@@ -18,7 +18,7 @@ import fi_terms
 import interlude
 import world
 
-LEVELS = [("sum", 4.0), ("sum", 30.0), ("product", 4.0), ("product", 30.0), ("sigmoid_gaussian", 4.0), ("sigmoid_gaussian", 30.0), ("bump", 10.0)]
+KINDS = [("corner", {}), ("middle", {}), ("elongated", {}), ("elongated, aligned", {"tilt": 0.0})]
 OVERRIDES = dict(interlude_trial_count=20, interlude_repeat_count=3, interlude_interaction_trials=17, interlude_peak_trials=0, interlude_mode=4, interlude_feature_trials=0)
 
 
@@ -78,13 +78,13 @@ def main():
         for kind, group in by_kind.items():
             print_table(f"{args.experiment} {kind} ({len(group)} sessions)", group)
         return
-    for kind, steepness in LEVELS:
-        rows = []
+    for label, kwargs in KINDS:
+        kind, rows = label.split(",")[0], []
         for seed in range(args.draws):
-            inst = fi_terms.draw_instance(np.random.default_rng(seed), kind, steepness=steepness, target=args.target, x=args.x)
+            inst = fi_terms.draw_instance(np.random.default_rng(seed), kind, target=args.target, x=args.x, **kwargs)
             sidecar, _, _ = interlude.generate_interlude("RW_I1", reward_function=inst.reward_function(), **OVERRIDES)
             rows.append((inst.reward_function(), sidecar["trials"]))
-        print_table(f"{kind} k={steepness:g} ({args.draws} draws, target {args.target} at x = {args.x})", rows)
+        print_table(f"{label} ({args.draws} draws, target {args.target} at x = {args.x})", rows)
 
 
 if __name__ == "__main__":

@@ -57,21 +57,15 @@ MonoBehaviour:
       weight: 0
       peak: 0
       width: 0
-    bumps: []
-    products: []
-    factors:
-    - combine: 0
-      shapeFactor:
-        kind: 0
-        center: 0.2732
-        scale: 3.288
-        inverted: 0
-      colorFactor:
-        kind: 0
-        center: 0.2845
-        scale: 4.31
-        inverted: 0
+    bumps:
+    - centerShape: 0.4461
+      centerColor: 0.5202
+      width: 0.46989
+      widthColor: 0.13425
+      angle: 45
       height: 4
+    products: []
+    factors: []
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -160,13 +154,12 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"cell": "PRD-shallow", "experiment": "FI", "hint": "combination",
-    "index": 3, "instance": "FI_S3", "iteration": 1, "kind": "product", "level":
-    "shallow", "rule": {"inflection": [0.2732, 0.2845], "inverted": {"color": false,
-    "shape": false}, "kind": "product", "max_reward": 4.0, "nonzero": 0.994, "sparsity":
-    {"30": 0.2055, "40": 0.2999, "50": 0.4042}, "steepness": [3.288, 4.31], "target":
-    0.3, "x": 40}, "steepness": 4.0, "target_sparsity": 0.3, "world_attempts": 1,
-    "x_percent": 40}'
+  designJson: '{"cell": "ROTATED", "experiment": "FI", "hint": "combination", "index":
+    3, "instance": "FI_S3", "iteration": 1, "iterations": 6, "kind": "elongated",
+    "rule": {"center": [0.4461, 0.5202], "elongation": 3.5, "kind": "elongated",
+    "max_reward": 4.0, "nonzero": 0.6253, "short_spread": 0.13425, "sparsity": {"30":
+    0.1408, "40": 0.2016, "50": 0.2737}, "target": 0.2, "tilt": 45.0, "x": 40}, "target_sparsity":
+    0.2, "world_attempts": 1, "x_percent": 40}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1

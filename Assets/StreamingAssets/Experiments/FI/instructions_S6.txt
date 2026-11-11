@@ -1,7 +1,6 @@
 Find the best fruit
 
 This is a new area.
-The reward depends on the **combination** of **bush shape** and **fruit color**, not on each alone.
 Collect as many points as you can.
 
 Press [Enter] to begin

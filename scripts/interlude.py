@@ -474,22 +474,30 @@ def peak_trials(des, n, rng):
 INTERACTION_PLANS = {"sum": (("HL", 3), ("HM", 3), ("ML", 3), ("MM", 2), ("S", 3), ("C", 3), ("R", 0)),                 # (a sum is its own best separable fit: it has no reversal pairs)
                      "product": (("HL", 2), ("HM", 3), ("ML", 3), ("MM", 2), ("S", 2), ("C", 2), ("R", 3)),
                      "sigmoid_gaussian": (("HL", 2), ("HM", 3), ("ML", 3), ("MM", 2), ("S", 2), ("C", 2), ("R", 3)),
+                     "round": (("HL", 3), ("HM", 4), ("ML", 3), ("MM", 3), ("S", 2), ("C", 2), ("R", 0)),                    # (a round Gaussian is a product: it has no reversal pairs to speak of)
                      "bump": (("HL", 2), ("HM", 2), ("ML", 2), ("MM", 2), ("S", 1), ("C", 1), ("along", 2), ("across", 2), ("R", 3))}
 SHORTFALL_CLASS = "HM"        # the class that takes the trials a class cannot supply (a shallow product has hardly any reversal pairs)
-INTERACTION_REPEATS = {"sum": ("HM", "MM", "S"), "product": ("HM", "MM", "S"), "sigmoid_gaussian": ("HM", "MM", "S"), "bump": ("along", "across", "MM")}     # the classes the repeats are of
+INTERACTION_REPEATS = {"sum": ("HM", "MM", "S"), "product": ("HM", "MM", "S"), "sigmoid_gaussian": ("HM", "MM", "S"), "bump": ("along", "across", "MM"), "round": ("HM", "MM", "S")}     # the classes the repeats are of
 INTERACTION_POOL = 60         # points kept per level
 INTERACTION_DRAWS = 6000      # candidate pairs drawn per class
 SPAN_MIN = 0.5                # a context for a one-feature pair: the best reward spans at least this share of the best along the varied feature
 REVERSAL_MARGIN = 0.1         # a reversal pair: the additive fit's predicted gap is at least this share of the best reward
 
 
+ELONGATED_RATIO = 1.5         # a single Gaussian whose long spread is at least this times the short one is "bump" (elongated), else "round"
+
+
 def interaction_kind(reward_function):
-    """The kind of rule a reward function is, as `fi_terms.KINDS` names them: a turned bump, or a `factors` term as a mean (sum), with a Gaussian factor (sigmoid_gaussian), or as a product."""
-    if any(float(b.get("angle") or 0.0) != 0.0 for b in reward_function.get("bumps") or []):
+    """The kind of rule a reward function is: a single Gaussian ("round", or "bump" when it is elongated, turned or not), or a `factors` term as a mean (sum), with a Gaussian factor
+    (sigmoid_gaussian), or as a product."""
+    bumps, terms = reward_function.get("bumps") or [], reward_function.get("factors") or []
+    if len(bumps) == 1 and not terms:
+        long_spread, short_spread = float(bumps[0]["width"]), float(bumps[0].get("widthColor") or 0.0) or float(bumps[0]["width"])
+        return "bump" if max(long_spread, short_spread) >= ELONGATED_RATIO * min(long_spread, short_spread) else "round"
+    if any(float(b.get("angle") or 0.0) != 0.0 for b in bumps):
         return "bump"
-    terms = reward_function.get("factors") or []
     if not terms:
-        raise ValueError("interaction trials need a reward function of factor terms or a turned bump")
+        raise ValueError("interaction trials need a reward function of factor terms or a Gaussian")
     if int(terms[0]["combine"]) == 1:
         return "sum"
     return "sigmoid_gaussian" if any(int(terms[0][side]["kind"]) == 1 for side in ("shapeFactor", "colorFactor")) else "product"

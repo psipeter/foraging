@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: FI_S1
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
-  sessionDuration: 120
+  sessionDuration: 150
   worldSeed: 3101
   isPractice: 0
   isInterlude: 0
@@ -57,21 +57,15 @@ MonoBehaviour:
       weight: 0
       peak: 0
       width: 0
-    bumps: []
-    products: []
-    factors:
-    - combine: 1
-      shapeFactor:
-        kind: 0
-        center: 0.5812
-        scale: 4.428
-        inverted: 0
-      colorFactor:
-        kind: 0
-        center: 0.495
-        scale: 3.328
-        inverted: 0
+    bumps:
+    - centerShape: 0
+      centerColor: 1
+      width: 0.50507
+      widthColor: 0.50507
+      angle: 0
       height: 4
+    products: []
+    factors: []
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -160,13 +154,12 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"cell": "SUM-shallow", "experiment": "FI", "hint": "sum", "index":
-    1, "instance": "FI_S1", "iteration": 1, "kind": "sum", "level": "shallow", "rule":
-    {"inflection": [0.5812, 0.495], "inverted": {"color": false, "shape": false},
-    "kind": "sum", "max_reward": 4.0, "nonzero": 1.0, "sparsity": {"30": 0.1847,
-    "40": 0.2994, "50": 0.4578}, "steepness": [4.428, 3.328], "target": 0.3, "x":
-    40}, "steepness": 4.0, "target_sparsity": 0.3, "world_attempts": 1, "x_percent":
-    40}'
+  designJson: '{"cell": "CORNER", "experiment": "FI", "hint": "combination", "index":
+    1, "instance": "FI_S1", "iteration": 1, "iterations": 3, "kind": "corner", "rule":
+    {"center": [0.0, 1.0], "elongation": 1.0, "kind": "corner", "max_reward": 4.0,
+    "nonzero": 0.8749, "short_spread": 0.50507, "sparsity": {"30": 0.1398, "40":
+    0.1996, "50": 0.27}, "target": 0.2, "tilt": 0.0, "x": 40}, "target_sparsity":
+    0.2, "world_attempts": 1, "x_percent": 40}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1

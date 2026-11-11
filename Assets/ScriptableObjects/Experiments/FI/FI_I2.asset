@@ -57,21 +57,15 @@ MonoBehaviour:
       weight: 0
       peak: 0
       width: 0
-    bumps: []
-    products: []
-    factors:
-    - combine: 1
-      shapeFactor:
-        kind: 0
-        center: 0.4508
-        scale: 27.315
-        inverted: 1
-      colorFactor:
-        kind: 0
-        center: 0.5227
-        scale: 33.444
-        inverted: 0
+    bumps:
+    - centerShape: 0.4565
+      centerColor: 0.574
+      width: 0.25237
+      widthColor: 0.25237
+      angle: 0
       height: 4
+    products: []
+    factors: []
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -160,13 +154,12 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"cell": "SUM-steep", "experiment": "FI", "hint": "sum", "index":
-    2, "instance": "FI_S2", "iteration": 1, "kind": "sum", "level": "steep", "rule":
-    {"inflection": [0.4508, 0.5227], "inverted": {"color": false, "shape": true},
-    "kind": "sum", "max_reward": 4.0, "nonzero": 0.8096, "sparsity": {"30": 0.2712,
-    "40": 0.3019, "50": 0.5133}, "steepness": [27.315, 33.444], "target": 0.3, "x":
-    40}, "steepness": 30.0, "target_sparsity": 0.3, "world_attempts": 1, "x_percent":
-    40}'
+  designJson: '{"cell": "MIDDLE", "experiment": "FI", "hint": "combination", "index":
+    2, "instance": "FI_S2", "iteration": 1, "iterations": 3, "kind": "middle", "rule":
+    {"center": [0.4565, 0.574], "elongation": 1.0, "kind": "middle", "max_reward":
+    4.0, "nonzero": 0.833, "short_spread": 0.25237, "sparsity": {"30": 0.1409, "40":
+    0.2017, "50": 0.2733}, "target": 0.2, "tilt": 0.0, "x": 40}, "target_sparsity":
+    0.2, "world_attempts": 1, "x_percent": 40}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1

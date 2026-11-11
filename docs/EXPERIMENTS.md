@@ -309,90 +309,45 @@ bonus design for sparse sessions.
 
 1. **Display name:** feature interaction (FI)
 2. **Hypothesis:**
-   1. Learning is slower and the performance ceiling is lower the more the reward depends on the combination of shape and color rather than
-      on each feature separately.
-   2. The cost grows from rules that are monotone in both features, to rules with a peak in one feature, to rules that are not separable by
-      feature (a tilted peak).
-   3. At a given sparsity, sharper sigmoids make the high-reward region harder to find, because the reward gives no gradient outside it.
-3. **Experiment:**
-   1. *Features and terms.* Only shape and color are used (no moisture). Both vary, and both always matter. Write x and y for the two features
-      scaled from 0 to 1, with roles and direction (which end pays) drawn per instance. Bushes sit on a hexagonal lattice, with reward density
-      roughly uniform. Sparsity is as defined in "Conventions", and is matched across types, so a harder type is not simply a sparser one. The
-      maximum reward and per-fruit noise are matched too.
-   2. *Session types, from simple to complex:*
-      * Additive. Reward is w₁·x + w₂·y. No interaction; the baseline.
-      * Sigmoid × sigmoid. Reward is sigmoid(x) · sigmoid(y), with the steepness and inflection point of each set per instance. Both features
-        must be high, and the maximum is at one corner of the feature space. Shallow sigmoids approximate the product x · y.
-      * Sigmoid × Gaussian. Reward is sigmoid(x) · Gaussian(y). One feature gates the reward and the other has a peak, so the optimum is at an
-        interior value of y and a high value of x.
-      * Tilted bump. A 2D Gaussian that is elongated and rotated, so the reward depends on a combination of the two features. It is not
-        separable, so searching one feature at a time stalls, and the optimum is in the interior.
-   3. *Parameters.* For sigmoid × sigmoid: the steepness and inflection point of each sigmoid. For sigmoid × Gaussian: the sigmoid's steepness
-      and inflection point, and the Gaussian's center and width. For the tilted bump: the tilt angle, the elongation and the widths. These are
-      set to match sparsity across types, and the remaining freedom is used to vary the steepness at fixed sparsity.
-   4. *Instances.* Each session is an instance from a pool with its own world seed and draw of roles, directions and positions.
-   5. *Order and intermixing.* The additive session comes first, then a first pass of the other types from simple to complex. Later instances
-      of each type are intermixed in random order.
-   6. *Hints.* The additive session says both features matter independently. The first pass of interaction sessions says the combination of the
-      two features matters. Later sessions have no hint about the structure.
-   7. **TODO, how many instances of each type and the session length.** Harder types need longer sessions. How to choose the steepness values so
-      that shallow and steep sigmoids differ clearly at matched sparsity.
-   8. *Other open items.*
-      * Interlude trials. With steep sigmoids the reward is nearly flat in each region, so two bushes in the same region have no correct side.
-        Informative pairs are across the boundary (high region against low region), and pairs near it. The tilted bump needs pairs along and
-        across its long axis. Ties need a rule.
-      * The generator must populate every region (the high corner, the transition, the far low region, the ends of the bump) and assign the
-        (shape, color) records evenly (`spatialBalance`).
-      * How well the simulated agents' critics learn each type (additive against joint features), to screen the types and calibrate the lengths.
+   1. Learning is slower and the performance ceiling lower the less separable the reward is in the shape and color axes.
+   2. The cost grows from a rule that is monotone in both features (a Gaussian at a corner, close to additive), to a peaked product (a round Gaussian in the middle, separable in the axes), to a rule separable only in
+      a rotated basis (an elongated Gaussian turned 45 degrees).
+3. **Experiment (built 2026-11-11; `scripts/design/FI.py`, `fi_terms.py`; replaces the first design of sums, products and sigmoid rules, see DECISIONS "FI: three Gaussians"):**
+   1. *Features and rule.* Only shape and color pay (elevation varies and pays nothing). The reward is one Gaussian over the (shape, color) plane with one optimum, so there is no trapping. Bushes sit on the
+      hexagonal lattice with the features dealt evenly over the plane (`featureCoverage`).
+   2. *Cells.* **CORNER**: round, centred at a corner (the four corners in a seeded order). **MIDDLE**: round, centred near the middle (0.4 to 0.6). **ROTATED**: stretched (elongation 3.5) and turned 45 degrees (sign
+      alternating over its sessions). **Sparsity is matched** across the cells: each draw solves the Gaussian's spread so that the share of the plane in the top 40% of the reward range is 0.20 (every instance within 1%);
+      the best bush pays 4 and `rewardStd` is 0.6 everywhere. A linear ramp can replace the corner Gaussian if its small non-separability becomes a concern.
+   3. *Iterations (PI): 3, 3 and 6.* The rotated Gaussian is the hardest and the most variable cell, so it has the most sessions: **12 sessions** of 150 s (a reduced run takes `repeats` and `short` as for FN and RW).
+   4. *Order.* The first iteration of each cell in the order corner, middle, rotated; then the other nine sessions in a seeded random order.
+   5. *Hint.* The first iteration of each cell: "There is one best **combination** of bush shape and fruit color." (only "combination" bold); later iterations have none.
+   6. *Interlude trials,* 20 in every session (17 distinct pairs, 3 exact repeats at least 8 trials apart), typed by where the reward lies: high, middle and low parts of the reward (HL, HM, ML, MM), one feature varied
+      (S, C), and for the rotated Gaussian along and across its long axis (`interlude.INTERACTION_PLANS`; `SessionConfig.interludeInteractionTrials`). No pair is shown with a true gap under 0.25, so every trial has a correct
+      side; gaps are spread within a class and look-alike bushes avoided. **Reversal pairs** (the best separable fit, a function of shape plus a function of color, orders the pair the wrong way) are 3 trials of the rotated
+      Gaussian's session (R, a shortfall goes to HM); a round Gaussian has hardly any.
 4. **Analysis:**
-   1. Point trajectories of reward against time in each session and type.
-   2. Interlude choices fitted by a ladder of models: additive, multiplicative (additive in the log of the reward), and a full joint model.
-      The best model per participant and type shows what kind of rule was learned and how far the learned value function is from the true one.
-      (Three of the four types are products of a function of each feature, so a multiplicative model is needed to tell "learned a product
-      rule" from "learned a joint rule".)
-   3. For the sigmoid types: how long it takes to find the high region, and how that depends on steepness at matched sparsity.
-   4. Direct comparison of types at matched sparsity.
-   5. Instance index as a covariate, to see whether people learn to look for interactions.
+   1. Points over time by cell, and the share of the oracle's score.
+   2. **The interaction cost** for simulated learners is the same-prior pair (`fi_screen.py`): a delta rule over 1-D bumps of shape and color, summed (`learner_add2`) or multiplied (`learner_joint`), same centres, same
+      spread, same learning rule. Their difference is the cost of ignoring the interaction. It also contains a peak-localisation benefit (an exactly additive peaked rule gave +23), so it is read against the corner cell.
+   3. Interlude choices fitted by models of the same pair (additive, joint) and a model with a free rotation, per participant and cell; reversal-pair accuracy separates a separable learner from one that represents the interaction.
+5. **Agent screen `fi3` (2026-11-11; 80 worlds per cell, 480 worlds, no errors; `fi_screen.py run --tag fi3 --extras`).** Share of the oracle's score at 150 s, additive twin / joint, and the gap (joint minus twin, points):
 
-9. **Implementation plan, proposal v1 (PI, 2026-11-11; nothing here is built).** **The linear additive session is replaced by a sum of sigmoids** (PI): the separable baseline with the same marginal terms as sigmoid x sigmoid, so the two differ only in the combination rule (a sum of linear terms against a sigmoid product would differ in the nonlinearity as well); a shallow sum is nearly the old additive rule. Phases, in order; the agent screen comes after the experiment is built and playable.
-   1. *New reward terms* (C# and the Python mirrors, `world.bush_value`, `terms_relevance`, the fingerprint with new fields omitted at default, the builder's array paths; C# against Python compared on a grid): `angle` on `RewardBump` (0 = today's bump, so RW and stored hashes
-      do not move), and one new term of two factors, each a sigmoid (centre, steepness, direction; normalised to 1 at its paying end, so the maximum is `height`) or a Gaussian (centre, width).
-   2. *Instance generator `fi_terms.py`:* per type (sum of sigmoids, sigmoid x sigmoid, sigmoid x Gaussian, tilted bump) a class with the interface `Peaks` has (`value`, `dims`, `paying`, `reward_function`, `session_fields`), so `rw_peaks.sparsity`, the region
-      counts and `rw_screen.session_params` serve it unchanged. The shared pieces of RW's design module (the seeded play order, the world-seed search with a guarantee check, the instruction pages) move into `design/common.py`, RW's instance list verified
-      identical before and after; FN stays as it is. Roles (which feature is x), directions and positions are drawn per instance as in FN (direction 0 higher pays, 1 lower) and RW. **Sparsity is matched across the types** by solving each type's free
-      parameter (the sigmoids' inflection point, the Gaussian's width, the bump's scale) to land within 10% of the target; the target and the region definition `x` are table constants. **Measured on the plane (top-x% region):** linear additive reward (no longer a session; the sum of sigmoids is) with both features
-      mattering is at x = 30 only 0.18 to 0.24 (weight ratio 1 to 0.3; 0.29 needs one feature to carry 5%), at x = 40 0.32 to 0.37, at x = 50 0.50; sigmoid x sigmoid reaches any of these at any steepness (k = 30, c = 0.4: 0.32 at x = 30), and the sum of sigmoids can be matched to the product by shifting its inflection point (k = 10: the product at c = 0.4 has 0.25 / 0.29 at x = 30 / 40, the sum at c = 0.5 has 0.25 / 0.33). So a
-      matched 30% needs x = 40 (the best bush's 60%, not RW's 70%) for the linear rule, which the sum of sigmoids makes unnecessary; **x and the target are to be decided by playing.** Additive and shallow-sigmoid rewards pay nonzero over 98% of the plane, a steep sigmoid product only inside its high region
-      (0.32 at c = 0.5; the steep sum 0.80, since a bush with one feature high pays about half): that difference is the steepness effect (hypothesis 3) and the sum-against-product contrast, and the target is chosen high enough that finding a nonzero bush is not what the session measures.
-   3. *Interlude trials (typed, like RW):* 20 in every session, 17 distinct pairs plus 3 exact repeats (one per class), so the count gives no hint of the type; a new count field `interludeInteractionTrials`. **Tie rule:** no pair is shown with a true gap under
-      0.25 (five times the tie tolerance), so two bushes in one flat region never meet and every trial has a correct side. Classes by the true reward level (high: at least 70% of the maximum; low: at most 25%; the rest transition), with a per-type table of counts:
-      sum of sigmoids: one-feature-only pairs for each feature, trade-off pairs, one feature high against both mid (ordered differently by the sum and the product), high against low; sigmoid x sigmoid: high/low, high/transition, transition/low, graded within the transition; sigmoid x Gaussian: the same plus gate-only and peak-only pairs; tilted bump: centre against along the
-      long axis, centre against across the short axis, along against far. Gaps spread evenly within a class, look-alike bushes avoided, repeats at least 8 trials from their source (as RW). A steep sigmoid has a thin transition band: the build checks that every class
-      has candidates and fails loudly otherwise. **Reversal pairs** (the best additive fit to the true reward orders the pair the wrong way; they separate the additive, multiplicative and joint models of the analysis) are a class the table can hold at 0 trials; their share
-      among the other classes' pairs is computed from the built files, and agent tests decide whether a class of their own is needed.
-   4. *`design/FI.py`, table-driven:* for the sum of sigmoids, sigmoid x sigmoid and sigmoid x Gaussian two levels each (shallow k about 4, steep k about 30), for the tilted bump one (elongation about 3.5, tilt 20 to 70 degrees off an axis), 3 iterations each:
-      **21 sessions** (6 + 6 + 6 + 3) (reduced runs by the `short` and `repeats` knobs as in FN and RW). Order: the shallow sum first, then one pass of the other cells from simple to complex (sum steep, sigmoid x sigmoid, sigmoid x Gaussian, tilted bump; shallow before steep), then the rest shuffled by the master seed. Lengths 120 s (sum of sigmoids)
-      and 150 s (the others), provisional; about 51 minutes of play plus the Interludes (at most 49 minutes at the 7 s cap), so the lengths are the first thing to trim. The ground varies and pays nothing (`moistureVaries` on). Hints (concise): the sum of sigmoids, "Shape and color **add up**:
-      each one adds its own part to the reward."; the first pass of the other three, "The reward depends on the **combination** of **bush shape** and **fruit color**, not on each alone."; later sessions none. Build, check the generated files, development build, play check.
-   5. *Agent screen after the experiment is built* (`fi_screen.py` on the `rw_screen.py` pattern, with the critic `RBFFeatures` in its two forms, `additive=True` (separable, the default) and `additive=False` (joint), which already exist, to see whether a separable learner copes with the sum and fails on the products): calibrates lengths and iteration counts, tests whether reversal pairs are redundant, and gives the power analysis.
-   6. *Later:* the analysis model ladder (additive, multiplicative, joint), recovery tests on agents, the pilot.
-   * *Phase 2 built (2026-11-11; `scripts/fi_terms.py`, `scripts/design/common.py`, tests in `test_fi_terms.py`; uncommitted):* `fi_terms.draw_instance(rng, kind, steepness, elongation, target, x)` draws a sum, product, sigmoid x Gaussian or bump with its free parameter solved to the target sparsity (within 10%);
-     RW's instance list and texts are identical after the move to `design/common.py`. **Reachable range** (6 draws, 3 worlds, x = 30 and 40, targets 0.15 to 0.40, steepness 4 and 30): every kind reaches every target except sigmoid x Gaussian at k = 4 for x = 30, target 0.40; the world guarantee
-     (at least 10 bushes high, 10 low, 8 mid) fails for the shallow sum at x = 30 from target 0.30 and the shallow product at x = 30 from 0.30 to 0.40 (a shallow rule pays at least a fifth of the best everywhere, so it has no low region), and passes everywhere at x = 40, targets up to 0.30. **At the
-     matched sparsity of 30% the bump (elongation 3.5) is a tilted ridge:** its long spread (about 0.65) is wider than the plane, so it has no ends inside it; the Interlude's classes for it are `along` and `across` the ridge, not its ends.
-   * *Phase 3 built (2026-11-11; `interlude.interaction_trials`, `SessionConfig.interludeInteractionTrials`, `scripts/fi_interlude_report.py`, tests in `test_fi_interlude.py`; uncommitted):* typed trials as planned: 17 distinct pairs plus 3 repeats, the plan per kind of rule
-     (sum, product, sigmoid x Gaussian: HL 3, HM 3, ML 3, MM 2, shape-only 3, colour-only 3; bump: HL, HM, ML, MM, S, C 2 each, along 3, across 2), repeats of HM, MM and S (bump: along, across, MM), no pair under a gap of 0.25, gaps spread within a class, bushes of different trials
-     apart where the pool allows. **Classes by level:** H and L are at least 70% and at most 25% of the best reward, M between; S and C vary one feature at a value of the other where it matters (the best-to-worst span along it is at least half the best). The generator is unchanged for every
-     other session (the committed RW Interlude files regenerate identically). **Reversal pairs** (the best separable fit, a function of shape plus a function of colour, orders the pair the wrong way by at least 10% of the best reward): of the distinct pairs of the planned classes, 0% for the sum
-     and the shallow rules and 0 to 7% for the steep product, sigmoid x Gaussian and the bump, so **the other classes do not supply them.** Among 6000 random pairs with a gap of 0.25 or more, 0 (sum), about 0 (product, k = 4), 13 (product, k = 30), 28 (sigmoid x Gaussian, k = 30) and 417 (bump)
-     are reversals at that margin. **So the class gets trials of its own (PI):** 3 per session for the product, sigmoid x Gaussian and bump (the plans: product and sigmoid x Gaussian HL 2, HM 3, ML 3, MM 2, S 2, C 2, R 3; bump HL 2, HM 2, ML 2, MM 2, S 1, C 1, along 2, across 2, R 3; the sum keeps
-     its plan and has none, since its best separable fit is the rule itself). Whatever reversal pairs a rule cannot supply go to the HM class: over 8 drawn instances each, the steep product and sigmoid x Gaussian have all 3, the shallow sigmoid x Gaussian about 0.6, the shallow product none. The reversal pairs of the
-     sigmoid rules are close pairs (gaps 0.26 to 0.63, near the 0.25 tie rule), so they are hard trials; the bump's are 0.45 to 2.0.
-   * *Phase 4 built (2026-11-11; `scripts/design/FI.py`, `scripts/test_fi_design.py`; development build deployed for a play check; uncommitted):* **21 sessions**, 3 iterations of each of 7 cells: SUM, PRD and SGA (sum, product, sigmoid x Gaussian) shallow (k about 4) and steep (about 30), and BMP (the tilted bump, elongation 3.5).
-     **Matched sparsity 30% of the plane in the top 40% of the reward range** (`TARGET_SPARSITY`, `X_PERCENT`, to be tuned by playing); every instance within 10% (0.299 to 0.304 realised), best bush 4. Lengths 120 s (SUM) and 150 s (the others). Order: the shallow sum first, then the first iteration
-     of each cell in the order of the table, then the 14 later iterations shuffled (master seed 501, world seeds from 3101); every instance passed its world check on the first seed. Hints: the first iteration of a sum, "Bush shape and fruit color each add their own part to the reward."; of the other rules, "The reward depends on the
-     combination of bush shape and fruit color, not on each alone."; later iterations none. Interludes: 20 trials, 17 interaction pairs and 3 repeats. **Built Interlude files** (`fi_interlude_report.py --experiment FI`): reversal pairs 9 (product: all in the steep sessions), 11 (sigmoid x Gaussian), 9 (bump), none for the sum;
-     the shallow product's 9 went to the HM class. The game's own stale-world check finds none of the 21 FI (or 22 RW) worlds stale. Not played yet.
+   | cell | twin | joint | gap (+- se) | Interlude accuracy, twin / joint | found a high bush by 30 s |
+   |---|---|---|---|---|---|
+   | CORNER | 0.92 | 0.92 | +5 +- 7 | 0.99 / 1.00 | 0.80 |
+   | MIDDLE | 0.79 | 0.86 | +63 +- 7 | 0.93 / 0.98 | 0.91 |
+   | ROTATED (45 deg, 3.5) | 0.64 | 0.73 | +70 +- 9 | 0.64 / 0.80 | 0.85 |
+   | control: ALIGNED (0 deg, 3.5) | 0.70 | 0.74 | +35 +- 8 | 0.80 / 0.87 | 0.70 |
+   | control: ROTATED 22 deg | 0.67 | 0.73 | +52 +- 9 | 0.71 / 0.79 | 0.84 |
+   | control: ROTATED, elongation 5 | 0.57 | 0.66 | +72 +- 10 | 0.53 / 0.71 | 0.75 |
+
+   (`nearest`: 0.65, 0.63, 0.57, 0.52, 0.55, 0.53.) **The three cells separate strongly in difficulty:** the twin's share falls 0.13 (z -12) from corner to middle and 0.14 (z -12) from middle to rotated; a person 2.5 times slower
+   than the agents (the agents at 90 s) is at 0.86, 0.76 and 0.64. **The corner is nearly additive** (gap +5, the twin equals the joint learner). **The gap does not separate middle from rotated** (+63 against +70, z 0.6; the earlier
+   screen gave +65 against +89): the Interlude does (twin 0.93 to 0.64, joint 0.98 to 0.80). **Rotation alone** (aligned against rotated, same width, elongation and sparsity): +36 here (z 3.0), +82 in the first test (z 6.8). The aligned
+   gap was +7 there and +35 here (a 2.5-sigma difference), so about +20 pooled, against about +80 for the rotated, a rotation effect of about +60 points. **Reversal pairs of the rotated Gaussian:** twin 0.30, joint 0.48 (chance is 0.5);
+   the aligned control's twin 0.69, joint 0.98. Elongation 5 is harder (twin 0.57) but leaves little to learn from (`nearest` 0.53); **3.5 is kept.**
+   **Caveats:** the joint learner (8 x 8 bumps of spread 0.3) is too coarse to resolve a ridge of short spread 0.13, which probably understates the interaction cost of the rotated cell (a finer pair is untested); the learner gap
+   mixes interaction with a peak-localisation benefit; 80 worlds per cell, one sparsity.
 
 ---
 

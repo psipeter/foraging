@@ -57,21 +57,15 @@ MonoBehaviour:
       weight: 0
       peak: 0
       width: 0
-    bumps: []
-    products: []
-    factors:
-    - combine: 0
-      shapeFactor:
-        kind: 0
-        center: 0.3054
-        scale: 4.565
-        inverted: 1
-      colorFactor:
-        kind: 1
-        center: 0.7081
-        scale: 0.3055
-        inverted: 0
+    bumps:
+    - centerShape: 0.5647
+      centerColor: 0.566
+      width: 0.46987
+      widthColor: 0.13425
+      angle: 45
       height: 4
+    products: []
+    factors: []
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -160,13 +154,12 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"cell": "SGA-shallow", "experiment": "FI", "hint": "none", "index":
-    9, "instance": "FI_S9", "iteration": 3, "kind": "sigmoid_gaussian", "level":
-    "shallow", "rule": {"gate": "shape", "inflection": 0.3054, "inverted": true,
-    "kind": "sigmoid_gaussian", "max_reward": 4.0, "nonzero": 0.8703, "peak_center":
-    0.7081, "peak_spread": 0.3055, "sparsity": {"30": 0.2138, "40": 0.301, "50":
-    0.3846}, "steepness": 4.565, "target": 0.3, "x": 40}, "steepness": 4.0, "target_sparsity":
-    0.3, "world_attempts": 1, "x_percent": 40}'
+  designJson: '{"cell": "ROTATED", "experiment": "FI", "hint": "none", "index": 9,
+    "instance": "FI_S9", "iteration": 5, "iterations": 6, "kind": "elongated", "rule":
+    {"center": [0.5647, 0.566], "elongation": 3.5, "kind": "elongated", "max_reward":
+    4.0, "nonzero": 0.6291, "short_spread": 0.13425, "sparsity": {"30": 0.1408, "40":
+    0.2017, "50": 0.2737}, "target": 0.2, "tilt": 45.0, "x": 40}, "target_sparsity":
+    0.2, "world_attempts": 1, "x_percent": 40}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1

@@ -57,21 +57,15 @@ MonoBehaviour:
       weight: 0
       peak: 0
       width: 0
-    bumps: []
-    products: []
-    factors:
-    - combine: 0
-      shapeFactor:
-        kind: 0
-        center: 0.2398
-        scale: 3.743
-        inverted: 1
-      colorFactor:
-        kind: 0
-        center: 0.2912
-        scale: 3.431
-        inverted: 0
+    bumps:
+    - centerShape: 0.4727
+      centerColor: 0.5972
+      width: 0.25222
+      widthColor: 0.25222
+      angle: 0
       height: 4
+    products: []
+    factors: []
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -160,13 +154,12 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"cell": "PRD-shallow", "experiment": "FI", "hint": "none", "index":
-    10, "instance": "FI_S10", "iteration": 2, "kind": "product", "level": "shallow",
-    "rule": {"inflection": [0.2398, 0.2912], "inverted": {"color": false, "shape":
-    true}, "kind": "product", "max_reward": 4.0, "nonzero": 0.999, "sparsity": {"30":
-    0.2034, "40": 0.2998, "50": 0.4069}, "steepness": [3.743, 3.431], "target": 0.3,
-    "x": 40}, "steepness": 4.0, "target_sparsity": 0.3, "world_attempts": 1, "x_percent":
-    40}'
+  designJson: '{"cell": "MIDDLE", "experiment": "FI", "hint": "none", "index": 10,
+    "instance": "FI_S10", "iteration": 2, "iterations": 3, "kind": "middle", "rule":
+    {"center": [0.4727, 0.5972], "elongation": 1.0, "kind": "middle", "max_reward":
+    4.0, "nonzero": 0.8232, "short_spread": 0.25222, "sparsity": {"30": 0.1408, "40":
+    0.2016, "50": 0.2733}, "target": 0.2, "tilt": 0.0, "x": 40}, "target_sparsity":
+    0.2, "world_attempts": 1, "x_percent": 40}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1

@@ -58,11 +58,11 @@ MonoBehaviour:
       peak: 0
       width: 0
     bumps:
-    - centerShape: 0.6543
-      centerColor: 0.4893
-      width: 0.62099
-      widthColor: 0.17742
-      angle: -24.09
+    - centerShape: 0.4163
+      centerColor: 0.5796
+      width: 0.46972
+      widthColor: 0.13421
+      angle: -45
       height: 4
     products: []
     factors: []
@@ -154,12 +154,12 @@ MonoBehaviour:
   layout: 
   assignment: 
   rewardStage: 
-  designJson: '{"cell": "BMP", "experiment": "FI", "hint": "none", "index": 8, "instance":
-    "FI_S8", "iteration": 3, "kind": "bump", "level": "", "rule": {"center": [0.6543,
-    0.4893], "elongation": 3.5, "kind": "bump", "max_reward": 4.0, "nonzero": 0.77,
-    "short_spread": 0.17742, "sparsity": {"30": 0.2248, "40": 0.302, "50": 0.3872},
-    "target": 0.3, "tilt": -24.09, "x": 40}, "steepness": null, "target_sparsity":
-    0.3, "world_attempts": 1, "x_percent": 40}'
+  designJson: '{"cell": "ROTATED", "experiment": "FI", "hint": "none", "index": 8,
+    "instance": "FI_S8", "iteration": 2, "iterations": 6, "kind": "elongated", "rule":
+    {"center": [0.4163, 0.5796], "elongation": 3.5, "kind": "elongated", "max_reward":
+    4.0, "nonzero": 0.6273, "short_spread": 0.13421, "sparsity": {"30": 0.1407, "40":
+    0.2015, "50": 0.2735}, "target": 0.2, "tilt": -45.0, "x": 40}, "target_sparsity":
+    0.2, "world_attempts": 1, "x_percent": 40}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1
