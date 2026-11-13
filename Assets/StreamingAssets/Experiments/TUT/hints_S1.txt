@@ -8,3 +8,13 @@
 #
 # Triggers (Assets/Scripts/UI/TutorialHints.cs): harvest_available, harvest_paused, fruit n, bout n, exhausted n, patch_switch n, ranking_start n, ranking_end n,
 # seconds n (foraging seconds into the session), idle n (seconds standing still without harvesting). {points} is the fruit or harvest that fired it.
+
+@bout 1
+Harvesting
+
+Harvesting this bush earned {points} points.
+You can **stop** harvesting a bush anytime, or **return** to a bush later
+
+Try harvesting a different bush
+
+Press [Enter] to continue
