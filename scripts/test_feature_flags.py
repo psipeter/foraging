@@ -86,7 +86,7 @@ def test_feature_gap_counts_only_the_channels_that_vary_and_pay():
 
 
 def test_a_random_reward_interlude_has_no_correct_side_and_constant_flat_features():
-    sidecar, params, _ = generate_interlude("TUT_I1", pool_samples=60_000, random_bush_value_range=(1.0, 3.0), shape_varies=False, color_varies=True)
+    sidecar, params, _ = generate_interlude("FIX_I0", pool_samples=60_000, random_bush_value_range=(1.0, 3.0), shape_varies=False, color_varies=True)
     assert all(t["correct"] == "either" for t in sidecar["trials"])
     assert set(sidecar["shape"]) == {0.5} and len(set(sidecar["color"])) > 1
 

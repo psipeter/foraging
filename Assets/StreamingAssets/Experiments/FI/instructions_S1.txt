@@ -1,7 +1,0 @@
-Find the best fruit
-
-This is a new area.
-There is one best **combination** of bush shape and fruit color.
-Collect as many points as you can.
-
-Press [Enter] to begin

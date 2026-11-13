@@ -1,8 +1,0 @@
-Find the best fruit
-
-This is a new area.
-**Both** the **bush shape** and the **fruit color** matter.
-There are **two kinds** of valuable bush, and one is better than the other.
-Collect as many points as you can.
-
-Press [Enter] to begin

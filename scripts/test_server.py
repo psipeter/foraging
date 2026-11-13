@@ -569,8 +569,8 @@ def test_the_migration_turns_existing_runs_into_participants_of_a_legacy_experim
 
 def test_the_load_test_script_runs_clean_against_the_local_server(env):
     import hashlib
-    world = ROOT / "Assets" / "StreamingAssets" / "Experiments" / "TUT" / "TUT_S1_seed200.world"
-    env["db"].execute("insert into public.worlds (sha256, name) values (%s, 'TUT_S1_seed200.world') on conflict do nothing", (hashlib.sha256(world.read_bytes()).hexdigest(),))
+    world = ROOT / "Assets" / "StreamingAssets" / "Experiments" / "FOR" / "FOR_S1_seed7101.world"
+    env["db"].execute("insert into public.worlds (sha256, name) values (%s, 'FOR_S1_seed7101.world') on conflict do nothing", (hashlib.sha256(world.read_bytes()).hexdigest(),))
     server_admin.register_release(env["db"], "load-test", {"TEST": 1})
     done = subprocess.run([sys.executable, str(ROOT / "scripts" / "load_test.py"), "--url", env["url"], "--participants", "3", "--seconds", "6",
                            "--ramp", "1"], capture_output=True, text=True, env={**os.environ, "FORAGING_API_KEY": APIKEY}, timeout=120)

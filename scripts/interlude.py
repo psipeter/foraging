@@ -30,7 +30,7 @@ Designed trial types (contrast, graded, extrapolation) were removed (2026-11-09)
 `per_feature` (FN): `interludeFeatureTrials` trials for each visible feature that pays enough to show, a pair that differs in that feature only, with the true reward gap spread in noise units (`rewardStd`).
 
 Usage:
-    python scripts/interlude.py TUT_I1 CF_I1 CF_I2 CF_I3 CF_I4 CF_I5 CF_I6 CF_I7
+    python scripts/interlude.py FIX_I0
 """
 
 import argparse

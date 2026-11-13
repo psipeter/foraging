@@ -9,9 +9,8 @@ from design.common import instruction_page
 
 CODE = "FOR"
 TITLE = "Foraging in Tiles"
-REQUIRES = ("TUT",)
-TEMPLATE_SESSION = "FN_S1"          # copied only when an instance has no asset yet (the lighting, camera and so on come from it)
-TEMPLATE_INTERLUDE = "FN_I1"
+REQUIRES = ()
+TEMPLATE_SESSION = "FOR_S1"         # copied only when an instance has no asset yet (the lighting, camera and so on come from it)
 
 REWARD_STD = 0.6
 REWARD_SCALE = 4.0                  # the best bush pays about this much when the weights sum to one, as in every built experiment

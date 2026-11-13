@@ -14,7 +14,7 @@ from world import bush_value, check_values, generate_world, load_session, sessio
 
 # The generator tests are about the generator, not about a shipped session: each case is a stated configuration (synthetic.py, or an archived old session from
 # legacy_sessions.py) generated on the tutorial's Interlude asset, the one that stays whatever experiments come and go.
-ASSET = "TUT_I1"
+ASSET = "FIX_I0"
 BOTH_VARY = {"shape_varies": True, "color_varies": True}
 
 

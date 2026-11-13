@@ -298,7 +298,7 @@ def generate_break_pool(name, set_size=None, set_count=None, arc_span=None, bush
     return _build_sets(params, set_size, set_count, arc_span, distance, gap, moisture, None, pool_size, steps, {"format": "ranking-break", "session": params.session_name}), params
 
 
-STAGE_TEMPLATE = "TUT_S1"       # the asset the stage's parameters start from (only the terrain matters: the bush table of the stage file is never played)
+STAGE_TEMPLATE = "FIX_S0"       # the asset the stage's parameters start from (only the terrain matters: the bush table of the stage file is never played)
 
 
 def stage_path(seed=1):

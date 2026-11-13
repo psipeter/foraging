@@ -15,7 +15,7 @@ from test_agents import ColorCritic, session_agent
 from agents import UtilityActor
 from world import bush_value, session_features
 
-ASSET = "TUT_I1"
+ASSET = "FIX_I0"
 TWO_FEATURES = synthetic.overrides(visible=("shape", "color"), weights={"shape": 0.5, "color": 0.5})
 COLOR_ONLY = synthetic.overrides(visible=("shape", "color"), weights={"color": 1.0})
 SHAPE_ONLY_VISIBLE = synthetic.overrides(visible=("shape",), weights={"shape": 1.0})
@@ -211,7 +211,7 @@ def test_a_practice_interlude_has_no_correct_order():
 def pool(**options):
     key = ("pool", tuple(sorted(options.items())))
     if key not in _CACHE:
-        _CACHE[key] = ranking.generate_break_pool("TUT_S1", **TWO_FEATURES, **options)[0]
+        _CACHE[key] = ranking.generate_break_pool("FIX_S0", **TWO_FEATURES, **options)[0]
     return _CACHE[key]
 
 
@@ -239,8 +239,8 @@ def test_a_break_pool_set_is_a_value_ladder_with_every_gap_at_least_the_tie_gap(
 
 
 def test_a_break_pool_is_deterministic():
-    a = ranking.generate_break_pool("TUT_S1", **TWO_FEATURES, set_count=3, steps=2000)[0]
-    b = ranking.generate_break_pool("TUT_S1", **TWO_FEATURES, set_count=3, steps=2000)[0]
+    a = ranking.generate_break_pool("FIX_S0", **TWO_FEATURES, set_count=3, steps=2000)[0]
+    b = ranking.generate_break_pool("FIX_S0", **TWO_FEATURES, set_count=3, steps=2000)[0]
     assert a == b
 
 
@@ -248,7 +248,7 @@ def test_a_break_pool_refuses_an_interlude_asset_and_a_paying_moisture():
     with pytest.raises(ValueError):
         ranking.generate_break_pool(ASSET, **TWO_FEATURES)
     with pytest.raises(ValueError):
-        ranking.generate_break_pool("TUT_S1", **synthetic.overrides(visible=("shape", "color", "moisture"), weights={"moisture": 1.0}))
+        ranking.generate_break_pool("FIX_S0", **synthetic.overrides(visible=("shape", "color", "moisture"), weights={"moisture": 1.0}))
 
 
 def test_the_interlude_file_still_starts_with_its_identity_keys():
@@ -257,5 +257,5 @@ def test_the_interlude_file_still_starts_with_its_identity_keys():
 
 
 def test_the_pool_file_sits_beside_the_world_file(tmp_path):
-    path, sidecar = ranking.export_pool("TUT_S1", out_dir=tmp_path)
-    assert path.name == f"TUT_S1_seed{sidecar['seed']}.ranking.json" and path.parent == tmp_path
+    path, sidecar = ranking.export_pool("FIX_S0", out_dir=tmp_path)
+    assert path.name == f"FIX_S0_seed{sidecar['seed']}.ranking.json" and path.parent == tmp_path

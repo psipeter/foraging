@@ -14,8 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ExperimentConfig
   code: FOR
   title: Foraging in Tiles
-  requires:
-  - TUT
+  requires: []
   sessions:
   - {fileID: 11400000, guid: de467562384245e6eb912362b71cef60, type: 2}
   countsTowardTotal: 1

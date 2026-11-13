@@ -95,7 +95,7 @@ def interlude_of(label, **extra):
     key = (label, tuple(sorted(extra.items())))
     if key not in _INTERLUDES:
         base = {"interlude_trial_count": 12, "interlude_repeat_count": 0, "reward_std": 0.6, **extra}
-        _INTERLUDES[key] = generate_interlude("TUT_I1", mode="hybrid", **{**synthetic.overrides(**CONFIGS[label]), **base})[0]
+        _INTERLUDES[key] = generate_interlude("FIX_I0", mode="hybrid", **{**synthetic.overrides(**CONFIGS[label]), **base})[0]
     return _INTERLUDES[key]
 
 

@@ -1,14 +1,14 @@
 """Sessions built from a stated configuration, for tests that ask whether what a design intends is what the generators produce.
 
 A test names the configuration (which features are visible, what each pays and in which direction, the noise) and gets the `load_session` overrides
-or the session itself, built on a template asset (`TUT_S1`, the one session of a built experiment that does not go away) with every other field made
+or the session itself, built on a template asset (`FIX_S0`, the frozen copy of the tutorial) with every other field made
 neutral: no random per-bush value, independent attributes, continuous terrain. Nothing here is a particular shipped session, so a test written with it
 keeps working when sessions are added, changed or removed.
 """
 
 from world import FEATURES, load_session
 
-TEMPLATE = "TUT_S1"
+TEMPLATE = "FIX_S0"
 REWARD_SCALE = 4.0        # the best bush pays about this much when the weights sum to one, as in every built experiment
 
 

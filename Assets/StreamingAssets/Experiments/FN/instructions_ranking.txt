@@ -1,5 +1,0 @@
-Ranking phase
-
-Harvest the bushes in order from most to least points, based on what you learned in the last part.
-
-Press [Enter] to begin

@@ -38,7 +38,7 @@ def experiment_sessions(code):
     return tuple(sorted(found, key=lambda name: int(name.rsplit("_S", 1)[1])))
 
 
-SESSIONS = experiment_sessions("FN")      # the default experiment; the Tutorial's TUT_S1 is left out
+SESSIONS = experiment_sessions("FOR")
 
 
 def _footer(h, run_ids):

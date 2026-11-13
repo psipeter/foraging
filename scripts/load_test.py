@@ -27,7 +27,7 @@ from server_client import Client, ServerError, event_rows
 FPS = 90
 CHUNK_SECONDS = 5
 GRACE = 4.0
-WORLD = Path(__file__).resolve().parent.parent / "Assets" / "StreamingAssets" / "Experiments" / "TUT" / "TUT_S1_seed200.world"
+WORLD = Path(__file__).resolve().parent.parent / "Assets" / "StreamingAssets" / "Experiments" / "FOR" / "FOR_S1_seed7101.world"
 
 lock = threading.Lock()
 timings = {}          # endpoint -> [ms]

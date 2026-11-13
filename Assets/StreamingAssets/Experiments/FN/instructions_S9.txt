@@ -1,7 +1,0 @@
-Find the best fruit
-
-This is a new area.
-**Either** the **fruit color** or the **elevation** determines how many points a fruit gives.
-Collect as many points as you can.
-
-Press [Enter] to begin

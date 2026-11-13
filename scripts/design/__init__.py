@@ -5,8 +5,8 @@ A design module defines
     CODE, TITLE            the experiment's key (the asset prefix) and the name the menu shows
     REQUIRES               codes a participant must have finished first (default none)
     COUNTS_TOWARD_TOTAL    whether its points join the menu's total (default True)
-    TEMPLATE_SESSION       an existing session asset (e.g. "TUT_S1") copied when an instance has no asset yet
-    TEMPLATE_INTERLUDE     ... and the same for an Interlude asset ("TUT_I1")
+    TEMPLATE_SESSION       an existing session asset (e.g. "FOR_S1") copied when an instance has no asset yet
+    TEMPLATE_INTERLUDE     ... and the same for an Interlude asset ("FOR_I1")
     instances() -> list of Instance, in play order
     texts() -> {file name: text} instruction texts, written to Assets/StreamingAssets/Experiments/<code>/ (optional)
 

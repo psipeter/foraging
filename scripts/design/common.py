@@ -1,7 +1,4 @@
-"""Pieces the table-driven designs share (RW, FI): the seeded play order, the search for a world seed whose world passes a check, and the instruction page.
-
-FN predates these and keeps its own (its cells and order are built differently); it may adopt them later.
-"""
+"""Pieces the table-driven designs share: the seeded play order, the search for a world seed whose world passes a check, and the instruction page."""
 
 import numpy as np
 

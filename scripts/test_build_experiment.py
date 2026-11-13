@@ -13,7 +13,7 @@ def fake_design(**extra):
                  {"interludeTrialCount": 10}, {"cell": "A", "hint": True}),
         Instance("ZZ_S2", {"worldSeed": 8}, {"sessionDuration": 90}, None, {"cell": "B"}),
     ]
-    return SimpleNamespace(CODE="ZZ", TITLE="Test", TEMPLATE_SESSION="TUT_S1", TEMPLATE_INTERLUDE="TUT_I1", instances=lambda: instances, **extra)
+    return SimpleNamespace(CODE="ZZ", TITLE="Test", TEMPLATE_SESSION="FOR_S1", TEMPLATE_INTERLUDE="FOR_I1", instances=lambda: instances, **extra)
 
 
 def by_name(spec):
@@ -24,7 +24,7 @@ def test_a_spec_lists_each_session_followed_by_its_interlude_in_play_order():
     spec = build_spec(fake_design())
     assert [s["name"] for s in spec["sessions"]] == ["ZZ_S1", "ZZ_I1", "ZZ_S2"]      # S2 has no Interlude
     assert spec["code"] == "ZZ" and spec["title"] == "Test" and spec["requires"] == [] and spec["countsTowardTotal"] and not spec["removeStale"]
-    assert spec["sessions"][0]["template"].endswith("TUT/TUT_S1.asset") and spec["sessions"][1]["template"].endswith("TUT/TUT_I1.asset")
+    assert spec["sessions"][0]["template"].endswith("FOR/FOR_S1.asset") and spec["sessions"][1]["template"].endswith("FOR/FOR_I1.asset")
 
 
 def test_world_fields_go_to_both_assets_and_session_only_fields_to_the_session():
@@ -49,8 +49,8 @@ def test_array_sizes_come_before_their_items_and_values_are_text():
 
 
 def test_remove_stale_and_experiment_options_pass_through():
-    spec = build_spec(fake_design(REQUIRES=("TUT",), COUNTS_TOWARD_TOTAL=False), remove_stale=True)
-    assert spec["removeStale"] and spec["requires"] == ["TUT"] and not spec["countsTowardTotal"]
+    spec = build_spec(fake_design(REQUIRES=("FOR",), COUNTS_TOWARD_TOTAL=False), remove_stale=True)
+    assert spec["removeStale"] and spec["requires"] == ["FOR"] and not spec["countsTowardTotal"]
 
 
 def test_a_design_module_must_declare_the_code_it_is_named_for(tmp_path, monkeypatch):

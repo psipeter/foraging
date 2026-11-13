@@ -286,7 +286,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 405d309d6eb8e36adb0ca11b7a71aaca, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
-  defaultExperiment: {fileID: 11400000, guid: 74a95d2b9d56ad3be8839286b89c35bd, type: 2}
+  defaultExperiment: {fileID: 11400000, guid: 78b575ccacca46ed2962fd4858591a41, type: 2}
   sunController: {fileID: 419207779}
   harvestManager: {fileID: 528505460}
   terrainManager: {fileID: 1847944418}
@@ -300,9 +300,6 @@ MonoBehaviour:
   ambientAudio: {fileID: 1968310339}
   instructionsPanel: {fileID: 269841567}
   interludeManager: {fileID: 2081684507}
-  quickPracticeSeconds: 20
-  quickSessionSeconds: 20
-  quickInterludeTrials: 3
 --- !u!4 &205307911
 Transform:
   m_ObjectHideFlags: 0
