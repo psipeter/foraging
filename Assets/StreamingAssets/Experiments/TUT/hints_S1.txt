@@ -7,7 +7,8 @@
 #     Press [Enter] to continue
 #
 # Triggers (Assets/Scripts/UI/TutorialHints.cs): harvest_available, harvest_paused, fruit n, bout n, exhausted n, patch_switch n, ranking_start n, ranking_end n,
-# seconds n (foraging seconds into the session), idle n (seconds standing still without harvesting). {points} is the fruit or harvest that fired it.
+# seconds n (foraging seconds into the session), idle n (seconds standing still without harvesting), after <trigger>:<n> <seconds> (that many foraging seconds after that hint was shown).
+# {points} is the fruit or harvest that fired it.
 
 @bout 1
 Harvesting
@@ -36,5 +37,15 @@ Ranking
 You will sometimes be asked to rank imaginary bushes based on what you learned
 Harvest these bushes from most to least valuable
 You will earn hidden points for correct rankings
+
+Press [Enter] to continue
+
+@after ranking_start:1 30
+Scoring
+
+You have a limited **time** in each session
+Your goal is to collect as many points as you can
+**Payment** is based on total points earned
+Try to learn and harvest efficiently
 
 Press [Enter] to continue

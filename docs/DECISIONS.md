@@ -2253,3 +2253,5 @@ A session's points are the harvest points and the points its ranking sets paid, 
 
 **Addendum (PI, 2026-11-14): the tutorial pays on both features.** The colour-only reward is replaced by shape 1/4 and colour 3/4 (`TUTORIAL_REWARD` in `design/TUT.py`; FOR_S1 is 1/2 and 1/2), because the second hint tells participants that a bush's "**shape** and/or **color**" determine its points, which would have been false for a colour-only world. The mix still differs from FOR's so the practice does not teach FOR's rule exactly. The world and ranking pool were regenerated.
 
+**Addendum (PI, 2026-11-14): relative hint trigger.** `@after <trigger>:<n> <seconds>` fires that many foraging seconds (the session clock, which a ranking break holds) after the named hint was shown; the tutorial's Scoring hint is `@after ranking_start:1 30`, so it comes 30 seconds of foraging after the first ranking note. It never fires if the hint it follows is never shown (a participant who never leaves a patch).
+

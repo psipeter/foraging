@@ -22,7 +22,9 @@ using UnityEngine.InputSystem;
 //   ranking_start       the nth ranking break, as it starts
 //   ranking_end         the nth ranking break, as it ends
 //   seconds             this many foraging seconds into the session (n = seconds)
-//   idle                after this many seconds standing still without harvesting (n = seconds; fires again for each block of the same trigger with a larger n)
+//   idle                after this many seconds standing still without harvesting (n = seconds)
+//   after               `@after <trigger>:<n> <seconds>`: that many foraging seconds (the session clock, which a ranking break holds) after the hint with that id was shown,
+//                       for example `@after ranking_start:1 30`; never fires if that hint is never shown
 // Foraging triggers are ignored while a ranking break is running (the ranking bushes pay nothing and show no outcome). Each shown and dismissed hint is logged
 // (`hint_shown`, `hint_dismissed`: id, trigger, n). A resumed session starts its hints again.
 public class TutorialHints : MonoBehaviour
@@ -35,8 +37,11 @@ public class TutorialHints : MonoBehaviour
         public int n = 1;
         public string text;
         public bool shown;
+        public string afterId;           // for an `after` hint: the id of the hint it follows
+        public float afterSeconds;
+        public float shownAt = -1f;       // foraging seconds into the session when it was shown
 
-        public string Id => $"{trigger}:{n}";
+        public string Id => trigger == "after" ? $"after:{afterId}:{afterSeconds:0}" : $"{trigger}:{n}";
     }
 
     private readonly List<Hint> _hints = new List<Hint>();
@@ -108,7 +113,12 @@ public class TutorialHints : MonoBehaviour
                 Close();
                 string[] parts = line.Substring(1).Trim().Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
                 block = new Hint { trigger = parts.Length > 0 ? parts[0].ToLowerInvariant() : "" };
-                if (parts.Length > 1 && int.TryParse(parts[1], out int n))
+                if (block.trigger == "after" && parts.Length > 2)
+                {
+                    block.afterId = parts[1].Contains(":") ? parts[1] : parts[1] + ":1";
+                    float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out block.afterSeconds);
+                }
+                else if (parts.Length > 1 && int.TryParse(parts[1], out int n))
                 {
                     block.n = Mathf.Max(1, n);
                 }
@@ -132,7 +142,7 @@ public class TutorialHints : MonoBehaviour
 
     private static readonly string[] Triggers =
     {
-        "harvest_available", "harvest_paused", "fruit", "bout", "exhausted", "patch_switch", "ranking_start", "ranking_end", "seconds", "idle",
+        "harvest_available", "harvest_paused", "fruit", "bout", "exhausted", "patch_switch", "ranking_start", "ranking_end", "seconds", "idle", "after",
     };
 
     private void OnEnable()
@@ -270,6 +280,10 @@ public class TutorialHints : MonoBehaviour
                 {
                     Queue(hint);
                 }
+                else if (!hint.shown && hint.trigger == "after" && FollowedHintShownAt(hint.afterId) is float at && elapsed - at >= hint.afterSeconds)
+                {
+                    Queue(hint);
+                }
             }
         }
 
@@ -299,6 +313,20 @@ public class TutorialHints : MonoBehaviour
         }
     }
 
+    // When (foraging seconds) the hint with this id was shown, or null if it has not been.
+    private float? FollowedHintShownAt(string id)
+    {
+        foreach (Hint hint in _hints)
+        {
+            if (hint.Id == id && hint.shownAt >= 0f)
+            {
+                return hint.shownAt;
+            }
+        }
+
+        return null;
+    }
+
     private bool HarvestHeld()
     {
         return _player != null && _player.HarvestHeld;
@@ -307,6 +335,7 @@ public class TutorialHints : MonoBehaviour
     private void Show(Hint hint)
     {
         _current = hint;
+        hint.shownAt = _sun != null ? _config.SessionDuration - _sun.SessionTimeRemaining : 0f;
         string[] lines = hint.text.Trim().Split('\n');
         string title = System.Text.RegularExpressions.Regex.Replace(lines[0], "<[^>]+>", "").Trim().Replace(" // ", "\n");
         int last = lines.Length - 1;
