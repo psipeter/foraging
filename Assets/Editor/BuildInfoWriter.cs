@@ -71,7 +71,7 @@ public class BuildInfoWriter : IPreprocessBuildWithReport
         foreach (string file in Directory.GetFiles(folder, "*", SearchOption.AllDirectories))
         {
             string relative = Path.GetRelativePath(folder, file).Replace('\\', '/');
-            // The experiments' own files (worlds, Interlude files, instruction texts) are fetched when the participant chooses an experiment
+            // The experiments' own files (worlds, ranking pools, instruction texts) are fetched when the participant chooses an experiment
             // (StreamingData.Fetch with the files its sessions name), so the list holds only what every participant needs.
             if (!relative.EndsWith(".meta") && relative != "streaming_files.txt" && !relative.StartsWith("Experiments/"))
             {

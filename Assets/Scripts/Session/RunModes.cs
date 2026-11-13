@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 
-// Reduced runs, for development: two independent knobs that shorten what a participant plays so that the whole path (the sessions, the Interludes, the finish
+// Reduced runs, for development: two independent knobs that shorten what a participant plays so that the whole path (the sessions, the finish
 // screen, the menu round trip, the loading bar) can be tested in minutes.
-//   short   0 to 1: every session lasts this fraction of its length (at least MinSessionSeconds) and every Interlude plays this fraction of its trials (at least
-//           MinInterludeTrials). 1 = as designed.
-//   repeats 1 or more: an experiment's sessions that repeat a cell (the design record's `iteration`) are played only up to this iteration, each with its Interlude;
-//           more than any iteration that exists = everything. A session without an iteration (the tutorial) always plays.
+//   short   0 to 1: every session lasts this fraction of its length (at least MinSessionSeconds). 1 = as designed.
+//   repeats 1 or more: an experiment's sessions that repeat a cell (the design record's `iteration`) are played only up to this iteration;
+//           more than any iteration that exists = everything. A session without an iteration always plays.
 // Set in the Editor's Foraging > Experiments window (EditorPrefs, kept between runs), as ?short=0.3&repeats=1 in the address of a browser development build or as
 // -short 0.3 -repeats 1 on a standalone development build. A release build ignores all of it: a link must not be able to shorten a participant's run.
 // A run with fewer sessions than the experiment lists declares its count at run-start (ExpectedSessions), which only a development release may do; the server
@@ -16,7 +15,6 @@ using UnityEngine;
 public static class RunModes
 {
     public const float MinSessionSeconds = 10f;
-    public const int MinInterludeTrials = 3;
 
     public const string ShortKey = "Foraging.Short";
     public const string RepeatsKey = "Foraging.Repeats";
@@ -93,12 +91,6 @@ public static class RunModes
         return factor >= 1f ? session.SessionDuration : Mathf.Max(MinSessionSeconds, session.SessionDuration * factor);
     }
 
-    // The number of an Interlude's trials with the factor applied; 0 = as designed (no cap).
-    public static int InterludeTrials(SessionConfig interlude, float factor)
-    {
-        return factor >= 1f ? 0 : Mathf.Max(MinInterludeTrials, Mathf.RoundToInt(interlude.InterludeTrialCount * factor));
-    }
-
     // The iteration of the cell a session plays (1 when its design record has none).
     private static int Iteration(SessionConfig session)
     {
@@ -117,37 +109,15 @@ public static class RunModes
         }
     }
 
-    // The sessions to play from an experiment's list, in their order: the repeats knob applied (each Interlude goes with its session).
+    // The sessions to play from an experiment's list, in their order: the repeats knob applied.
     public static List<SessionConfig> Apply(IList<SessionConfig> sessions)
     {
         int repeats = Repeats;
-        var listed = new HashSet<string>();
-        foreach (SessionConfig session in sessions)
-        {
-            if (session != null && !session.IsInterlude)
-            {
-                listed.Add(session.name);
-            }
-        }
-
-        var kept = new HashSet<string>();
         var played = new List<SessionConfig>();
         foreach (SessionConfig session in sessions)
         {
-            if (session == null)
+            if (session == null || Iteration(session) <= repeats)
             {
-                played.Add(session);
-            }
-            else if (session.IsInterlude)
-            {
-                if (string.IsNullOrEmpty(session.InterludeFor) || !listed.Contains(session.InterludeFor) || kept.Contains(session.InterludeFor))
-                {
-                    played.Add(session);
-                }
-            }
-            else if (Iteration(session) <= repeats)
-            {
-                kept.Add(session.name);
                 played.Add(session);
             }
         }
@@ -155,7 +125,7 @@ public static class RunModes
         return played;
     }
 
-    // What run-start declares: the number of sessions (sessions and Interludes alike) of a run that has fewer than the experiment lists; null for a full run.
+    // What run-start declares: the number of sessions of a run that has fewer than the experiment lists; null for a full run.
     public static int? ExpectedSessions(IList<SessionConfig> sessions)
     {
         int count = Apply(sessions).Count;

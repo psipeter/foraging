@@ -1,33 +1,5 @@
 using UnityEngine;
 
-// What happens to the bush that was not chosen in an Interlude trial once the player starts harvesting one. The order is part of the
-// logged format (the manifest stores the number): Allow 0, Lock 1, Exhaust 2, Hide 3.
-public enum InterludeSwitchPolicy
-{
-    Allow,      // nothing: the player may switch bushes; the first bush to reach the required fruit count is the choice
-    Lock,       // the other bush stays as it is but can no longer be harvested
-    Exhaust,    // the other bush takes the spent look and can no longer be harvested
-    Hide        // the other bush shrinks away and is hidden
-}
-
-// The kind of Interlude (scripts/ranking.py for Ranking, scripts/interlude.py for Pairs). The order is part of the logged format (the session row stores the number): Pairs 0, Ranking 1.
-public enum InterludeFormat
-{
-    Pairs,      // the forced choice between two bushes, walked to (to be retired once every experiment's Interludes are ranking ones)
-    Ranking     // k bushes in view on an arc at a flat stage, harvested from best to worst without walking
-}
-
-// Which trials scripts/interlude.py generates for an Interlude asset (the game only plays the generated file). The order is part of the
-// logged format (the manifest stores the number): RetiredDesigned 0, Random 1, RewardGap 2, FeatureGap 3, Hybrid 4.
-public enum InterludeMode
-{
-    RetiredDesigned,   // the contrast / graded / extrapolation trials were removed (2026-11-09); the generator refuses it. Kept so the numbers below do not move.
-    Random,     // independent random shape and color for both bushes (a definite better side in every trial)
-    RewardGap,  // one pair per bin of the true reward difference, evenly spread from interludeMinRewardGap to the largest the world offers
-    FeatureGap, // one pair per bin of the perceptual distance (shape, color, moisture) between the bushes, from interludeMinFeatureGap up
-    Hybrid      // both spreads at once: the reward gaps and the feature gaps of the trials are each evenly spread
-}
-
 // How scripts/world.py arranges the bushes' (shape, color) records over the map (scripts/spatial.py). The order is part of the logged format
 // (the session row stores the number): Off 0, Tiles 1, TilesAndSwaps 2.
 public enum SpatialBalance
@@ -63,106 +35,57 @@ public class SessionConfig : ScriptableObject
     [Tooltip("Practice sessions are not part of the analyzed experiment: the end screen says 'Practice complete' and they are not counted in 'Session x/N'.")]
     [SerializeField] private bool isPractice;
 
-    [Header("Interlude")]
-    [Tooltip("An Interlude is a short forced-choice block run after a session, in that session's own world (terrain, mountains, sun) with only two bushes present: the player harvests the one they think pays more. Outcomes are never shown. Its reward function and terrain parameters must match the session in interludeFor, and its worldSeed must equal that session's (scripts/interlude.py checks).")]
-    [SerializeField] private bool isInterlude;
-    [Tooltip("Name of the session asset this Interlude probes (e.g. S1); its world file supplies the terrain.")]
-    [SerializeField] private string interludeFor = "";
-    [Tooltip("Pairs = the forced choice between two bushes (walk to one and harvest it). Ranking = k bushes in view at once at the centre of the flat stage world (stage_seed<N>.world in StreamingAssets), harvested from best to worst: no walking, the harvest range is ignored and the bush the crosshair is on is the one harvested. Read by the game and by scripts/ranking.py (regenerate the Interlude file after changing the other ranking fields).")]
-    [SerializeField] private InterludeFormat interludeFormat = InterludeFormat.Pairs;
-    [Tooltip("Ranking only: bushes per set. Read by scripts/ranking.py.")]
-    [SerializeField] private int interludeSetSize = 5;
-    [Tooltip("Ranking only: sets in the Interlude (chosen together to fill the value range and the feature plane). Read by scripts/ranking.py.")]
-    [SerializeField] private int interludeSetCount = 3;
-    [Tooltip("Ranking only: degrees from the leftmost to the rightmost bush centre (the arc is symmetric about the heading). The outermost centres must stay inside the view of a 4:3 window, so at least half of each bush is on screen without turning: scripts/ranking.py checks. Read by scripts/ranking.py.")]
-    [SerializeField] private float interludeArcSpan = 84f;
-    [Tooltip("Ranking only: distance from the spawn point to the nearest point of each canopy (world units); the same for every bush. Read by scripts/ranking.py.")]
-    [SerializeField] private float interludeRankingDistance = 16f;
-    [Tooltip("Ranking only: moisture of the flat stage (0-1); every bush has it. Read by scripts/ranking.py.")]
-    [SerializeField] private float interludeStageMoisture = 0.5f;
-    [Tooltip("Ranking only: seed of the stage world file the Interlude is played on (stage_seed<N>.world in StreamingAssets, from scripts/ranking.py stage).")]
-    [SerializeField] private int interludeStageSeed = 1;
-    [Tooltip("Ranking only: the halo of the bush being aimed at is a copy of its canopy this many times larger (the main task uses 1.03), so it shows at the stage's distance.")]
-    [SerializeField] private float interludeRimScale = 1.15f;
-    [Tooltip("Ranking only: how many times brighter the rim of the bush being aimed at is than in the main task.")]
-    [SerializeField] private float interludeRimBoost = 3f;
-    [Tooltip("Ranking only: how far above the usual spot the progress ring and the rank number sit, in ring diameters, so they clear the canopy and its halo at the stage's distance.")]
-    [SerializeField] private float interludeMarkerLift = 0.75f;
-    [Tooltip("Ranking only: size of the rank number, as a multiple of the number's size in the main task's units (the digits are about this times 1.2 degrees tall).")]
-    [SerializeField] private float interludeRankScale = 3f;
-    [Tooltip("Ranking only: hidden bonus points per correctly ordered pair (a set of k bushes implies k(k-1)/2 pairs; pairs whose true values differ by less than the file's tie tolerance are not counted), shown only on the final screen. Practice Interludes award none. Provisional: scoring is decided at analysis time.")]
-    [SerializeField] private float interludeBonusPerPair = 2f;
-    [Tooltip("Ranking only: degrees beyond a canopy's edge at which the crosshair still selects it for harvest (0 = the crosshair must be inside the canopy).")]
-    [SerializeField] private float interludeAimTolerance = 1.5f;
-    [Tooltip("Which trials scripts/interlude.py generates: Hybrid (reward gaps and feature gaps both spread evenly, with repeats; the default), RewardGap, FeatureGap or Random (random pairs, always a correct side). Read by the generator, not by the game: regenerate the Interlude file after changing it.")]
-    [SerializeField] private InterludeMode interludeMode = InterludeMode.Hybrid;
-    [Tooltip("Number of choice trials.")]
-    [SerializeField] private int interludeTrialCount = 10;
-    // Set only on the copy GameManager makes for local quick testing (QuickCopy): the Interlude plays only this many of the file's first trials. 0 = all.
-    [HideInInspector] [SerializeField] private int interludeTrialLimit;
-    [Tooltip("Seconds allowed per trial; the trial moves on when it runs out.")]
-    [SerializeField] private float interludeTrialSeconds = 7f;
-    [Tooltip("Fruits that must be harvested from a bush to register it as the choice (times fruitHarvestDuration = harvest time). Equal to fruitCount = the whole bush.")]
-    [SerializeField] private int interludeHarvestFruits = 10;
-    [Tooltip("What happens to the other bush when the player starts harvesting one (commitment: that bush is the choice from then on, and the trial still ends when it has been harvested). Allow = no commitment, the first bush to reach interludeHarvestFruits is the choice.")]
-    [SerializeField] private InterludeSwitchPolicy interludeSwitchPolicy = InterludeSwitchPolicy.Hide;
-    [Tooltip("Hidden bonus points per correct choice, shown only on the final screen. Practice Interludes award none.")]
-    [SerializeField] private float interludeBonusPerCorrect = 5f;
-    [Tooltip("Hold the sun still at solar noon (the Interlude is not a day).")]
+    [Tooltip("Hold the sun still at solar noon.")]
     [SerializeField] private bool freezeSun;
-    [Tooltip("Distance from the spawn point to the nearest point of each bush's canopy (world units). Both bushes are placed so this is equal, whatever their canopy radius (which depends on shape). Placement is searched by scripts/interlude.py: re-run it after changing.")]
-    [SerializeField] private float interludeBushDistance = 22.6f;
-    [Tooltip("Bearing (degrees from the heading) of each canopy's inner edge, on opposite sides, so the heading bisects the pair and turning to either is the same. Keep it large enough that neither canopy can come into harvest range by walking straight ahead (scripts/interlude.py checks).")]
-    [SerializeField] private float interludeBushBearing = 31.5f;
-    [Tooltip("Random-mode Interludes only: the two bushes of every trial stand on ground that differs in elevation by at least this many world units (the valley's elevation is (1 - moisture) * terrainMaxElevation), so the terrain difference is clearly visible; 0 = no minimum. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
-    [SerializeField] private float interludeMinElevationDifference = 0f;
-    [Tooltip("RewardGap / Hybrid Interludes only: the smallest true reward difference (points per fruit) between the two bushes of a trial; the trials are spread evenly from here to the largest difference the world offers. About one standard error of a 10-fruit harvest mean by default. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
-    [SerializeField] private float interludeMinRewardGap = 0.25f;
-    [Tooltip("FeatureGap / Hybrid Interludes only: the smallest perceptual distance between the two bushes of a trial (root mean square of the shape, color and moisture differences, each on its 0-1 scale); the trials are spread evenly from here to the largest the world offers. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
-    [SerializeField] private float interludeMinFeatureGap = 0.1f;
-    [Tooltip("RewardGap / Hybrid Interludes only: the largest true reward difference (points per fruit) between the two bushes of a trial, so the trials are spread evenly from interludeMinRewardGap to here instead of to the largest the world offers; 0 = no ceiling. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
-    [SerializeField] private float interludeMaxRewardGap = 0f;
-    [Tooltip("FeatureGap / Hybrid Interludes only: the largest perceptual distance between the two bushes of a trial (same scale as interludeMinFeatureGap); 0 = no ceiling. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
-    [SerializeField] private float interludeMaxFeatureGap = 0f;
-    [Tooltip("RewardGap / FeatureGap / Hybrid Interludes only: how many of the interludeTrialCount trials are exact repeats of an earlier pair (same place, same bushes, same sides; the file gives the repeat bush entries of its own), a check of how consistent a participant's choices are. 0 = none. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
-    [SerializeField] private int interludeRepeatCount = 0;
-    [Tooltip("RewardGap / FeatureGap / Hybrid Interludes only: per-feature trials for each visible feature (a pair that differs in that feature only, the true reward gap spread in units of rewardStd), taken out of interludeTrialCount. 0 = none. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
-    [SerializeField] private int interludeFeatureTrials = 0;
-    [Tooltip("RewardGap / FeatureGap / Hybrid Interludes only: peak trials for a reward function made of Gaussian peaks (RW), taken out of interludeTrialCount: a pair of bushes from two different peaks' top regions or from a peak and from off every peak, split over the pairs the peaks allow. 0 = none. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
-    [SerializeField] private int interludePeakTrials = 0;
-    [Tooltip("RewardGap / FeatureGap / Hybrid Interludes only: interaction trials for a reward function of sigmoid, Gaussian or tilted-bump terms (FI), taken out of interludeTrialCount: pairs of bushes in classes of the reward (high, middle and low parts, one feature varied, along and across a bump), split by a plan per kind of rule, reward gaps spread within a class, no pair closer than the tie gap. 0 = none. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
-    [SerializeField] private int interludeInteractionTrials = 0;
-    [Tooltip("The fewest trials between a repeated pair and its repeat. Read by scripts/interlude.py: regenerate the Interlude file after changing it.")]
-    [SerializeField] private int interludeRepeatSeparation = 8;
 
-    [Header("Ranking breaks (a ranking set played in place, on the terrain the player stands on, after patch switches; the set file is read from scripts/ranking.py pool)")]
-    [Tooltip("A ranking break is due after this many patch switches (a settled crossing into another tile); 0 = no breaks. The arc, set size, distance, bonus and tie gap are the interlude* fields.")]
-    [SerializeField] private int rankingBreakEvery = 0;
-    [Tooltip("Ranking sets played in one break.")]
-    [SerializeField] private int rankingBreakSets = 1;
+    [Header("Ranking (a set of bushes played in place after patch switches, on the terrain the player stands on; the set file is read from scripts/ranking.py pool)")]
+    [Tooltip("A ranking is due after this many patch switches (a settled crossing into another tile); 0 = no rankings.")]
+    [SerializeField] private int rankingEvery = 0;
+    [Tooltip("Ranking sets played in one ranking.")]
+    [SerializeField] private int rankingSets = 1;
     [Tooltip("Seconds of the countdown of one ranking set (the main clock is frozen meanwhile).")]
-    [SerializeField] private float rankingBreakSeconds = 20f;
-    [Tooltip("The fewest seconds of foraging between the end of one break and a patch switch that counts toward the next (a switch inside this time is ignored).")]
-    [SerializeField] private float rankingBreakCooldown = 10f;
-    [Tooltip("A crossing into another tile counts as a patch switch once the player is this many units past the edge between the tiles (0 = at the edge itself, so the break starts as early as possible and the arc is farthest from the next cluster).")]
-    [SerializeField] private float rankingBreakSettleDepth = 0f;
-    [Tooltip("Sets in the break pool file (used in order, one after another). Read by scripts/ranking.py pool: regenerate the file after changing it.")]
-    [SerializeField] private int rankingBreakPoolSets = 12;
+    [SerializeField] private float rankingSeconds = 20f;
+    [Tooltip("The fewest seconds of foraging between the end of one ranking and a patch switch that counts toward the next (a switch inside this time is ignored).")]
+    [SerializeField] private float rankingCooldown = 10f;
+    [Tooltip("A crossing into another tile counts as a patch switch once the player is this many units past the edge between the tiles (0 = at the edge itself, so the ranking starts as early as possible and the arc is farthest from the next cluster).")]
+    [SerializeField] private float rankingSettleDepth = 0f;
+    [Tooltip("Sets in the pool file (used in order, one after another). Read by scripts/ranking.py pool: regenerate the file after changing it.")]
+    [SerializeField] private int rankingPoolSets = 12;
     [Tooltip("Seconds the ranking bushes take to grow and to shrink away again.")]
-    [SerializeField] private float rankingBreakFadeSeconds = 0.4f;
-    [Tooltip("Seconds the world's bushes take to fade to grayscale when a break starts, and back to colour when it ends.")]
-    [SerializeField] private float rankingBreakGraySeconds = 0.25f;
-    [Tooltip("Seconds per fruit while harvesting a ranking bush (a whole bush takes this times fruitCount): quick, like the ranking Interlude's fruitHarvestDuration.")]
-    [SerializeField] private float rankingBreakFruitSeconds = 0.05f;
-    [Tooltip("No break starts when this many seconds or fewer of the session are left.")]
-    [SerializeField] private float rankingBreakLastSeconds = 10f;
-    [Tooltip("A patch switch counts toward a break only once the participant has harvested (taken a fruit from) at least this many different bushes in the session, so no ranking comes before they have seen what a bush pays.")]
-    [SerializeField] private int rankingBreakMinBushes = 1;
-    [Tooltip("The line shown at the top of the screen during a break.")]
-    [SerializeField] private string rankingBreakText = "Rank these bushes: harvest them from most to least points";
+    [SerializeField] private float rankingFadeSeconds = 0.4f;
+    [Tooltip("Seconds the world's bushes take to fade to grayscale when a ranking starts, and back to colour when it ends.")]
+    [SerializeField] private float rankingGraySeconds = 0.25f;
+    [Tooltip("Seconds per fruit while harvesting a ranking bush (a whole bush takes this times fruitCount): quick.")]
+    [SerializeField] private float rankingFruitSeconds = 0.05f;
+    [Tooltip("No ranking starts when this many seconds or fewer of the session are left.")]
+    [SerializeField] private float rankingLastSeconds = 10f;
+    [Tooltip("A patch switch counts toward a ranking only once the participant has harvested (taken a fruit from) at least this many different bushes in the session, so no ranking comes before they have seen what a bush pays.")]
+    [SerializeField] private int rankingMinBushes = 1;
+    [Tooltip("The line shown at the top of the screen during a ranking.")]
+    [SerializeField] private string rankingText = "Rank these bushes: harvest them from most to least points";
+    [Tooltip("Bushes per set. Read by scripts/ranking.py.")]
+    [SerializeField] private int rankingSetSize = 5;
+    [Tooltip("Degrees from the leftmost to the rightmost bush centre (the arc is symmetric about the heading). The outermost centres must stay inside the view of a 4:3 window, so at least half of each bush is on screen without turning: scripts/ranking.py checks. Read by scripts/ranking.py.")]
+    [SerializeField] private float rankingArcSpan = 84f;
+    [Tooltip("Distance from the player to the nearest point of each canopy (world units); the same for every bush. Read by scripts/ranking.py.")]
+    [SerializeField] private float rankingDistance = 16f;
+    [Tooltip("The smallest true reward difference (points per fruit) between two bushes of a set; pairs closer than this are ties and score nothing. Read by scripts/ranking.py.")]
+    [SerializeField] private float rankingTieGap = 0.25f;
+    [Tooltip("The halo of the bush being aimed at is a copy of its canopy this many times larger (the main task uses 1.03), so it shows at the ranking's distance.")]
+    [SerializeField] private float rankingRimScale = 1.15f;
+    [Tooltip("How many times brighter the rim of the bush being aimed at is than in the main task.")]
+    [SerializeField] private float rankingRimBoost = 3f;
+    [Tooltip("How far above the usual spot the progress ring and the rank number sit, in ring diameters, so they clear the canopy and its halo at the ranking's distance.")]
+    [SerializeField] private float rankingMarkerLift = 0.75f;
+    [Tooltip("Size of the rank number, as a multiple of the number's size in the main task's units (the digits are about this times 1.2 degrees tall).")]
+    [SerializeField] private float rankingRankScale = 3f;
+    [Tooltip("Hidden bonus points per correctly ordered pair (a set of k bushes implies k(k-1)/2 pairs; ties are not counted), shown only on the final screen. Practice sessions award none. Provisional: scoring is decided at analysis time.")]
+    [SerializeField] private float rankingBonusPerPair = 2f;
+    [Tooltip("Degrees beyond a canopy's edge at which the crosshair still selects it in a ranking when crosshairRadius is 0 (0 = the crosshair must be inside the canopy).")]
+    [SerializeField] private float rankingAimTolerance = 1.5f;
 
     [Header("Instructions")]
-    [Tooltip("File in StreamingAssets shown before this session. '{session}' and '{total}' are replaced by this session's number and the count of non-practice sessions.")]
+    [Tooltip("File in StreamingAssets shown before this session. '{part}' and '{total}' are replaced by this session's number and the count of sessions.")]
     [SerializeField] private string instructionsFile = "instructions.txt";
     [Tooltip("Optional text kept on screen during the session (empty = none).")]
     [SerializeField] private string controlsReminder = "";
@@ -208,7 +131,7 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float highlightFadeAngle = 45f;
     [Tooltip("Harvest is available, and keeps progressing, only while the bush is within this bearing (degrees). Looking further away pauses the harvest.")]
     [SerializeField] private float harvestMaxAngle = 35f;
-    [Tooltip("The crosshair's hidden hit circle (degrees of view angle around the centre of the screen): a bush can be harvested only while this circle touches its canopy (the canopy's real shape, above and below as well as to the sides), together with the harvest range. Used by main sessions and rankings alike. 0 = the old rule (a 35 degree cone of yaw, harvestMaxAngle; the ranking's interludeAimTolerance). Read by scripts/replay.py from the log.")]
+    [Tooltip("The crosshair's hidden hit circle (degrees of view angle around the centre of the screen): a bush can be harvested only while this circle touches its canopy (the canopy's real shape, above and below as well as to the sides), together with the harvest range. Used by main sessions and rankings alike. 0 = the old rule (a 35 degree cone of yaw, harvestMaxAngle; rankingAimTolerance). Read by scripts/replay.py from the log.")]
     [SerializeField] private float crosshairRadius = 7f;
     [Tooltip("A harvest in progress (main sessions) keeps going while the circle, grown by this factor, still touches the bush, so hand tremor at the edge does not pause it. Starting a harvest uses the plain circle.")]
     [SerializeField] private float crosshairReleaseScale = 2f;
@@ -309,21 +232,21 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private string rewardStage = "";
     [Tooltip("What the experiment's design says about this instance (scripts/design/<code>.py): the instance id, its cell parameters and its hint arm, as JSON. Written by the experiment builder, logged with the rest of this config, read by no game code.")]
     [SerializeField] private string designJson = "";
-    [Tooltip("False: every bush has the value shapeWhenFixed, so all canopies are identical; give the shape component weight 0. Read by scripts/world.py and scripts/interlude.py: regenerate the world and the Interlude after changing it.")]
+    [Tooltip("False: every bush has the value shapeWhenFixed, so all canopies are identical; give the shape component weight 0. Read by scripts/world.py: regenerate the world after changing it.")]
     [SerializeField] private bool shapeVaries = true;
-    [Tooltip("The shape value of every bush when shapeVaries is off (0..1; the canopy size then follows the shape axis). Read by scripts/world.py and scripts/interlude.py.")]
+    [Tooltip("The shape value of every bush when shapeVaries is off (0..1; the canopy size then follows the shape axis). Read by scripts/world.py.")]
     [SerializeField] private float shapeWhenFixed = 0.5f;
-    [Tooltip("False: every bush has the value colorWhenFixed, so all fruit have one color; give the color component weight 0. Read by scripts/world.py and scripts/interlude.py: regenerate the world and the Interlude after changing it.")]
+    [Tooltip("False: every bush has the value colorWhenFixed, so all fruit have one color; give the color component weight 0. Read by scripts/world.py: regenerate the world after changing it.")]
     [SerializeField] private bool colorVaries = true;
-    [Tooltip("The color value of every bush when colorVaries is off (0..1). Read by scripts/world.py and scripts/interlude.py.")]
+    [Tooltip("The color value of every bush when colorVaries is off (0..1). Read by scripts/world.py.")]
     [SerializeField] private float colorWhenFixed = 0.5f;
     [Tooltip("False: the valley has one moisture value (moistureWhenFixed), so the ground is one colour and flat (elevation follows moisture), and moisture cannot pay. Read by scripts/world.py: regenerate the world after changing it.")]
     [SerializeField] private bool moistureVaries = true;
     [Tooltip("The moisture of the whole valley when moistureVaries is off (0..1).")]
     [SerializeField] private float moistureWhenFixed = 0.5f;
-    [Tooltip("Declare moisture a feature of the task even though it pays nothing: scripts/interlude.py then counts it in the feature gap. Moisture that pays is always counted; with this off and a zero weight it is decoration. Read by scripts/interlude.py.")]
+    [Tooltip("Declare moisture a feature of the task even though it pays nothing: it counts as a feature of the task. Moisture that pays is always counted; with this off and a zero weight it is decoration.")]
     [SerializeField] private bool moistureIsFeature = false;
-    [Tooltip("A per-bush point value drawn uniformly from (min, max) and added to the reward function, independent of every attribute: the practice session's random reward. (0, 0) = off. Pre-drawn in the world file by scripts/world.py; an Interlude of such a session has no correct side.")]
+    [Tooltip("A per-bush point value drawn uniformly from (min, max) and added to the reward function, independent of every attribute: the practice session's random reward. (0, 0) = off. Pre-drawn in the world file by scripts/world.py.")]
     [SerializeField] private Vector2 randomBushValueRange = Vector2.zero;
     [Tooltip("Harvest becomes available when the player is within gap(R) = base + perRadius * canopyRadius of the canopy EDGE (horizontal distance). ~7 shows the whole bush at the 5.1 eye height / 75 deg vertical FOV (the near foot is visible from 5.1 / tan(37.5 deg) = 6.6).")]
     [SerializeField] private float harvestRangeGapBase = 7f;
@@ -495,76 +418,40 @@ public class SessionConfig : ScriptableObject
     public float SessionDuration => sessionDuration;
     public int WorldSeed => worldSeed;
     public bool IsPractice => isPractice;
-    public bool IsInterlude => isInterlude;
-    public string InterludeFor => interludeFor;
-
-    // The experiment this session belongs to: the part of its asset name before the first underscore (CF_S1 -> "CF"). Its generated files are
-    // in StreamingAssets/Experiments/<code>/.
     public string ExperimentCode => name.Split('_')[0];
-    public InterludeMode InterludeMode => interludeMode;
-    public InterludeFormat InterludeFormat => interludeFormat;
-    public bool IsRanking => isInterlude && interludeFormat == InterludeFormat.Ranking;
-    public int InterludeSetSize => interludeSetSize;
-    public int InterludeSetCount => interludeSetCount;
-    public float InterludeArcSpan => interludeArcSpan;
-    public float InterludeRankingDistance => interludeRankingDistance;
-    public float InterludeStageMoisture => interludeStageMoisture;
-    public int InterludeStageSeed => interludeStageSeed;
-    public float InterludeAimTolerance => interludeAimTolerance;
-    public float InterludeBonusPerPair => interludeBonusPerPair;
-    public float InterludeRimScale => interludeRimScale;
-    public float InterludeRimBoost => interludeRimBoost;
-    public float InterludeMarkerLift => interludeMarkerLift;
-    public float InterludeRankScale => interludeRankScale;
-    public int InterludeTrialCount => interludeTrialCount;
-    public int InterludeFeatureTrials => interludeFeatureTrials;
-    public int InterludePeakTrials => interludePeakTrials;
-    public int InterludeInteractionTrials => interludeInteractionTrials;
-    public int InterludeTrialLimit => interludeTrialLimit;
+    public bool FreezeSun => freezeSun;
+    public int RankingEvery => rankingEvery;
+    public int RankingSets => rankingSets;
+    public float RankingSeconds => rankingSeconds;
+    public float RankingCooldown => rankingCooldown;
+    public float RankingSettleDepth => rankingSettleDepth;
+    public int RankingPoolSets => rankingPoolSets;
+    public float RankingFadeSeconds => rankingFadeSeconds;
+    public float RankingGraySeconds => rankingGraySeconds;
+    public float RankingFruitSeconds => rankingFruitSeconds;
+    public float RankingLastSeconds => rankingLastSeconds;
+    public int RankingMinBushes => rankingMinBushes;
+    public string RankingText => rankingText;
+    public int RankingSetSize => rankingSetSize;
+    public float RankingArcSpan => rankingArcSpan;
+    public float RankingDistance => rankingDistance;
+    public float RankingTieGap => rankingTieGap;
+    public float RankingRimScale => rankingRimScale;
+    public float RankingRimBoost => rankingRimBoost;
+    public float RankingMarkerLift => rankingMarkerLift;
+    public float RankingRankScale => rankingRankScale;
+    public float RankingBonusPerPair => rankingBonusPerPair;
+    public float RankingAimTolerance => rankingAimTolerance;
 
-    // A copy for a reduced run (RunModes.Short; never the asset itself, which would be saved into the file): a session lasts `factor` of its length, an Interlude
-    // plays that fraction of its trials. The copy keeps the asset's name, which names the world and Interlude files.
+    // A copy for a reduced run (RunModes.Short; never the asset itself, which would be saved into the file): a session lasts `factor` of its length.
+    // The copy keeps the asset's name, which names the world file.
     public SessionConfig ScaledCopy(float factor)
     {
         SessionConfig copy = Instantiate(this);
         copy.name = name;
-        if (!isInterlude)
-        {
-            copy.sessionDuration = RunModes.SessionSeconds(this, factor);
-        }
-        else
-        {
-            copy.interludeTrialLimit = RunModes.InterludeTrials(this, factor);
-        }
-
+        copy.sessionDuration = RunModes.SessionSeconds(this, factor);
         return copy;
     }
-    public float InterludeTrialSeconds => interludeTrialSeconds;
-    public int InterludeHarvestFruits => interludeHarvestFruits;
-    public InterludeSwitchPolicy InterludeSwitchPolicy => interludeSwitchPolicy;
-    public float InterludeBonusPerCorrect => interludeBonusPerCorrect;
-    public bool FreezeSun => freezeSun;
-    public float InterludeBushDistance => interludeBushDistance;
-    public float InterludeBushBearing => interludeBushBearing;
-    public float InterludeMinElevationDifference => interludeMinElevationDifference;
-    public float InterludeMinRewardGap => interludeMinRewardGap;
-    public float InterludeMinFeatureGap => interludeMinFeatureGap;
-    public float InterludeMaxRewardGap => interludeMaxRewardGap;
-    public float InterludeMaxFeatureGap => interludeMaxFeatureGap;
-    public int InterludeRepeatCount => interludeRepeatCount;
-    public int InterludeRepeatSeparation => interludeRepeatSeparation;
-    public int RankingBreakEvery => rankingBreakEvery;
-    public int RankingBreakSets => rankingBreakSets;
-    public float RankingBreakSeconds => rankingBreakSeconds;
-    public float RankingBreakCooldown => rankingBreakCooldown;
-    public float RankingBreakSettleDepth => rankingBreakSettleDepth;
-    public int RankingBreakPoolSets => rankingBreakPoolSets;
-    public float RankingBreakFadeSeconds => rankingBreakFadeSeconds;
-    public float RankingBreakGraySeconds => rankingBreakGraySeconds;
-    public float RankingBreakFruitSeconds => rankingBreakFruitSeconds;
-    public float RankingBreakLastSeconds => rankingBreakLastSeconds;
-    public int RankingBreakMinBushes => rankingBreakMinBushes;
-    public string RankingBreakText => rankingBreakText;
     public string InstructionsFile => instructionsFile;
     public string ControlsReminder => controlsReminder;
     public string FirstHarvestMessage => firstHarvestMessage;

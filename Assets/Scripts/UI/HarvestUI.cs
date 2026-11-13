@@ -31,7 +31,6 @@ public class HarvestUI : MonoBehaviour
     [SerializeField] private float scoreCountUpSeconds = 0.2f;
     [SerializeField] private float scoreFlashSeconds = 0.4f;
 
-    private string _progressText;
     private Coroutine _punch;
     private float _scoreTarget;
     private float _scoreShown;
@@ -93,25 +92,15 @@ public class HarvestUI : MonoBehaviour
         }
     }
 
-    // The Interlude shows trial progress ("3/10") in the score slot instead of a score.
-    public void SetProgressText(string text)
-    {
-        _progressText = text;
-        if (totalScoreText != null)
-        {
-            ShowScore();
-        }
-    }
-
     private void ShowScore()
     {
-        totalScoreText.text = _progressText ?? $"{Mathf.RoundToInt(_scoreShown)}";
+        totalScoreText.text = $"{Mathf.RoundToInt(_scoreShown)}";
     }
 
     private void HandleFruitCollected(float amount, Vector3 worldPos)
     {
-        // An Interlude never shows outcomes: no +X popup.
-        if (canvas == null || floatingTextPrefab == null || (sessionConfig != null && sessionConfig.IsInterlude) || RankingBreak.Active)
+        // A ranking never shows outcomes: no +X popup.
+        if (canvas == null || floatingTextPrefab == null || RankingBreak.Active)
         {
             return;
         }
@@ -185,9 +174,9 @@ public class HarvestUI : MonoBehaviour
 
     private void HandleScoreChanged(float runningTotal)
     {
-        if ((sessionConfig != null && sessionConfig.IsInterlude) || RankingBreak.Active)
+        if (RankingBreak.Active)
         {
-            return;     // the score slot shows trial progress instead (and a ranking break moves no score)
+            return;     // a ranking moves no score
         }
 
         _scoreTarget = runningTotal;

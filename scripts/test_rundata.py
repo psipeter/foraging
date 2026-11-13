@@ -24,15 +24,20 @@ def traj(n=50):
 EVENTS = [
     {"t": 0.0, "real": 0.0, "type": "session_start", "payload": {"x": 1.5, "yaw": 20.0}},
     {"t": 0.8, "real": 0.9, "type": "fruit", "tree_id": 3, "k": 0, "reward": 2.0, "running_total": 2.0},
-    {"t": 1.0, "real": 1.1, "type": "trial_start", "payload": {"order": 0, "left": 1, "right": 2}},
+    {"t": 1.0, "real": 1.1, "type": "rank_set_start", "payload": {"set": 0}},
 ]
 SESSION = {"name": "S1", "config": CFG, "world_file": "S1_seed1.world", "world_sha256": "0" * 64, "completed": True, "final_score": 2.0}
 
 
+BUSHES = [{"id": 5, "slot": 0, "shape": 0.25, "color": 0.5, "moisture": 0.5, "value": 1.5, "rank": 2, "start_time": 3.0, "finish_time": 5.5, "fruits": 10},
+          {"id": 6, "slot": 1, "shape": 0.75, "color": 0.125, "moisture": 0.5, "value": 2.5, "rank": 1, "start_time": 1.0, "finish_time": 2.5, "fruits": 10},
+          {"id": 7, "slot": 2, "shape": 0.5, "color": 0.9, "moisture": 0.5, "value": 0.5, "rank": None, "start_time": None, "finish_time": None, "fruits": 0}]
+
+
 def test_write_then_read_round_trips_every_stream(tmp_path):
-    trials = [{"presented_order": 0, "trial_index": 4, "type": "t", "varied_feature": "shape", "stage_x": 1.5, "choice": "left",
-               "choice_correct": 1, "timed_out": 0, "response_time": 2.25, "first_harvest_time": None, "left_fruits": 10, "paused_seconds": 3.5}]
-    folder = rundata.write_session(tmp_path, RUN, 3, SESSION, traj(), EVENTS, plan=[4, 2, 0], trials=trials)
+    sets = [{"seq": 0, "set_index": 4, "pool_index": 7, "start_x": 1.5, "start_z": 2.5, "timed_out": 0, "response_time": 2.25,
+             "first_harvest_time": None, "bonus": 1.0, "paused_seconds": 3.5, "set_size": 3, "correct_pairs": 2, "total_pairs": 3, "bushes": BUSHES}]
+    folder = rundata.write_session(tmp_path, RUN, 3, SESSION, traj(), EVENTS, sets=sets)
     assert folder == tmp_path / RUN / "03"
     got = rundata.read_session(folder)
     assert got["session"]["name"] == "S1" and got["session"]["run_id"] == RUN and got["session"]["session_index"] == 3
@@ -41,14 +46,16 @@ def test_write_then_read_round_trips_every_stream(tmp_path):
     assert [x["seq"] for x in e] == [0, 1, 2] and e[0]["payload"] == {"x": 1.5, "yaw": 20.0} and e[0]["tree_id"] == -1
     assert e[1]["tree_id"] == 3 and e[1]["k"] == 0 and e[1]["reward"] == 2.0 and e[1]["payload"] == {}
     assert math.isnan(e[0]["reward"]) and math.isnan(e[2]["running_total"])
-    assert got["plan"] == [4, 2, 0]
-    assert got["trials"][0]["trial_index"] == 4 and got["trials"][0]["first_harvest_time"] is None and got["trials"][0]["seq"] == 0
-    assert got["trials"][0]["choice"] == "left" and got["trials"][0]["left_fruits"] == 10 and got["trials"][0]["paused_seconds"] == 3.5
+    s0 = got["sets"][0]
+    assert s0["set_index"] == 4 and s0["pool_index"] == 7 and s0["first_harvest_time"] is None and s0["seq"] == 0
+    assert s0["bushes"] == BUSHES and s0["set_size"] == 3 and s0["correct_pairs"] == 2 and s0["total_pairs"] == 3
+    assert s0["bonus"] == 1.0 and s0["paused_seconds"] == 3.5 and s0["start_x"] == 1.5
+    assert (folder / "ranking_sets.csv").exists()
 
 
-def test_a_session_without_interlude_files_has_none(tmp_path):
+def test_a_session_without_ranking_sets_has_none(tmp_path):
     got = rundata.read_session(rundata.write_session(tmp_path, RUN, 0, SESSION, traj(), EVENTS))
-    assert got["plan"] is None and got["trials"] is None
+    assert got["sets"] is None
 
 
 def test_an_empty_session_reads_back(tmp_path):
@@ -162,26 +169,3 @@ def test_a_release_counts_the_sessions_of_the_experiment_asset_at_its_commit(tmp
     assert server_admin.sessions_in_build("HEAD", "XX", repo=tmp_path) == 3            # the requires entry and the later fields are not sessions
     with pytest.raises(ValueError):
         server_admin.sessions_in_build("HEAD", "NOPE", repo=tmp_path)
-
-
-BUSHES = [{"id": 5, "slot": 0, "shape": 0.25, "color": 0.5, "moisture": 0.5, "value": 1.5, "rank": 2, "start_time": 3.0, "finish_time": 5.5, "fruits": 10},
-          {"id": 6, "slot": 1, "shape": 0.75, "color": 0.125, "moisture": 0.5, "value": 2.5, "rank": 1, "start_time": 1.0, "finish_time": 2.5, "fruits": 10},
-          {"id": 7, "slot": 2, "shape": 0.5, "color": 0.9, "moisture": 0.5, "value": 0.5, "rank": None, "start_time": None, "finish_time": None, "fruits": 0}]
-
-
-def test_a_ranking_set_is_one_row_with_its_bushes_as_json(tmp_path):
-    sets = [{"presented_order": 0, "trial_index": 1, "type": "ranking", "stage_x": 0.0, "stage_z": 0.0, "timed_out": 1, "response_time": 30.0,
-             "bonus": 4.0, "set_size": 3, "correct_pairs": 2, "total_pairs": 3, "bushes": BUSHES}]
-    got = rundata.read_session(rundata.write_session(tmp_path, RUN, 1, SESSION, traj(), EVENTS, trials=sets))["trials"][0]
-    assert got["bushes"] == BUSHES and got["set_size"] == 3 and got["correct_pairs"] == 2 and got["total_pairs"] == 3
-    assert got["left_id"] is None and got["choice"] == "" and got["bonus"] == 4.0
-
-
-def test_a_trials_file_written_before_the_ranking_columns_still_reads(tmp_path):
-    folder = rundata.write_session(tmp_path, RUN, 1, SESSION, traj(), EVENTS, trials=[{"presented_order": 0, "trial_index": 4, "choice": "left"}])
-    path = folder / "interlude_trials.csv"
-    old = rundata.INTERLUDE_COLUMNS[:-4]
-    lines = path.read_text().splitlines()
-    path.write_text("\n".join(",".join(line.split(",")[:len(old)]) for line in lines) + "\n")       # the old header and rows: no ranking columns
-    got = rundata.read_session(folder)["trials"][0]
-    assert got["trial_index"] == 4 and got["choice"] == "left" and got["bushes"] is None and got["set_size"] is None

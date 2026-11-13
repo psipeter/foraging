@@ -182,7 +182,7 @@ public class PlayerController : MonoBehaviour
         return terrainManager.SampleElevation(pos.x, pos.z) + groundOffset;
     }
 
-    // Moves the player to (x, z) standing on the terrain (the Interlude teleports between trial stages).
+    // Moves the player to (x, z) standing on the terrain (a resumed session puts the player back where they were).
     public void TeleportTo(float x, float z)
     {
         float y = terrainManager != null ? terrainManager.SampleElevation(x, z) + groundOffset : transform.position.y;
@@ -208,7 +208,7 @@ public class PlayerController : MonoBehaviour
             _rawMove = context.ReadValue<Vector2>();
         }
 
-        moveInput = _stationary ? Vector2.zero : _rawMove;        // a stationary player (the ranking Interlude) has no walking input at all, so no walking key is read or logged as held
+        moveInput = _stationary ? Vector2.zero : _rawMove;        // a stationary player (a ranking) has no walking input at all, so no walking key is read or logged as held
     }
 
     // Space: started = pressed, canceled = released (Invoke Unity Events fires all phases).
@@ -233,7 +233,7 @@ public class PlayerController : MonoBehaviour
         return pressed;
     }
 
-    // The ranking Interlude: the player stands where they are for the whole block (looking stays free). Unlike the harvest lock, a bout ending does not release it.
+    // A ranking: the player stands where they are for the whole block (looking stays free). Unlike the harvest lock, a bout ending does not release it.
     public void SetStationary(bool stationary)
     {
         _stationary = stationary;

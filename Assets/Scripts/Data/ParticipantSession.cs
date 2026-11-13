@@ -12,7 +12,7 @@ public class ExperimentStanding
     public int n_sessions;
     public string status;            // none, in_progress, finished, terminated
     public int sessions_done;
-    public float points;             // the score of its completed sessions plus its Interlude bonuses, practice left out
+    public float points;             // the score of its completed sessions plus its ranking bonuses, practice left out
     public bool unlocked;            // the prerequisites are finished (the server enforces it when the run starts)
 }
 
@@ -104,7 +104,7 @@ public static class ParticipantSession
     }
 
     // Starts (or continues) the participant's run of an experiment.
-    // `expectedSessions`: the number of sessions (sessions and Interludes alike) of a reduced run (RunModes.ExpectedSessions); null for a full one.
+    // `expectedSessions`: the number of sessions of a reduced run (RunModes.ExpectedSessions); null for a full one.
     public static IEnumerator StartRun(OnlineSettings settings, string experiment, int? expectedSessions, Action<RunReply> done, Action<string> failed)
     {
         string body = expectedSessions.HasValue

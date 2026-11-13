@@ -41,7 +41,7 @@ public class InstructionsPanel : MonoBehaviour
     // One-time message after the first harvest that actually collected fruit (e.g. in practice).
     private void HandleHarvestBoutEnded(HarvestBout bout)
     {
-        if (_firstHarvestShown || _sessionEnded || bout.endedBySession || sessionConfig == null || sessionConfig.IsInterlude || RankingBreak.Active ||
+        if (_firstHarvestShown || _sessionEnded || bout.endedBySession || sessionConfig == null || RankingBreak.Active ||
             string.IsNullOrEmpty(sessionConfig.FirstHarvestMessage) ||
             bout.fruitRewards.Count == 0 || _screen == null)
         {
@@ -68,7 +68,7 @@ public class InstructionsPanel : MonoBehaviour
     }
 
     // The file's first line is the central instruction (the title), the last "Press [Key] to ..." line the prompt, the rest the text; the label above is
-    // "Session n of m · Part A" (B for the Interlude), and [Key] in the text becomes a key chip. " // " in the title is a line break.
+    // "Session n of m", and [Key] in the text becomes a key chip. " // " in the title is a line break.
     private void ShowText(string text, bool notice = false)
     {
         string[] lines = text.Replace("\r", "").Trim().Split('\n');
@@ -107,8 +107,7 @@ public class InstructionsPanel : MonoBehaviour
 
         return text
             .Replace("{part}", GameManager.SessionNumber.ToString())
-            .Replace("{total}", GameManager.SessionCount.ToString())
-            .Replace("{trial_seconds}", (sessionConfig != null ? sessionConfig.InterludeTrialSeconds : 0f).ToString("0"));
+            .Replace("{total}", GameManager.SessionCount.ToString());
     }
 
     // The controls hint kept on screen for the whole session (sessions that set one in their config), on a pill at the bottom: "[Mouse] look  [W / S] walk ...".

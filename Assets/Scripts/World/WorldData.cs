@@ -104,78 +104,16 @@ public class WorldData
     private string[] _checkNames;
     private float[] _checkValues;
 
-    // The world file supplying the terrain, relative to StreamingAssets (read through StreamingData). An Interlude uses the
-    // terrain of the session it probes.
+    // The world file of a session, relative to StreamingAssets (read through StreamingData).
     public static string PathFor(SessionConfig config)
     {
-        if (config.IsRanking)
-        {
-            return StagePath(config.InterludeStageSeed);
-        }
-
-        string owner = config.IsInterlude ? config.InterludeFor : config.name;
-        return $"Experiments/{config.ExperimentCode}/{owner}_seed{config.WorldSeed}.world";
+        return $"Experiments/{config.ExperimentCode}/{config.name}_seed{config.WorldSeed}.world";
     }
 
-    // The flat stage every ranking Interlude is played on (scripts/ranking.py stage): one world file at the root of StreamingAssets, so a browser
-    // build fetches it with the common files.
-    public static string StagePath(int seed)
-    {
-        return $"stage_seed{seed}.world";
-    }
-
-    // An Interlude's bush table and trial list (written by scripts/interlude.py), relative to StreamingAssets.
-    public static string InterludePathFor(SessionConfig config)
-    {
-        return $"Experiments/{config.ExperimentCode}/{config.name}_seed{config.WorldSeed}.interlude.json";
-    }
-
-    // A session's ranking-break pool (written by scripts/ranking.py pool), relative to StreamingAssets.
+    // A session's ranking pool (written by scripts/ranking.py pool), relative to StreamingAssets.
     public static string RankingPoolPathFor(SessionConfig config)
     {
         return $"Experiments/{config.ExperimentCode}/{config.name}_seed{config.WorldSeed}.ranking.json";
-    }
-
-    [Serializable]
-    private class InterludeBushes
-    {
-        public int fruitCount;
-        public float[] treePos;
-        public float[] shape;
-        public float[] color;
-        public float[] moisture;
-        public float[] canopyRadius;
-        public float[] value;
-        public int[] fruitRewards;
-    }
-
-    // Replaces this world's bushes with an Interlude's (the terrain stays the session's own).
-    private bool ApplyInterludeBushes(SessionConfig config)
-    {
-        string path = InterludePathFor(config);
-        if (!StreamingData.Exists(path))
-        {
-            Debug.LogError($"Interlude file not found: {path}. Generate it with: ./venv/bin/python scripts/interlude.py {config.name}");
-            return false;
-        }
-
-        InterludeBushes b = JsonUtility.FromJson<InterludeBushes>(StreamingData.ReadText(path));
-        if (b == null || b.treePos == null || b.treePos.Length == 0)
-        {
-            Debug.LogError($"Interlude file has no bush table: {path}");
-            return false;
-        }
-
-        TreeCount = b.treePos.Length / 2;
-        FruitCount = b.fruitCount;
-        TreePos = b.treePos;
-        Shape = b.shape;
-        Color = b.color;
-        Moisture = b.moisture;
-        CanopyRadius = b.canopyRadius;
-        Value = b.value;
-        FruitRewards = b.fruitRewards;
-        return true;
     }
 
     // Returns null (after logging why) when the file is missing or unreadable.
@@ -275,11 +213,6 @@ public class WorldData
                 || world.SnowGrid == null || world.RampGrid == null)
             {
                 Debug.LogError($"World file {path} is missing a terrain grid.");
-                return null;
-            }
-
-            if (config.IsInterlude && !world.ApplyInterludeBushes(config))
-            {
                 return null;
             }
 

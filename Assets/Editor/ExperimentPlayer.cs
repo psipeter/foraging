@@ -34,10 +34,10 @@ public class ExperimentPlayer : EditorWindow
         }
 
         EditorGUILayout.LabelField("Play an experiment", EditorStyles.boldLabel);
-        _startPart = Mathf.Max(1, EditorGUILayout.IntField(new GUIContent("Start at part", "1 = the first part. A part is a session or an Interlude, in play order (\"Part 3 of 18\" on the screens). Applies to Play below, not to Play with the menu."), _startPart));
+        _startPart = Mathf.Max(1, EditorGUILayout.IntField(new GUIContent("Start at part", "1 = the first part. A part is a session (\"Session 3 of 4\" on the screens). Applies to Play below, not to Play with the menu."), _startPart));
         EditorGUI.BeginChangeCheck();
-        _short = EditorGUILayout.Slider(new GUIContent("Short", "0 to 1: every session lasts this fraction of its length (at least 10 s) and every Interlude plays this fraction of its trials (at least 3). 1 = as designed. Kept between runs; applies to Play and to Play with the menu."), _short, 0f, 1f);
-        _repeats = Mathf.Max(1, EditorGUILayout.IntField(new GUIContent("Repeats", "1 or more: a cell's sessions are played up to this iteration (1 = one of each, with their Interludes); more than any iteration that exists = all. Kept between runs; applies to Play and to Play with the menu."), _repeats));
+        _short = EditorGUILayout.Slider(new GUIContent("Short", "0 to 1: every session lasts this fraction of its length (at least 10 s). 1 = as designed. Kept between runs; applies to Play and to Play with the menu."), _short, 0f, 1f);
+        _repeats = Mathf.Max(1, EditorGUILayout.IntField(new GUIContent("Repeats", "1 or more: a cell's sessions are played up to this iteration (1 = one of each); more than any iteration that exists = all. Kept between runs; applies to Play and to Play with the menu."), _repeats));
         if (EditorGUI.EndChangeCheck())
         {
             EditorPrefs.SetFloat(RunModes.ShortKey, _short);

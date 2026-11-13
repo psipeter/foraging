@@ -6,22 +6,20 @@
 `download` reads the database through the Supabase CLI (`supabase db query --remote`, read-only; the CLI must be logged in to the
 project) and writes, under `ForagingData/` (gitignored; it holds participant names):
 
-    <run_id>/<session:02d>/...   the raw local layout of rundata.py (events, decoded trajectory, Interlude trials, world files in
+    <run_id>/<session:02d>/...   the raw local layout of rundata.py (events, decoded trajectory, ranking sets, world files in
                                  _worlds/), so replay.py and visibility.py read a participant like a local log; run.json also
                                  carries the participant ID, the name they signed with and their feedback text
-    humans.sqlite                tidy tables, one row per participant / session / event / Interlude trial:
+    humans.sqlite                tidy tables, one row per participant / session / event / ranking set:
         participants      one row per run (a participant has one run per experiment): run_id, participant (the Prolific ID typed on the
                           login screen), signature (the name typed on the consent screen), status, started_at, finished_at, minutes,
                           build_commit, n_sessions, n_completed, feedback, on_server, ..., and at the end participant_id (the server's
                           identifier of the person, the same in every run of theirs) and experiment (the experiment's code: CF, TUT, ...)
-        sessions          run_id, session_index, name, block (the session's own name, which its Interlude shares: CF_S1 for CF_S1 and CF_I1;
-                          the practice names before experiments, P, S1, ..., work the old way), kind ('session' or 'interlude'),
-                          practice, started_at, ended_at, wall_s, duration_s (configured length; sessions only),
-                          final_score (as logged), n_fruits, n_trials, n_correct, bonus (Interludes), frames, mean_frame_ms, max_frame_ms,
+        sessions          run_id, session_index, name, practice, started_at, ended_at, wall_s, duration_s (configured length),
+                          final_score (as logged), n_fruits, n_sets, n_correct_pairs, n_total_pairs, bonus (the ranking sets'), frames, mean_frame_ms, max_frame_ms,
                           config and display (JSON text), and at the end experiment (the run's)
         events            the `events` table (payload as JSON text); the view `fruits` is its type = 'fruit' rows
-        interlude_trials  the `interlude_trials` table, as in rundata.INTERLUDE_COLUMNS, plus run_id and session_index (a ranking Interlude's set is one row: `bushes`
-                          is JSON text; `Humans.picks()` and the `interlude_picks` view give one row per bush)
+        ranking_sets      the `ranking_sets` table, as in rundata.RANKING_COLUMNS, plus run_id and session_index (a set is one row: `bushes`
+                          is JSON text; `Humans.picks()` and the `ranking_picks` view give one row per bush)
 
 A run is downloaded again only when it is new or its status, last upload or session count changed (`--all` downloads every run again).
 A run the server no longer has (the participant tables were cleared) stays here with `on_server` = 0.
@@ -67,29 +65,28 @@ TABLES = (   # name, select, order: one query per page, restricted to the runs b
     ("sessions", "select * from public.sessions", "run_id, session_index"),
     ("events", "select * from public.events", "run_id, session_index, seq"),
     ("trajectory", "select run_id, session_index, first_seq, encode(data, 'base64') as data from public.trajectory", "run_id, session_index, first_seq"),
-    ("plans", "select * from public.interlude_plan", "run_id, session_index"),
-    ("trials", "select * from public.interlude_trials", "run_id, session_index, seq"),
+    ("sets", "select * from public.ranking_sets", "run_id, session_index, seq"),
 )
 
-_TRIAL_TYPES = {c: "text" if c in rundata._TEXT or c in rundata._JSON else "integer" if c in rundata._INTEGER else "real" for c in rundata.INTERLUDE_COLUMNS}
+_SET_TYPES = {c: "text" if c in rundata._TEXT or c in rundata._JSON else "integer" if c in rundata._INTEGER else "real" for c in rundata.RANKING_COLUMNS}
 SCHEMA = f"""
 create table if not exists participants (run_id text primary key, participant text, signature text, consent_version text, status text,
     started_at text, finished_at text, minutes real, build_commit text, build_dirty integer, platform text, unity_version text,
     n_sessions integer, n_completed integer, feedback text, last_event text, on_server integer, participant_id text, experiment text);
-create table if not exists sessions (run_id text, session_index integer, name text, block text, kind text, practice integer,
+create table if not exists sessions (run_id text, session_index integer, name text, practice integer,
     world_seed integer, world_file text, started_at text, ended_at text, wall_s real, duration_s real, completed integer, final_score real,
-    n_fruits integer, n_trials integer, n_correct integer, bonus real, frames integer, mean_frame_ms real, max_frame_ms real,
+    n_fruits integer, n_sets integer, n_correct_pairs integer, n_total_pairs integer, bonus real, frames integer, mean_frame_ms real, max_frame_ms real,
     config text, display text, experiment text, primary key (run_id, session_index));
 create table if not exists events (run_id text, session_index integer, seq integer, t real, real real, type text, tree_id integer, k integer,
     reward real, running_total real, payload text, received_at text, primary key (run_id, session_index, seq));
-create table if not exists interlude_trials (run_id text, session_index integer,
-    {", ".join(f"{c} {t}" for c, t in _TRIAL_TYPES.items())}, primary key (run_id, session_index, seq));
-create view if not exists interlude_picks as
-    select t.run_id, t.session_index, t.seq, t.presented_order, t.trial_index, t.set_size, json_extract(b.value, '$.id') as bush_id,
+create table if not exists ranking_sets (run_id text, session_index integer,
+    {", ".join(f"{c} {t}" for c, t in _SET_TYPES.items())}, primary key (run_id, session_index, seq));
+create view if not exists ranking_picks as
+    select t.run_id, t.session_index, t.seq, t.set_index, t.pool_index, t.set_size, json_extract(b.value, '$.id') as bush_id,
            json_extract(b.value, '$.slot') as slot, json_extract(b.value, '$.shape') as shape, json_extract(b.value, '$.color') as color,
            json_extract(b.value, '$.moisture') as moisture, json_extract(b.value, '$.value') as value, json_extract(b.value, '$.rank') as rank,
            json_extract(b.value, '$.start_time') as start_time, json_extract(b.value, '$.finish_time') as finish_time, json_extract(b.value, '$.fruits') as fruits
-    from interlude_trials t, json_each(t.bushes) b where t.bushes is not null;
+    from ranking_sets t, json_each(t.bushes) b where t.bushes is not null;
 create view if not exists fruits as
     select run_id, session_index, seq, t, tree_id, k, reward, running_total from events where type = 'fruit';
 """
@@ -122,47 +119,37 @@ def _stamp(run):
     return (run["status"], _utc(run["finished_at"]), _utc(run["last_event"]), run["n_sessions"])
 
 
-def _block(s, config):
-    """The name a session and its Interlude share: the session's own (an Interlude names it in its config, `interludeFor`; the names before experiments end in _Interlude)."""
-    if not s["is_interlude"]:
-        return s["name"]
-    return config.get("interludeFor") or s["name"].removesuffix("_Interlude")
-
-
-def _session_row(s, events, trials, experiment=None):
+def _session_row(s, events, sets, experiment=None):
     config, frames = s["config"] or {}, s["frame_stats"] or {}
     started, ended = _utc(s["started_at"]), _utc(s["ended_at"])
-    interlude = bool(s["is_interlude"])
-    return (s["run_id"], s["session_index"], s["name"], _block(s, config), "interlude" if interlude else "session",
-            int(s["is_practice"]), s["world_seed"], s["world_file"], started, ended,
+    return (s["run_id"], s["session_index"], s["name"], int(s["is_practice"]), s["world_seed"], s["world_file"], started, ended,
             (pd.Timestamp(ended) - pd.Timestamp(started)).total_seconds() if started and ended else None,
-            None if interlude else config.get("sessionDuration"), int(s["completed"]), s["final_score"],
+            config.get("sessionDuration"), int(s["completed"]), s["final_score"],
             sum(e["type"] == "fruit" for e in events),
-            len(trials) if interlude else None, sum(t["choice_correct"] == 1 for t in trials) if interlude else None,
-            sum(t["bonus"] or 0 for t in trials) if interlude else None,
+            len(sets), sum(t["correct_pairs"] or 0 for t in sets), sum(t["total_pairs"] or 0 for t in sets), sum(t["bonus"] or 0 for t in sets),
             frames.get("count"), frames.get("meanMs"), frames.get("maxMs"),
             json.dumps(config, sort_keys=True), json.dumps(s["display"], sort_keys=True), experiment)
 
 
-def _store_run(con, out, run, sessions, events, chunks, plans, trials):
+def _store_run(con, out, run, sessions, events, chunks, sets):
     """Write one run as the local layout and replace its rows in the tidy tables."""
     run_id = run["run_id"]
     meta = {k: (_utc(v) if k in ("started_at", "finished_at") else v) for k, v in run.items() if k not in ("run_id", "last_event", "n_sessions")}
     rundata.write_run(out, run_id, meta)
-    for table in ("sessions", "events", "interlude_trials"):
+    for table in ("sessions", "events", "ranking_sets"):
         con.execute(f"delete from {table} where run_id = ?", (run_id,))
-    columns = rundata.INTERLUDE_COLUMNS
+    columns = rundata.RANKING_COLUMNS
     for s in sessions:
         index = s["session_index"]
         ev = events[index]
         server_admin.write_session_rows(out, run_id, s, ev, [dict(c, data=base64.b64decode(c["data"])) for c in chunks[index]],
-                                        plans.get(index), trials[index])
-        con.execute("insert into sessions values (" + ",".join("?" * 24) + ")", _session_row(s, ev, trials[index], run.get("experiment")))
+                                        sets[index])
+        con.execute("insert into sessions values (" + ",".join("?" * 23) + ")", _session_row(s, ev, sets[index], run.get("experiment")))
         con.executemany("insert into events values (?,?,?,?,?,?,?,?,?,?,?,?)",
                         [(run_id, index, e["seq"], e["t"], e["real"], e["type"], e["tree_id"], e["k"], e["reward"], e["running_total"],
                           json.dumps(e["payload"], sort_keys=True) if e["payload"] else None, _utc(e["received_at"])) for e in ev])
-        con.executemany(f"insert into interlude_trials values (?,?,{','.join('?' * len(columns))})",
-                        [(run_id, index) + tuple(json.dumps(t[c], separators=(",", ":")) if isinstance(t[c], (list, dict)) else t[c] for c in columns) for t in trials[index]])
+        con.executemany(f"insert into ranking_sets values (?,?,{','.join('?' * len(columns))})",
+                        [(run_id, index) + tuple(json.dumps(t[c], separators=(",", ":")) if isinstance(t[c], (list, dict)) else t[c] for c in columns) for t in sets[index]])
     server_admin.archive_worlds(run["build_commit"], sessions, out)
     minutes = ((pd.Timestamp(_utc(run["finished_at"])) - pd.Timestamp(_utc(run["started_at"]))).total_seconds() / 60) if run["finished_at"] else None
     con.execute("insert or replace into participants values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)",
@@ -177,31 +164,27 @@ def download(out=DATA_DIR, everything=False, log=print):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(out / DB_NAME)
+    if con.execute("select 1 from sqlite_master where name = 'interlude_trials'").fetchone():       # made before the Interlude was removed: download everything again
+        for old in ("view interlude_picks", "table interlude_trials", "table sessions", "table participants"):
+            con.execute(f"drop {old}")
     con.executescript(SCHEMA)
-    have_columns = {r[1] for r in con.execute("pragma table_info(interlude_trials)")}
-    for column, kind in _TRIAL_TYPES.items():                 # a database made before columns were appended to the table
-        if column not in have_columns:
-            con.execute(f"alter table interlude_trials add column {column} {kind}")
     runs = query(RUNS_SQL)
     have = {r[0]: r[1:] for r in con.execute("select run_id, status, finished_at, last_event, n_sessions from participants")}
     todo = [r for r in runs if everything or have.get(r["run_id"]) != _stamp(r) or not (out / r["run_id"]).is_dir()]
     if todo:
         ids = [r["run_id"] for r in todo]
         rows = {name: _fetch(select, order, ids) for name, select, order in TABLES}
-        by_run = {name: defaultdict(lambda: defaultdict(list)) for name in ("events", "trajectory", "trials")}
+        by_run = {name: defaultdict(lambda: defaultdict(list)) for name in ("events", "trajectory", "sets")}
         for name in by_run:
             for row in rows[name]:
                 by_run[name][row["run_id"]][row["session_index"]].append(row)
-        plans = defaultdict(dict)
-        for row in rows["plans"]:
-            plans[row["run_id"]][row["session_index"]] = row
         sessions = defaultdict(list)
         for row in rows["sessions"]:
             sessions[row["run_id"]].append(row)
         for run in todo:
             rid = run["run_id"]
             with con:
-                _store_run(con, out, run, sessions[rid], by_run["events"][rid], by_run["trajectory"][rid], plans[rid], by_run["trials"][rid])
+                _store_run(con, out, run, sessions[rid], by_run["events"][rid], by_run["trajectory"][rid], by_run["sets"][rid])
             log(f"  {rid[:8]}  {run['participant'] or '-':<14} {run['status']:<11} {run['n_sessions']} sessions")
     with con:
         con.execute("update participants set on_server = 0")
@@ -217,17 +200,17 @@ class Humans:
     sessions: pd.DataFrame
     events: pd.DataFrame
     fruits: pd.DataFrame
-    interlude_trials: pd.DataFrame
+    ranking_sets: pd.DataFrame
     root: Path
 
     def picks(self):
-        """The ranking Interlude's long form: one row per bush of each set (run_id, session_index, seq, trial_index, bush_id, slot, shape, color, moisture, value,
+        """The ranking sets' long form: one row per bush of each set (run_id, session_index, seq, set_index, pool_index, bush_id, slot, shape, color, moisture, value,
         rank (None if not finished), start_time, finish_time, fruits), from the `bushes` column of the set rows."""
         rows = []
-        for t in self.interlude_trials[self.interlude_trials["bushes"].notna()].itertuples():
+        for t in self.ranking_sets[self.ranking_sets["bushes"].notna()].itertuples():
             for b in json.loads(t.bushes):
-                rows.append({"run_id": t.run_id, "session_index": t.session_index, "seq": t.seq, "presented_order": t.presented_order,
-                             "trial_index": t.trial_index, "set_size": t.set_size, "bush_id": b["id"], **{k: b.get(k) for k in (
+                rows.append({"run_id": t.run_id, "session_index": t.session_index, "seq": t.seq, "set_index": t.set_index,
+                             "pool_index": t.pool_index, "set_size": t.set_size, "bush_id": b["id"], **{k: b.get(k) for k in (
                                  "slot", "shape", "color", "moisture", "value", "rank", "start_time", "finish_time", "fruits")}})
         return pd.DataFrame(rows)
 
@@ -262,7 +245,7 @@ def load(root=DATA_DIR, exclude=(), status=None):
     sessions = table("sessions")
     for column in ("started_at", "ended_at"):
         sessions[column] = pd.to_datetime(sessions[column], utc=True)
-    out = Humans(people, sessions, table("events"), table("fruits"), table("interlude_trials"), root)
+    out = Humans(people, sessions, table("events"), table("fruits"), table("ranking_sets"), root)
     con.close()
     return out
 

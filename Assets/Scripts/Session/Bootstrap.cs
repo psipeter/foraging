@@ -245,7 +245,7 @@ public class Bootstrap : MonoBehaviour
         Music.Stop();
         if (StreamingData.NeedsPreload)
         {
-            // The experiment's files (its worlds, Interlude files and instruction texts) are fetched now, not with the common ones at the start.
+            // The experiment's files (its worlds, ranking pools and instruction texts) are fetched now, not with the common ones at the start.
             string failure = null;
             _status.Set("Getting ready", experiment.Title, "Loading the worlds for this experiment.", 0f);
             yield return StreamingData.Fetch(experiment.FilesToStart(), p => _status.Set("Getting ready", experiment.Title, "Loading the worlds for this experiment.", p), reason => failure = reason);

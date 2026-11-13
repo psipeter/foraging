@@ -6,7 +6,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 
-// Reads the files in Assets/StreamingAssets (worlds, Interlude files, instruction text, online.json, build_info.json).
+// Reads the files in Assets/StreamingAssets (worlds, ranking pools, instruction text, online.json, build_info.json).
 // On desktop they are plain files. In a browser there is no file system: the Bootstrap scene fetches the common files listed in
 // streaming_files.txt (written by Assets/Editor/BuildInfoWriter before each build: everything outside Experiments/) into memory at the start,
 // then the files of the experiment the participant chooses (all of them, or one session's at a time: ExperimentConfig.DownloadPerSession) before

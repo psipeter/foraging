@@ -8,7 +8,6 @@ public class SessionTimerUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI timerText;
     [SerializeField] private SunController sunController;
     public SessionConfig sessionConfig;
-    public InterludeManager interludeManager;
     // The scene's own end-of-part panel and texts are not used any more (the score screen is built in code, UI/ScoreScreen.cs) and stay hidden.
     [SerializeField] private GameObject sessionEndPanel;
     [SerializeField] private TextMeshProUGUI finalScoreText;
@@ -134,10 +133,7 @@ public class SessionTimerUI : MonoBehaviour
             return;
         }
 
-        // An Interlude shows the trial's countdown (whole seconds, rounded up) instead of the session clock.
-        float remaining = sessionConfig.IsInterlude && interludeManager != null && interludeManager.Active
-            ? Mathf.Ceil(interludeManager.TrialSecondsLeft)
-            : Mathf.Max(0f, sunController.SessionTimeRemaining);
+        float remaining = Mathf.Max(0f, sunController.SessionTimeRemaining);
 
         int minutes = Mathf.FloorToInt(remaining / 60f);
         int seconds = Mathf.FloorToInt(remaining % 60f);
@@ -170,11 +166,8 @@ public class SessionTimerUI : MonoBehaviour
             }
         }
 
-        bool isInterlude = sessionConfig != null && sessionConfig.IsInterlude;
-
-        // An Interlude's points appear only on its end screen, never trial by trial (the practice Interlude shows what it would have paid, and never which
-        // choices were right). The totals are on the experiment's completion screen, after the last of these.
-        float points = isInterlude ? (interludeManager != null ? interludeManager.Points : 0f) : _lastTotalScore + RankingBreak.Points;       // (a ranking break's hidden bonus shows only here)
+        // The ranking sets' hidden bonus appears only here, never set by set. The totals are on the experiment's completion screen, after the last of these.
+        float points = _lastTotalScore + RankingBreak.Points;
         _score = ScoreScreen.Show(GameManager.PartLabel, points, "Press [Enter] to continue", FindFirstObjectByType<CameraController>());
         Music.PlayScore();
     }

@@ -270,10 +270,10 @@ public class DataPipeline : MonoBehaviour
         if (resume != null)
         {
             // Continue the interrupted run: what the scene recorded so far belongs to the wrong session, so drop it and
-            // reload the scene for the session to continue (the logger and InterludeManager restore the state).
+            // reload the scene for the session to continue (the logger restores the state).
             if (!resume.completed)
             {
-                _file?.PrepareResume(resume.session_index, resume.events_next, resume.trajectory_next, resume.trials_next);
+                _file?.PrepareResume(resume.session_index, resume.events_next, resume.trajectory_next, resume.sets_next);
             }
 
             ResumeInfo.Pending = resume;

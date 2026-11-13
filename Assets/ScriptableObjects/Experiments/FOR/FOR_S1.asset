@@ -15,53 +15,29 @@ MonoBehaviour:
   sessionDuration: 180
   worldSeed: 7101
   isPractice: 0
-  isInterlude: 0
-  interludeFor: 
-  interludeFormat: 0
-  interludeSetSize: 5
-  interludeSetCount: 3
-  interludeArcSpan: 84
-  interludeRankingDistance: 16
-  interludeStageMoisture: 0.5
-  interludeStageSeed: 1
-  interludeRimScale: 1.15
-  interludeRimBoost: 3
-  interludeMarkerLift: 0.75
-  interludeRankScale: 3
-  interludeBonusPerPair: 2
-  interludeAimTolerance: 1.5
-  interludeMode: 4
-  interludeTrialCount: 10
-  interludeTrialLimit: 0
-  interludeTrialSeconds: 7
-  interludeHarvestFruits: 10
-  interludeSwitchPolicy: 3
-  interludeBonusPerCorrect: 10
   freezeSun: 0
-  interludeBushDistance: 24.4
-  interludeBushBearing: 31.5
-  interludeMinElevationDifference: 0
-  interludeMinRewardGap: 0.25
-  interludeMinFeatureGap: 0.1
-  interludeMaxRewardGap: 0
-  interludeMaxFeatureGap: 0
-  interludeRepeatCount: 0
-  interludeFeatureTrials: 0
-  interludePeakTrials: 0
-  interludeInteractionTrials: 0
-  interludeRepeatSeparation: 8
-  rankingBreakEvery: 1
-  rankingBreakSets: 1
-  rankingBreakSeconds: 20
-  rankingBreakCooldown: 10
-  rankingBreakSettleDepth: 0
-  rankingBreakPoolSets: 12
-  rankingBreakFadeSeconds: 0.4
-  rankingBreakGraySeconds: 0.25
-  rankingBreakFruitSeconds: 0.05
-  rankingBreakLastSeconds: 10
-  rankingBreakMinBushes: 1
-  rankingBreakText: 'Rank these bushes: harvest them from most to least points'
+  rankingEvery: 1
+  rankingSets: 1
+  rankingSeconds: 20
+  rankingCooldown: 10
+  rankingSettleDepth: 0
+  rankingPoolSets: 12
+  rankingFadeSeconds: 0.4
+  rankingGraySeconds: 0.25
+  rankingFruitSeconds: 0.05
+  rankingLastSeconds: 10
+  rankingMinBushes: 1
+  rankingText: 'Rank these bushes: harvest them from most to least points'
+  rankingSetSize: 5
+  rankingArcSpan: 84
+  rankingDistance: 16
+  rankingTieGap: 0.25
+  rankingRimScale: 1.15
+  rankingRimBoost: 3
+  rankingMarkerLift: 0.75
+  rankingRankScale: 3
+  rankingBonusPerPair: 2
+  rankingAimTolerance: 1.5
   instructionsFile: Experiments/FOR/instructions_S1.txt
   controlsReminder: 
   firstHarvestMessage: 

@@ -11,8 +11,8 @@ fruit counts come from the logged fruit events, and the events logged in the gap
 have no frames to be derived from: `verify` leaves them out.
 
 A foraging session with ranking breaks (RankingBreak: `rank_break_start` / `rank_break_end` events) plays a ranking set in place: the real bushes are
-still there but grey and not harvestable, the set's bushes (not in the world file; their table is the `rank_set` event) stand on an arc, the harvest is aimed (no range, the Interlude's
-tolerance) and quick (`rankingBreakFruitSeconds` a fruit), and presses are discarded from the break's start and each set's end up to the next
+still there but grey and not harvestable, the set's bushes (not in the world file; their table is the `rank_set` event) stand on an arc, the harvest is aimed (no range, the ranking's
+tolerance) and quick (`rankingFruitSeconds` a fruit), and presses are discarded from the break's start and each set's end up to the next
 `rank_go` (or the break's end). `with_ranking_bushes` appends those bushes to the table and `break_windows` gives the windows.
 
 `replay_harvests` mirrors HarvestManager.Update frame for frame (range, bearing cone, press edge, fruit timer with
@@ -110,10 +110,7 @@ def load_session_log(folder):
     archive = folder.resolve().parent.parent / "_worlds"          # <out>/<run>/<session>
     header, grids = read_unity_world(find_world_file(row["world_file"], row["world_sha256"], archive))
     table = header
-    if row.get("interlude_file"):
-        # An Interlude plays a small bush table on its session's terrain.
-        table = json.loads(find_world_file(row["interlude_file"], row["interlude_sha256"], archive).read_text())
-    n, fruits = len(table["canopyRadius"]), int(table["fruitCount"])   # (an Interlude file's "n" counts trials)
+    n, fruits = len(table["canopyRadius"]), int(table["fruitCount"])
     bushes = Bushes(
         pos=np.asarray(table["treePos"], dtype=float).reshape(n, 2),
         canopy_radius=np.asarray(table["canopyRadius"], dtype=float),
@@ -180,12 +177,12 @@ def break_windows(events):
 
 def with_ranking_bushes(log):
     """(bushes, sets, ids): the world's bush table with the bushes of every ranking set appended (the `rank_set` events carry them: tree id, x, z, canopy radius,
-    shape; they pay nothing), `sets` one dict per `rank_set` (t, end = the time of its `trial_end`, slots = their indices in the table) and `ids`, the logged tree id
+    shape; they pay nothing), `sets` one dict per `rank_set` (t, end = the time of its `rank_set_end`, slots = their indices in the table) and `ids`, the logged tree id
     of every row of the table (a pool wrap can give two sets the same ids, so a set's bushes are rows of their own)."""
     b = log.bushes
     n0, n_fruits = len(b.pos), b.fruit_reward.shape[1]
     pos, radius, shape, ids, sets = [b.pos], [b.canopy_radius], [b.shape if b.shape is not None else np.zeros(n0)], [np.arange(n0)], []
-    ends = sorted(e["t"] for e in log.events if e["type"] == "trial_end" and "break" in _payload(e))
+    ends = sorted(e["t"] for e in log.events if e["type"] == "rank_set_end")
     total = n0
     for e in (e for e in log.events if e["type"] == "rank_set"):
         rows = _payload(e)["bushes"]
@@ -205,15 +202,11 @@ def with_ranking_bushes(log):
 def replay_harvests(log):
     """Re-derive the harvest events from the trajectory. Returns a list of event dicts in the logged vocabulary
     (harvest_press, harvest_pause/resume, fruit, harvest_release); a release the trajectory alone does not explain
-    (the Interlude cancelling a bout at a trial's end, or the session ending) is taken from the log and marked
+    (a ranking set's end cancelling a bout, or the session ending) is taken from the log and marked
     `forced`."""
     cfg = log.config
     gap_base, gap_per = cfg["harvestRangeGapBase"], cfg["harvestRangeGapPerRadius"]
     max_angle, per_fruit = cfg["harvestMaxAngle"], cfg["fruitHarvestDuration"]
-    # A ranking Interlude (HarvestManager.SetAimMode): no harvest range, and the crosshair must be within the aim tolerance of the canopy's edge.
-    aim = bool(cfg.get("isInterlude")) and int(cfg.get("interludeFormat", 0)) == 1
-    if aim:
-        max_angle = cfg["interludeAimTolerance"]
     n0 = len(log.bushes.pos)
     b, rank_sets, ids = with_ranking_bushes(log)
     n, n_fruits = len(b.pos), b.fruit_reward.shape[1]
@@ -227,38 +220,26 @@ def replay_harvests(log):
         half_height = 0.5 * canopy_height_of(b.shape, (cfg["shapeRange"]["x"], cfg["shapeRange"]["y"]), (cfg["canopyHeightRange"]["x"], cfg["canopyHeightRange"]["y"]))
         centres = np.stack([b.pos[:, 0], ground, b.pos[:, 1]], axis=-1)
         release_radius = crosshair * max(float(cfg.get("crosshairReleaseScale") or 1.0), 1.0)
-    # A ranking break: aimed (the Interlude's tolerance) and quick (rankingBreakFruitSeconds a fruit) from its start to its end.
+    # A ranking break (HarvestManager.SetAimMode): aimed (no harvest range; with the old cone, the ranking's tolerance) and quick (rankingFruitSeconds a fruit) from its start to its end.
     windows = break_windows(log.events)
-    break_per_fruit, break_angle = cfg.get("rankingBreakFruitSeconds", per_fruit), cfg.get("interludeAimTolerance", max_angle)
+    break_per_fruit, break_angle = cfg.get("rankingFruitSeconds", per_fruit), cfg.get("rankingAimTolerance", max_angle)
     next_set, was_in_break = 0, False
 
     ev = log.events
-    # Releases the keys cannot explain are honoured only where the game itself ends a bout: the Interlude's trial end
+    # Releases the keys cannot explain are honoured only where the game itself ends a bout: a ranking set's end
     # and the session's last frames. Any other logged release must come from the replayed key rules, or verify flags it.
     tail = _last_frames_start(log.traj)
-    cut_times = [e["t"] for e in ev if e["type"] == "trial_end"]
+    cut_times = [e["t"] for e in ev if e["type"] == "rank_set_end"]
     forced_times = [e for e in ev if e["type"] == "harvest_release"
-                    and (e["t"] >= tail or any(abs(e["t"] - c) < TIE for c in cut_times))]   # a trial_end is logged on the frame it ends the bout
-    trials = [e for e in ev if e["type"] == "trial_start" and "break" not in _payload(e)]
+                    and (e["t"] >= tail or any(abs(e["t"] - c) < TIE for c in cut_times))]   # a rank_set_end is logged on the frame it ends the bout
     # The fruit a logged tie resolves to, by (bush, k): see the fruit timer below.
     fruit_t = {(e["tree_id"], e["k"]): e["t"] for e in ev if e["type"] == "fruit"}
-    # An Interlude commitment: from the frame after the press that started the chosen bush, the other bush can no longer be
-    # harvested (hidden, spent or locked; the policy only changes how it looks).
-    locks = [e for e in ev if e["type"] == "choice_lock"]
-    next_lock = 0
-    # HarvestManager discards presses between an Interlude trial's end and the following trial_go (rows after the
-    # trial_end up to and including the trial_go frame); after the last trial's end there is no trial_go.
-    go_times = [e["t"] for e in ev if e["type"] == "trial_go"]
-    blocks = [(e["t"], min((g for g in go_times if g > e["t"] - 1e-9), default=np.inf)) for e in ev if e["type"] == "trial_end" and "break" not in _payload(e)]
     # A ranking break discards presses from its start and from each set's end up to the next rank_go (a set going live) or the break's end.
     unblocks = sorted(e["t"] for e in ev if e["type"] in ("rank_go", "rank_break_end"))
-    blocks += [(e["t"], min((g for g in unblocks if g > e["t"] + 1e-9), default=np.inf)) for e in ev
-               if e["type"] == "rank_break_start" or (e["type"] == "trial_end" and "break" in _payload(e))]
+    blocks = [(e["t"], min((g for g in unblocks if g > e["t"] + 1e-9), default=np.inf)) for e in ev
+              if e["type"] in ("rank_break_start", "rank_set_end")]
     active = np.ones(n, dtype=bool)
     active[n0:] = False
-    if trials:
-        active[:] = False
-    next_trial = 0
 
     partial = np.zeros(n)
     taken = np.zeros(n, dtype=int)
@@ -289,8 +270,7 @@ def replay_harvests(log):
             taken[:] = 0
             total = 0.0
             for e in ev:
-                # (An Interlude restarts the unfinished trial in a fresh scene with every bush full: nothing carries over.)
-                if e["type"] == "fruit" and e["t"] <= at + 1e-9 and not trials:
+                if e["type"] == "fruit" and e["t"] <= at + 1e-9:
                     taken[e["tree_id"]] += 1
                     total = e["running_total"] if not math.isnan(e["running_total"]) else total + e["reward"]
             exhausted = taken >= n_fruits
@@ -301,7 +281,7 @@ def replay_harvests(log):
             active[:] = False                   # the break is over: the real bushes are back
             active[:n0] = True
         was_in_break = in_break
-        aim_now, angle_now, fruit_now = aim or in_break, (break_angle if in_break else max_angle), (break_per_fruit if in_break else per_fruit)
+        aim_now, angle_now, fruit_now = in_break, (break_angle if in_break else max_angle), (break_per_fruit if in_break else per_fruit)
         while next_set < len(rank_sets) and rank_sets[next_set]["t"] <= t + 1e-4:        # a set's bushes stand from the frame at or just after its rank_set
             active[:] = False
             active[rank_sets[next_set]["slots"]] = True
@@ -311,16 +291,6 @@ def replay_harvests(log):
         held_prev = held
         if any(a + 1e-9 < t <= b + 1e-9 for a, b in blocks):
             pressed = False
-
-        while next_trial < len(trials) and trials[next_trial]["t"] <= t + 1e-4:     # (a trial_start takes effect on the frame at or just after its logged time)
-            pair = trials[next_trial]["payload"]
-            active[:] = False
-            active[[int(i) for i in pair["bushes"]] if "bushes" in pair else [int(pair["left"]), int(pair["right"])]] = True
-            next_trial += 1
-
-        while next_lock < len(locks) and locks[next_lock]["t"] < t - 1e-9:
-            active[int(locks[next_lock]["payload"]["locked"])] = False
-            next_lock += 1
 
         if target < 0:
             idx = np.flatnonzero(active & ~exhausted)
@@ -429,7 +399,7 @@ def steps(log, dt=0.1):
     `reward` (sum of the fruit rewards that arrive in the step, from the logged events), `harvesting` (1 inside a
     bout), `tree` (the bush being harvested, else -1) and `ranking` (1 inside a ranking break: the player stands still ranking
     a set, the real bushes are grey and not harvestable, and the tree ids of the bouts are those of the set's bushes). Pose is linearly interpolated, except across a teleport
-    (an Interlude trial change), where the earlier pose is held until the jump; discrete states take the latest
+    (a ranking break's teleport or a resume), where the earlier pose is held until the jump; discrete states take the latest
     frame at or before the step start.
     """
     tr = log.traj

@@ -8,7 +8,7 @@ using UnityEngine;
 // a throwaway copy (<code>_PREVIEW.asset, git-ignored) and edits only that. Change its terrain fields here (they are the copy's own fields), press "Regenerate world and
 // preview": the window saves the copy, runs scripts/world.py for it (the world is generated in Python, not in Unity) and rebuilds the session preview in the open scene
 // (Foraging > Session preview) for it, so you can fly around the Scene view or press Play. When you have chosen values, they go into the experiment's design table
-// (scripts/design/<code>.py) and "Delete the preview files" removes the copy and its world. The Interlude file is not regenerated (it matters only for the real game).
+// (scripts/design/<code>.py) and "Delete the preview files" removes the copy and its world.
 // The window runs ./venv/bin/python in the project folder.
 public class TerrainPreview : EditorWindow
 {
@@ -52,7 +52,7 @@ public class TerrainPreview : EditorWindow
 
             foreach (SessionConfig session in experiment.Sessions)
             {
-                if (session != null && !session.IsInterlude)
+                if (session != null)
                 {
                     _sessions.Add(session);
                 }

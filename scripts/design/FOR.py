@@ -20,8 +20,8 @@ TILE_FIELDS = {"tileRadius": 45.0, "tileRampWidth": 14.0, "tileMoistureLevels": 
 # (id, between mode, within mode, other tile fields): one session, whatever is being tested now; "" leaves the mode to the default (`none` and `pool`: no pattern anywhere). Every combination is a pair
 # of table entries (tiles.py BETWEEN_MODES, WITHIN_MODES); tried so far: random-scatter, bimodal-smooth, none-gradient.
 CROSSHAIR_RADIUS = 7.0              # the hidden hit circle of the crosshair (degrees; SessionConfig.crosshairRadius)
-# a ranking set in place after every patch switch (`SessionConfig.rankingBreak*`; the arc is the interlude* fields: 5 bushes, 16 units, 84 degrees): 20 s a set, one set per break
-BREAK_FIELDS = {"rankingBreakEvery": 1, "rankingBreakSets": 1, "rankingBreakSeconds": 20.0, "rankingBreakCooldown": 10.0, "rankingBreakPoolSets": 12, "rankingBreakMinBushes": 1, "rankingBreakSettleDepth": 0.0}
+# a ranking set in place after every patch switch (`SessionConfig.ranking*`; the arc fields: 5 bushes, 16 units, 84 degrees): 20 s a set, one set per break
+RANKING_FIELDS = {"rankingEvery": 1, "rankingSets": 1, "rankingSeconds": 20.0, "rankingCooldown": 10.0, "rankingPoolSets": 12, "rankingMinBushes": 1, "rankingSettleDepth": 0.0}
 CELLS = (("default", "", "", {}),)
 
 
@@ -36,8 +36,8 @@ def _fields(between, within, extra, seed):
 
 
 def instances():
-    return [Instance(f"{CODE}_S{n}", _fields(between, within, extra, FIRST_WORLD_SEED + 100 * n), {"sessionDuration": SECONDS, "instructionsFile": f"Experiments/{CODE}/instructions_S{n}.txt", "isPractice": False, "crosshairRadius": CROSSHAIR_RADIUS, **BREAK_FIELDS},
-                     None, {"experiment": CODE, "index": n, "cell": cid, "tile_value_mode": between, "tile_within_mode": within, "prototype": True})
+    return [Instance(f"{CODE}_S{n}", _fields(between, within, extra, FIRST_WORLD_SEED + 100 * n), {"sessionDuration": SECONDS, "instructionsFile": f"Experiments/{CODE}/instructions_S{n}.txt", "isPractice": False, "crosshairRadius": CROSSHAIR_RADIUS, **RANKING_FIELDS},
+                     {"experiment": CODE, "index": n, "cell": cid, "tile_value_mode": between, "tile_within_mode": within, "prototype": True})
             for n, (cid, between, within, extra) in enumerate(CELLS, start=1)]
 
 

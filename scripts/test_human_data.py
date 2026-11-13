@@ -20,13 +20,13 @@ def run_row(run_id, participant, signature, status="finished", n_sessions=2, las
     return {"run_id": run_id, "status": status, "platform": "WebGLPlayer", "build_commit": "abc", "build_commits": ["abc"], "build_dirty": False,
             "unity_version": "6000", "started_at": "2026-11-03 10:00:00+00", "finished_at": "2026-11-03 10:18:30+00" if status == "finished" else None,
             "participant": participant, "signature": signature, "consent_version": "v1", "feedback": feedback, "n_sessions": n_sessions,
-            "last_event": last, "participant_id": "pp-" + run_id[:8], "experiment": "CF"}
+            "last_event": last, "participant_id": "pp-" + run_id[:8], "experiment": "FOR"}
 
 
-def session_row(run_id, index, name, interlude=False, interlude_for=None):
-    return {"run_id": run_id, "session_index": index, "name": name, "is_practice": False, "is_interlude": interlude, "world_seed": 1,
-            "world_file": None, "world_sha256": None, "interlude_file": None, "interlude_sha256": None,
-            "config": {"sessionDuration": 90, **({"interludeFor": interlude_for} if interlude_for else {})}, "camera": {}, "display": {"width": 1920}, "frame_stats": {"count": 100, "meanMs": 9.5, "maxMs": 30},
+def session_row(run_id, index, name):
+    return {"run_id": run_id, "session_index": index, "name": name, "is_practice": False, "world_seed": 1,
+            "world_file": None, "world_sha256": None,
+            "config": {"sessionDuration": 90}, "camera": {}, "display": {"width": 1920}, "frame_stats": {"count": 100, "meanMs": 9.5, "maxMs": 30},
             "started_at": "2026-11-03 10:00:00+00", "ended_at": "2026-11-03 10:01:30.5+00", "completed": True, "final_score": 12.0}
 
 
@@ -35,9 +35,11 @@ def event_row(run_id, index, seq, type_, reward=None, total=None, payload=None):
             "k": 0 if reward is not None else None, "reward": reward, "running_total": total, "payload": payload, "received_at": "2026-11-03 10:00:05+00"}
 
 
-def trial_row(run_id, index, seq, correct):
-    row = {c: None for c in rundata.INTERLUDE_COLUMNS}
-    row.update(run_id=run_id, session_index=index, seq=seq, type="gap", choice="left", choice_correct=int(correct), bonus=10.0 if correct else 0.0)
+def set_row(run_id, index, seq, correct, total=1):
+    row = {c: None for c in rundata.RANKING_COLUMNS}
+    row.update(run_id=run_id, session_index=index, seq=seq, set_index=seq, pool_index=seq + 5, set_size=2, correct_pairs=int(correct), total_pairs=total,
+               bonus=10.0 if correct else 0.0, bushes=[{"id": 100 + seq, "slot": 0, "shape": 0.5, "color": 0.25, "moisture": 0.5, "value": 1.0, "rank": 1,
+                                                       "start_time": 1.0, "finish_time": 2.0, "fruits": 3}])
     return row
 
 
@@ -47,11 +49,11 @@ class FakeServer:
     def __init__(self):
         self.runs, self.tables, self.calls = [], {name: [] for name, _, _ in hd.TABLES}, []
 
-    def add(self, run, session_rows, events, trials=()):
+    def add(self, run, session_rows, events, sets=()):
         self.runs.append(run)
         self.tables["sessions"] += session_rows
         self.tables["events"] += events
-        self.tables["trials"] += list(trials)
+        self.tables["sets"] += list(sets)
         for s in session_rows:
             frames = np.column_stack([np.arange(1, 6) * 0.1, np.arange(5), np.zeros(5), np.zeros(5), np.zeros(5), np.zeros(5)])
             self.tables["trajectory"].append({"run_id": run["run_id"], "session_index": s["session_index"], "first_seq": 0,
@@ -73,13 +75,13 @@ def server(monkeypatch):
     monkeypatch.setattr(hd, "query", fake)
     monkeypatch.setattr(hd, "PAGE", 3)      # pages of 3 rows: every table is read in several queries
     fake.add(run_row(RUN_A, "Peter_test", "Peter D", feedback="fun"),
-             [session_row(RUN_A, 0, "CF_S1"), session_row(RUN_A, 1, "CF_I1", interlude=True, interlude_for="CF_S1")],
+             [session_row(RUN_A, 0, "FOR_S1"), session_row(RUN_A, 1, "FOR_S2")],
              [event_row(RUN_A, 0, 0, "session_start"), event_row(RUN_A, 0, 1, "fruit", 5.0, 5.0), event_row(RUN_A, 0, 2, "fruit", 0.0, 5.0),
-              event_row(RUN_A, 0, 3, "teleport", payload={"x": 1}), event_row(RUN_A, 1, 0, "trial_end")],
-             [trial_row(RUN_A, 1, 0, True), trial_row(RUN_A, 1, 1, False)])
-    fake.add(run_row(RUN_B, "p7788", "Alice Smith"), [session_row(RUN_B, 0, "CF_S1"), session_row(RUN_B, 1, "CF_I1", interlude=True, interlude_for="CF_S1")],
-             [event_row(RUN_B, 0, 0, "fruit", 3.0, 3.0)], [trial_row(RUN_B, 1, 0, True)])
-    fake.add(run_row(RUN_C, "someone", "xx PETER xx", status="in_progress", n_sessions=1), [session_row(RUN_C, 0, "CF_S1")], [])
+              event_row(RUN_A, 0, 3, "teleport", payload={"x": 1}), event_row(RUN_A, 1, 0, "rank_set_end")],
+             [set_row(RUN_A, 0, 0, True), set_row(RUN_A, 0, 1, False)])
+    fake.add(run_row(RUN_B, "p7788", "Alice Smith"), [session_row(RUN_B, 0, "FOR_S1"), session_row(RUN_B, 1, "FOR_S2")],
+             [event_row(RUN_B, 0, 0, "fruit", 3.0, 3.0)], [set_row(RUN_B, 0, 0, True)])
+    fake.add(run_row(RUN_C, "someone", "xx PETER xx", status="in_progress", n_sessions=1), [session_row(RUN_C, 0, "FOR_S1")], [])
     return fake
 
 
@@ -91,26 +93,26 @@ def test_download_writes_the_tidy_tables_and_the_raw_layout(server, tmp_path):
     assert (a.signature, a.status, a.n_sessions, a.n_completed, a.feedback, a.on_server) == ("Peter D", "finished", 2, 2, "fun", 1)
     assert a.minutes == pytest.approx(18.5)
     s = h.sessions.set_index(["run_id", "session_index"])
-    assert s.loc[(RUN_A, 0), ["kind", "block", "duration_s", "n_fruits", "wall_s"]].tolist() == ["session", "CF_S1", 90.0, 2, 90.5]
-    assert s.loc[(RUN_A, 1), ["kind", "block", "n_trials", "n_correct", "bonus"]].tolist() == ["interlude", "CF_S1", 2, 1, 10.0]
-    assert pd.isna(s.loc[(RUN_A, 1), "duration_s"]) and s.loc[(RUN_A, 0), "mean_frame_ms"] == 9.5
+    assert s.loc[(RUN_A, 0), ["name", "duration_s", "n_fruits", "wall_s"]].tolist() == ["FOR_S1", 90.0, 2, 90.5]
+    assert s.loc[(RUN_A, 0), ["n_sets", "n_correct_pairs", "n_total_pairs", "bonus"]].tolist() == [2, 1, 2, 10.0]
+    assert s.loc[(RUN_A, 1), ["n_sets", "bonus"]].tolist() == [0, 0.0] and s.loc[(RUN_A, 0), "mean_frame_ms"] == 9.5
     assert len(h.events) == 6 and list(h.fruits["reward"][h.fruits.run_id == RUN_A]) == [5.0, 0.0]
     assert h.events.set_index(["run_id", "session_index", "seq"]).loc[(RUN_A, 0, 3), "payload"] == '{"x": 1}'
-    assert len(h.interlude_trials) == 3 and h.interlude_trials["choice_correct"].sum() == 2
+    assert len(h.ranking_sets) == 3 and h.ranking_sets["correct_pairs"].sum() == 2
     traj = h.trajectory(RUN_A, 0)
     assert len(traj) == 5 and list(traj.columns) == ["t", "x", "z", "yaw", "pitch", "keys"] and traj["t"].iloc[-1] == pytest.approx(0.5)
     log = rundata.read_session(tmp_path / RUN_A / "00")                  # the raw layout reads like a local log
-    assert log["session"]["name"] == "CF_S1" and [e["type"] for e in log["events"]][:2] == ["session_start", "fruit"] and len(log["traj"]) == 5
-    assert (a.experiment, a.participant_id) == ("CF", "pp-" + RUN_A[:8]) and set(s["experiment"]) == {"CF"}
+    assert log["session"]["name"] == "FOR_S1" and [e["type"] for e in log["events"]][:2] == ["session_start", "fruit"] and len(log["traj"]) == 5
+    assert (a.experiment, a.participant_id) == ("FOR", "pp-" + RUN_A[:8]) and set(s["experiment"]) == {"FOR"}
     run_json = rundata.json.loads((tmp_path / RUN_A / "run.json").read_text())
-    assert run_json["experiment"] == "CF" and run_json["participant"] == "Peter_test" and run_json["signature"] == "Peter D" and "token_hash" not in run_json
+    assert run_json["experiment"] == "FOR" and run_json["participant"] == "Peter_test" and run_json["signature"] == "Peter D" and "token_hash" not in run_json
 
 
 def test_exclude_matches_the_id_or_the_signed_name_in_any_case_and_leaves_every_table(server, tmp_path):
     hd.download(tmp_path, log=lambda *_: None)
     h = hd.load(tmp_path, exclude=["peter"])
     assert list(h.participants["participant"]) == ["p7788"]             # "Peter_test" by ID, "xx PETER xx" by signature
-    for table in (h.sessions, h.events, h.fruits, h.interlude_trials):
+    for table in (h.sessions, h.events, h.fruits, h.ranking_sets):
         assert set(table["run_id"]) <= {RUN_B}
     assert list(hd.load(tmp_path, status="finished").participants["participant"]) == ["Peter_test", "p7788"]
     assert hd.load(tmp_path, exclude=["peter", "alice", "SOME"]).participants.empty
@@ -153,7 +155,7 @@ def test_a_failing_query_raises_with_the_cli_message(monkeypatch):
         hd.query("select 1")
 
 
-def test_the_names_before_experiments_still_pair_a_session_with_its_interlude():
-    old = hd._session_row(session_row(RUN_A, 1, "S1_Interlude", interlude=True), [], [])
-    assert old[3] == "S1" and hd._session_row(session_row(RUN_A, 0, "S1"), [], [])[3] == "S1"
-
+def test_the_picks_of_a_set_come_one_row_per_bush(server, tmp_path):
+    hd.download(tmp_path, log=lambda *_: None)
+    p = hd.load(tmp_path).picks()
+    assert len(p) == 3 and set(p["set_index"]) == {0, 1} and set(p["pool_index"]) == {5, 6} and set(p["bush_id"]) == {100, 101}

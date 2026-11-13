@@ -2,7 +2,7 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 
-// The screen at the end of a part, a session's or an Interlude's: "Session 3 of 21 · Part A complete", the points of that part very large in a panel, and under a rule the prompt
+// The screen at the end of a session: "Session 3 of 4", the points of that session very large in a panel, and under a rule the prompt
 // as the last line of the panel. The world stays behind it and the camera turns slowly, so it is not a still frame. The music (UI/Music.cs) starts with it. Built at runtime.
 public class ScoreScreen : MonoBehaviour
 {

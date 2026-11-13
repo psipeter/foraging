@@ -80,20 +80,18 @@ class Client:
         self.token = result.get("token", self.token)
         return result
 
-    def append(self, session_index, session=None, events=(), frames=None, first_seq=0, plan=None, trials=()):
+    def append(self, session_index, session=None, events=(), frames=None, first_seq=0, sets=()):
         """One upload. `frames` is an (n, 6) array whose first frame has sequence number `first_seq`."""
         chunks = []
         if frames is not None and len(frames):
             chunks.append(base64.b64encode(codec.encode(frames, first_seq)).decode())
-        return self.append_chunks(session_index, session, events, chunks, plan, trials)
+        return self.append_chunks(session_index, session, events, chunks, sets)
 
-    def append_chunks(self, session_index, session=None, events=(), chunks=(), plan=None, trials=()):
+    def append_chunks(self, session_index, session=None, events=(), chunks=(), sets=()):
         body = {"run_id": self.run_id, "token": self.token, "session_index": session_index, "events": list(events),
-                "trajectory": list(chunks), "trials": list(trials)}
+                "trajectory": list(chunks), "sets": list(sets)}
         if session is not None:
             body["session"] = session
-        if plan is not None:
-            body["plan"] = list(plan)
         return self._post("append", body)
 
     def finish(self):
@@ -115,9 +113,9 @@ def event_rows(events, first_seq=0):
 
 
 def upload_session(client, session_index, data, frames_per_chunk=600, events_per_batch=200):
-    """Upload `rundata.read_session(...)`'s dict (session, traj, events, plan, trials) in batches, trajectory chunks of
-    `frames_per_chunk` frames. The first batch carries the session row as it stands at the start, the last one the Interlude
-    trials, and a final request the row's final fields (ended_at, completed, final_score, frame_stats). Returns its ack."""
+    """Upload `rundata.read_session(...)`'s dict (session, traj, events, sets) in batches, trajectory chunks of
+    `frames_per_chunk` frames. The first batch carries the session row as it stands at the start, the last one the ranking
+    sets, and a final request the row's final fields (ended_at, completed, final_score, frame_stats). Returns its ack."""
     final = {k: v for k, v in data["session"].items() if k not in ("run_id", "session_index")}
     start = {**final, "ended_at": None, "completed": False, "final_score": None, "frame_stats": None}
     rows, traj = event_rows(data["events"]), data["traj"]
@@ -125,5 +123,5 @@ def upload_session(client, session_index, data, frames_per_chunk=600, events_per
     for b in range(n_batches):
         client.append(session_index, session=start if b == 0 else None, events=rows[b * events_per_batch:(b + 1) * events_per_batch],
                       frames=traj[b * frames_per_chunk:(b + 1) * frames_per_chunk], first_seq=b * frames_per_chunk,
-                      plan=data["plan"] if b == 0 else None, trials=(data["trials"] or []) if b == n_batches - 1 else ())
+                      sets=(data["sets"] or []) if b == n_batches - 1 else ())
     return client.append(session_index, session=final)

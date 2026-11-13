@@ -9,7 +9,7 @@ using UnityEngine.UI;
 // experiment on one line: its name, its length (sessions and minutes, or the progress and the time left), its prerequisite (the experiments to finish first) and a button
 // (Start, Continue, or View code for a finished one); the ones whose prerequisites are not finished are locked. Near the bottom of the screen, buttons open the introduction
 // and the consent form again: they end the menu with a ChosenCode that is not an experiment (IntroductionCode, ConsentCode) and the caller shows the page and the menu again.
-// Sessions are counted without their Interludes (a session and its Interlude are Part A and Part B of one session); a reduced run (RunModes) shows its own lengths.
+// A reduced run (RunModes) shows its own lengths.
 // Built at runtime like the other overlays. Without a data server (the Editor, a lab build) every experiment of the catalog is offered.
 public class MenuScreen : MonoBehaviour
 {
@@ -48,16 +48,10 @@ public class MenuScreen : MonoBehaviour
         return screen;
     }
 
-    // The sessions (not their Interludes) among the first `parts` entries of a list of sessions and Interludes.
+    // The sessions among the first `parts` entries of a list of sessions.
     private static int CountSessions(IList<SessionConfig> list, int parts = int.MaxValue)
     {
-        int count = 0;
-        for (int i = 0; i < list.Count && i < parts; i++)
-        {
-            count += list[i] != null && list[i].IsInterlude ? 0 : 1;
-        }
-
-        return count;
+        return Mathf.Min(list.Count, parts);
     }
 
     // The minutes of what a participant plays now: the experiment's estimate, or, for a reduced run, worked out from what is played.
@@ -93,7 +87,7 @@ public class MenuScreen : MonoBehaviour
                     row.PillStyle = 1;
                     break;
                 case "in_progress":
-                    // the server counts completed sessions and Interludes alike (sessions_done), so the bar follows that and the caption counts the sessions
+                    // the server counts completed sessions (sessions_done)
                     row.Action = "Continue";
                     row.Enabled = s.unlocked;
                     if (played != null)

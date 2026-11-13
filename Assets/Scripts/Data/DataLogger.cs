@@ -7,9 +7,9 @@ using UnityEngine;
 
 // Records everything needed to replay the participant's actions in their exact world (docs/ONLINE_DATA_PLAN.md):
 //   trajectory   one row per rendered frame: t, x, z, yaw, pitch, keys (the state HarvestManager reads that frame), quantized
-//   events       sparse discrete events (pause, harvest press/release, every fruit, teleports, Interlude trials, ...)
+//   events       sparse discrete events (pause, harvest press/release, every fruit, teleports, ranking breaks, ...)
 //   session row  the full SessionConfig, the world file's hash, build info, display and frame statistics
-//   Interlude    the shuffled trial order (logged when the Interlude starts) and one row per trial
+//   ranking sets one row per ranking set
 // Rows are batched (events within a second, trajectory every five seconds online, every second offline) and handed to the
 // DataPipeline, which writes the local copy under ForagingData/<run id>/<session>/ and uploads when online. The clock `t`
 // is unpaused session seconds since the logger started (it stands still while a screen or the data gate holds
@@ -51,14 +51,12 @@ public class DataLogger : MonoBehaviour
     private float _dtMax;
 
     private string _worldHash;
-    private string _interludeHash;
 
     // Rows since the last flush; the sequence numbers run on across flushes (a frame's is its index in the session).
     private readonly List<EventRow> _events = new List<EventRow>();
     private readonly List<FrameQ> _pendingFrames = new List<FrameQ>();
-    private readonly List<TrialRow> _trials = new List<TrialRow>();
-    private int _eventSeq, _frameSeq, _trialSeq;
-    private int[] _plan;
+    private readonly List<SetRow> _sets = new List<SetRow>();
+    private int _eventSeq, _frameSeq, _setSeq;
     private string _sessionJson;
     private ResumeReply _resume;        // the server's state when this session continues an interrupted one
 
@@ -124,14 +122,14 @@ public class DataLogger : MonoBehaviour
     }
 
     // This session continues one the participant left: sequence numbers and the clock carry on from what the server holds, and
-    // the game's state is restored once the scene's trees exist. Rows logged while the scene was starting (the Interlude's first
-    // trial) are moved to the resume, after the session_resume event.
+    // the game's state is restored once the scene's trees exist. Rows logged while the scene was starting are moved to the resume, after the
+    // session_resume event.
     private void BeginResumed(ResumeReply r)
     {
         _resume = r;
         _eventSeq = r.events_next;
         _frameSeq = r.trajectory_next;
-        _trialSeq = r.trials_next;
+        _setSeq = r.sets_next;
         _t = r.clock;
         _lastRunningTotal = r.running_total;
         if (!string.IsNullOrEmpty(r.started_at))
@@ -159,7 +157,7 @@ public class DataLogger : MonoBehaviour
         yield return null;
         yield return null;          // the trees are generated and found by now
         ResumeReply r = _resume;
-        if (sessionConfig != null && !sessionConfig.IsInterlude)
+        if (sessionConfig != null)
         {
             if (r.has_pose && playerController != null)
             {
@@ -222,7 +220,7 @@ public class DataLogger : MonoBehaviour
 
         float now = Time.realtimeSinceStartup;
         float frameInterval = DataPipeline.IsOnline ? OnlineTrajectoryFlushSeconds : OfflineTrajectoryFlushSeconds;
-        bool eventsDue = (_events.Count > 0 || _trials.Count > 0) && now - _lastFlush >= EventFlushSeconds;
+        bool eventsDue = (_events.Count > 0 || _sets.Count > 0) && now - _lastFlush >= EventFlushSeconds;
         if (eventsDue || (_pendingFrames.Count > 0 && now - _lastFrameFlush >= frameInterval))
         {
             Flush();
@@ -249,16 +247,10 @@ public class DataLogger : MonoBehaviour
         });
     }
 
-    // The Interlude's shuffled trial order (the trial indices in presentation order), logged once when it starts.
-    public void LogInterludePlan(int[] trialOrder)
+    // One ranking set: its cells in SetRow.Columns order, formatted, '' for a missing value.
+    public void LogSet(string[] cells)
     {
-        _plan = trialOrder;
-    }
-
-    // One Interlude trial: its cells in TrialRow.Columns order, formatted, '' for a missing value.
-    public void LogTrial(string[] cells)
-    {
-        _trials.Add(new TrialRow { Cells = cells });
+        _sets.Add(new SetRow { Cells = cells });
     }
 
     // Hands everything recorded since the last flush to the pipeline.
@@ -275,22 +267,21 @@ public class DataLogger : MonoBehaviour
             e.Seq = _eventSeq++;
         }
 
-        foreach (TrialRow t in _trials)
+        foreach (SetRow t in _sets)
         {
-            t.Seq = _trialSeq++;
+            t.Seq = _setSeq++;
         }
 
         var batch = new DataBatch
         {
-            SessionIndex = _sessionIndex, SessionJson = _sessionJson, Plan = _plan, FirstFrameSeq = _frameSeq,
-            Events = new List<EventRow>(_events), Frames = new List<FrameQ>(_pendingFrames), Trials = new List<TrialRow>(_trials),
+            SessionIndex = _sessionIndex, SessionJson = _sessionJson, FirstFrameSeq = _frameSeq,
+            Events = new List<EventRow>(_events), Frames = new List<FrameQ>(_pendingFrames), Sets = new List<SetRow>(_sets),
         };
         _events.Clear();
-        _trials.Clear();
+        _sets.Clear();
         _frameSeq += _pendingFrames.Count;
         _pendingFrames.Clear();
         _sessionJson = null;
-        _plan = null;
         _lastFlush = _lastFrameFlush = Time.realtimeSinceStartup;
         if (!batch.IsEmpty)
         {
@@ -382,7 +373,6 @@ public class DataLogger : MonoBehaviour
 
         string archive = StreamingData.NeedsPreload ? null : Path.Combine(Application.dataPath, "..", "ForagingData", "_worlds");
         _worldHash = HashAndArchive(WorldData.PathFor(sessionConfig), archive);
-        _interludeHash = sessionConfig.IsInterlude ? HashAndArchive(WorldData.InterludePathFor(sessionConfig), archive) : null;
     }
 
     private static string HashAndArchive(string relativePath, string archive)
@@ -458,12 +448,9 @@ public class DataLogger : MonoBehaviour
             ("session_index", _sessionIndex),
             ("name", sessionConfig.name),
             ("is_practice", sessionConfig.IsPractice),
-            ("is_interlude", sessionConfig.IsInterlude),
             ("world_seed", sessionConfig.WorldSeed),
             ("world_file", Path.GetFileName(WorldData.PathFor(sessionConfig))),
             ("world_sha256", _worldHash),
-            ("interlude_file", sessionConfig.IsInterlude ? Path.GetFileName(WorldData.InterludePathFor(sessionConfig)) : null),
-            ("interlude_sha256", _interludeHash),
             ("config", new Json.Raw(JsonUtility.ToJson(sessionConfig))),
             ("camera", new Json.Raw(camera)),
             ("display", new Json.Raw(display)),

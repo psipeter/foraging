@@ -119,7 +119,7 @@ def test_a_press_latched_during_a_pause_acts_on_the_first_frame_with_time():
 
 def test_verify_flags_a_release_the_keys_do_not_explain():
     # Space stays held and the bush has fruit left, yet the log ends the bout after the 3rd fruit: a game bug that the
-    # old "any logged release is forced" rule accepted. Only a trial_end or the session's last frames may force one.
+    # old "any logged release is forced" rule accepted. Only a rank_set_end or the session's last frames may force one.
     frames = [(0, 7.0, 0.0, 4)] * 400
     log = toy_log(frames, n_fruits=10)
     log.events = logged(log)
@@ -127,8 +127,8 @@ def test_verify_flags_a_release_the_keys_do_not_explain():
     log.events = [e for e in log.events if e["t"] <= fr[2]["t"] and e["type"] != "fruit" or e["type"] == "fruit" and e["t"] <= fr[2]["t"]]
     log.events.append(dict(type="harvest_release", t=fr[2]["t"], tree_id=0, real=0.0, k=-1, reward=float("nan"), payload={}))
     assert verify(log)[0]
-    # The same release is accepted when a trial_end coincides with it (the Interlude cancelling the bout).
-    log.events.append(dict(type="trial_end", t=fr[2]["t"], real=0.0, tree_id=-1, k=-1, reward=float("nan"), payload={}))
+    # The same release is accepted when a rank_set_end coincides with it (a ranking set cancelling the bout).
+    log.events.append(dict(type="rank_set_end", t=fr[2]["t"], real=0.0, tree_id=-1, k=-1, reward=float("nan"), payload={}))
     log.manifest.pop("final_score", None)
     assert not [p for p in verify(log)[0] if p.startswith(("harvest_release", "fruit", "harvest_press"))]
 
@@ -153,11 +153,6 @@ def two_bush_log(frames, events=()):
     return multi_log([(-6.0, 10.0, 1.0), (6.0, 10.0, 1.0)], [(0.0, 10.0, yaw, keys) for yaw, keys in frames], events)
 
 
-def choice_lock(t, committed, locked, policy="Hide"):
-    return {"type": "choice_lock", "t": t, "real": 0.0, "tree_id": committed, "k": -1, "reward": float("nan"),
-            "running_total": float("nan"), "payload": {"committed": committed, "locked": locked, "policy": policy}}
-
-
 def presses(replayed):
     return [e["tree_id"] for e in replayed if e["type"] == "harvest_press"]
 
@@ -170,41 +165,8 @@ def test_without_a_lock_the_player_can_switch_bushes():
     assert presses(out) == [0, 1]
 
 
-def test_a_choice_lock_stops_a_switch_but_not_resuming_the_chosen_bush():
-    # the lock is logged on the press frame (t = 0.01); it applies from the next frame on
-    events = [choice_lock(0.01, committed=0, locked=1)]
-    assert presses(replay_harvests(two_bush_log(SWITCHING, events))) == [0]
-    back = [(-90.0, 4)] * 100 + [(-90.0, 0)] * 10 + [(90.0, 4)] * 50 + [(90.0, 0)] * 5 + [(-90.0, 4)] * 50
-    out = replay_harvests(two_bush_log(back, events))
-    assert presses(out) == [0, 0]                                       # pressing the chosen bush again resumes it
-    assert all(e["tree_id"] == 0 for e in out if e["type"] == "fruit")
-
-
-def test_the_lock_does_not_change_the_press_that_causes_it():
-    events = [choice_lock(0.01, committed=1, locked=0)]
-    out = replay_harvests(two_bush_log([(90.0, 4)] * 100, events))        # first press is on bush 1, whose lock partner is 0
-    assert presses(out) == [1] and len(fruits(out)) == 1
-
-
 def _ev(kind, t, **payload):
     return dict(type=kind, t=t, real=0.0, tree_id=-1, k=-1, reward=float("nan"), payload=payload)
-
-
-def test_a_press_between_trials_starts_no_bout():
-    # Space pressed during the fade after trial_end (and held through trial_go) must not start a bout on the old bush:
-    # HarvestManager discards presses until the block lifts, so replay sees no press edge at trial_go either.
-    frames = [(0, 7.0, 0.0, 0)] * 50 + [(0, 7.0, 0.0, 4)] * 100
-    log = toy_log(frames)
-    log.events = [_ev("trial_end", 0.50), _ev("trial_go", 1.00)]
-    assert replay_harvests(log) == []
-    log.events = [_ev("trial_end", 0.50)]                   # the last trial's end: blocked for the rest of the session
-    assert replay_harvests(log) == []
-    # A fresh press after trial_go works.
-    frames = [(0, 7.0, 0.0, 0)] * 10 + [(0, 7.0, 0.0, 4)] * 50 + [(0, 7.0, 0.0, 0)] * 10 + [(0, 7.0, 0.0, 4)] * 60
-    log = toy_log(frames)
-    log.events = [_ev("trial_end", 0.10), _ev("trial_go", 0.50)]
-    out = [e for e in replay_harvests(log) if e["type"] == "harvest_press"]
-    assert len(out) == 1 and abs(out[0]["t"] - 0.71) < 2 / HZ
 
 
 # --- geometry of the cone, focus choice and range (HarvestManager.Measure) -----------------------------------------
@@ -263,19 +225,6 @@ def test_range_grows_with_the_canopy_radius_term():
     assert not press_events(replay_harvests(log))
 
 
-# --- Interlude trial activation -------------------------------------------------------------------------------------
-
-def test_a_trials_pair_is_active_from_the_trial_start_frame():
-    # Two bushes; only the trial's pair may be harvested, and from the frame of the trial_start event itself.
-    bushes = [(0.0, 10.0, 1.0), (30.0, 10.0, 1.0), (60.0, 10.0, 1.0)]
-    frames = [(0, 7.0, 0.0, 0)] * 49 + [(0, 7.0, 0.0, 4)] * 60                   # Space down on the row at t = 0.50
-    ev = [_ev("trial_start", 0.50, order=0, trial=0, left=0, right=1)]
-    out = replay_harvests(multi_log(bushes, frames, ev))
-    assert len(press_events(out)) == 1 and abs(press_events(out)[0]["t"] - 0.50) < 1e-6
-    ev = [_ev("trial_start", 0.80, order=0, trial=0, left=1, right=2)]            # bush 0 is not in the pair
-    assert not press_events(replay_harvests(multi_log(bushes, frames, ev)))
-
-
 # --- verify: tolerances and the ignored tail -----------------------------------------------------------------------
 
 def test_verify_flags_a_fruit_logged_50_ms_off():
@@ -319,7 +268,7 @@ def test_steps_reward_and_harvesting_are_placed_in_the_right_steps():
     assert (s["tree"][s["harvesting"] == 1] == 0).all() and (s["tree"][s["harvesting"] == 0] == -1).all()
 
 
-# --- loading: hash checks and the Interlude's own bush table --------------------------------------------------------
+# --- loading: hash checks ---------------------------------------------------------------------------------------------------------------
 
 def _archive(tmp_path, name, content):
     d = tmp_path / "_worlds"
@@ -347,15 +296,6 @@ def test_find_world_file_rejects_a_file_with_the_wrong_hash(tmp_path, monkeypatc
     (tmp_path / "_worlds" / f"{sha[:8]}_x.world").write_bytes(b"tampered")
     with pytest.raises(FileNotFoundError):
         replay.find_world_file("x.world", sha)
-
-
-def test_an_interlude_log_uses_the_interludes_bush_table(tmp_path, monkeypatch):
-    table = {"treePos": [1.0, 2.0, 3.0, 4.0], "canopyRadius": [1.5, 2.5], "fruitCount": 2, "fruitRewards": [5, 6, 7, 8],
-             "value": [1.0, 2.0], "shape": [0.1, 0.9], "n": 5}
-    isha = _archive(tmp_path, "S1_Interlude_seed1.interlude.json", json.dumps(table).encode())
-    log = load_session_log(_session(tmp_path, monkeypatch, interlude_file="S1_Interlude_seed1.interlude.json", interlude_sha256=isha))
-    assert log.bushes.pos.tolist() == [[1.0, 2.0], [3.0, 4.0]] and log.bushes.canopy_radius.tolist() == [1.5, 2.5]
-    assert log.bushes.fruit_reward.tolist() == [[5, 6], [7, 8]] and "elevation" in log.grids     # the terrain is the session's
 
 
 def test_verify_reports_a_file_that_was_cut_mid_line(tmp_path, monkeypatch):
@@ -439,17 +379,6 @@ def test_a_resume_does_not_double_count_the_fruits_replayed_before_it():
     assert [e["running_total"] for e in fruits(replay_harvests(log))] == [1.0, 3.0]
 
 
-def test_an_interlude_restarts_its_trial_after_a_resume_with_every_bush_full():
-    # The Interlude restarts the unfinished trial in a fresh scene: the bush's first fruit pays again, as k = 0.
-    log = toy_log([(0, 7.0, 0.0, 4)] * 100)
-    log.traj = np.vstack([log.traj, np.array([[1.0 + (i + 1) / HZ, 0.0, 7.0, 0.0, 0.0, 4] for i in range(100)])])
-    log.events = [_ev("trial_start", 0.01, order=0, trial=0, left=0, right=0),
-                  dict(_ev("fruit", 0.8), tree_id=0, k=0, reward=1.0, running_total=1.0),
-                  _ev("session_resume", 1.0),
-                  _ev("trial_start", 1.0, order=0, trial=0, left=0, right=0)]
-    assert [(e["k"], e["reward"]) for e in fruits(replay_harvests(log))] == [(0, 1.0), (0, 1.0)]
-
-
 def test_a_logged_fruit_decides_a_tie_between_frame_sums_and_the_fruit_time():
     # Browser frame times are whole milliseconds (here a 0.2 s fruit, press on the row at 2.818 after one at 2.817), so the
     # frames sum to the fruit time exactly and double arithmetic fires one frame after the game's float32 did.
@@ -475,41 +404,11 @@ def test_a_pulled_runs_world_archive_next_to_its_folder_is_found(tmp_path, monke
     assert len(load_session_log(folder).bushes.pos) > 0
 
 
-# --- a ranking Interlude: aim, no range, and a harvest started is finished (HarvestManager.SetAimMode) ----------------------------------
-
-AIM = {"config": dict(CFG, isInterlude=True, interludeFormat=1, interludeAimTolerance=1.5)}
-
-
-def aimed(frames, n_fruits=3):
-    log = toy_log(frames, n_fruits=n_fruits)
-    log.manifest = AIM
-    return log
-
-
-def test_aiming_ignores_the_harvest_range():
-    frames = [(0, -30.0, 0.0, 4)] * 100                 # the edge is 39 away, far outside the range of 7
-    assert len(press_events(replay_harvests(aimed(frames)))) == 1
-    assert not press_events(replay_harvests(toy_log(frames)))        # the main task: out of range
-
-
-def test_aiming_needs_the_crosshair_within_the_tolerance_of_the_canopy():
-    # radius 1 at 40: its angular radius is 1.4 degrees; 2 degrees off its edge is beyond the 1.5 degree tolerance, 3 degrees off the centre is within it
-    assert not press_events(replay_harvests(aimed([(0, -30.0, 5.0, 4)] * 100)))
-    assert press_events(replay_harvests(aimed([(0, -30.0, 2.0, 4)] * 100)))
-
-
-def test_a_harvest_started_is_finished_whatever_the_key_and_the_crosshair_do():
-    # a 0.1 s tap, then the key up and the view turned away: three fruits at 0.8 s each all the same, no pause and no release before the bush is spent
-    frames = [(0, -30.0, 0.0, 4)] * 10 + [(0, -30.0, 90.0, 0)] * 300
-    out = replay_harvests(aimed(frames))
-    assert [e["reward"] for e in fruits(out)] == [1, 2, 3] and np.allclose([e["t"] for e in fruits(out)], [0.8, 1.6, 2.4], atol=2 / HZ)
-    assert [e["type"] for e in out if e["type"] in ("harvest_pause", "harvest_resume")] == []
-    assert len(press_events(out)) == 1
-
+# --- a ranking break inside a foraging session (RankingBreak) -------------------------------------------------------------------------
 
 # --- a ranking break inside a foraging session (RankingBreak) -----------------------------------------------------
 
-BREAK = {"config": dict(CFG, rankingBreakFruitSeconds=0.05, interludeAimTolerance=1.5)}
+BREAK = {"config": dict(CFG, rankingFruitSeconds=0.05, rankingAimTolerance=1.5)}
 SET_ID = 101
 
 
@@ -522,12 +421,12 @@ def keyed(spans, total=400, x=0.0, z=7.0):
     return [(x, z, 0.0, k) for k in keys]
 
 
-def break_events(start=1.0, rank_set=1.3, go=1.5, trial_end=2.5, end=2.7, z=67.0):
+def break_events(start=1.0, rank_set=1.3, go=1.5, set_end=2.5, end=2.7, z=67.0):
     """One real bush (radius 1, at (0, 10)) and one ranking set of one bush 60 units from the player, as RankingBreak logs them."""
     both = {"break": 1}
     return [_ev("rank_break_start", start, **both),
             _ev("rank_set", rank_set, **{"break": 1, "set": 0, "fruits": 10, "bushes": [{"id": SET_ID, "x": 0.0, "z": z, "radius": 1.0, "shape": 0.5}]}),
-            _ev("rank_go", go, **both), _ev("trial_end", trial_end, **both), _ev("rank_break_end", end, **both)]
+            _ev("rank_go", go, **both), _ev("rank_set_end", set_end, **both), _ev("rank_break_end", end, **both)]
 
 
 def break_log(spans=((1.05, 1.6), (1.7, 2.6), (3.0, 4.0)), **kwargs):
@@ -542,7 +441,7 @@ def test_a_break_harvest_is_aimed_quick_and_pays_nothing_and_the_foraging_harves
     got = fruits(out)
     ranked = [e for e in got if e["tree_id"] == SET_ID]
     assert len(ranked) == 10 and all(e["reward"] == 0.0 for e in ranked)
-    assert np.allclose(np.diff([e["t"] for e in ranked]), 0.05, atol=2 / HZ)       # quick: rankingBreakFruitSeconds a fruit, not the session's 0.8
+    assert np.allclose(np.diff([e["t"] for e in ranked]), 0.05, atol=2 / HZ)       # quick: rankingFruitSeconds a fruit, not the session's 0.8
     real = [e for e in got if e["tree_id"] == 0]
     assert len(real) == 1 and real[0]["reward"] == 1.0 and abs(real[0]["t"] - 3.81) < 3 / HZ         # the main task's rules again: in range, 0.8 s a fruit
     assert real[0]["running_total"] == 1.0
@@ -562,12 +461,25 @@ def test_the_real_bush_cannot_be_harvested_during_a_break_and_the_set_bush_not_a
     assert all(e["tree_id"] == SET_ID for e in fruits(out) if e["t"] < 2.7)
 
 
-def test_a_timed_out_set_ends_its_bout_at_the_trial_end():
-    log = break_log(spans=((1.7, 2.6),), trial_end=1.9)
+def test_a_timed_out_set_ends_its_bout_at_the_set_end():
+    log = break_log(spans=((1.7, 2.6),), set_end=1.9)
     log.events.append(dict(type="harvest_release", t=1.9, real=0.0, tree_id=SET_ID, k=-1, reward=float("nan"), payload={}))
     out = replay_harvests(log)
     assert [e["type"] for e in out if e["type"] == "harvest_release"] == ["harvest_release"] and out[-1]["forced"]
     assert len(fruits(out)) < 10
+
+
+def test_a_harvest_started_in_a_break_is_finished_whatever_the_key_and_the_crosshair_do():
+    # a 0.1 s tap on the set's bush, then the key up and the view turned away: the aimed bout runs to the bush's last fruit, no pause, no release
+    frames = [(0.0, 7.0, 0.0, 4 if 1.55 <= (i + 1) / HZ < 1.65 else 0) for i in range(400)]
+    frames = [(x, z, 90.0 if (i + 1) / HZ >= 1.65 else yaw, k) for i, (x, z, yaw, k) in enumerate(frames)]
+    log = toy_log(frames, n_fruits=10)
+    log.manifest = BREAK
+    log.events = break_events()
+    out = replay_harvests(log)
+    assert len([e for e in fruits(out) if e["tree_id"] == SET_ID]) == 10
+    assert [e["type"] for e in out if e["type"] in ("harvest_pause", "harvest_resume")] == []
+    assert len(press_events(out)) == 1
 
 
 def test_a_break_replay_verifies_against_its_own_events():
@@ -585,9 +497,9 @@ def test_steps_marks_the_break():
 
 def test_two_sets_with_the_same_ids_are_separate_bushes():
     # a pool that wraps gives a later set the ids of an earlier one (at other places): replay keeps them apart
-    log = break_log(spans=((1.7, 2.6), (3.2, 3.9)), trial_end=2.8, end=3.9)
+    log = break_log(spans=((1.7, 2.6), (3.2, 3.9)), set_end=2.8, end=3.9)
     second = _ev("rank_set", 3.0, **{"break": 1, "set": 1, "fruits": 10, "bushes": [{"id": SET_ID, "x": 20.0, "z": 27.0, "radius": 1.0, "shape": 0.5}]})
-    log.events = sorted(log.events + [second, _ev("rank_go", 3.1, **{"break": 1}), _ev("trial_end", 3.85, **{"break": 1})], key=lambda e: e["t"])
+    log.events = sorted(log.events + [second, _ev("rank_go", 3.1, **{"break": 1}), _ev("rank_set_end", 3.85, **{"break": 1})], key=lambda e: e["t"])
     bushes, sets, ids = replay.with_ranking_bushes(log)
     assert len(sets) == 2 and len(bushes.pos) == 3 and list(ids) == [0, SET_ID, SET_ID] and np.allclose(bushes.pos[2], [20.0, 27.0])
 
@@ -642,12 +554,16 @@ def test_a_tall_bush_is_aimed_higher_up_than_a_squat_one():
     assert press_events(replay_harvests(cross_log(hold(0.0, -20.0, yaw, higher), shape=1.0)))
 
 
-def test_the_range_still_applies_to_the_crosshair_in_the_main_task_but_not_to_aiming():
+def test_the_range_applies_to_the_crosshair_in_the_main_task_but_not_inside_a_ranking_break():
     near = dict(CROSS, harvestRangeGapBase=7.0)
     yaw, pitch = look(0.0, -20.0, 0.0, 10.0)
-    assert not press_events(replay_harvests(cross_log(hold(0.0, -20.0, yaw, pitch), cfg=near)))     # 29 from the edge, beyond 7
-    aim = dict(near, isInterlude=True, interludeFormat=1, interludeAimTolerance=1.5)
-    assert press_events(replay_harvests(cross_log(hold(0.0, -20.0, yaw, pitch), cfg=aim)))          # ranking: no range
+    rows = hold(0.0, -20.0, yaw, pitch)
+    assert not press_events(replay_harvests(cross_log(rows, cfg=near)))     # 29 from the edge, beyond 7
+    log = cross_log(rows, cfg=near)
+    log.events = [_ev("rank_break_start", 0.0, **{"break": 1}),
+                  _ev("rank_set", 0.0, **{"break": 1, "set": 0, "fruits": 3, "bushes": [{"id": SET_ID, "x": 0.0, "z": 10.0, "radius": 1.0, "shape": 0.0}]}),
+                  _ev("rank_go", 0.005, **{"break": 1})]
+    assert [e["tree_id"] for e in press_events(replay_harvests(log))] == [SET_ID]            # ranking: no range
 
 
 def test_of_two_bushes_on_the_ray_the_nearer_is_the_target():

@@ -55,7 +55,7 @@ public class SunController : MonoBehaviour
         sessionTime = Mathf.Max(0f, seconds);
     }
 
-    // Ends the session now (the Interlude ends when its trials are done, not at a fixed time).
+    // Ends the session now (a ranking never ends a session).
     public void EndSession()
     {
         sessionTime = SessionDuration;
@@ -123,7 +123,7 @@ public class SunController : MonoBehaviour
 
         // The sun follows a real solar path from sunStartElevation in the morning to
         // sunEndElevation in the afternoon, mapped onto the session's length (a shorter session plays the same path faster).
-        // Interludes hold the sun still at solar noon.
+        // freezeSun holds the sun still at solar noon.
         bool frozen = sessionConfig != null && sessionConfig.FreezeSun;
         float progress = frozen ? 0f : Mathf.Clamp01(sessionTime / Mathf.Max(SessionDuration, 0.0001f));
         SolveSun(progress, frozen, out float elevation, out float azimuth);

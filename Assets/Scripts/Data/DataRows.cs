@@ -24,8 +24,8 @@ public class EventRow
     }
 }
 
-// One Interlude trial: the cells of interlude_trials.csv after `seq`, in TrialColumns order, already formatted ('' = missing).
-public class TrialRow
+// One ranking set: the cells of ranking_sets.csv after `seq`, in Columns order, already formatted ('' = missing).
+public class SetRow
 {
     public int Seq;
     public string[] Cells;
@@ -33,12 +33,9 @@ public class TrialRow
     // name, kind (I integer, F float, S text, J raw JSON), in the order of the table.
     public static readonly (string name, char kind)[] Columns =
     {
-        ("presented_order", 'I'), ("trial_index", 'I'), ("type", 'S'), ("varied_feature", 'S'), ("stage_x", 'F'), ("stage_z", 'F'),
-        ("left_id", 'I'), ("left_shape", 'F'), ("left_color", 'F'), ("left_moisture", 'F'), ("left_value", 'F'),
-        ("right_id", 'I'), ("right_shape", 'F'), ("right_color", 'F'), ("right_moisture", 'F'), ("right_value", 'F'),
-        ("correct_side", 'S'), ("choice", 'S'), ("choice_correct", 'I'), ("timed_out", 'I'), ("response_time", 'F'),
-        ("first_harvest_time", 'F'), ("first_harvest_side", 'S'), ("left_fruits", 'I'), ("right_fruits", 'I'), ("bonus", 'F'), ("locked_at", 'F'), ("paused_seconds", 'F'),
-        // appended for the ranking Interlude (a row is one set; the pair columns are empty): its size, the implied pairs ordered right and counted, and one JSON object per bush (J: raw JSON)
+        ("set_index", 'I'), ("pool_index", 'I'), ("start_x", 'F'), ("start_z", 'F'), ("timed_out", 'I'), ("response_time", 'F'),
+        ("first_harvest_time", 'F'), ("bonus", 'F'), ("paused_seconds", 'F'),
+        // the set's size, the implied pairs ordered right and counted, and one JSON object per bush (J: raw JSON)
         ("set_size", 'I'), ("correct_pairs", 'I'), ("total_pairs", 'I'), ("bushes", 'J'),
     };
 
@@ -64,9 +61,8 @@ public class DataBatch
     public List<EventRow> Events = new List<EventRow>();
     public List<FrameQ> Frames = new List<FrameQ>();
     public int FirstFrameSeq;
-    public int[] Plan;                          // the Interlude's trial order, in its first batch
-    public List<TrialRow> Trials = new List<TrialRow>();
+    public List<SetRow> Sets = new List<SetRow>();
     public float SubmitTime;                    // Time.realtimeSinceStartup when handed to the pipeline
 
-    public bool IsEmpty => SessionJson == null && Events.Count == 0 && Frames.Count == 0 && Plan == null && Trials.Count == 0;
+    public bool IsEmpty => SessionJson == null && Events.Count == 0 && Frames.Count == 0 && Sets.Count == 0;
 }

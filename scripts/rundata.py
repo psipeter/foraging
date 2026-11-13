@@ -5,8 +5,7 @@
         session.json                               the `sessions` row (config, world hashes, camera, display, score, ...)
         events.csv                                 seq,t,real,type,tree_id,k,reward,running_total,payload
         trajectory.csv                             seq,t,x,z,yaw,pitch,keys   (the quantized values the server holds)
-        interlude_plan.json                        {"trial_order": [...]}     (Interludes only)
-        interlude_trials.csv                       seq + the columns of the `interlude_trials` table
+        ranking_sets.csv                           seq + the columns of the `ranking_sets` table (a session with ranking breaks only)
 
 The Editor and standalone builds write this as the developer mirror of what an online build uploads; `read_session`
 returns the same structures whether the rows came from here or from the database. Missing numbers are empty cells
@@ -23,16 +22,11 @@ import numpy as np
 
 EVENT_COLUMNS = ("seq", "t", "real", "type", "tree_id", "k", "reward", "running_total", "payload")
 TRAJECTORY_COLUMNS = ("seq", "t", "x", "z", "yaw", "pitch", "keys")
-INTERLUDE_COLUMNS = (
-    "seq", "presented_order", "trial_index", "type", "varied_feature", "stage_x", "stage_z",
-    "left_id", "left_shape", "left_color", "left_moisture", "left_value",
-    "right_id", "right_shape", "right_color", "right_moisture", "right_value",
-    "correct_side", "choice", "choice_correct", "timed_out", "response_time", "first_harvest_time", "first_harvest_side",
-    "left_fruits", "right_fruits", "bonus", "locked_at", "paused_seconds",
-    "set_size", "correct_pairs", "total_pairs", "bushes")      # the last four are the ranking Interlude's (a set is one row; `bushes` is a list of dicts, JSON in the CSV)
-_INTEGER = {"seq", "presented_order", "trial_index", "left_id", "right_id", "choice_correct", "timed_out", "left_fruits", "right_fruits",
-            "set_size", "correct_pairs", "total_pairs"}
-_TEXT = {"type", "varied_feature", "correct_side", "choice", "first_harvest_side"}
+RANKING_COLUMNS = (
+    "seq", "set_index", "pool_index", "start_x", "start_z", "timed_out", "response_time", "first_harvest_time", "bonus", "paused_seconds",
+    "set_size", "correct_pairs", "total_pairs", "bushes")      # a set is one row; `bushes` is a list of dicts, JSON in the CSV
+_INTEGER = {"seq", "set_index", "pool_index", "timed_out", "set_size", "correct_pairs", "total_pairs"}
+_TEXT = set()
 _JSON = {"bushes"}
 
 
@@ -94,7 +88,7 @@ def _event(row):
     }
 
 
-def _trial(row):
+def _set(row):
     out = {}
     for name, value in row.items():
         if name in _TEXT:
@@ -115,10 +109,10 @@ def write_run(root, run_id, run):
     return folder
 
 
-def write_session(root, run_id, session_index, session, traj, events, plan=None, trials=None):
+def write_session(root, run_id, session_index, session, traj, events, sets=None):
     """Write one session. `traj` is (n, 6) t, x, z, yaw, pitch, keys, already quantized (`trajectory_codec.quantize`),
-    `events` a list of dicts (t, type and optionally real, tree_id, k, reward, running_total, payload), `plan` the
-    shuffled Interlude trial order, `trials` Interlude trial dicts. `seq` is the position in the list."""
+    `events` a list of dicts (t, type and optionally real, tree_id, k, reward, running_total, payload), `sets` ranking-set dicts.
+    `seq` is the position in the list."""
     folder = Path(root) / str(run_id) / f"{session_index:02d}"
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "session.json").write_text(json.dumps(dict(session, run_id=str(run_id), session_index=session_index), indent=2, sort_keys=True))
@@ -140,20 +134,18 @@ def write_session(root, run_id, session_index, session, traj, events, plan=None,
         for seq, row in enumerate(traj):
             w.writerow([seq, *(format(float(v), ".10g") for v in row[:5]), int(row[5])])
 
-    if plan is not None:
-        (folder / "interlude_plan.json").write_text(json.dumps({"trial_order": list(plan)}))
-    if trials is not None:
-        with open(folder / "interlude_trials.csv", "w", newline="") as f:
+    if sets is not None:
+        with open(folder / "ranking_sets.csv", "w", newline="") as f:
             w = csv.writer(f, lineterminator="\n")
-            w.writerow(INTERLUDE_COLUMNS)
-            for seq, t in enumerate(trials):
-                w.writerow([seq if c == "seq" else _cell(t.get(c)) for c in INTERLUDE_COLUMNS])
+            w.writerow(RANKING_COLUMNS)
+            for seq, t in enumerate(sets):
+                w.writerow([seq if c == "seq" else _cell(t.get(c)) for c in RANKING_COLUMNS])
     return folder
 
 
 def read_session(folder):
-    """A session folder as a dict: session (the row), traj (n, 6), events (list of dicts with `payload` dicts), plan
-    (list or None), trials (list of dicts or None), truncated (names of files whose last line was cut short and dropped)."""
+    """A session folder as a dict: session (the row), traj (n, 6), events (list of dicts with `payload` dicts), sets
+    (list of dicts or None), truncated (names of files whose last line was cut short and dropped)."""
     folder = Path(folder)
     session = json.loads((folder / "session.json").read_text())
     events, events_cut = _read_rows(folder / "events.csv", EVENT_COLUMNS, _event)
@@ -163,10 +155,9 @@ def read_session(folder):
     # The sequence numbers must be consecutive; a local copy of a session that was continued on another computer starts later than 0.
     if len(traj) and not np.array_equal(traj[:, 0], traj[0, 0] + np.arange(len(traj))):
         raise ValueError(f"{folder}: trajectory seq is not consecutive")
-    plan = json.loads((folder / "interlude_plan.json").read_text())["trial_order"] if (folder / "interlude_plan.json").exists() else None
-    trials = trial_cut = None
-    if (folder / "interlude_trials.csv").exists():
-        trials, trial_cut = _read_rows(folder / "interlude_trials.csv", INTERLUDE_COLUMNS, _trial)
+    sets = set_cut = None
+    if (folder / "ranking_sets.csv").exists():
+        sets, set_cut = _read_rows(folder / "ranking_sets.csv", RANKING_COLUMNS, _set)
     truncated = [name for name, cut in (("trajectory.csv", traj_cut), ("events.csv", events_cut),
-                                        ("interlude_trials.csv", trial_cut)) if cut]
-    return {"session": session, "traj": traj[:, 1:], "events": events, "plan": plan, "trials": trials, "truncated": truncated}
+                                        ("ranking_sets.csv", set_cut)) if cut]
+    return {"session": session, "traj": traj[:, 1:], "events": events, "sets": sets, "truncated": truncated}

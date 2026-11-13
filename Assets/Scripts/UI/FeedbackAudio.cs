@@ -9,7 +9,7 @@ public class FeedbackAudio : MonoBehaviour
     {
         FruitPick,
         BushExhausted,
-        InterludePick
+        RankingPick
     }
 
     public SessionConfig sessionConfig;
@@ -49,12 +49,12 @@ public class FeedbackAudio : MonoBehaviour
 
     private void HandleFruitCollected(float amount, Vector3 worldPos)
     {
-        // An Interlude never reveals the reward, so its pick sound is a different, neutral sound that never changes
+        // A ranking never reveals the reward, so its pick sound is a different, neutral sound that never changes
         // pitch. (The main pick sound rises in pitch with the reward, and reusing it, even at a fixed pitch, would
         // pair the harvest with that low-versus-high-reward cue.)
-        if ((sessionConfig != null && sessionConfig.IsInterlude) || RankingBreak.Active)
+        if (RankingBreak.Active)
         {
-            Play(Cue.InterludePick, 1f);
+            Play(Cue.RankingPick, 1f);
             return;
         }
 
@@ -92,11 +92,11 @@ public class FeedbackAudio : MonoBehaviour
              + 0.35f * Mathf.Sin(2f * Mathf.PI * 1320f * t)
              + 0.12f * Mathf.Sin(2f * Mathf.PI * 1980f * t)) * Mathf.Exp(-t * 24f));
 
-        // Interlude pick: a very short, soft, low "bloop" that falls in pitch (the main pick blip is bright and has a
-        // fixed upward contour), so it cannot be mistaken for the reward cue. At the Interlude's fast per-fruit rate it
+        // Ranking pick: a very short, soft, low "bloop" that falls in pitch (the main pick blip is bright and has a
+        // fixed upward contour), so it cannot be mistaken for the reward cue. At a ranking's fast per-fruit rate it
         // reads as a quick run of ticks.
         const float length = 0.045f;
-        _clips[Cue.InterludePick] = Synthesize("InterludePick", length, (t) =>
+        _clips[Cue.RankingPick] = Synthesize("RankingPick", length, (t) =>
         {
             const float f0 = 480f, f1 = 300f;
             float phase = 2f * Mathf.PI * (f0 * t + (f1 - f0) * t * t / (2f * length));

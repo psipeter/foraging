@@ -12,7 +12,7 @@ export class HttpError extends Error {
 
 const MAX_EVENTS = 5000;
 const MAX_CHUNKS = 50;
-const MAX_TRIALS = 200;
+const MAX_SETS = 200;
 const MAX_FEEDBACK = 5000;
 // Mirror of IdPattern in Assets/Scripts/Session/ConsentScreen.cs.
 const PID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -74,7 +74,7 @@ async function guarded<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
-const CONFLICTS = ['no_session', 'session_gap', 'gap_events', 'gap_trajectory', 'overlap_trajectory', 'gap_trials'];
+const CONFLICTS = ['no_session', 'session_gap', 'gap_events', 'gap_trajectory', 'overlap_trajectory', 'gap_sets'];
 
 export function fromDbError(e: DbError): HttpError {
   if (e.message === 'unauthorized') return new HttpError(401, 'unauthorized');
@@ -124,7 +124,7 @@ export function participantStart(db: Db, body: Body) {
 
 // {build, participant_id, participant_token, experiment, expected_sessions?} starts the participant's run of an experiment, or continues the unfinished one
 // (the participant must satisfy its prerequisites). `expected_sessions` declares a reduced run (a development build playing fewer sessions, see
-// docs/DECISIONS.md "Reduced runs"): how many sessions (practice, sessions, Interludes) it will have; only a build registered as a development release may
+// docs/DECISIONS.md "Reduced runs"): how many sessions it will have; only a build registered as a development release may
 // send it (403 reduced_run_not_allowed). Returns {run_id, token, status, experiment, resume, has_resume}; a finished run has no token but the
 // experiment's completion code.
 export function runStart(db: Db, body: Body) {
@@ -141,7 +141,7 @@ export function runStart(db: Db, body: Body) {
   });
 }
 
-// {run_id, token, session_index, session?, events?, trajectory?: [base64 chunk], plan?, trials?} -> {events_next, trajectory_next, trials_next}.
+// {run_id, token, session_index, session?, events?, trajectory?: [base64 chunk], sets?} -> {events_next, trajectory_next, sets_next}.
 // A 200 means every row of the request is stored.
 export function append(db: Db, body: Body) {
   return guarded(async () => {
@@ -159,11 +159,9 @@ export function append(db: Db, body: Body) {
       session: body.session ?? null,
       events: list(body, 'events', MAX_EVENTS),
       trajectory: chunks,
-      plan: body.plan ?? null,
-      trials: list(body, 'trials', MAX_TRIALS),
+      sets: list(body, 'sets', MAX_SETS),
     };
     if (batch.session !== null && (typeof batch.session !== 'object' || Array.isArray(batch.session))) bad('session must be an object');
-    if (batch.plan !== null && !Array.isArray(batch.plan)) bad('plan must be an array');
     const state = await db.call('server.append_batch', [rid, hash, index, batch]);
     return { ok: true, ...state };
   });

@@ -60,25 +60,24 @@ def test_finished_breaks_are_held_and_counted(conn):
 
 def test_a_break_the_data_stops_inside_is_held_until_the_last_thing_heard(conn):
     run = new_run(conn, "S3")
-    log(conn, run, [(0.0, "session_start"), (20.0, "rank_break_start"), (26.0, "rank_break_end"), (40.0, "rank_break_start"), (40.5, "rank_set"), (47.0, "pick")])
+    log(conn, run, [(0.0, "session_start"), (20.0, "rank_break_start"), (26.0, "rank_break_end"), (40.0, "rank_break_start"), (40.5, "rank_set"), (47.0, "rank_pick")])
     s = state(conn, run)
     assert s["held_seconds"] == pytest.approx(6.0 + 7.0) and s["breaks"] == 2 and s["sets_played"] == 1 and s["clock"] == 47.0
 
 
-def test_the_bonus_of_the_sets_so_far_is_returned_for_a_foraging_session_only(conn):
+def test_the_bonus_of_the_sets_so_far_is_returned(conn):
     run = new_run(conn, "S4")
     log(conn, run, [(0.0, "session_start"), (20.0, "rank_break_start")])
+    assert state(conn, run)["break_bonus"] == 0
     for seq, bonus in enumerate((4.0, 6.0)):
-        conn.execute("insert into public.interlude_trials (run_id, session_index, seq, presented_order, trial_index, bonus) values (%s, 0, %s, %s, %s, %s)", (run, seq, seq, seq, bonus))
+        conn.execute("insert into public.ranking_sets (run_id, session_index, seq, set_index, pool_index, bonus) values (%s, 0, %s, %s, %s, %s)", (run, seq, seq, seq, bonus))
     assert state(conn, run)["break_bonus"] == pytest.approx(10.0)
-    conn.execute("update public.sessions set is_interlude = true where run_id = %s", (run,))
-    assert state(conn, run)["break_bonus"] == 0                    # an Interlude's trials are its own, counted as before
 
 
 def test_the_points_of_a_run_include_the_bonus_of_a_foraging_sessions_ranking_sets(conn):
     run = new_run(conn, "S5")
     conn.execute("update public.sessions set completed = true, final_score = 10 where run_id = %s", (run,))
-    conn.execute("insert into public.interlude_trials (run_id, session_index, seq, presented_order, trial_index, bonus) values (%s, 0, 0, 0, 0, 5)", (run,))
+    conn.execute("insert into public.ranking_sets (run_id, session_index, seq, set_index, pool_index, bonus) values (%s, 0, 0, 0, 0, 5)", (run,))
     assert conn.execute("select server.run_points(%s) as p", (run,)).fetchone()["p"] == 15
     conn.execute("update public.sessions set is_practice = true where run_id = %s", (run,))
     assert conn.execute("select server.run_points(%s) as p", (run,)).fetchone()["p"] == 0         # a practice session pays nothing, sets included

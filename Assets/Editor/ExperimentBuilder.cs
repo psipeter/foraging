@@ -4,7 +4,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-// Creates or updates an experiment's assets (its sessions, their Interludes, the ExperimentConfig and its entry in the catalog) from a spec that
+// Creates or updates an experiment's assets (its sessions, the ExperimentConfig and its entry in the catalog) from a spec that
 // scripts/build_experiment.py writes from the experiment's design module (scripts/design/<code>.py). It is the one place SessionConfig assets are
 // made in bulk: a session is a copy of a template asset with the spec's fields set, so a design change is a rebuild, not a hand edit.
 // Run it through the Unity CLI: unity command eval 'return ExperimentBuilder.Build("<spec.json>");'
@@ -30,7 +30,7 @@ public static class ExperimentBuilder
         public string[] requires;
         public bool countsTowardTotal;
         public bool removeStale;        // delete the experiment's <code>_S*/<code>_I* assets that the spec does not list
-        public SessionSpec[] sessions;  // in play order, each session followed by its Interlude where it has one
+        public SessionSpec[] sessions;  // in play order
     }
 
     public static string Build(string specPath)

@@ -88,18 +88,13 @@ public class HttpSink
             sb.Append(start > 0 ? "," : "").Append('"').Append(Convert.ToBase64String(chunk)).Append('"');
         }
 
-        sb.Append("],\"trials\":[");
-        for (int i = 0; i < b.Trials.Count; i++)
+        sb.Append("],\"sets\":[");
+        for (int i = 0; i < b.Sets.Count; i++)
         {
-            sb.Append(i > 0 ? "," : "").Append(b.Trials[i].ToJson());
+            sb.Append(i > 0 ? "," : "").Append(b.Sets[i].ToJson());
         }
 
         sb.Append(']');
-        if (b.Plan != null)
-        {
-            sb.Append(",\"plan\":[").Append(string.Join(",", b.Plan)).Append(']');
-        }
-
         return sb.Append('}').ToString();
     }
 

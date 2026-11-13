@@ -39,7 +39,6 @@ MENU_COMMIT = "menu123"
 DEV_COMMIT = "dev9999"                                         # registered as a development release: it may start reduced runs
 BUILD = {"commit": COMMIT, "dirty": False, "platform": "TestPlatform", "unity_version": "6000.test"}
 WORLD = "a" * 64
-INTERLUDE = "b" * 64
 
 
 @pytest.fixture(scope="module")
@@ -76,7 +75,7 @@ def env(tmp_path_factory):
     server_admin.register_release(admin, COMMIT, {"TEST": 2})
     server_admin.register_release(admin, MENU_COMMIT, {"ONE": 1, "TWO": 1})
     server_admin.register_release(admin, DEV_COMMIT, {"TEST": 2}, development=True)
-    admin.execute("insert into public.worlds (sha256, name) values (%s, 'S1_seed1.world'), (%s, 'S1_Interlude_seed1.interlude.json')", (WORLD, INTERLUDE))
+    admin.execute("insert into public.worlds (sha256, name) values (%s, 'S1_seed1.world')", (WORLD,))
     yield {"url": f"http://127.0.0.1:{port}", "db": admin, "dburl": url, "log": log}
     proc.terminate()
     proc.wait(10)
@@ -147,7 +146,7 @@ def test_append_stores_rows_and_a_repeat_changes_nothing(env):
     f = frames(300)
     events = event_rows([ev(0.0, "session_start", payload={"x": 1.5}), ev(1.0, "fruit", tree_id=4, k=0, reward=2.0, running_total=2.0)])
     ack = c.append(0, session=session_row(), events=events, frames=f, first_seq=0)
-    assert ack["events_next"] == 2 and ack["trajectory_next"] == 300 and ack["trials_next"] == 0
+    assert ack["events_next"] == 2 and ack["trajectory_next"] == 300 and ack["sets_next"] == 0
     again = c.append(0, session=session_row(), events=events, frames=f, first_seq=0)      # a lost response, resent
     assert again == ack
     assert count(env, "events", c.run_id) == 2 and count(env, "trajectory", c.run_id) == 1 and count(env, "sessions", c.run_id) == 1
@@ -255,22 +254,19 @@ def test_a_run_whose_build_no_longer_lists_the_experiment_does_not_finish(env):
     assert env["db"].execute("select status from public.runs where run_id = %s", (c.run_id,)).fetchone()["status"] != "finished"
 
 
-def test_interludes_carry_a_plan_and_trials_and_the_resume_state_has_them(env):
+def test_ranking_sets_are_stored_and_the_resume_state_has_them(env):
     c = client(env)
-    c.start(prolific_pid="PID_interlude")
-    c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start")]))
-    interlude = session_row(1, is_interlude=True, interlude_file="S1_Interlude_seed1.interlude.json", interlude_sha256=INTERLUDE)
-    trials = [{"seq": i, "presented_order": i, "trial_index": [4, 2, 0][i], "type": "t", "choice": "left", "choice_correct": 1, "timed_out": 0,
-               "left_id": 1, "right_id": 2, "response_time": 1.5, "paused_seconds": 2.5} for i in range(2)]
-    ack = c.append(1, session=interlude, events=event_rows([ev(0.0, "session_start")]), plan=[4, 2, 0], trials=trials)
-    assert ack["trials_next"] == 2
-    assert env["db"].execute("select paused_seconds from public.interlude_trials where run_id = %s order by seq", (c.run_id,)).fetchall() == [
-        {"paused_seconds": 2.5}, {"paused_seconds": 2.5}]
-    state = c.start(prolific_pid="PID_interlude")["resume"]
-    assert state["session_index"] == 1 and state["is_interlude"] is True and state["interlude_plan"] == [4, 2, 0]
-    assert state["trial_rows"] == [{"correct": 1, "bonus": 0}, {"correct": 1, "bonus": 0}] and state["trials_next"] == 2
-    with raises(409, "gap_trials"):
-        c.append(1, trials=[{**trials[0], "seq": 5}])
+    c.start(prolific_pid="PID_sets")
+    sets = [ranking_set(i, 1, 3.5) for i in range(2)]
+    ack = c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start")]), sets=sets)
+    assert ack["sets_next"] == 2
+    assert env["db"].execute("select set_index, pool_index, paused_seconds from public.ranking_sets where run_id = %s order by seq", (c.run_id,)).fetchall() == [
+        {"set_index": 0, "pool_index": 4, "paused_seconds": 2.5}, {"set_index": 1, "pool_index": 5, "paused_seconds": 2.5}]
+    state = c.start(prolific_pid="PID_sets")["resume"]
+    assert state["session_index"] == 0 and state["sets_next"] == 2 and state["break_bonus"] == 7.0
+    assert "is_interlude" not in state and "interlude_plan" not in state and "trial_rows" not in state
+    with raises(409, "gap_sets"):
+        c.append(0, sets=[{**sets[0], "seq": 5}])
 
 
 def test_finish_lists_what_is_missing_and_a_finished_run_accepts_no_more(env):
@@ -400,8 +396,9 @@ def test_the_public_roles_can_read_nothing_and_call_nothing(env, role):
                 conn.execute(statement)
 
 
-def trial(seq, correct, bonus):
-    return {"seq": seq, "presented_order": seq, "trial_index": seq, "choice_correct": correct, "bonus": bonus}
+def ranking_set(seq, correct, bonus):
+    return {"seq": seq, "set_index": seq, "pool_index": seq + 4, "timed_out": 0, "response_time": 1.5, "paused_seconds": 2.5, "bonus": bonus,
+            "set_size": 2, "correct_pairs": correct, "total_pairs": 1}
 
 
 def test_resume_state_carries_the_totals_of_finished_sessions(env):
@@ -409,19 +406,13 @@ def test_resume_state_carries_the_totals_of_finished_sessions(env):
     c.start(prolific_pid="PID_totals")
     done = {"completed": True, "ended_at": "2026-10-29T12:00:00Z"}
     c.append(0, session=session_row(0, is_practice=True, final_score=58.0, **done), events=event_rows([ev(0.0, "session_start")]))
-    c.append(1, session=session_row(1, is_interlude=True, is_practice=True, final_score=0.0, **done), events=event_rows([ev(0.0, "session_start")]),
-             trials=[trial(0, 1, 5.0)])
-    c.append(2, session=session_row(2, final_score=33.0, **done), events=event_rows([ev(0.0, "session_start")]))
-    c.append(3, session=session_row(3, is_interlude=True, final_score=0.0, **done), events=event_rows([ev(0.0, "session_start")]),
-             trials=[trial(0, 1, 5.0), trial(1, 0, 0.0)])
-    c.append(4, session=session_row(4, is_interlude=True), events=event_rows([ev(0.0, "session_start")]), plan=[1, 0],
-             trials=[trial(0, 1, 5.0)])
+    c.append(1, session=session_row(1, final_score=33.0, **done), events=event_rows([ev(0.0, "session_start")]), sets=[ranking_set(0, 1, 5.0)])
+    c.append(2, session=session_row(2), events=event_rows([ev(0.0, "session_start")]), sets=[ranking_set(0, 1, 5.0), ranking_set(1, 0, 0.0)])
     state = c.start(prolific_pid="PID_totals")["resume"]
-    assert state["session_index"] == 4 and state["completed"] is False
-    assert [(p["index"], p["is_practice"], p["is_interlude"], p["score"]) for p in state["previous"]] == [
-        (0, True, False, 58.0), (1, True, True, 0.0), (2, False, False, 33.0), (3, False, True, 0.0)]
-    assert state["previous_interlude"] == {"trials": 2, "correct": 1, "bonus": 5.0}     # finished, non-practice Interludes only
-    assert state["trial_rows"] == [{"correct": 1, "bonus": 5.0}]
+    assert state["session_index"] == 2 and state["completed"] is False
+    assert [(p["index"], p["is_practice"], p["score"]) for p in state["previous"]] == [(0, True, 58.0), (1, False, 33.0)]
+    assert state["break_bonus"] == 5.0 and state["sets_next"] == 2
+    assert "previous_interlude" not in state and all("is_interlude" not in p for p in state["previous"])
     assert state["has_pose"] is False and state["pose"]["t"] == 0 and state["open_bout_tree"] == -1 and state["running_total"] == 0
 
 
@@ -494,13 +485,13 @@ def test_the_menu_lists_the_experiments_with_the_participants_standing_and_locks
     assert env["db"].execute("select experiment, build_commit from public.runs where run_id = %s", (two["run_id"],)).fetchone() == {"experiment": "TWO", "build_commit": MENU_COMMIT}
 
 
-def test_menu_points_are_completed_session_scores_plus_interlude_bonuses_without_the_practice_ones(env):
+def test_menu_points_are_completed_session_scores_plus_ranking_bonuses_without_the_practice_ones(env):
     c = client(env)
     c.login("PID_points")
     c.start(login=False)
     done = {"completed": True, "ended_at": "2026-11-07T12:00:00Z"}
     c.append(0, session=session_row(0, is_practice=True, final_score=58.0, **done), events=event_rows([ev(0.0, "session_start")]))         # practice: not counted
-    c.append(1, session=session_row(1, is_interlude=True, **done), events=event_rows([ev(0.0, "session_start")]), trials=[trial(0, 1, 5.0), trial(1, 0, 0.0)])
+    c.append(1, session=session_row(1, **done), events=event_rows([ev(0.0, "session_start")]), sets=[ranking_set(0, 1, 5.0), ranking_set(1, 0, 0.0)])
     standing = {m["code"]: m for m in c.login("PID_points")["experiments"]}["TEST"]
     assert standing["points"] == 5.0 and standing["sessions_done"] == 2
 
@@ -622,17 +613,15 @@ def test_a_full_run_of_a_development_release_still_needs_every_session_and_a_res
     assert two_sessions_ok["ok"] is False and any("0 sessions present, 2 expected" in p for p in two_sessions_ok["problems"])
 
 
-def test_a_ranking_set_is_a_trial_row_with_bushes_and_counts_in_the_tallies_and_the_long_view(env):
+def test_a_ranking_set_is_a_row_with_bushes_and_counts_in_the_tallies_and_the_long_view(env):
     c = client(env)
     c.start(prolific_pid="PID_ranking")
-    c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start")]))
     bushes = [{"id": 5, "slot": 0, "shape": 0.25, "color": 0.5, "moisture": 0.5, "value": 1.5, "rank": 1, "start_time": 1.0, "finish_time": 2.5, "fruits": 10},
               {"id": 6, "slot": 1, "shape": 0.75, "color": 0.1, "moisture": 0.5, "value": 0.5, "rank": None, "start_time": None, "finish_time": None, "fruits": 0}]
-    row = {"seq": 0, "presented_order": 0, "trial_index": 2, "type": "ranking", "timed_out": 1, "response_time": 30.0, "bonus": 3.5, "set_size": 2,
-           "correct_pairs": 1, "total_pairs": 1, "bushes": bushes}
-    ack = c.append(1, session=session_row(1, is_interlude=True), events=event_rows([ev(0.0, "session_start")]), plan=[2], trials=[row])
-    assert ack["trials_next"] == 1
+    row = {**ranking_set(0, 1, 3.5), "timed_out": 1, "response_time": 30.0, "start_x": 1.0, "start_z": 2.0, "bushes": bushes}
+    ack = c.append(0, session=session_row(0), events=event_rows([ev(0.0, "session_start")]), sets=[row])
+    assert ack["sets_next"] == 1
     state = c.start(prolific_pid="PID_ranking")["resume"]
-    assert state["trial_rows"] == [{"correct": 0, "bonus": 3.5}] and state["trials_next"] == 1
-    picks = env["db"].execute("select bush_id, slot, rank, finish_time, fruits from public.interlude_picks where run_id = %s order by bush_id", (c.run_id,)).fetchall()
+    assert state["break_bonus"] == 3.5 and state["sets_next"] == 1
+    picks = env["db"].execute("select bush_id, slot, rank, finish_time, fruits from public.ranking_picks where run_id = %s order by bush_id", (c.run_id,)).fetchall()
     assert picks == [{"bush_id": 5, "slot": 0, "rank": 1, "finish_time": 2.5, "fruits": 10}, {"bush_id": 6, "slot": 1, "rank": None, "finish_time": None, "fruits": 0}]

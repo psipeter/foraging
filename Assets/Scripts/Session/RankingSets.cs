@@ -1,8 +1,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 
-// What the ranking Interlude (InterludeManager) and the in-session ranking break (RankingBreak) share: the scoring of a set's implied pairs and its
-// interlude_trials row (in TrialRow.Columns order; the pair columns are empty and `bushes` holds one object per bush in slot order).
+// What a ranking break (RankingBreak) uses to score a set and to log its ranking_sets row (in SetRow.Columns order; `bushes` holds one object per bush in slot order).
 public static class RankingSets
 {
     public static string F(float value)
@@ -70,32 +69,15 @@ public static class RankingSets
             ("finish_time", finishTime >= 0f ? (object)finishTime : null), ("fruits", fruits));
     }
 
-    // The cells of a set's interlude_trials row.
-    public static string[] RowCells(int position, int trialIndex, float startX, float startZ, bool timedOut, float response, float firstHarvestTime, float bonus,
+    // The cells of a set's ranking_sets row, in SetRow.Columns order.
+    public static string[] RowCells(int position, int poolIndex, float startX, float startZ, bool timedOut, float response, float firstHarvestTime, float bonus,
         float pausedSeconds, int setSize, int correct, int total, IEnumerable<string> bushObjects)
     {
-        var cells = new List<string> { position.ToString(), trialIndex.ToString(), "ranking", "", F(startX), F(startZ) };
-        for (int i = 0; i < 10; i++)
+        return new[]
         {
-            cells.Add("");                                  // left_* and right_*
-        }
-
-        cells.Add("");                                      // correct_side
-        cells.Add("");                                      // choice
-        cells.Add("");                                      // choice_correct
-        cells.Add(timedOut ? "1" : "0");
-        cells.Add(F(response));
-        cells.Add(firstHarvestTime < 0f ? "" : F(firstHarvestTime));
-        cells.Add("");                                      // first_harvest_side
-        cells.Add("");                                      // left_fruits
-        cells.Add("");                                      // right_fruits
-        cells.Add(F(bonus));
-        cells.Add("");                                      // locked_at
-        cells.Add(F(pausedSeconds));
-        cells.Add(setSize.ToString());
-        cells.Add(correct.ToString());
-        cells.Add(total.ToString());
-        cells.Add("[" + string.Join(",", bushObjects) + "]");
-        return cells.ToArray();
+            position.ToString(), poolIndex.ToString(), F(startX), F(startZ), timedOut ? "1" : "0", F(response),
+            firstHarvestTime < 0f ? "" : F(firstHarvestTime), F(bonus), F(pausedSeconds),
+            setSize.ToString(), correct.ToString(), total.ToString(), "[" + string.Join(",", bushObjects) + "]",
+        };
     }
 }

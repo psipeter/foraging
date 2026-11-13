@@ -144,8 +144,8 @@ public class Tree : MonoBehaviour
     // Both ease toward their targets so the cues fade in and out instead of popping.
     private void UpdateRim()
     {
-        float softTarget = _highlightLevel * sessionConfig.RimApproachIntensity * (_highlightEmphasis ? sessionConfig.InterludeRimBoost * 0.5f : 1f);
-        float boost = _highlightEmphasis ? sessionConfig.InterludeRimBoost : 1f;
+        float softTarget = _highlightLevel * sessionConfig.RimApproachIntensity * (_highlightEmphasis ? sessionConfig.RankingRimBoost * 0.5f : 1f);
+        float boost = _highlightEmphasis ? sessionConfig.RankingRimBoost : 1f;
         float crispTarget = _highlightSelected ? sessionConfig.RimSelectedIntensity * boost : 0f;
         float ease = 1f - Mathf.Exp(-12f * Time.deltaTime);
         _softCurrent = Mathf.Lerp(_softCurrent, softTarget, ease);
@@ -166,7 +166,7 @@ public class Tree : MonoBehaviour
         // Slightly different rim color once the bush is selected (harvestable).
         _selectedBlend = Mathf.Lerp(_selectedBlend, _highlightSelected ? 1f : 0f, ease);
         _rimInstance.SetColor("_RimColor", Color.Lerp(sessionConfig.RimColor, sessionConfig.RimSelectedColor, _selectedBlend));
-        _rimObject.transform.localScale = Vector3.one * Mathf.Lerp(RimScale, _highlightEmphasis ? sessionConfig.InterludeRimScale : RimScale, _selectedBlend);
+        _rimObject.transform.localScale = Vector3.one * Mathf.Lerp(RimScale, _highlightEmphasis ? sessionConfig.RankingRimScale : RimScale, _selectedBlend);
         _rimInstance.SetFloat("_SoftIntensity", _softCurrent);
         _rimInstance.SetFloat("_SoftPower", sessionConfig.RimApproachPower);
         _rimInstance.SetFloat("_CrispIntensity", _crispCurrent);
@@ -428,7 +428,7 @@ public class Tree : MonoBehaviour
         }
     }
 
-    // Ranking Interlude: the rank this bush was given (1 = the first harvested) shown as a number above the crown, facing the camera at the
+    // Ranking: the rank this bush was given (1 = the first harvested) shown as a number above the crown, facing the camera at the
     // ring's constant apparent size. 0 removes it. A spent bush keeps its number.
     public void SetRank(int rank)
     {
@@ -487,9 +487,9 @@ public class Tree : MonoBehaviour
         float degrees = sessionConfig.HarvestRingSizeDeg;
         float size = 2f * dist * Mathf.Tan(degrees * 0.5f * Mathf.Deg2Rad);
         Transform label = _rankLabel.transform;
-        label.position = crown + Vector3.up * (0.4f + size * (0.5f + sessionConfig.InterludeMarkerLift));
+        label.position = crown + Vector3.up * (0.4f + size * (0.5f + sessionConfig.RankingMarkerLift));
         label.rotation = _rankCamera.rotation;
-        label.localScale = Vector3.one * (size / Mathf.Max(transform.lossyScale.x, 0.0001f) * 0.25f * sessionConfig.InterludeRankScale);
+        label.localScale = Vector3.one * (size / Mathf.Max(transform.lossyScale.x, 0.0001f) * 0.25f * sessionConfig.RankingRankScale);
     }
 
     // Clock-style harvest progress ring above the crown, facing the camera at a constant apparent size.
@@ -599,7 +599,7 @@ public class Tree : MonoBehaviour
         }
     }
 
-    // Interlude: the bush that was not chosen shrinks away and is hidden. It stops being harvestable at once (isHarvested is what
+    // The bush that was not chosen shrinks away and is hidden. It stops being harvestable at once (isHarvested is what
     // HarvestManager skips), so it cannot be switched to during the fade.
     public void ShrinkAwayAndHide(float duration)
     {
@@ -807,7 +807,7 @@ public class Tree : MonoBehaviour
     }
 
     // level: 0-1 graded cue while approaching; selected: this is the bush Space would harvest (or is harvesting).
-    // `emphasized` (the ranking Interlude): the selected bush gets a bigger, brighter halo, so it shows at the stage's distance.
+    // `emphasized` (a ranking): the selected bush gets a bigger, brighter halo, so it shows at the ranking's distance.
     public void SetHighlight(float level, bool selected, bool emphasized = false)
     {
         _highlightLevel = Mathf.Clamp01(level);

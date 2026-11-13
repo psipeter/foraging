@@ -7,8 +7,7 @@ using UnityEngine;
 // and Game views show the session instead of an empty scene. It uses the game's own components (TerrainManager for the ground, Tree for the bushes) and
 // the same scene references (terrain material, bush prefab, rim and ring materials), but puts everything under one object that is never saved with the scene
 // and is cleared before Play, before a recompile, before the scene is saved and when the Editor quits (the game builds the world itself at Start; objects
-// built in edit mode do not survive a domain reload intact: their materials are lost and the bushes turn pink). The session is the last session (not an
-// Interlude) of the GameManager's defaultExperiment (CF_S7 for Complex Features, TUT_S1 for the Tutorial). It is built by Foraging > Session preview and, with
+// built in edit mode do not survive a domain reload intact: their materials are lost and the bushes turn pink). The session is the last session of the GameManager's defaultExperiment. It is built by Foraging > Session preview and, with
 // "Preview on scene open" ticked (the default), also when the Editor or scene opens and after Play, and rebuilt when defaultExperiment changes.
 [InitializeOnLoad]
 public static class SessionPreview
@@ -122,7 +121,7 @@ public static class SessionPreview
         }
     }
 
-    // The session shown for a GameManager: the last one of its defaultExperiment that is not an Interlude.
+    // The session shown for a GameManager: the last one of its defaultExperiment.
     // Set by Foraging > Terrain preview: preview this session instead of the last one of the default experiment (null: the default).
     public static SessionConfig Chosen;
 
@@ -144,7 +143,7 @@ public static class SessionPreview
         {
             foreach (SessionConfig session in experiment.Sessions)
             {
-                if (session != null && !session.IsInterlude)
+                if (session != null)
                 {
                     found = session;
                 }

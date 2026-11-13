@@ -12,7 +12,7 @@ public class FileSink : IDisposable
     private class SessionFiles
     {
         public string Folder;
-        public StreamWriter Events, Trajectory, Trials;
+        public StreamWriter Events, Trajectory, Sets;
     }
 
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -36,12 +36,12 @@ public class FileSink : IDisposable
     // The session continues an interrupted one: keep only the local rows the server also holds (the first `next` rows of each
     // file) so the sequence numbers carry on without a gap or a repeat, and append from there. Missing files (the participant
     // is on another computer) are created when the first row arrives, starting at the server's sequence number.
-    public void PrepareResume(int sessionIndex, int eventsNext, int trajectoryNext, int trialsNext)
+    public void PrepareResume(int sessionIndex, int eventsNext, int trajectoryNext, int setsNext)
     {
         string folder = Path.Combine(_runFolder, sessionIndex.ToString("00", Inv));
         TruncateRows(Path.Combine(folder, "events.csv"), eventsNext);
         TruncateRows(Path.Combine(folder, "trajectory.csv"), trajectoryNext);
-        TruncateRows(Path.Combine(folder, "interlude_trials.csv"), trialsNext);
+        TruncateRows(Path.Combine(folder, "ranking_sets.csv"), setsNext);
         _resumed.Add(sessionIndex);
     }
 
@@ -92,12 +92,7 @@ public class FileSink : IDisposable
             s.Trajectory.Write('\n');
         }
 
-        if (batch.Plan != null)
-        {
-            File.WriteAllText(Path.Combine(s.Folder, "interlude_plan.json"), "{\"trial_order\":[" + string.Join(",", batch.Plan) + "]}");
-        }
-
-        foreach (TrialRow t in batch.Trials)
+        foreach (SetRow t in batch.Sets)
         {
             var cells = new string[t.Cells.Length + 1];
             cells[0] = t.Seq.ToString(Inv);
@@ -106,19 +101,19 @@ public class FileSink : IDisposable
                 cells[i + 1] = Csv(t.Cells[i]);
             }
 
-            if (s.Trials == null)
+            if (s.Sets == null)
             {
-                s.Trials = Writer(s.Folder, "interlude_trials.csv",
-                    "seq," + string.Join(",", Array.ConvertAll(TrialRow.Columns, c => c.name)), _resumed.Contains(batch.SessionIndex));
+                s.Sets = Writer(s.Folder, "ranking_sets.csv",
+                    "seq," + string.Join(",", Array.ConvertAll(SetRow.Columns, c => c.name)), _resumed.Contains(batch.SessionIndex));
             }
 
-            s.Trials.Write(string.Join(",", cells));
-            s.Trials.Write('\n');
+            s.Sets.Write(string.Join(",", cells));
+            s.Sets.Write('\n');
         }
 
         s.Events.Flush();
         s.Trajectory.Flush();
-        s.Trials?.Flush();
+        s.Sets?.Flush();
     }
 
     public void Dispose()
@@ -127,7 +122,7 @@ public class FileSink : IDisposable
         {
             s.Events?.Dispose();
             s.Trajectory?.Dispose();
-            s.Trials?.Dispose();
+            s.Sets?.Dispose();
         }
 
         _sessions.Clear();

@@ -17,24 +17,10 @@ public class TreeCount
 }
 
 [Serializable]
-public class TrialTally
-{
-    public int correct;
-    public float bonus;
-}
-
-[Serializable]
 public class PreviousSession
 {
     public bool is_practice;
-    public bool is_interlude;
     public float score;
-}
-
-[Serializable]
-public class InterludeTotals
-{
-    public float bonus;
 }
 
 [Serializable]
@@ -53,16 +39,13 @@ public class ResumeReply
     public float running_total;
     public TreeCount[] fruits_taken;        // fruits already taken per bush
     public int open_bout_tree;              // the bush being harvested when the data stops, or -1
-    public int[] interlude_plan;
-    public TrialTally[] trial_rows;         // the current Interlude's finished trials
     public PreviousSession[] previous;      // completed sessions, for the running totals
-    public InterludeTotals previous_interlude;
     public double gap_seconds;              // how long ago the server last heard from the participant
-    public int events_next, trajectory_next, trials_next;
+    public int events_next, trajectory_next, sets_next;
 }
 
 // The server's state for the session about to start, held between the scene reload that DataPipeline triggers and the
-// components that restore it (DataLogger, InterludeManager, InstructionsPanel); cleared once applied.
+// components that restore it (DataLogger, InstructionsPanel); cleared once applied.
 public static class ResumeInfo
 {
     public static ResumeReply Pending;

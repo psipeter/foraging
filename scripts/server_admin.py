@@ -43,8 +43,7 @@ def register_experiment(conn, code, title, requires=(), sort_order=0, completion
 
 
 def register_release(conn, commit, experiments, note=None, development=False):
-    """Register a build and the experiments it offers: `experiments` maps an experiment code to its number of sessions (practice,
-    sessions and Interludes alike) in this build. The experiments must be registered (`register_experiment`); run-start refuses a build
+    """Register a build and the experiments it offers: `experiments` maps an experiment code to its number of sessions in this build. The experiments must be registered (`register_experiment`); run-start refuses a build
     that is not listed or an experiment it does not offer. `development` marks a release made from a development build: only such a release may start a
     reduced run (a development build playing fewer sessions; migration 20261110000000_reduced_runs.sql)."""
     with conn.transaction():                                  # run-finish reads these rows: never see them half replaced
@@ -56,7 +55,7 @@ def register_release(conn, commit, experiments, note=None, development=False):
 
 
 def sessions_in_build(commit, code, repo=PROJECT_ROOT):
-    """How many sessions (practice, sessions and Interludes alike) the experiment `code` lists in its asset at `commit`: the count `register_release`
+    """How many sessions the experiment `code` lists in its asset at `commit`: the count `register_release`
     registers, read from git so it cannot be mistyped."""
     asset = subprocess.run(["git", "show", f"{commit}:Assets/ScriptableObjects/Experiments/{code}/{code}.asset"], cwd=repo, capture_output=True, text=True)
     if asset.returncode != 0:
@@ -66,10 +65,9 @@ def sessions_in_build(commit, code, repo=PROJECT_ROOT):
 
 
 def register_worlds(conn, directory=WORLD_DIR):
-    """Register every world and Interlude file one folder under `directory` (and the stage worlds beside it) by sha256; returns the names registered."""
+    """Register every world and ranking pool file one folder under `directory` by sha256; returns the names registered."""
     names = []
-    stages = sorted(Path(directory).parent.glob("stage_seed*.world"))                         # the flat stage of the ranking Interludes, a common file beside the experiments' folders
-    for path in sorted(Path(directory).glob("*/*")) + stages:                                 # <experiment code>/<file>
+    for path in sorted(Path(directory).glob("*/*")):                                          # <experiment code>/<file>
         if path.suffix in (".world", ".json"):
             conn.execute("insert into public.worlds (sha256, name) values (%s, %s) on conflict (sha256) do nothing",
                          (hashlib.sha256(path.read_bytes()).hexdigest(), path.name))
@@ -123,7 +121,7 @@ def catalog_experiments(repo=PROJECT_ROOT):
 
 def build_plan(build_dir=None, commit=None, repo=PROJECT_ROOT):
     """What `publish` registers: the experiments (those the build holds when `build_dir` is given, else every catalog experiment), the commit (the build's own, from its
-    build_info.json, else `commit` or HEAD) with each experiment's session count read from git, the folder whose world and Interlude files are registered (the build's,
+    build_info.json, else `commit` or HEAD) with each experiment's session count read from git, the folder whose world and ranking pool files are registered (the build's,
     so the hashes are of the files the participant downloads), and the notes a human should see (a dirty build, a commit that is not HEAD)."""
     repo = Path(repo)
     notes = []
@@ -173,7 +171,7 @@ def build_description(build_dir, reason=None, repo=PROJECT_ROOT, now=None):
     when = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M UTC")
     lines = [f"Reason: {reason}"] if reason else []
     lines += [f"Made from the foraging commit {plan['commit']}" + (", with uncommitted changes to files that shape the game." if dirty else "."),
-              f"Holds (parts are sessions and Interludes): {holds}.", f"Prepared {when}."]
+              f"Holds (sessions): {holds}.", f"Prepared {when}."]
     return subject, "\n".join(lines)
 
 
@@ -191,7 +189,7 @@ def publish(conn, plan, completion_codes=None, note=None):
         register_experiment(conn, e["code"], e["title"], e["requires"], e["order"], completion_codes.get(e["code"]))
         done.append(f"experiment {e['code']} ({e['title']}, order {e['order']}, requires {e['requires'] or 'nothing'})")
     names = register_worlds(conn, plan["worlds"])
-    done.append(f"{len(names)} world and Interlude files from {plan['worlds']}")
+    done.append(f"{len(names)} world and ranking pool files from {plan['worlds']}")
     register_release(conn, plan["commit"], plan["sessions"], note, plan.get("development", False))
     done.append(f"release {plan['commit'][:12]} with {plan['sessions']}")
     return done
@@ -202,12 +200,12 @@ def _iso(value):
 
 
 def archive_worlds(commit, sessions, out_root, repo=PROJECT_ROOT):
-    """Write the world and Interlude files the `sessions` rows name into `out_root`/_worlds/<sha8>_<name> (where replay looks), taking
+    """Write the world files the `sessions` rows name into `out_root`/_worlds/<sha8>_<name> (where replay looks), taking
     them from git at the run's build commit: a browser never archives its worlds, and the working tree's files get regenerated.
     A file already archived is kept; one git does not hold with the logged sha256 is reported, not written."""
     archive = Path(out_root) / "_worlds"
     for s in sessions:
-        for name, sha in ((s["world_file"], s["world_sha256"]), (s.get("interlude_file"), s.get("interlude_sha256"))):
+        for name, sha in ((s["world_file"], s["world_sha256"]),):
             target = archive / f"{sha[:8]}_{name}" if name else None
             if target is None or target.exists():
                 continue
@@ -224,9 +222,9 @@ def archive_worlds(commit, sessions, out_root, repo=PROJECT_ROOT):
             target.write_bytes(blob)
 
 
-def write_session_rows(out_root, run_id, s, events, chunks, plan, trials):
+def write_session_rows(out_root, run_id, s, events, chunks, sets):
     """Write one session's database rows as the local layout: `s` the `sessions` row, `events` its rows in seq order, `chunks` its
-    trajectory rows (first_seq, data as bytes) in order, `plan` the `interlude_plan` row or None, `trials` its Interlude trial rows."""
+    trajectory rows (first_seq, data as bytes) in order, `sets` its `ranking_sets` rows."""
     index = s["session_index"]
     events = [{"t": e["t"], "real": np.nan if e["real"] is None else e["real"], "type": e["type"],
                "tree_id": -1 if e["tree_id"] is None else e["tree_id"], "k": -1 if e["k"] is None else e["k"],
@@ -241,10 +239,9 @@ def write_session_rows(out_root, run_id, s, events, chunks, plan, trials):
         frames.append(f)
         expect += len(f)
     traj = np.concatenate(frames) if frames else np.empty((0, 6))
-    trials = [{k: v for k, v in t.items() if k not in ("run_id", "session_index")} for t in trials]
+    sets = [{k: v for k, v in t.items() if k not in ("run_id", "session_index")} for t in sets]
     row = {k: _iso(v) for k, v in s.items() if k not in ("run_id", "session_index")}
-    rundata.write_session(out_root, run_id, index, row, traj, events, plan=plan["trial_order"] if plan else None,
-                          trials=trials or None)
+    rundata.write_session(out_root, run_id, index, row, traj, events, sets=sets or None)
 
 
 def pull_run(conn, run_id, out_root):
@@ -260,8 +257,7 @@ def pull_run(conn, run_id, out_root):
             out_root, run_id, s,
             conn.execute("select * from public.events where run_id = %s and session_index = %s order by seq", where),
             conn.execute("select first_seq, data from public.trajectory where run_id = %s and session_index = %s order by first_seq", where),
-            conn.execute("select trial_order from public.interlude_plan where run_id = %s and session_index = %s", where).fetchone(),
-            conn.execute("select * from public.interlude_trials where run_id = %s and session_index = %s order by seq", where))
+            conn.execute("select * from public.ranking_sets where run_id = %s and session_index = %s order by seq", where))
     archive_worlds(run["build_commit"], sessions, out_root)
     return Path(out_root) / str(run_id)
 

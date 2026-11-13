@@ -299,7 +299,6 @@ MonoBehaviour:
   feedbackAudio: {fileID: 440847461}
   ambientAudio: {fileID: 1968310339}
   instructionsPanel: {fileID: 269841567}
-  interludeManager: {fileID: 2081684507}
 --- !u!4 &205307911
 Transform:
   m_ObjectHideFlags: 0
@@ -1823,7 +1822,6 @@ MonoBehaviour:
   timerText: {fileID: 1016130530}
   sunController: {fileID: 419207779}
   sessionConfig: {fileID: 0}
-  interludeManager: {fileID: 0}
   sessionEndPanel: {fileID: 1050203413}
   finalScoreText: {fileID: 301916361}
   sessionCompleteText: {fileID: 544481332}
@@ -2715,60 +2713,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &2081684505
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2081684506}
-  - component: {fileID: 2081684507}
-  m_Layer: 0
-  m_Name: InterludeManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &2081684506
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2081684505}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &2081684507
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2081684505}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2555d999ac8dab12a92169c2e2181b61, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::InterludeManager
-  sessionConfig: {fileID: 0}
-  harvestUI: {fileID: 0}
-  dataLogger: {fileID: 0}
-  player: {fileID: 581266112}
-  cameraController: {fileID: 581266119}
-  harvestManager: {fileID: 528505460}
-  sunController: {fileID: 419207779}
-  fadeSeconds: 0.25
-  blackHoldSeconds: 0.2
-  hideSeconds: 0.4
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -2789,4 +2733,3 @@ SceneRoots:
   - {fileID: 269841568}
   - {fileID: 440847460}
   - {fileID: 1968310338}
-  - {fileID: 2081684506}

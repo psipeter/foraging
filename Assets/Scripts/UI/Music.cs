@@ -1,7 +1,7 @@
 using UnityEngine;
 
-// The study's music (Resources/Audio: synthesized, no licence): a slow pad loop under the menus and, at the start of each score screen (a session's or an
-// Interlude's, and the experiment's completion screen), a short soft arpeggio followed by a quieter pad loop. It never plays during a session (the
+// The study's music (Resources/Audio: synthesized, no licence): a slow pad loop under the menus and, at the start of each score screen (a session's, and the
+// experiment's completion screen), a short soft arpeggio followed by a quieter pad loop. It never plays during a session (the
 // ambient sound is the only sound there) and never depends on anything the participant does. Fades in and out; created on first use and kept across scene loads.
 public class Music : MonoBehaviour
 {

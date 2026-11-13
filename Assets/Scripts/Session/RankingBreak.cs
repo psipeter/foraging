@@ -6,8 +6,8 @@ using UnityEngine;
 
 // A ranking break: a ranking set played in place, inside a foraging session, so the participant stays in the foraging stage (SessionConfig.rankingBreak*,
 // docs/DECISIONS.md "FOR: ranking breaks inside the session"). After every `rankingBreakEvery` patch switches (a settled crossing into another tile of a tiles
-// world) the real bushes fade to grayscale (and cannot be aimed at) and a set of ranking bushes grows on the Interlude's arc in front of the player, on the terrain they stand on. The player
-// harvests them from most to least points under the Interlude's rules (stationary, any bush in view, a started harvest is finished). The session clock is held
+// world) the real bushes fade to grayscale (and cannot be aimed at) and a set of ranking bushes grows on an arc in front of the player, on the terrain they stand on. The player
+// harvests them from most to least points under these rules (stationary, any bush in view, a started harvest is finished). The session clock is held
 // while a break runs (SunController.ClockHeld) and a second countdown shows the set's own seconds; outcomes are hidden and the ranking bushes pay nothing
 // (zero fruit rewards), so the score does not move. The sets come from the session's pool file (scripts/ranking.py pool), used in order.
 // Created at runtime by GameManager (no scene wiring). Not built yet: replay/visibility gaps, resume. The arc is placed on whatever ground is there (no wait for flat ground: it looked fine in the first playtest).
@@ -42,7 +42,7 @@ public class RankingBreak : MonoBehaviour
         public int fruitCount;
         public float[] treePos;
         public float[] canopyRadius;
-        public PoolSet[] trials;
+        public PoolSet[] sets;
     }
 
     // True from the start of a break to its end: the consumers of HarvestManager's events (HarvestUI, FeedbackAudio, InstructionsPanel) hide outcomes meanwhile.
@@ -98,7 +98,7 @@ public class RankingBreak : MonoBehaviour
     public static RankingBreak Create(SessionConfig config, WorldData world, TreeGenerator treeGenerator, PlayerController player, CameraController camera,
         HarvestManager harvest, SunController sun, HarvestUI harvestUI, DataLogger log, SessionTimerUI timer)
     {
-        if (config == null || config.RankingBreakEvery <= 0 || world == null || !world.HasTiles || config.IsInterlude)
+        if (config == null || config.RankingEvery <= 0 || world == null || !world.HasTiles)
         {
             return null;
         }
@@ -111,7 +111,7 @@ public class RankingBreak : MonoBehaviour
         }
 
         PoolFile pool = JsonUtility.FromJson<PoolFile>(StreamingData.ReadText(path));
-        if (pool == null || pool.format != "ranking-break" || pool.trials == null || pool.trials.Length == 0)
+        if (pool == null || pool.format != "ranking-pool" || pool.sets == null || pool.sets.Length == 0)
         {
             Debug.LogError($"RankingBreak: {path} is not a ranking-break pool; regenerate it.");
             return null;
@@ -137,7 +137,7 @@ public class RankingBreak : MonoBehaviour
             // Continuing an interrupted session: the numbering, the pool and the rows carry on (an unfinished break is not resumed; the patch switch count starts again).
             rankingBreak._breakNumber = ResumeInfo.Pending.breaks;
             rankingBreak._poolIndex = ResumeInfo.Pending.sets_played;
-            rankingBreak._setCounter = ResumeInfo.Pending.trials_next;
+            rankingBreak._setCounter = ResumeInfo.Pending.sets_next;
             foreach (TreeCount taken in ResumeInfo.Pending.fruits_taken)
             {
                 if (taken.n > 0 && taken.tree < world.TreeCount)
@@ -211,7 +211,7 @@ public class RankingBreak : MonoBehaviour
 
         // A switch counts once the player is `rankingBreakSettleDepth` past the edge on the new side (0: at the edge, which puts the arc farthest from the next cluster); one inside the cooldown after a break,
         // or in the last seconds of the session, or before enough bushes have been harvested, is ignored (it does not wait to fire later, in the middle of the next patch).
-        if (tile != _tile && _world.DepthIntoTile(p.x, p.z, _tile, tile) >= _config.RankingBreakSettleDepth)
+        if (tile != _tile && _world.DepthIntoTile(p.x, p.z, _tile, tile) >= _config.RankingSettleDepth)
         {
             _tile = tile;
             if (SwitchCounts())
@@ -220,7 +220,7 @@ public class RankingBreak : MonoBehaviour
             }
         }
 
-        if (_switches >= _config.RankingBreakEvery && !_harvest.IsHarvesting)
+        if (_switches >= _config.RankingEvery && !_harvest.IsHarvesting)
         {
             StartCoroutine(RunBreak());
         }
@@ -229,8 +229,8 @@ public class RankingBreak : MonoBehaviour
     private bool SwitchCounts()
     {
         float elapsed = _config.SessionDuration - _sun.SessionTimeRemaining;
-        return _sun.SessionTimeRemaining > _config.RankingBreakLastSeconds && elapsed - _lastEnd >= _config.RankingBreakCooldown
-            && _harvestedBushes.Count >= _config.RankingBreakMinBushes;
+        return _sun.SessionTimeRemaining > _config.RankingLastSeconds && elapsed - _lastEnd >= _config.RankingCooldown
+            && _harvestedBushes.Count >= _config.RankingMinBushes;
     }
 
     private IEnumerator RunBreak()
@@ -242,11 +242,11 @@ public class RankingBreak : MonoBehaviour
         _breakNumber++;
         _player.SetStationary(true);
         _harvest.SetBlocked(true);
-        _harvest.SetAimMode(true, _config.InterludeAimTolerance);
-        _harvest.SetFruitSeconds(_config.RankingBreakFruitSeconds);
+        _harvest.SetAimMode(true, _config.RankingAimTolerance);
+        _harvest.SetFruitSeconds(_config.RankingFruitSeconds);
         if (_log != null)
         {
-            _log.LogEvent("rank_break_start", payload: Json.Obj(("break", _breakNumber), ("switches", _switches), ("tile", _tile), ("pool_index", _poolIndex), ("sets", _config.RankingBreakSets)));
+            _log.LogEvent("rank_break_start", payload: Json.Obj(("break", _breakNumber), ("switches", _switches), ("tile", _tile), ("pool_index", _poolIndex), ("sets", _config.RankingSets)));
         }
 
         // The world's bushes stay where they are but go grey, and none can be aimed at meanwhile.
@@ -260,10 +260,10 @@ public class RankingBreak : MonoBehaviour
 
         yield return GrayFade(1f);
 
-        for (int s = 0; s < _config.RankingBreakSets; s++)
+        for (int s = 0; s < _config.RankingSets; s++)
         {
-            PoolSet set = _pool.trials[_poolIndex % _pool.trials.Length];
-            yield return RunSet(set, s, s == _config.RankingBreakSets - 1);
+            PoolSet set = _pool.sets[_poolIndex % _pool.sets.Length];
+            yield return RunSet(set, s, s == _config.RankingSets - 1);
             _poolIndex++;
         }
 
@@ -362,7 +362,7 @@ public class RankingBreak : MonoBehaviour
         _setClock = 0f;
         float paused = 0f;
         bool timedOut = false;
-        SecondsLeft = _config.RankingBreakSeconds;
+        SecondsLeft = _config.RankingSeconds;
         var ids = new List<string>();
         foreach (PoolBush b in set.bushes)
         {
@@ -371,7 +371,7 @@ public class RankingBreak : MonoBehaviour
 
         if (_log != null)
         {
-            _log.LogEvent("trial_start", payload: Json.Obj(("order", indexInBreak), ("trial", set.index), ("break", _breakNumber), ("bushes", new Json.Raw("[" + string.Join(",", ids) + "]"))));
+            _log.LogEvent("rank_set_start", payload: Json.Obj(("order", indexInBreak), ("set", set.index), ("break", _breakNumber), ("bushes", new Json.Raw("[" + string.Join(",", ids) + "]"))));
         }
 
         _setLive = true;
@@ -391,7 +391,7 @@ public class RankingBreak : MonoBehaviour
             }
 
             _setClock += Time.deltaTime;
-            SecondsLeft = Mathf.Max(0f, _config.RankingBreakSeconds - _setClock);
+            SecondsLeft = Mathf.Max(0f, _config.RankingSeconds - _setClock);
             if (_firstHarvestTime < 0f && _harvest.IsHarvesting)
             {
                 _firstHarvestTime = _setClock;
@@ -402,7 +402,7 @@ public class RankingBreak : MonoBehaviour
                 break;
             }
 
-            if (_setClock >= _config.RankingBreakSeconds)
+            if (_setClock >= _config.RankingSeconds)
             {
                 _harvest.CancelBout();
                 timedOut = true;
@@ -430,7 +430,7 @@ public class RankingBreak : MonoBehaviour
         }
 
         FadeHud(0f);
-        yield return new WaitForSecondsRealtime(_config.RankingBreakFadeSeconds);
+        yield return new WaitForSecondsRealtime(_config.RankingFadeSeconds);
         yield return RemoveSet(created, scales);
     }
 
@@ -462,7 +462,7 @@ public class RankingBreak : MonoBehaviour
 
         float tie = _pool.tieTolerance > 0f ? _pool.tieTolerance : 0.05f;
         RankingSets.ScorePairs(setIds, values, _picks, tie, out int correct, out int total);
-        float worth = correct * _config.InterludeBonusPerPair;
+        float worth = correct * _config.RankingBonusPerPair;
         float bonus = _config.IsPractice ? 0f : worth;
         Points += worth;
         if (_log == null)
@@ -476,7 +476,7 @@ public class RankingBreak : MonoBehaviour
             times.Add(RankingSets.F(t));
         }
 
-        _log.LogEvent("trial_end", payload: Json.Obj(("picked", new Json.Raw("[" + string.Join(",", _picks) + "]")), ("pick_times", new Json.Raw("[" + string.Join(",", times) + "]")),
+        _log.LogEvent("rank_set_end", payload: Json.Obj(("picked", new Json.Raw("[" + string.Join(",", _picks) + "]")), ("pick_times", new Json.Raw("[" + string.Join(",", times) + "]")),
             ("correct_pairs", correct), ("total_pairs", total), ("first_harvest_time", _firstHarvestTime < 0f ? null : (object)_firstHarvestTime), ("timed_out", timedOut ? 1 : 0),
             ("paused_seconds", paused), ("bonus", bonus), ("break", _breakNumber)));
 
@@ -490,9 +490,9 @@ public class RankingBreak : MonoBehaviour
                 index >= 0 ? _pickTimes[index] : -1f, tree != null ? tree.FruitCount - tree.FruitsRemaining : 0));
         }
 
-        float response = timedOut ? _config.RankingBreakSeconds : (_pickTimes.Count > 0 ? _pickTimes[_pickTimes.Count - 1] : 0f);
+        float response = timedOut ? _config.RankingSeconds : (_pickTimes.Count > 0 ? _pickTimes[_pickTimes.Count - 1] : 0f);
         Vector3 p = _player.transform.position;
-        _log.LogTrial(RankingSets.RowCells(_setCounter++, set.index, p.x, p.z, timedOut, response, _firstHarvestTime, bonus, paused, _setSize, correct, total, objects));
+        _log.LogSet(RankingSets.RowCells(_setCounter++, set.index, p.x, p.z, timedOut, response, _firstHarvestTime, bonus, paused, _setSize, correct, total, objects));
     }
 
     private void HandleBoutStarted(Tree tree)
@@ -521,7 +521,7 @@ public class RankingBreak : MonoBehaviour
         tree.SetRank(_picks.Count);
         if (_log != null)
         {
-            _log.LogEvent("pick", tree.treeId, payload: Json.Obj(("rank", _picks.Count), ("set_time", _setClock), ("break", _breakNumber)));
+            _log.LogEvent("rank_pick", tree.treeId, payload: Json.Obj(("rank", _picks.Count), ("set_time", _setClock), ("break", _breakNumber)));
         }
     }
 
@@ -539,7 +539,7 @@ public class RankingBreak : MonoBehaviour
 
     private IEnumerator GrayFade(Tree[] trees, float from, float to)
     {
-        float seconds = Mathf.Max(_config.RankingBreakGraySeconds, 0.01f);
+        float seconds = Mathf.Max(_config.RankingGraySeconds, 0.01f);
         float elapsed = 0f;
         while (elapsed < seconds)
         {
@@ -568,7 +568,7 @@ public class RankingBreak : MonoBehaviour
     // The trees' scales move from `from` to `to` times their own over the fade (not exactly zero: a zero-scale collider logs warnings).
     private IEnumerator Scale(Tree[] trees, Vector3[] full, float from, float to)
     {
-        float seconds = Mathf.Max(_config.RankingBreakFadeSeconds, 0.01f);
+        float seconds = Mathf.Max(_config.RankingFadeSeconds, 0.01f);
         float elapsed = 0f;
         while (elapsed < seconds)
         {
@@ -627,13 +627,13 @@ public class RankingBreak : MonoBehaviour
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
             Color plate = new Color(0.06f, 0.067f, 0.09f, 0.55f);
-            TextMeshProUGUI banner = UiStyle.Label(_hud.transform, "Banner", _config.RankingBreakText, 32f, TextAlignmentOptions.Center, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Color.white);
+            TextMeshProUGUI banner = UiStyle.Label(_hud.transform, "Banner", _config.RankingText, 32f, TextAlignmentOptions.Center, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Color.white);
             UiStyle.HudPlate(banner, new Vector2(0f, -64f), new Vector2(1100f, 64f), 32f, plate, "BannerPlate");
             _clockText = UiStyle.Label(_hud.transform, "Countdown", "", 46f, TextAlignmentOptions.Center, new Vector2(0f, 1f), new Vector2(0f, 1f), Color.white);
             UiStyle.HudPlate(_clockText, new Vector2(64f + 110f, -(44f + 34f + 76f)), new Vector2(220f, 68f), 46f, plate, "CountdownPlate");
         }
 
-        SecondsLeft = _config.RankingBreakSeconds;
+        SecondsLeft = _config.RankingSeconds;
         RefreshClock();
         _hudGroup.alpha = 0f;
         _hud.SetActive(true);
@@ -659,7 +659,7 @@ public class RankingBreak : MonoBehaviour
     private IEnumerator FadeHudRoutine(float target)
     {
         float from = _hudGroup.alpha;
-        float seconds = Mathf.Max(_config.RankingBreakFadeSeconds, 0.01f);
+        float seconds = Mathf.Max(_config.RankingFadeSeconds, 0.01f);
         float elapsed = 0f;
         while (elapsed < seconds)
         {

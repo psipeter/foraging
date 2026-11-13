@@ -61,7 +61,7 @@ public class HarvestManager : MonoBehaviour
     public static event Action<HarvestBout> OnHarvestBoutEnded;
     public static event Action<HarvestHint> OnHintChanged;
     public static event Action OnBushExhausted;
-    // Raised for every fruit taken, in every session kind (the Interlude counts fruits to register a choice).
+    // Raised for every fruit taken, in every session kind (a ranking counts fruits to register a pick).
     public static event Action<Tree> OnFruitTaken;
     // For the DataLogger: a bout started on a tree; a fruit with its index k on that tree (0-based, in the order taken),
     // reward and the session total after it; the target entered (true) or left (false) the harvest range/cone mid-bout.
@@ -90,7 +90,7 @@ public class HarvestManager : MonoBehaviour
         OnScoreChanged?.Invoke(_runningTotal);
     }
 
-    // While blocked no bout can start and Space presses are discarded (the Interlude's gap between trials). The caller
+    // While blocked no bout can start and Space presses are discarded (the gap between ranking sets). The caller
     // ends any open bout first; replay mirrors the window with the trial_end / trial_go events.
     public void SetBlocked(bool blocked)
     {
@@ -219,7 +219,7 @@ public class HarvestManager : MonoBehaviour
                 targetIndex = focusIndex;
             }
         }
-        else if (!_aimMode && !playerController.HarvestHeld)        // aiming: a bout started is finished, whatever the key does (the Interlude's commitment)
+        else if (!_aimMode && !playerController.HarvestHeld)        // aiming: a bout started is finished, whatever the key does (a ranking's commitment)
         {
             EndBout();
             targetIndex = -1;
@@ -258,7 +258,7 @@ public class HarvestManager : MonoBehaviour
                 fill = (tree.FruitsRemaining - Mathf.Clamp01(partial / perFruit)) / Mathf.Max(1, tree.FruitCount);
             }
 
-            tree.SetRing(showRing, fill, cameraController.PlayerCamera != null ? cameraController.PlayerCamera.transform : null, _aimMode ? sessionConfig.InterludeMarkerLift : 0f);
+            tree.SetRing(showRing, fill, cameraController.PlayerCamera != null ? cameraController.PlayerCamera.transform : null, _aimMode ? sessionConfig.RankingMarkerLift : 0f);
         }
 
         if (_harvesting)
@@ -349,7 +349,7 @@ public class HarvestManager : MonoBehaviour
 
         OnFruitTaken?.Invoke(_target);
 
-        // Events fire in every session kind. In an Interlude the consumers hide the outcome (no +X popup or score; the
+        // Events fire in every session kind. In a ranking the consumers hide the outcome (no +X popup or score; the
         // pick sound plays at a fixed pitch, see HarvestUI and FeedbackAudio).
         OnFruitCollected?.Invoke(fruitReward, worldPos);
         OnScoreChanged?.Invoke(_runningTotal);
@@ -398,14 +398,14 @@ public class HarvestManager : MonoBehaviour
         OnHarvestBoutEnded?.Invoke(finished);
     }
 
-    // The Interlude swaps which bushes are active between trials: stop any harvest first, then call this so the
+    // A ranking swaps which bushes are active between sets: stop any harvest first, then call this so the
     // next Update re-finds the active trees.
     public void RefreshTrees()
     {
         _trees = null;
     }
 
-    // Ranking Interlude: the player stands still and picks by aiming; a harvest started (Space pressed on the bush aimed at) runs to the bush's last fruit whatever the
+    // Ranking: the player stands still and picks by aiming; a harvest started (Space pressed on the bush aimed at) runs to the bush's last fruit whatever the
     // key and the crosshair do afterwards (the commitment: the rank of a bush is the order of starting and of finishing alike). The harvest range is ignored (any bush in view can be harvested) and the
     // crosshair must be within `toleranceDegrees` of the canopy's edge (0 = inside the canopy) instead of HarvestMaxAngle; the progress ring is
     // shown only on the bush aimed at or harvested, the rank number replacing it once the bush is finished). scripts/replay.py and scripts/visibility.py mirror this rule.

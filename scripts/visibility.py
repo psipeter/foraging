@@ -13,14 +13,11 @@ the camera, so it is recomputed here from `replay.SessionLog`:
   inside the view frustum and the straight line from the eye to it clears the terrain (a heightfield march over the
   world file's elevation grid) and passes through no other bush's canopy (`bush_occlusion`, on by default: each canopy
   is an opaque half-ellipsoid, the same shape as the one that is sampled, and only bushes that exist at that moment can hide
-  another, so in an Interlude only the pair). `visible_fraction` is the share of those points that qualify, a graded measure
+  another). `visible_fraction` is the share of those points that qualify, a graded measure
   of how much of the bush is in view.
 * In a ranking break (a session's in-place ranking: `rank_break_start` / `rank_break_end`) the real bushes stay (grey, not harvestable) and the current set's stand
-  among them (their table is the `rank_set` event); a set is taken as standing from its `rank_set` to its `trial_end` (the growth and the shrinking are not modelled),
+  among them (their table is the `rank_set` event); a set is taken as standing from its `rank_set` to its `rank_set_end` (the growth and the shrinking are not modelled),
   and the returned `tree_id` of such a bush is its logged id. The grey is not modelled either: a real bush counts as visible as ever.
-* In an Interlude only the trial's bushes exist (the pair, or a ranking set's; the rest are inactive objects), taken from the `trial_start` events. Under
-  the Hide switch policy the unchosen bush is gone HIDE_SECONDS after the `choice_lock` event (under Exhaust and Lock it stays
-  visible).
 
 Not modelled: fruit visibility (fruit hanging in front of a canopy, or hiding behind one), foliage that is translucent at the
 edges, a camera inside a canopy, fog, and any limit on how far away attributes can be resolved. Use the returned `distance` and angular `width`/`height` to threshold
@@ -42,8 +39,6 @@ import numpy as np
 
 from perception import canopy_height_of, hidden_by_bushes, hidden_by_terrain, sample_grid, unit_directions
 from replay import break_windows, load_session_log, with_ranking_bushes
-
-HIDE_SECONDS = 0.4      # InterludeManager.hideSeconds: how long the unchosen bush takes to shrink away under policy Hide
 
 
 # --------------------------------------------------------------------------------------------------
@@ -128,19 +123,6 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
     normals = np.stack([dirs[None, :, 0] / rx[:, None], dirs[None, :, 1] / ry[:, None], dirs[None, :, 2] / rx[:, None]], axis=-1)
     mid = np.stack([b.pos[:, 0], ground + ry * 0.5, b.pos[:, 1]], axis=-1)       # middle of the visible canopy
 
-    # Which bushes exist when (an Interlude shows only the trial's pair).
-    trials = [e for e in log.events if e["type"] == "trial_start" and "break" not in (e.get("payload") or {})]
-    trial_t = np.array([e["t"] for e in trials])
-    trial_pair = [tuple(int(i) for i in e["payload"]["bushes"]) if "bushes" in e["payload"]          # a ranking set's bushes, or a pair
-                  else (int(e["payload"]["left"]), int(e["payload"]["right"])) for e in trials]
-
-    hide_locks = []
-    for e in log.events:
-        if e["type"] == "choice_lock":
-            lock = e["payload"]
-            if lock.get("policy") == "Hide":
-                hide_locks.append((e["t"], int(lock["locked"])))
-
     tr = log.traj
     if dt is None:
         idx = np.arange(len(tr)) if frames is None else np.asarray(frames)
@@ -159,11 +141,6 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
         candidates = np.arange(n_real)
         if any(lo < t <= hi for lo, hi in windows):
             candidates = np.concatenate([candidates, *[rs["slots"] for rs in rank_sets if rs["t"] - 1e-4 <= t < rs["end"]]]).astype(int)
-        elif trials:
-            k = max(int(np.searchsorted(trial_t, t + 1e-4, side="right")) - 1, 0)
-            candidates = np.array(trial_pair[k], dtype=int)
-            gone = [locked for t_lock, locked in hide_locks if t >= t_lock + HIDE_SECONDS]
-            candidates = np.array([c for c in candidates if c not in gone], dtype=int)
         exists = candidates                                               # the bushes that exist now (they can also hide each other)
         near_enough = np.hypot(*(b.pos[candidates] - eye[[0, 2]]).T) <= max_distance + rx[candidates]
         candidates = candidates[near_enough]

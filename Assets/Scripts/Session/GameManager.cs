@@ -18,7 +18,6 @@ public class GameManager : MonoBehaviour
     [SerializeField] private FeedbackAudio feedbackAudio;
     [SerializeField] private AmbientAudio ambientAudio;
     [SerializeField] private InstructionsPanel instructionsPanel;
-    [SerializeField] private InterludeManager interludeManager;
 
     public static int CurrentSessionIndex = 0;
     public static List<SessionConfig> AllSessionConfigs;
@@ -37,39 +36,12 @@ public class GameManager : MonoBehaviour
     public static int TotalSessions => AllSessionConfigs?.Count ?? 0;
     public static bool IsLastSession => TotalSessions == 0 || CurrentSessionIndex >= TotalSessions - 1;
 
-    // The study's screens count sessions; a session (Part A) and its Interlude (Part B) share a number: "Session 3 of 21 · Part A".
-    public static int SessionCount
-    {
-        get
-        {
-            int count = 0;
-            for (int i = 0; AllSessionConfigs != null && i < AllSessionConfigs.Count; i++)
-            {
-                count += AllSessionConfigs[i].IsInterlude ? 0 : 1;
-            }
+    // The study's screens count sessions: "Session 3 of 4".
+    public static int SessionCount => AllSessionConfigs?.Count ?? 0;
 
-            return count;
-        }
-    }
+    public static int SessionNumber => Mathf.Max(1, CurrentSessionIndex + 1);
 
-    public static int SessionNumber
-    {
-        get
-        {
-            int number = 0;
-            for (int i = 0; AllSessionConfigs != null && i <= CurrentSessionIndex && i < AllSessionConfigs.Count; i++)
-            {
-                number += AllSessionConfigs[i].IsInterlude ? 0 : 1;
-            }
-
-            return Mathf.Max(1, number);
-        }
-    }
-
-    public static string PartLetter =>
-        AllSessionConfigs != null && CurrentSessionIndex >= 0 && CurrentSessionIndex < AllSessionConfigs.Count && AllSessionConfigs[CurrentSessionIndex].IsInterlude ? "B" : "A";
-
-    public static string PartLabel => $"Session {SessionNumber} of {SessionCount} · Part {PartLetter}";
+    public static string PartLabel => $"Session {SessionNumber} of {SessionCount}";
 
     private void Awake()
     {
@@ -148,7 +120,7 @@ public class GameManager : MonoBehaviour
         }
 
         WorldData world = WorldData.Load(activeConfig);
-        if (world != null && !activeConfig.IsRanking)       // the stage world is shared by every ranking Interlude, so no asset's terrain fields describe it
+        if (world != null)
         {
             foreach (string name in world.FindMismatches(activeConfig))
             {
@@ -187,7 +159,6 @@ public class GameManager : MonoBehaviour
         if (sessionTimerUI != null)
         {
             sessionTimerUI.sessionConfig = activeConfig;
-            sessionTimerUI.interludeManager = interludeManager;
         }
 
         if (harvestUI != null)
@@ -208,13 +179,6 @@ public class GameManager : MonoBehaviour
         if (instructionsPanel != null)
         {
             instructionsPanel.sessionConfig = activeConfig;
-        }
-
-        if (interludeManager != null)
-        {
-            interludeManager.sessionConfig = activeConfig;
-            interludeManager.harvestUI = harvestUI;
-            interludeManager.dataLogger = dataLogger;
         }
 
         AimCrosshair.Build(harvestUI != null ? harvestUI.GetComponent<Canvas>() : null, harvestManager, activeConfig);
