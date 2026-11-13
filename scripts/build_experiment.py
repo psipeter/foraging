@@ -53,7 +53,6 @@ def build_spec(module, remove_stale=False):
     code = module.CODE
     sessions = []
     for inst in module.instances():
-        number = inst.name.split("_S", 1)[1]
         design = {**inst.design, "instance": inst.name}
         shared = {**inst.fields, "designJson": json.dumps(design, sort_keys=True)}
         sessions.append({"name": inst.name, "template": f"{ASSET_ROOT}/{module.TEMPLATE_SESSION.split('_')[0]}/{module.TEMPLATE_SESSION}.asset",

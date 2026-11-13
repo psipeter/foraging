@@ -182,7 +182,7 @@ def test_committed_world_files_are_fresh(tmp_path):
     startup about stale parameters, but not about a changed generator."""
     from world import export_unity, read_unity_world, unity_world_path
     from world import EXPERIMENTS_DIR
-    for path in sorted(EXPERIMENTS_DIR.glob("*/*_S*.asset")):                 # every session of every experiment
+    for path in sorted(EXPERIMENTS_DIR.glob("*/*_[ST][0-9]*.asset")):                 # every session of every experiment
         name = path.stem
         p = load_session(name)
         seed = int(p.world_seed)

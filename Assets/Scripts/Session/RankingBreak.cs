@@ -52,6 +52,10 @@ public class RankingBreak : MonoBehaviour
     // so the ranking teaches nothing about the values.
     public static event System.Action OnSetScored;
 
+    // A break begins / ends (for the tutorial's hints).
+    public static event System.Action OnBreakStarted;
+    public static event System.Action OnBreakEnded;
+
     // The hidden bonus earned in this session's breaks so far (what the correct pairs would pay, also in a practice session); the session's end screen adds it to the points.
     public static float Points { get; private set; }
 
@@ -253,6 +257,7 @@ public class RankingBreak : MonoBehaviour
         _harvest.SetBlocked(true);
         _harvest.SetAimMode(true, _config.RankingAimTolerance);
         _harvest.SetFruitSeconds(_config.RankingFruitSeconds);
+        OnBreakStarted?.Invoke();
         if (_log != null)
         {
             _log.LogEvent("rank_break_start", payload: Json.Obj(("break", _breakNumber), ("switches", _switches), ("tile", _tile), ("pool_index", _poolIndex), ("sets", _config.RankingSets)));
@@ -299,6 +304,8 @@ public class RankingBreak : MonoBehaviour
         {
             _log.LogEvent("rank_break_end", payload: Json.Obj(("break", _breakNumber)));
         }
+
+        OnBreakEnded?.Invoke();
 
         Active = false;
         _sun.ClockHeld = false;

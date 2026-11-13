@@ -39,6 +39,7 @@ MonoBehaviour:
   rankingBonusPerPair: 4
   rankingAimTolerance: 1.5
   instructionsFile: Experiments/FOR/instructions_S1.txt
+  hintsFile: 
   controlsReminder: 
   firstHarvestMessage: 
   controlsReminderOpacity: 0.35

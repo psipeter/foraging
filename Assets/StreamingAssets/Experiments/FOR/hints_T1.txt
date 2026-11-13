@@ -1,0 +1,57 @@
+# Tutorial hints (placeholders). Format: @trigger [n], then title, text, prompt; see Assets/Scripts/UI/TutorialHints.cs.
+
+@harvest_available
+[hint: harvest_available]
+
+Placeholder for the harvest available hint. {points}
+
+Press [Enter] to continue
+
+@harvest_paused
+[hint: harvest_paused]
+
+Placeholder for the harvest paused hint. {points}
+
+Press [Enter] to continue
+
+@fruit
+[hint: fruit]
+
+Placeholder for the fruit hint. {points}
+
+Press [Enter] to continue
+
+@bout
+[hint: bout]
+
+Placeholder for the bout hint. {points}
+
+Press [Enter] to continue
+
+@exhausted
+[hint: exhausted]
+
+Placeholder for the exhausted hint. {points}
+
+Press [Enter] to continue
+
+@patch_switch
+[hint: patch_switch]
+
+Placeholder for the patch switch hint. {points}
+
+Press [Enter] to continue
+
+@ranking_start
+[hint: ranking_start]
+
+Placeholder for the ranking start hint. {points}
+
+Press [Enter] to continue
+
+@ranking_end
+[hint: ranking_end]
+
+Placeholder for the ranking end hint. {points}
+
+Press [Enter] to continue

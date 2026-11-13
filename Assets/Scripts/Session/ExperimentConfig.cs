@@ -78,6 +78,11 @@ public class ExperimentConfig : ScriptableObject
             files.Add(session.InstructionsFile);
         }
 
+        if (!string.IsNullOrEmpty(session.HintsFile))
+        {
+            files.Add(session.HintsFile);
+        }
+
         return files;
     }
 

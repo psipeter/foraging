@@ -16,6 +16,7 @@ MonoBehaviour:
   title: Foraging in Tiles
   requires: []
   sessions:
+  - {fileID: 11400000, guid: e5eb64a104420cf23be57ed5774e7e0b, type: 2}
   - {fileID: 11400000, guid: de467562384245e6eb912362b71cef60, type: 2}
   countsTowardTotal: 1
   estimatedMinutes: 0

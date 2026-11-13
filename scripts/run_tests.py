@@ -29,7 +29,7 @@ FIXTURE_SESSIONS = "scripts/fixtures/sessions/"
 
 def _is_session_asset(path):
     # a live session, or the frozen environment of the engine tests (scripts/fixtures/sessions/FIX_T0.asset)
-    return (path.startswith(SESSION_CONFIGS) and re.search(r"_S\d+\.asset$", path) is not None) or (path.startswith(FIXTURE_SESSIONS) and path.endswith(".asset"))
+    return (path.startswith(SESSION_CONFIGS) and re.search(r"_[ST]\d+\.asset$", path) is not None) or (path.startswith(FIXTURE_SESSIONS) and path.endswith(".asset"))
 
 
 def _is_world_file(path):
