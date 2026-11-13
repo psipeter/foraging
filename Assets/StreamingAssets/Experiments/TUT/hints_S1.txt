@@ -29,3 +29,12 @@ Your goal is to learn this pattern
 Try harvesting a few more bushes, then move to a new area
 
 Press [Enter] to continue
+
+@ranking_start 1
+Ranking
+
+You will sometimes be asked to rank imaginary bushes based on what you learned
+Harvest these bushes from most to least valuable
+You will earn hidden points for correct rankings
+
+Press [Enter] to continue
