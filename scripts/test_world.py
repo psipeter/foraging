@@ -90,7 +90,7 @@ def test_save_load_roundtrip(tmp_path):
     w.save(tmp_path / "w.npz")
     r = World.load(tmp_path / "w.npz")
     assert r.seed == 5 and np.array_equal(r.pos, w.pos) and np.array_equal(r.fruit_reward, w.fruit_reward)
-    assert r.params.tree_spacing == w.params.tree_spacing and r.params.reward_function == w.params.reward_function
+    assert r.params.reward_function == w.params.reward_function
 
 
 def test_unity_export_roundtrip(tmp_path):
@@ -102,7 +102,7 @@ def test_unity_export_roundtrip(tmp_path):
     assert h["treeCount"] == w.n and h["res"] == res and set(g) == {"moisture", "elevation", "rock", "snow", "ramp"}
     assert np.allclose(np.array(h["treePos"]).reshape(-1, 2), w.pos)
     assert np.array_equal(np.array(h["fruitRewards"]).reshape(w.n, -1), w.fruit_reward)
-    assert dict(zip(h["checkNames"], h["checkValues"]))["treeSpacing"] == float(w.params.tree_spacing)
+    assert dict(zip(h["checkNames"], h["checkValues"]))["terrainMaxElevation"] == float(w.params.terrain_max_elevation)
     for a in g.values():
         assert a.shape == (res, res) and np.isfinite(a).all()
 
@@ -171,7 +171,7 @@ def test_exported_grids_hold_the_terrains_values_under_their_names(tmp_path):
 
 def test_checked_parameters_cover_the_world_shaping_ones():
     names = set(check_values(synthetic.session(**DEFAULT)))
-    assert {"rewardStd", "fruitCount", "treeSpacing", "mountainHeight", "terrainMaxElevation",
+    assert {"rewardStd", "fruitCount", "treeEdgeMargin", "mountainHeight", "terrainMaxElevation",
             "canopyWidthRange.min", "shapeRange.max", "reward.shape.weight"} <= names
 
 
