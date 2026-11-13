@@ -1,0 +1,673 @@
+{
+  "camera": {
+    "farClipPlane": 1000,
+    "fieldOfView": 75,
+    "localHeight": 4.6,
+    "nearClipPlane": 0.3
+  },
+  "completed": true,
+  "config": {
+    "ambientIntensityByElevation": {
+      "m_Curve": [
+        {
+          "inSlope": 0.014999998733401299,
+          "inWeight": 0,
+          "outSlope": 0.014999998733401299,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 0,
+          "value": 0.20000000298023224,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.014999998733401299,
+          "inWeight": 0,
+          "outSlope": 0.02500000223517418,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 10,
+          "value": 0.3499999940395355,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.02500000223517418,
+          "inWeight": 0,
+          "outSlope": 0.01785714365541935,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 20,
+          "value": 0.6000000238418579,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.01785714365541935,
+          "inWeight": 0,
+          "outSlope": 0.013636361807584763,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 34,
+          "value": 0.8500000238418579,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.013636361807584763,
+          "inWeight": 0,
+          "outSlope": 0,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 45,
+          "value": 1,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0,
+          "inWeight": 0,
+          "outSlope": 0,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 90,
+          "value": 1,
+          "weightedMode": 0
+        }
+      ],
+      "m_PostInfinity": 2,
+      "m_PreInfinity": 2,
+      "m_RotationOrder": 4,
+      "serializedVersion": "2"
+    },
+    "ambientUpdateInterval": 1.5,
+    "ambientUpdateMinDegrees": 2,
+    "assignment": "tiles",
+    "bedVolume": 0.016499999910593033,
+    "birdIntervalMax": 14,
+    "birdIntervalMin": 5,
+    "birdVolume": 0.029999999329447746,
+    "burstCount": 7,
+    "burstDuration": 0.3499999940395355,
+    "burstSize": 0.11999999731779099,
+    "burstSpeed": 3.5,
+    "cameraFieldOfView": 75,
+    "cameraNearClip": 0.30000001192092896,
+    "canopyHeightRange": {
+      "x": 1,
+      "y": 15
+    },
+    "canopyTintDark": {
+      "a": 1,
+      "b": 0.6499999761581421,
+      "g": 0.699999988079071,
+      "r": 0.550000011920929
+    },
+    "canopyTintLight": {
+      "a": 1,
+      "b": 1.2999999523162842,
+      "g": 1.2000000476837158,
+      "r": 1.2999999523162842
+    },
+    "canopyWidthRange": {
+      "x": 1,
+      "y": 6
+    },
+    "colorVaries": true,
+    "colorWhenFixed": 0.5,
+    "controlsReminder": "",
+    "controlsReminderOpacity": 0.3499999940395355,
+    "crosshairAlpha": 0.25,
+    "crosshairRadius": 7,
+    "crosshairReleaseScale": 2,
+    "designJson": "{\"cell\": \"default\", \"experiment\": \"FOR\", \"index\": 1, \"instance\": \"FOR_S1\", \"prototype\": true, \"tile_value_mode\": \"\", \"tile_within_mode\": \"\"}",
+    "eyeHeight": 5.099999904632568,
+    "firstHarvestMessage": "",
+    "fogEnabled": true,
+    "fogEndDistance": 200,
+    "fogStartDistance": 50,
+    "footstepStride": 3.5999999046325684,
+    "footstepVolume": 0.05999999865889549,
+    "freezeSun": false,
+    "fruitBrightness": 1.2000000476837158,
+    "fruitColorPreservation": 0.5,
+    "fruitColorRamp": [
+      {
+        "a": 1,
+        "b": 0.527999997138977,
+        "g": 0.02979999966919422,
+        "r": 0.05040000006556511
+      },
+      {
+        "a": 1,
+        "b": 0.5758000016212463,
+        "g": 0.020400000736117363,
+        "r": 0.1607999950647354
+      },
+      {
+        "a": 1,
+        "b": 0.6129999756813049,
+        "g": 0.014399999752640724,
+        "r": 0.24899999797344208
+      },
+      {
+        "a": 1,
+        "b": 0.6417999863624573,
+        "g": 0.006099999882280827,
+        "r": 0.3336000144481659
+      },
+      {
+        "a": 1,
+        "b": 0.6583999991416931,
+        "g": 0.0006000000284984708,
+        "r": 0.41819998621940613
+      },
+      {
+        "a": 1,
+        "b": 0.6565999984741211,
+        "g": 0.015200000256299973,
+        "r": 0.5022000074386597
+      },
+      {
+        "a": 1,
+        "b": 0.6341000199317932,
+        "g": 0.06679999828338623,
+        "r": 0.5806000232696533
+      },
+      {
+        "a": 1,
+        "b": 0.5964000225067139,
+        "g": 0.125,
+        "r": 0.649399995803833
+      },
+      {
+        "a": 1,
+        "b": 0.5515999794006348,
+        "g": 0.18150000274181366,
+        "r": 0.7088000178337097
+      },
+      {
+        "a": 1,
+        "b": 0.5051000118255615,
+        "g": 0.23739999532699585,
+        "r": 0.7612000107765198
+      },
+      {
+        "a": 1,
+        "b": 0.459199994802475,
+        "g": 0.2937000095844269,
+        "r": 0.808899998664856
+      },
+      {
+        "a": 1,
+        "b": 0.41429999470710754,
+        "g": 0.3515999913215637,
+        "r": 0.8529000282287598
+      },
+      {
+        "a": 1,
+        "b": 0.36980000138282776,
+        "g": 0.41179999709129333,
+        "r": 0.8932999968528748
+      },
+      {
+        "a": 1,
+        "b": 0.32510000467300415,
+        "g": 0.4747999906539917,
+        "r": 0.9290000200271606
+      },
+      {
+        "a": 1,
+        "b": 0.28040000796318054,
+        "g": 0.5412999987602234,
+        "r": 0.9584000110626221
+      },
+      {
+        "a": 1,
+        "b": 0.23639999330043793,
+        "g": 0.61080002784729,
+        "r": 0.9797999858856201
+      },
+      {
+        "a": 1,
+        "b": 0.19519999623298645,
+        "g": 0.6826000213623047,
+        "r": 0.9918000102043152
+      },
+      {
+        "a": 1,
+        "b": 0.16140000522136688,
+        "g": 0.7556999921798706,
+        "r": 0.9936000108718872
+      },
+      {
+        "a": 1,
+        "b": 0.14380000531673431,
+        "g": 0.8294000029563904,
+        "r": 0.9848999977111816
+      },
+      {
+        "a": 1,
+        "b": 0.14830000698566437,
+        "g": 0.9031000137329102,
+        "r": 0.965499997138977
+      },
+      {
+        "a": 1,
+        "b": 0.13130000233650208,
+        "g": 0.9751999974250793,
+        "r": 0.9399999976158142
+      }
+    ],
+    "fruitCount": 10,
+    "fruitExposureCompensation": 1,
+    "fruitHarvestDuration": 0.20000000298023224,
+    "fruitPopDuration": 0.15000000596046448,
+    "fruitRadius": 0.699999988079071,
+    "fruitShadingFloor": 0.6499999761581421,
+    "harvestLookResistance": 0,
+    "harvestMaxAngle": 35,
+    "harvestRangeGapBase": 7,
+    "harvestRangeGapPerRadius": 0,
+    "harvestRingSizeDeg": 7,
+    "highlightFadeAngle": 45,
+    "highlightFullAngle": 25,
+    "highlightRangeGap": 20,
+    "instructionsFile": "Experiments/FOR/instructions_S1.txt",
+    "isPractice": false,
+    "layout": "tiles",
+    "lookDegreesPerCount": 0.02199999988079071,
+    "lookPitchLimit": 85,
+    "lookSensitivity": 2,
+    "minSunElevation": 0,
+    "moistureIsFeature": false,
+    "moistureVaries": true,
+    "moistureWhenFixed": 0.5,
+    "mountainBandWidth": 60,
+    "mountainBlockThreshold": 0.15000000596046448,
+    "mountainBoundaryJitter": 15,
+    "mountainFogStrength": 0.15000000596046448,
+    "mountainHeight": 70,
+    "mountainNoiseScale": 60,
+    "mountainRockColor": {
+      "a": 1,
+      "b": 0.3799999952316284,
+      "g": 0.4000000059604645,
+      "r": 0.41999998688697815
+    },
+    "mountainSnowColor": {
+      "a": 1,
+      "b": 0.9800000190734863,
+      "g": 0.949999988079071,
+      "r": 0.9300000071525574
+    },
+    "musicVolume": 0.15000000596046448,
+    "pitchSemitoneRange": 7,
+    "playerMoveSpeed": 11.25,
+    "popupColor": {
+      "a": 1,
+      "b": 0.7799999713897705,
+      "g": 0.949999988079071,
+      "r": 1
+    },
+    "popupExtraScale": 0.8999999761581421,
+    "popupScale": 1.7000000476837158,
+    "postExposureByElevation": {
+      "m_Curve": [
+        {
+          "inSlope": 0.03999999910593033,
+          "inWeight": 0,
+          "outSlope": 0.03999999910593033,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 0,
+          "value": -1,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.03999999910593033,
+          "inWeight": 0,
+          "outSlope": 0.030000001192092896,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 10,
+          "value": -0.6000000238418579,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.030000001192092896,
+          "inWeight": 0,
+          "outSlope": 0.02142857201397419,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 20,
+          "value": -0.30000001192092896,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.02142857201397419,
+          "inWeight": 0,
+          "outSlope": 0,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 34,
+          "value": 0,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0,
+          "inWeight": 0,
+          "outSlope": 0,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 90,
+          "value": 0,
+          "weightedMode": 0
+        }
+      ],
+      "m_PostInfinity": 2,
+      "m_PreInfinity": 2,
+      "m_RotationOrder": 4,
+      "serializedVersion": "2"
+    },
+    "postExposureOffset": 0.30000001192092896,
+    "randomBushValueRange": {
+      "x": 0,
+      "y": 0
+    },
+    "rankingAimTolerance": 1.5,
+    "rankingArcSpan": 84,
+    "rankingBonusPerPair": 4,
+    "rankingCooldown": 10,
+    "rankingDistance": 16,
+    "rankingEvery": 1,
+    "rankingFadeSeconds": 0.4000000059604645,
+    "rankingFruitSeconds": 0.05000000074505806,
+    "rankingGraySeconds": 0.25,
+    "rankingLastSeconds": 10,
+    "rankingMarkerLift": 0.75,
+    "rankingMinBushes": 1,
+    "rankingPoolSets": 12,
+    "rankingRankScale": 3,
+    "rankingRimBoost": 3,
+    "rankingRimScale": 1.149999976158142,
+    "rankingSeconds": 20,
+    "rankingSetSize": 5,
+    "rankingSets": 1,
+    "rankingSettleDepth": 0,
+    "rankingText": "Rank these bushes: harvest them from most to least points",
+    "rankingTieGap": 0.25,
+    "rewardFeedbackMax": 4,
+    "rewardFunction": {
+      "bumps": [],
+      "colorComponent": {
+        "basisFunctionType": 0,
+        "peak": 0,
+        "weight": 2,
+        "width": 0
+      },
+      "factors": [],
+      "moistureComponent": {
+        "basisFunctionType": 0,
+        "peak": 0,
+        "weight": 0,
+        "width": 0
+      },
+      "products": [],
+      "shapeComponent": {
+        "basisFunctionType": 0,
+        "peak": 0,
+        "weight": 2,
+        "width": 0
+      }
+    },
+    "rewardSizeScaling": 1,
+    "rewardStage": "",
+    "rewardStd": 0.6000000238418579,
+    "rimApproachIntensity": 1.5,
+    "rimApproachPower": 2.5,
+    "rimColor": {
+      "a": 1,
+      "b": 0.8199999928474426,
+      "g": 0.9599999785423279,
+      "r": 1
+    },
+    "rimSelectedColor": {
+      "a": 1,
+      "b": 0.6000000238418579,
+      "g": 0.8999999761581421,
+      "r": 1
+    },
+    "rimSelectedIntensity": 2.5,
+    "rimSelectedPower": 8,
+    "sessionDuration": 54.000003814697266,
+    "sfxVolume": 0.5,
+    "shapeRange": {
+      "x": 0,
+      "y": 1
+    },
+    "shapeVaries": true,
+    "shapeWhenFixed": 0.5,
+    "showHarvestHint": true,
+    "skyAtmosphereThickness": 1,
+    "skyExposureByElevation": {
+      "m_Curve": [
+        {
+          "inSlope": 0.010000002570450306,
+          "inWeight": 0,
+          "outSlope": 0.010000002570450306,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 0,
+          "value": 1,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.010000002570450306,
+          "inWeight": 0,
+          "outSlope": 0.014999997802078724,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 10,
+          "value": 1.100000023841858,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.014999997802078724,
+          "inWeight": 0,
+          "outSlope": 0.003571425098925829,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 20,
+          "value": 1.25,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.003571425098925829,
+          "inWeight": 0,
+          "outSlope": 0,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 34,
+          "value": 1.2999999523162842,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0,
+          "inWeight": 0,
+          "outSlope": 0,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 90,
+          "value": 1.2999999523162842,
+          "weightedMode": 0
+        }
+      ],
+      "m_PostInfinity": 2,
+      "m_PreInfinity": 2,
+      "m_RotationOrder": 4,
+      "serializedVersion": "2"
+    },
+    "skyTintNeutral": {
+      "a": 1,
+      "b": 0.5,
+      "g": 0.5,
+      "r": 0.5
+    },
+    "snowLineFraction": 0.5640000104904175,
+    "spentScale": 0.699999988079071,
+    "spentTint": {
+      "a": 1,
+      "b": 0.41999998688697815,
+      "g": 0.5,
+      "r": 0.550000011920929
+    },
+    "spentTransitionDuration": 0.6000000238418579,
+    "sunAzimuthOffset": 0,
+    "sunDeclination": 12,
+    "sunEndElevation": 10,
+    "sunExtinction": {
+      "x": 0.10000000149011612,
+      "y": 0.1599999964237213,
+      "z": 0.30000001192092896
+    },
+    "sunHueStrength": 0.800000011920929,
+    "sunIntensityByElevation": {
+      "m_Curve": [
+        {
+          "inSlope": 0.029999999329447746,
+          "inWeight": 0,
+          "outSlope": 0.029999999329447746,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 0,
+          "value": 0.10000000149011612,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.029999999329447746,
+          "inWeight": 0,
+          "outSlope": 0.03999999910593033,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 5,
+          "value": 0.25,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.03999999910593033,
+          "inWeight": 0,
+          "outSlope": 0.03500000387430191,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 10,
+          "value": 0.44999998807907104,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.03500000387430191,
+          "inWeight": 0,
+          "outSlope": 0.02499999664723873,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 20,
+          "value": 0.800000011920929,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.02499999664723873,
+          "inWeight": 0,
+          "outSlope": 0.018181823194026947,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 34,
+          "value": 1.149999976158142,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.018181823194026947,
+          "inWeight": 0,
+          "outSlope": 0.008823527954518795,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 45,
+          "value": 1.350000023841858,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0.008823527954518795,
+          "inWeight": 0,
+          "outSlope": 0,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 62,
+          "value": 1.5,
+          "weightedMode": 0
+        },
+        {
+          "inSlope": 0,
+          "inWeight": 0,
+          "outSlope": 0,
+          "outWeight": 0,
+          "serializedVersion": "3",
+          "time": 90,
+          "value": 1.5,
+          "weightedMode": 0
+        }
+      ],
+      "m_PostInfinity": 2,
+      "m_PreInfinity": 2,
+      "m_RotationOrder": 4,
+      "serializedVersion": "2"
+    },
+    "sunIntensityScale": 1.2000000476837158,
+    "sunLatitude": 40,
+    "sunStartElevation": 30,
+    "targetFrameRate": 120,
+    "terrainMaxElevation": 9,
+    "terrainMeshResolution": 449,
+    "tileArrangement": "random",
+    "tileBushes": 9,
+    "tileClusterRadius": 15,
+    "tileClusterSpacing": 10,
+    "tileCoverageMin": 0,
+    "tileGoodFraction": 0.25,
+    "tileGradient": 0.30000001192092896,
+    "tileGradientAngle": -1,
+    "tileMoistureLevels": 4,
+    "tileRadius": 45,
+    "tileRampWidth": 14,
+    "tileSmoothness": 0,
+    "tileSpread": 0.11999999731779099,
+    "tileStartSpreadMin": 0,
+    "tileValueMode": "",
+    "tileWithinMode": "",
+    "treeEdgeMargin": 8,
+    "uploadGraceSeconds": 4,
+    "worldHalfExtent": 350,
+    "worldSeed": 7101
+  },
+  "display": {
+    "buildCommit": "095029362915987899541cfe66b1951c939cb9cc",
+    "buildDirty": false,
+    "fullscreen": false,
+    "height": 1080,
+    "platform": "WebGLPlayer",
+    "targetFrameRate": 120,
+    "unityVersion": "6000.3.12f1",
+    "vSyncCount": 0,
+    "width": 1920
+  },
+  "ended_at": "2026-11-13 22:34:01.118+00",
+  "foraging_points": 290,
+  "frame_stats": {
+    "count": 6180,
+    "fixedDeltaTime": 0.02,
+    "maxMs": 50,
+    "meanMs": 11.117799225802802
+  },
+  "is_practice": false,
+  "name": "FOR_S1",
+  "ranking_points": 76,
+  "run_id": "d0a5fb74-f123-449e-a9ab-e842d51e398c",
+  "session_index": 0,
+  "started_at": "2026-11-13 22:32:50.469+00",
+  "world_file": "FOR_S1_seed7101.world",
+  "world_seed": 7101,
+  "world_sha256": "a05829504a5948652cee03e6d4a96a098ac91bb4bfada2833df5c8ce70fcbeac"
+}

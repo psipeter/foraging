@@ -213,7 +213,7 @@ scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignore
              server_client.py (reference client of the online server's protocol), server_smoke.py (one throwaway run through the deployed endpoints), load_test.py (N simulated participants uploading at the game's cadence), db_backup.py (a local JSONL copy of every database table before a migration),
              webgl_smoke.mjs (a WebGL build in headless Chromium: loads, logs in, picks an experiment, plays, uploads), deploy_webgl.sh and patch_webgl_page.py (a WebGL build as one fresh commit in a GitHub Pages repository; never pushes),
              mutation_check.py (mutation testing of the changed lines in a scratch copy; see "Adversarial review"), conftest.py (tests run with motor costs off unless marked `motor_costs`),
-             test_*.py (pytest; run them with `scripts/run_tests.py`, which runs only the test files the changed files can affect, or `--all` before committing; `--fast` skips `slow`-marked tests)
+             validate_run.py and test_validate_run.py (the run validator: `validate_run.py <session folder | run folder | run id | --all> [--json]` checks scoring, integrity and the ranking-break rules of logged sessions, PASS/WARN/FAIL, exit 1 on a FAIL; golden sessions with one injected fault each, and the two real browser runs of 2026-11-13 in `scripts/fixtures/runs/`), test_*.py (pytest; run them with `scripts/run_tests.py`, which runs only the test files the changed files can affect, or `--all` before committing; `--fast` skips `slow`-marked tests)
 ```
 
 Keep this tree in sync when files are added, moved, or retired.
@@ -391,6 +391,13 @@ planner searches): a few seconds vs about 35 s for everything, so use it while i
 the plain command after touching a session asset, `world.py`, `ranking.py` or the
 planner. The tests call the real generators in memory and write nothing into the project. There
 are no Unity-side tests.
+
+**Validate a pilot run before trusting it:** `./venv/bin/python scripts/validate_run.py <run id or folder>` (read-only; `--all` for every run under `ForagingData/`, `--json`
+for scripts). It recomputes the scoring independently of the C# code (foraging points against the fruit events and the world's pre-drawn rewards; each ranking set's pairs
+and points against `ranking.pair_scores`, its `rank_set_end` event and `session_end`), checks the log's integrity (event seq and clock, one start and end, frame count, break
+and set events and rows, the world file's hash) and the design's break rules (a patch switch before each break, cooldown, minimum bushes, last seconds, player still, no
+foraging fruit and the foraging clock lasting `sessionDuration`, the pool in order). FAIL = the data or scoring is wrong; WARN = undecidable or an old format. Logs from
+before the ranking breaks, and the old Interlude sessions, give WARN or SKIP, not FAIL.
 
 ### Results database (`results/results.sqlite`, schema v3; specs, fingerprints, recording and query helpers are built)
 A SQLite file of every simulated-agent run, so previous runs can be queried instead of re-run. `results/` is at the repo root,

@@ -1,0 +1,18 @@
+{
+  "build_commit": "095029362915987899541cfe66b1951c939cb9cc",
+  "build_commits": [
+    "095029362915987899541cfe66b1951c939cb9cc"
+  ],
+  "build_dirty": false,
+  "consent_version": "PLACEHOLDER-1",
+  "experiment": "FOR",
+  "feedback": null,
+  "finished_at": "2026-11-13T22:36:20.230064+00:00",
+  "participant": "fixture",
+  "participant_id": "fixture",
+  "platform": "WebGLPlayer",
+  "signature": "fixture",
+  "started_at": "2026-11-13T22:34:49.955544+00:00",
+  "status": "finished",
+  "unity_version": "6000.3.12f1"
+}
