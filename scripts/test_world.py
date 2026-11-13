@@ -223,14 +223,6 @@ def test_a_session_defaults_to_the_tiles_and_terms_stages():
     assert set(LAYOUTS) == set(ASSIGNMENTS) == {"tiles"} and "terms" in REWARDS
 
 
-def test_a_terrace_mode_set_on_a_session_is_still_echoed_into_the_world_check():
-    """The generators no longer read the terrace fields, but a session asset that sets one still writes it into its world file's header (the game compares it)."""
-    assert "moistureTerraceMode" not in check_values(synthetic.session(**DEFAULT, moisture_terrace_mode=0))
-    v = check_values(synthetic.session(**DEFAULT, moisture_terrace_mode=2))
-    assert v["moistureTerraceMode"] == 2 and {"terraceMeanWidth", "terracePhaseShift", "terraceStrength", "terraceDiffusionIterations", "terraceDiffusionEdge"} <= set(v)
-
-
-# ---- the staircase and diffusion terrace modes (no level count) ----
 
 def test_a_version_1_world_file_still_reads(tmp_path):
     """The raw-float32 layout of version 1 (before the grids were quantized) stays readable."""

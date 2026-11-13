@@ -12,15 +12,7 @@ using UnityEngine;
 // The window runs ./venv/bin/python in the project folder.
 public class TerrainPreview : EditorWindow
 {
-    private static readonly string[] Fields =
-    {
-        "terrainNoiseFrequency", "terrainNoiseOctaves", "terrainMaxElevation", "moistureTerraceMode",
-        "moistureTerraceLevels", "moistureTerraceUnevenness",
-        "moistureTerraceSharpness", "moistureTerraceResidual",
-        "terraceMeanWidth", "terraceWidthSpread", "terraceMaxBand", "terraceMinStep", "terracePhaseShift", "terracePhaseFrequency", "terraceStrength",
-        "terraceDiffusionIterations", "terraceDiffusionEdge",
-        "spatialBalance", "featureBalance", "featureBalanceTarget", "featureBalanceScales",
-    };
+    private static readonly string[] Fields = { "terrainMaxElevation" };
 
     private readonly List<SessionConfig> _sessions = new List<SessionConfig>();
     private int _choice;

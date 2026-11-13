@@ -260,20 +260,12 @@ public class WorldData
         {
             { "worldHalfExtent", config.WorldHalfExtent },
             { "terrainMeshResolution", config.TerrainMeshResolution },
-            { "terrainNoiseFrequency", config.TerrainNoiseFrequency },
-            { "terrainNoiseOctaves", config.TerrainNoiseOctaves },
             { "terrainMaxElevation", config.TerrainMaxElevation },
-            { "moistureTerraceLevels", config.MoistureTerraceLevels },
-            { "moistureTerraceSharpness", config.MoistureTerraceSharpness },
-            { "moistureTerraceResidual", config.MoistureTerraceResidual },
             { "mountainBandWidth", config.MountainBandWidth },
             { "mountainBoundaryJitter", config.MountainBoundaryJitter },
             { "mountainHeight", config.MountainHeight },
             { "mountainNoiseScale", config.MountainNoiseScale },
             { "snowLineFraction", config.SnowLineFraction },
-            { "treeSpacing", config.TreeSpacing },
-            { "placementJitter", config.PlacementJitter },
-            { "startClearingRadius", config.StartClearingRadius },
             { "treeEdgeMargin", config.TreeEdgeMargin },
             { "fruitCount", config.FruitCount },
             { "rewardStd", config.RewardStd },
@@ -281,20 +273,12 @@ public class WorldData
             { "canopyWidthRange.max", config.CanopyWidthRange.y },
             { "shapeRange.min", config.ShapeRange.x },
             { "shapeRange.max", config.ShapeRange.y },
-            { "spatialBalance", (float)(int)config.SpatialBalance },
             { "shapeVaries", config.ShapeVaries ? 1f : 0f },
             { "colorVaries", config.ColorVaries ? 1f : 0f },
             { "shapeWhenFixed", config.ShapeWhenFixed },
             { "colorWhenFixed", config.ColorWhenFixed },
             { "moistureVaries", config.MoistureVaries ? 1f : 0f },
             { "moistureWhenFixed", config.MoistureWhenFixed },
-            { "moistureTerraceUnevenness", config.MoistureTerraceUnevenness },
-            { "moistureTerraceMode", (float)(int)config.MoistureTerraceMode },
-            { "featureBalance", (float)(int)config.FeatureBalance },
-            { "featureCoverage", (float)(int)config.FeatureCoverage },
-            { "featureBalanceTarget", config.FeatureBalanceTarget },
-            { "featureBalanceScales.count", config.FeatureBalanceScales != null ? config.FeatureBalanceScales.Length : 0 },
-            { "featureBalanceScales.sum", SumOf(config.FeatureBalanceScales) },
             { "tileRadius", config.TileRadius },        // (scripts/world.py writes the tile names only for a tiles layout, so a file of another layout does not mention them)
             { "tileRampWidth", config.TileRampWidth },
             { "tileMoistureLevels", config.TileMoistureLevels },
@@ -308,15 +292,6 @@ public class WorldData
             { "tileGradientAngle", config.TileGradientAngle },
             { "tileCoverageMin", config.TileCoverageMin },
             { "tileStartSpreadMin", config.TileStartSpreadMin },
-            { "terraceMeanWidth", config.TerraceMeanWidth },
-            { "terraceWidthSpread", config.TerraceWidthSpread },
-            { "terraceMaxBand", config.TerraceMaxBand },
-            { "terraceMinStep", config.TerraceMinStep },
-            { "terracePhaseShift", config.TerracePhaseShift },
-            { "terracePhaseFrequency", config.TerracePhaseFrequency },
-            { "terraceStrength", config.TerraceStrength },
-            { "terraceDiffusionIterations", config.TerraceDiffusionIterations },
-            { "terraceDiffusionEdge", config.TerraceDiffusionEdge },
             { "randomBushValueRange.min", config.RandomBushValueRange.x },
             { "randomBushValueRange.max", config.RandomBushValueRange.y }
         };
@@ -376,9 +351,9 @@ public class WorldData
 
         // Names the generator writes only when they differ from the default (1 for the "varies" flags, 0.5 for the "when fixed" values, 0 for the random value range):
         // a file without one was made with the default, so a config that now differs is stale.
-        foreach (string name in new[] { "shapeVaries", "colorVaries", "moistureVaries", "shapeWhenFixed", "colorWhenFixed", "moistureWhenFixed", "moistureTerraceUnevenness", "moistureTerraceMode", "featureBalance", "featureCoverage", "randomBushValueRange.min", "randomBushValueRange.max", "spatialBalance" })
+        foreach (string name in new[] { "shapeVaries", "colorVaries", "moistureVaries", "shapeWhenFixed", "colorWhenFixed", "moistureWhenFixed", "randomBushValueRange.min", "randomBushValueRange.max" })
         {
-            float fallback = name.StartsWith("randomBushValueRange") || name == "spatialBalance" || name == "moistureTerraceUnevenness" || name == "moistureTerraceMode" || name == "featureBalance" || name == "featureCoverage" ? 0f : name.EndsWith("WhenFixed") ? 0.5f : 1f;
+            float fallback = name.StartsWith("randomBushValueRange") ? 0f : name.EndsWith("WhenFixed") ? 0.5f : 1f;
             if (Array.IndexOf(_checkNames, name) < 0 && current.TryGetValue(name, out float now) && !Mathf.Approximately(now, fallback))
             {
                 mismatches.Add(name);
@@ -394,20 +369,6 @@ public class WorldData
         current[$"{prefix}.center"] = factor.Center;
         current[$"{prefix}.scale"] = factor.Scale;
         current[$"{prefix}.inverted"] = factor.Inverted ? 1f : 0f;
-    }
-
-    private static float SumOf(float[] values)
-    {
-        float sum = 0f;
-        if (values != null)
-        {
-            foreach (float value in values)
-            {
-                sum += value;
-            }
-        }
-
-        return sum;
     }
 
     private static void AddReward(Dictionary<string, float> values, string part, RewardComponent component)

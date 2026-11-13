@@ -110,9 +110,6 @@ MonoBehaviour:
   birdVolume: 0.03
   birdIntervalMin: 5
   birdIntervalMax: 14
-  treeSpacing: 23
-  placementJitter: 0.5
-  startClearingRadius: 8
   fruitCount: 10
   fruitRadius: 0.7
   fruitColorRamp:
@@ -140,15 +137,6 @@ MonoBehaviour:
   shapeRange: {x: 0, y: 1}
   canopyWidthRange: {x: 1, y: 6}
   canopyHeightRange: {x: 1, y: 15}
-  spatialBalance: 0
-  featureBalance: 0
-  featureCoverage: 0
-  featureBalanceTarget: 0.7
-  featureBalanceScales:
-  - 40
-  - 60
-  - 120
-  - 240
   layout: tiles
   assignment: tiles
   rewardStage: 
@@ -186,23 +174,7 @@ MonoBehaviour:
   tileGradientAngle: -1
   tileCoverageMin: 0
   tileStartSpreadMin: 0
-  terrainNoiseFrequency: 3
-  terrainNoiseOctaves: 1
   terrainMaxElevation: 9
-  moistureTerraceLevels: 0
-  moistureTerraceSharpness: 0.7
-  moistureTerraceResidual: 0.03
-  moistureTerraceUnevenness: 0
-  moistureTerraceMode: 2
-  terraceMeanWidth: 0.14
-  terraceWidthSpread: 0.7
-  terraceMaxBand: 0.3
-  terraceMinStep: 0.08
-  terracePhaseShift: 0.4
-  terracePhaseFrequency: 0.6
-  terraceStrength: 1
-  terraceDiffusionIterations: 500
-  terraceDiffusionEdge: 0.1
   terrainMeshResolution: 449
   worldHalfExtent: 350
   sunStartElevation: 30

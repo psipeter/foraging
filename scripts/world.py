@@ -106,9 +106,7 @@ def _convert(value):
 
 # Fields an older asset file does not have yet (Unity adds a field to an asset only when it is saved): their defaults, snake_case names.
 FIELD_DEFAULTS = {"shape_varies": True, "color_varies": True, "shape_when_fixed": 0.5, "color_when_fixed": 0.5, "random_bush_value_range": (0.0, 0.0), "design_json": "",
-                  "moisture_varies": True, "moisture_when_fixed": 0.5, "moisture_is_feature": False, "moisture_terrace_unevenness": 0.0,
-                  "moisture_terrace_mode": 0, "terrace_mean_width": 0.14, "terrace_width_spread": 0.7, "terrace_max_band": 0.30, "terrace_min_step": 0.08, "terrace_phase_shift": 0.4,
-                  "terrace_phase_frequency": 0.6, "terrace_strength": 1.0, "terrace_diffusion_iterations": 500, "terrace_diffusion_edge": 0.1,      # (the terrace fields are only echoed into the world file's header, which the game checks)
+                  "moisture_varies": True, "moisture_when_fixed": 0.5, "moisture_is_feature": False,
                   "layout": None, "assignment": None, "reward_stage": None,      # (stage names: None = the default, see stage_names)
                   "tile_radius": 70.0, "tile_ramp_width": 14.0, "tile_moisture_levels": 4, "tile_bushes": 9, "tile_cluster_radius": 22.0, "tile_cluster_spacing": 12.0, "tile_spread": 0.12,
                   "tile_arrangement": None, "tile_value_mode": None, "tile_within_mode": None, "tile_good_fraction": 0.25, "tile_smoothness": 0, "tile_gradient": 0.3, "tile_gradient_angle": -1.0,
@@ -262,10 +260,6 @@ class Perlin:
 # --------------------------------------------------------------------------------------------------
 # Terrain fields that matter for the task (moisture, valley mask)
 # --------------------------------------------------------------------------------------------------
-
-TERRACE_PARAMS = ("terrace_mean_width", "terrace_width_spread", "terrace_max_band", "terrace_min_step", "terrace_phase_shift", "terrace_phase_frequency", "terrace_strength",
-                  "terrace_diffusion_iterations", "terrace_diffusion_edge")      # (echoed into the header, see check_values; nothing generates terraces any more)
-
 
 class Terrain:
     """The ground of a world: the tiles' plateaus (moisture and the valley's elevation) and the mountain band round the edge."""
@@ -452,10 +446,9 @@ class World:
 
 # Parameters that shape a world. Written into Unity world files so the game can warn when SessionConfig has
 # changed since the file was generated. Names are the SessionConfig field names (camelCase).
-CHECK_KEYS = ["worldHalfExtent", "terrainMeshResolution", "terrainNoiseFrequency", "terrainNoiseOctaves",
-              "terrainMaxElevation", "moistureTerraceLevels", "moistureTerraceSharpness", "moistureTerraceResidual",
+CHECK_KEYS = ["worldHalfExtent", "terrainMeshResolution", "terrainMaxElevation",
               "mountainBandWidth", "mountainBoundaryJitter", "mountainHeight",
-              "mountainNoiseScale", "snowLineFraction", "treeSpacing", "placementJitter", "startClearingRadius",
+              "mountainNoiseScale", "snowLineFraction",
               "treeEdgeMargin", "fruitCount", "rewardStd"]
 REWARD_PARTS = ["shape", "color", "moisture"]
 WORLD_MAGIC = b"FWLD"
@@ -478,17 +471,12 @@ def check_values(params):
                                  ("moistureVaries", float(bool(params.moisture_varies)), 1.0),
                                  ("shapeWhenFixed", float(params.shape_when_fixed), 0.5), ("colorWhenFixed", float(params.color_when_fixed), 0.5),
                                  ("moistureWhenFixed", float(params.moisture_when_fixed), 0.5),
-                                 ("moistureTerraceUnevenness", float(params.moisture_terrace_unevenness), 0.0),
                                  ("randomBushValueRange.min", float(params.random_bush_value_range[0]), 0.0),
                                  ("randomBushValueRange.max", float(params.random_bush_value_range[1]), 0.0)):
         if value != default:
             out[name] = value
     for name in tiles.TILE_PARAMS:                                 # the numbers the tiles layout reads
         out[_camel(name)] = float(getattr(params, name))
-    if int(params.moisture_terrace_mode):                          # a session with a terrace mode set (none of the generators reads it now) still echoes it, as its world files always did
-        out["moistureTerraceMode"] = float(params.moisture_terrace_mode)
-        for name in TERRACE_PARAMS:
-            out[_camel(name)] = float(getattr(params, name))
     for part in REWARD_PARTS:
         comp = params.reward_function[part + "Component"]
         for field in ("basisFunctionType", "weight", "peak", "width"):

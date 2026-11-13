@@ -26,7 +26,7 @@ CELLS = (("default", "", "", {}),)
 
 
 def _fields(between, within, extra, seed):
-    f = {"worldSeed": seed, "rewardStd": REWARD_STD, "spatialBalance": 0, "featureBalance": 0, "featureCoverage": 0, "layout": "tiles", "assignment": "tiles", "tileValueMode": between,
+    f = {"worldSeed": seed, "rewardStd": REWARD_STD, "layout": "tiles", "assignment": "tiles", "tileValueMode": between,
          "tileWithinMode": within, "tileArrangement": "random", **{**TILE_FIELDS, **extra}, "terrainMaxElevation": 9.0, "shapeVaries": True, "colorVaries": True, "moistureVaries": True, "moistureIsFeature": False,
          "rewardFunction.bumps.Array.size": 0, "rewardFunction.products.Array.size": 0}
     for feature, weight in (("shape", 0.5), ("color", 0.5), ("moisture", 0.0)):
