@@ -403,6 +403,67 @@ def evaluate_interlude(agent, sidecar, bonus_per_correct=5.0, practice=False, n_
     return InterludeScore(len(hits), n_samples, acc, {k: float(np.mean(v)) for k, v in by_type.items()}, p_left, bonus)
 
 
+@dataclass
+class RankingScore:
+    n_sets: int
+    n_samples: int
+    orders: np.ndarray              # (sets, samples, set size): bush ids in the order the agent ranked them, best first
+    values: np.ndarray              # (sets, set size): the true value of each bush, by position in the sidecar's set (`bushes`)
+    pair_accuracy: float            # mean over sets and samples of the share of the implied, non-tied pairs ordered correctly
+    tau: float                      # 2 * pair accuracy - 1
+    first_pick_regret: float        # mean true value of the set's best bush minus that of the one ranked first
+    rank_gain: float                # mean discounted gain between the worst order (0) and the best (1)
+    per_set: list                   # pair accuracy of each set
+
+
+@functools.lru_cache(maxsize=None)
+def _ranking_for(session, seed, options, overrides):
+    from ranking import generate_ranking
+    return generate_ranking(interlude_name(session), seed=seed, **dict(options), **dict(overrides))[0]
+
+
+def get_ranking(session, seed, options=(), **overrides):
+    """The ranking Interlude the game shows for this session at this world seed (ranking.generate_ranking; cached). `options` are the generator's
+    own settings as (name, value) pairs (`set_size`, `set_count`, ...), `overrides` session fields. The caller gets its own copy."""
+    key = tuple(sorted((k, _freeze(v)) for k, v in overrides.items() if k not in NON_INTERLUDE_OVERRIDES))
+    return copy.deepcopy(_ranking_for(session, seed, tuple(sorted((k, _freeze(v)) for k, v in dict(options).items())), key))
+
+
+def evaluate_ranking(agent, sidecar, n_samples=20, rng=None):
+    """Rank every set of a ranking Interlude with an agent, after its session. As in `evaluate_interlude` the critic is frozen and the agent has a fresh memory
+    of the Interlude's own bushes, which it is shown as observed whatever its sensor (the arc is built so every bush is in view). The agent ranks greedily by its
+    own utility: it takes the best of the bushes left, then the best of those that remain, and so on (`choose_between` on the remaining bushes), `n_samples`
+    times from `rng` (random tie-breaking is the only chance in it). No outcome is shown or learned from. Scores are computed from the orders by `ranking`."""
+    import ranking
+    if rng is None:
+        rng = np.random.default_rng(np.random.SeedSequence([int(sidecar["seed"]), AGENT_STREAM, 2]))
+    knowledge = WorldKnowledge.from_sidecar(sidecar)
+    agent.begin_interlude(knowledge)
+    n_sets, size = len(sidecar["trials"]), int(sidecar["setSize"])
+    orders = np.zeros((n_sets, n_samples, size), dtype=int)
+    values = np.zeros((n_sets, size))
+    for s, trial in enumerate(sidecar["trials"]):
+        ids = np.array([b["id"] for b in trial["bushes"]])
+        values[s] = [b["value"] for b in trial["bushes"]]
+        agent.observe(Observation(ids, knowledge.pos[ids], knowledge.radius[ids], knowledge.attrs[ids], np.zeros(size, dtype=bool)))
+        body = Body(np.array(trial["start"], dtype=float), trial["yaw"], agent.task.session_duration, 0.0)
+        for k in range(n_samples):
+            left = list(ids)
+            for rank in range(size):
+                orders[s, k, rank] = left.pop(int(agent.choose_between(body, np.array(left), rng)))
+    by_id = {int(i): float(v) for i, v in enumerate(knowledge.values)}
+    tie = float(sidecar.get("tieTolerance", ranking.TIE_TOLERANCE))
+    acc, regret, gain = np.zeros((n_sets, n_samples)), np.zeros((n_sets, n_samples)), np.zeros((n_sets, n_samples))
+    for s in range(n_sets):
+        for k in range(n_samples):
+            picked = [by_id[int(i)] for i in orders[s, k]]
+            acc[s, k] = ranking.pair_accuracy(picked, values[s], tie)
+            regret[s, k] = ranking.first_pick_regret(picked, values[s])
+            gain[s, k] = ranking.rank_gain(picked, values[s])
+    return RankingScore(n_sets, n_samples, orders, values, float(np.nanmean(acc)), float(2.0 * np.nanmean(acc) - 1.0), float(regret.mean()),
+                        float(np.nanmean(gain)), [float(np.nanmean(a)) for a in acc])
+
+
 # --------------------------------------------------------------------------------------------------
 # Experiments
 # --------------------------------------------------------------------------------------------------

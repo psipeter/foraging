@@ -94,16 +94,20 @@ def write_texts(module):
 
 
 def generate(module):
-    """Worlds and Interlude files of every instance (what `world.py --unity` and `interlude.py` do), in this process."""
+    """Worlds, ranking-break pools and Interlude files of every instance (what `world.py --unity`, `ranking.py pool` and `interlude.py` do), in this process."""
     import interlude
+    import ranking
     import world
     for inst in module.instances():
         params = world.load_session(inst.name)
         path = world.unity_world_path(inst.name, int(params.world_seed))
         world.export_unity(world.generate_world(params, int(params.world_seed)), path)
         print(f"{path.name}")
+        if int(getattr(params, "ranking_break_every", 0) or 0) > 0:
+            print(ranking.export_pool(inst.name)[0].name)
         if inst.interlude_fields is not None:
-            print(interlude.export(interlude_name(inst.name))[0].name)
+            ranked = int(inst.interlude_fields.get("interludeFormat", 0)) == 1
+            print((ranking.export if ranked else interlude.export)(interlude_name(inst.name))[0].name)
 
 
 def remove_stale_files(module):

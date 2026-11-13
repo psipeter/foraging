@@ -162,3 +162,26 @@ def test_a_release_counts_the_sessions_of_the_experiment_asset_at_its_commit(tmp
     assert server_admin.sessions_in_build("HEAD", "XX", repo=tmp_path) == 3            # the requires entry and the later fields are not sessions
     with pytest.raises(ValueError):
         server_admin.sessions_in_build("HEAD", "NOPE", repo=tmp_path)
+
+
+BUSHES = [{"id": 5, "slot": 0, "shape": 0.25, "color": 0.5, "moisture": 0.5, "value": 1.5, "rank": 2, "start_time": 3.0, "finish_time": 5.5, "fruits": 10},
+          {"id": 6, "slot": 1, "shape": 0.75, "color": 0.125, "moisture": 0.5, "value": 2.5, "rank": 1, "start_time": 1.0, "finish_time": 2.5, "fruits": 10},
+          {"id": 7, "slot": 2, "shape": 0.5, "color": 0.9, "moisture": 0.5, "value": 0.5, "rank": None, "start_time": None, "finish_time": None, "fruits": 0}]
+
+
+def test_a_ranking_set_is_one_row_with_its_bushes_as_json(tmp_path):
+    sets = [{"presented_order": 0, "trial_index": 1, "type": "ranking", "stage_x": 0.0, "stage_z": 0.0, "timed_out": 1, "response_time": 30.0,
+             "bonus": 4.0, "set_size": 3, "correct_pairs": 2, "total_pairs": 3, "bushes": BUSHES}]
+    got = rundata.read_session(rundata.write_session(tmp_path, RUN, 1, SESSION, traj(), EVENTS, trials=sets))["trials"][0]
+    assert got["bushes"] == BUSHES and got["set_size"] == 3 and got["correct_pairs"] == 2 and got["total_pairs"] == 3
+    assert got["left_id"] is None and got["choice"] == "" and got["bonus"] == 4.0
+
+
+def test_a_trials_file_written_before_the_ranking_columns_still_reads(tmp_path):
+    folder = rundata.write_session(tmp_path, RUN, 1, SESSION, traj(), EVENTS, trials=[{"presented_order": 0, "trial_index": 4, "choice": "left"}])
+    path = folder / "interlude_trials.csv"
+    old = rundata.INTERLUDE_COLUMNS[:-4]
+    lines = path.read_text().splitlines()
+    path.write_text("\n".join(",".join(line.split(",")[:len(old)]) for line in lines) + "\n")       # the old header and rows: no ranking columns
+    got = rundata.read_session(folder)["trials"][0]
+    assert got["trial_index"] == 4 and got["choice"] == "left" and got["bushes"] is None and got["set_size"] is None

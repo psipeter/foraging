@@ -620,3 +620,19 @@ def test_a_full_run_of_a_development_release_still_needs_every_session_and_a_res
     back.start(prolific_pid="PID_reduced_resume")                                             # returns without a reduction: the full count applies again
     two_sessions_ok = back.finish()
     assert two_sessions_ok["ok"] is False and any("0 sessions present, 2 expected" in p for p in two_sessions_ok["problems"])
+
+
+def test_a_ranking_set_is_a_trial_row_with_bushes_and_counts_in_the_tallies_and_the_long_view(env):
+    c = client(env)
+    c.start(prolific_pid="PID_ranking")
+    c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start")]))
+    bushes = [{"id": 5, "slot": 0, "shape": 0.25, "color": 0.5, "moisture": 0.5, "value": 1.5, "rank": 1, "start_time": 1.0, "finish_time": 2.5, "fruits": 10},
+              {"id": 6, "slot": 1, "shape": 0.75, "color": 0.1, "moisture": 0.5, "value": 0.5, "rank": None, "start_time": None, "finish_time": None, "fruits": 0}]
+    row = {"seq": 0, "presented_order": 0, "trial_index": 2, "type": "ranking", "timed_out": 1, "response_time": 30.0, "bonus": 3.5, "set_size": 2,
+           "correct_pairs": 1, "total_pairs": 1, "bushes": bushes}
+    ack = c.append(1, session=session_row(1, is_interlude=True), events=event_rows([ev(0.0, "session_start")]), plan=[2], trials=[row])
+    assert ack["trials_next"] == 1
+    state = c.start(prolific_pid="PID_ranking")["resume"]
+    assert state["trial_rows"] == [{"correct": 0, "bonus": 3.5}] and state["trials_next"] == 1
+    picks = env["db"].execute("select bush_id, slot, rank, finish_time, fruits from public.interlude_picks where run_id = %s order by bush_id", (c.run_id,)).fetchall()
+    assert picks == [{"bush_id": 5, "slot": 0, "rank": 1, "finish_time": 2.5, "fruits": 10}, {"bush_id": 6, "slot": 1, "rank": None, "finish_time": None, "fruits": 0}]

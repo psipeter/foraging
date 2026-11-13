@@ -66,9 +66,10 @@ def sessions_in_build(commit, code, repo=PROJECT_ROOT):
 
 
 def register_worlds(conn, directory=WORLD_DIR):
-    """Register every world and Interlude file one folder under `directory` by sha256; returns the names registered."""
+    """Register every world and Interlude file one folder under `directory` (and the stage worlds beside it) by sha256; returns the names registered."""
     names = []
-    for path in sorted(Path(directory).glob("*/*")):                                          # <experiment code>/<file>
+    stages = sorted(Path(directory).parent.glob("stage_seed*.world"))                         # the flat stage of the ranking Interludes, a common file beside the experiments' folders
+    for path in sorted(Path(directory).glob("*/*")) + stages:                                 # <experiment code>/<file>
         if path.suffix in (".world", ".json"):
             conn.execute("insert into public.worlds (sha256, name) values (%s, %s) on conflict (sha256) do nothing",
                          (hashlib.sha256(path.read_bytes()).hexdigest(), path.name))

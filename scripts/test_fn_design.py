@@ -7,7 +7,9 @@ import numpy as np
 import pytest
 
 from design import FN
+import ranking
 from interlude import generate_interlude, sidecar_path
+from ranking import generate_ranking
 from world import check_values, export_unity, generate_world, load_session, session_features, unity_world_path
 
 
@@ -101,8 +103,9 @@ def test_committed_fn_files_are_fresh(tmp_path):
         export_unity(generate_world(p, seed), tmp_path / committed.name)
         assert (tmp_path / committed.name).read_bytes() == committed.read_bytes(), f"{committed.name} is stale: re-run scripts/build_experiment.py FN"
         name = i.name.replace("_S", "_I")
-        sidecar = generate_interlude(name)[0]
-        on_disk = json.load(open(sidecar_path(name, sidecar["seed"])))
+        ranked = int(i.interlude_fields.get("interludeFormat", 0)) == 1
+        sidecar = (generate_ranking if ranked else generate_interlude)(name)[0]
+        on_disk = json.load(open(ranking.sidecar_path(name, sidecar["seed"]) if ranked else sidecar_path(name, sidecar["seed"])))
         assert on_disk == json.loads(json.dumps(sidecar)), f"{name} Interlude file is stale: re-run scripts/build_experiment.py FN"
 
 

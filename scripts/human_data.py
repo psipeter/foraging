@@ -20,7 +20,8 @@ project) and writes, under `ForagingData/` (gitignored; it holds participant nam
                           final_score (as logged), n_fruits, n_trials, n_correct, bonus (Interludes), frames, mean_frame_ms, max_frame_ms,
                           config and display (JSON text), and at the end experiment (the run's)
         events            the `events` table (payload as JSON text); the view `fruits` is its type = 'fruit' rows
-        interlude_trials  the `interlude_trials` table, as in rundata.INTERLUDE_COLUMNS, plus run_id and session_index
+        interlude_trials  the `interlude_trials` table, as in rundata.INTERLUDE_COLUMNS, plus run_id and session_index (a ranking Interlude's set is one row: `bushes`
+                          is JSON text; `Humans.picks()` and the `interlude_picks` view give one row per bush)
 
 A run is downloaded again only when it is new or its status, last upload or session count changed (`--all` downloads every run again).
 A run the server no longer has (the participant tables were cleared) stays here with `on_server` = 0.
@@ -70,7 +71,7 @@ TABLES = (   # name, select, order: one query per page, restricted to the runs b
     ("trials", "select * from public.interlude_trials", "run_id, session_index, seq"),
 )
 
-_TRIAL_TYPES = {c: "text" if c in rundata._TEXT else "integer" if c in rundata._INTEGER else "real" for c in rundata.INTERLUDE_COLUMNS}
+_TRIAL_TYPES = {c: "text" if c in rundata._TEXT or c in rundata._JSON else "integer" if c in rundata._INTEGER else "real" for c in rundata.INTERLUDE_COLUMNS}
 SCHEMA = f"""
 create table if not exists participants (run_id text primary key, participant text, signature text, consent_version text, status text,
     started_at text, finished_at text, minutes real, build_commit text, build_dirty integer, platform text, unity_version text,
@@ -83,6 +84,12 @@ create table if not exists events (run_id text, session_index integer, seq integ
     reward real, running_total real, payload text, received_at text, primary key (run_id, session_index, seq));
 create table if not exists interlude_trials (run_id text, session_index integer,
     {", ".join(f"{c} {t}" for c, t in _TRIAL_TYPES.items())}, primary key (run_id, session_index, seq));
+create view if not exists interlude_picks as
+    select t.run_id, t.session_index, t.seq, t.presented_order, t.trial_index, t.set_size, json_extract(b.value, '$.id') as bush_id,
+           json_extract(b.value, '$.slot') as slot, json_extract(b.value, '$.shape') as shape, json_extract(b.value, '$.color') as color,
+           json_extract(b.value, '$.moisture') as moisture, json_extract(b.value, '$.value') as value, json_extract(b.value, '$.rank') as rank,
+           json_extract(b.value, '$.start_time') as start_time, json_extract(b.value, '$.finish_time') as finish_time, json_extract(b.value, '$.fruits') as fruits
+    from interlude_trials t, json_each(t.bushes) b where t.bushes is not null;
 create view if not exists fruits as
     select run_id, session_index, seq, t, tree_id, k, reward, running_total from events where type = 'fruit';
 """
@@ -155,7 +162,7 @@ def _store_run(con, out, run, sessions, events, chunks, plans, trials):
                         [(run_id, index, e["seq"], e["t"], e["real"], e["type"], e["tree_id"], e["k"], e["reward"], e["running_total"],
                           json.dumps(e["payload"], sort_keys=True) if e["payload"] else None, _utc(e["received_at"])) for e in ev])
         con.executemany(f"insert into interlude_trials values (?,?,{','.join('?' * len(columns))})",
-                        [(run_id, index) + tuple(t[c] for c in columns) for t in trials[index]])
+                        [(run_id, index) + tuple(json.dumps(t[c], separators=(",", ":")) if isinstance(t[c], (list, dict)) else t[c] for c in columns) for t in trials[index]])
     server_admin.archive_worlds(run["build_commit"], sessions, out)
     minutes = ((pd.Timestamp(_utc(run["finished_at"])) - pd.Timestamp(_utc(run["started_at"]))).total_seconds() / 60) if run["finished_at"] else None
     con.execute("insert or replace into participants values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)",
@@ -171,6 +178,10 @@ def download(out=DATA_DIR, everything=False, log=print):
     out.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(out / DB_NAME)
     con.executescript(SCHEMA)
+    have_columns = {r[1] for r in con.execute("pragma table_info(interlude_trials)")}
+    for column, kind in _TRIAL_TYPES.items():                 # a database made before columns were appended to the table
+        if column not in have_columns:
+            con.execute(f"alter table interlude_trials add column {column} {kind}")
     runs = query(RUNS_SQL)
     have = {r[0]: r[1:] for r in con.execute("select run_id, status, finished_at, last_event, n_sessions from participants")}
     todo = [r for r in runs if everything or have.get(r["run_id"]) != _stamp(r) or not (out / r["run_id"]).is_dir()]
@@ -208,6 +219,17 @@ class Humans:
     fruits: pd.DataFrame
     interlude_trials: pd.DataFrame
     root: Path
+
+    def picks(self):
+        """The ranking Interlude's long form: one row per bush of each set (run_id, session_index, seq, trial_index, bush_id, slot, shape, color, moisture, value,
+        rank (None if not finished), start_time, finish_time, fruits), from the `bushes` column of the set rows."""
+        rows = []
+        for t in self.interlude_trials[self.interlude_trials["bushes"].notna()].itertuples():
+            for b in json.loads(t.bushes):
+                rows.append({"run_id": t.run_id, "session_index": t.session_index, "seq": t.seq, "presented_order": t.presented_order,
+                             "trial_index": t.trial_index, "set_size": t.set_size, "bush_id": b["id"], **{k: b.get(k) for k in (
+                                 "slot", "shape", "color", "moisture", "value", "rank", "start_time", "finish_time", "fruits")}})
+        return pd.DataFrame(rows)
 
     def trajectory(self, run_id, session_index):
         """The frames of one session (t, x, z, yaw, pitch, keys; the quantized values the server holds)."""

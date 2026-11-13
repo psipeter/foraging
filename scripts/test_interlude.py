@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 import synthetic
+from ranking import generate_ranking, sidecar_path as ranking_sidecar_path
 from interlude import (FEATURES, TIE_TOLERANCE, bush_position, canopy_radius,
                        check_geometry, generate_interlude, has_hump, sidecar_path, write_sidecar)
 from interlude import CANOPY_AIM_HEIGHT, HUMP_TOLERANCE
@@ -109,9 +110,10 @@ def test_committed_interlude_files_are_fresh():
     from world import EXPERIMENTS_DIR
     for path in sorted(EXPERIMENTS_DIR.glob("*/*_I*.asset")):
         name = path.stem
-        sidecar = generate_interlude(name)[0]
-        committed = sidecar_path(name, sidecar["seed"])
-        assert committed.exists(), f"{committed} is missing: run scripts/interlude.py {name}"
+        ranked = int(getattr(load_session(name), "interlude_format", 0)) == 1
+        sidecar = (generate_ranking if ranked else generate_interlude)(name)[0]
+        committed = (ranking_sidecar_path if ranked else sidecar_path)(name, sidecar["seed"])
+        assert committed.exists(), f"{committed} is missing: run scripts/{'ranking' if ranked else 'interlude'}.py {name}"
         assert _same(json.load(open(committed)), json.loads(json.dumps(sidecar))), f"{committed.name} is stale: re-run ./venv/bin/python scripts/interlude.py {name}"
 
 

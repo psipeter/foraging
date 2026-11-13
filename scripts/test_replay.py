@@ -473,3 +473,201 @@ def test_a_pulled_runs_world_archive_next_to_its_folder_is_found(tmp_path, monke
     monkeypatch.setattr("replay.DATA_DIR", tmp_path / "elsewhere")
     monkeypatch.setattr("replay.WORLD_DIR", tmp_path / "none")
     assert len(load_session_log(folder).bushes.pos) > 0
+
+
+# --- a ranking Interlude: aim, no range, and a harvest started is finished (HarvestManager.SetAimMode) ----------------------------------
+
+AIM = {"config": dict(CFG, isInterlude=True, interludeFormat=1, interludeAimTolerance=1.5)}
+
+
+def aimed(frames, n_fruits=3):
+    log = toy_log(frames, n_fruits=n_fruits)
+    log.manifest = AIM
+    return log
+
+
+def test_aiming_ignores_the_harvest_range():
+    frames = [(0, -30.0, 0.0, 4)] * 100                 # the edge is 39 away, far outside the range of 7
+    assert len(press_events(replay_harvests(aimed(frames)))) == 1
+    assert not press_events(replay_harvests(toy_log(frames)))        # the main task: out of range
+
+
+def test_aiming_needs_the_crosshair_within_the_tolerance_of_the_canopy():
+    # radius 1 at 40: its angular radius is 1.4 degrees; 2 degrees off its edge is beyond the 1.5 degree tolerance, 3 degrees off the centre is within it
+    assert not press_events(replay_harvests(aimed([(0, -30.0, 5.0, 4)] * 100)))
+    assert press_events(replay_harvests(aimed([(0, -30.0, 2.0, 4)] * 100)))
+
+
+def test_a_harvest_started_is_finished_whatever_the_key_and_the_crosshair_do():
+    # a 0.1 s tap, then the key up and the view turned away: three fruits at 0.8 s each all the same, no pause and no release before the bush is spent
+    frames = [(0, -30.0, 0.0, 4)] * 10 + [(0, -30.0, 90.0, 0)] * 300
+    out = replay_harvests(aimed(frames))
+    assert [e["reward"] for e in fruits(out)] == [1, 2, 3] and np.allclose([e["t"] for e in fruits(out)], [0.8, 1.6, 2.4], atol=2 / HZ)
+    assert [e["type"] for e in out if e["type"] in ("harvest_pause", "harvest_resume")] == []
+    assert len(press_events(out)) == 1
+
+
+# --- a ranking break inside a foraging session (RankingBreak) -----------------------------------------------------
+
+BREAK = {"config": dict(CFG, rankingBreakFruitSeconds=0.05, interludeAimTolerance=1.5)}
+SET_ID = 101
+
+
+def keyed(spans, total=400, x=0.0, z=7.0):
+    """Frames at HZ standing at (x, z) facing +z with Space held over each (from, to) span in seconds."""
+    keys = [0] * total
+    for lo, hi in spans:
+        for i in range(int(round(lo * HZ)), int(round(hi * HZ))):
+            keys[i] = 4
+    return [(x, z, 0.0, k) for k in keys]
+
+
+def break_events(start=1.0, rank_set=1.3, go=1.5, trial_end=2.5, end=2.7, z=67.0):
+    """One real bush (radius 1, at (0, 10)) and one ranking set of one bush 60 units from the player, as RankingBreak logs them."""
+    both = {"break": 1}
+    return [_ev("rank_break_start", start, **both),
+            _ev("rank_set", rank_set, **{"break": 1, "set": 0, "fruits": 10, "bushes": [{"id": SET_ID, "x": 0.0, "z": z, "radius": 1.0, "shape": 0.5}]}),
+            _ev("rank_go", go, **both), _ev("trial_end", trial_end, **both), _ev("rank_break_end", end, **both)]
+
+
+def break_log(spans=((1.05, 1.6), (1.7, 2.6), (3.0, 4.0)), **kwargs):
+    log = toy_log(keyed(spans), n_fruits=10)
+    log.manifest = BREAK
+    log.events = break_events(**kwargs)
+    return log
+
+
+def test_a_break_harvest_is_aimed_quick_and_pays_nothing_and_the_foraging_harvest_resumes_after_it():
+    out = replay_harvests(break_log())
+    got = fruits(out)
+    ranked = [e for e in got if e["tree_id"] == SET_ID]
+    assert len(ranked) == 10 and all(e["reward"] == 0.0 for e in ranked)
+    assert np.allclose(np.diff([e["t"] for e in ranked]), 0.05, atol=2 / HZ)       # quick: rankingBreakFruitSeconds a fruit, not the session's 0.8
+    real = [e for e in got if e["tree_id"] == 0]
+    assert len(real) == 1 and real[0]["reward"] == 1.0 and abs(real[0]["t"] - 3.81) < 3 / HZ         # the main task's rules again: in range, 0.8 s a fruit
+    assert real[0]["running_total"] == 1.0
+    assert [e["tree_id"] for e in press_events(out)] == [SET_ID, 0]
+
+
+def test_a_press_before_the_set_goes_live_starts_no_bout():
+    # Space was pressed at 1.05 s (the break had started: presses are discarded until rank_go at 1.5) and is still held at 1.5: no press edge at the go
+    out = replay_harvests(break_log(spans=((1.05, 1.6),)))
+    assert press_events(out) == []
+
+
+def test_the_real_bush_cannot_be_harvested_during_a_break_and_the_set_bush_not_after_it():
+    # standing at the real bush through the whole break pressing: nothing starts until the set is live, and only the set's bush can (the real bush is hidden)
+    out = replay_harvests(break_log(spans=((1.7, 2.6), (2.8, 3.0))))
+    assert [e["tree_id"] for e in press_events(out)] == [SET_ID, 0]
+    assert all(e["tree_id"] == SET_ID for e in fruits(out) if e["t"] < 2.7)
+
+
+def test_a_timed_out_set_ends_its_bout_at_the_trial_end():
+    log = break_log(spans=((1.7, 2.6),), trial_end=1.9)
+    log.events.append(dict(type="harvest_release", t=1.9, real=0.0, tree_id=SET_ID, k=-1, reward=float("nan"), payload={}))
+    out = replay_harvests(log)
+    assert [e["type"] for e in out if e["type"] == "harvest_release"] == ["harvest_release"] and out[-1]["forced"]
+    assert len(fruits(out)) < 10
+
+
+def test_a_break_replay_verifies_against_its_own_events():
+    log = break_log()
+    log.events = sorted(break_events() + logged(log), key=lambda e: e["t"])
+    log.manifest["final_score"] = 1.0
+    assert verify(log)[0] == []
+
+
+def test_steps_marks_the_break():
+    s = steps(break_log(), 0.1)
+    in_break = s["t"][s["ranking"] == 1]
+    assert 1.0 < in_break.min() <= 1.1 and 2.6 <= in_break.max() <= 2.7 and s["ranking"].sum() == len(in_break)
+
+
+def test_two_sets_with_the_same_ids_are_separate_bushes():
+    # a pool that wraps gives a later set the ids of an earlier one (at other places): replay keeps them apart
+    log = break_log(spans=((1.7, 2.6), (3.2, 3.9)), trial_end=2.8, end=3.9)
+    second = _ev("rank_set", 3.0, **{"break": 1, "set": 1, "fruits": 10, "bushes": [{"id": SET_ID, "x": 20.0, "z": 27.0, "radius": 1.0, "shape": 0.5}]})
+    log.events = sorted(log.events + [second, _ev("rank_go", 3.1, **{"break": 1}), _ev("trial_end", 3.85, **{"break": 1})], key=lambda e: e["t"])
+    bushes, sets, ids = replay.with_ranking_bushes(log)
+    assert len(sets) == 2 and len(bushes.pos) == 3 and list(ids) == [0, SET_ID, SET_ID] and np.allclose(bushes.pos[2], [20.0, 27.0])
+
+
+# --- the crosshair rule (crosshairRadius > 0: the view ray must touch the canopy, pitch included) ------------------
+
+CROSS = dict(CFG, harvestRangeGapBase=100.0, crosshairRadius=1.5, crosshairReleaseScale=2.0, eyeHeight=5.0,
+             shapeRange={"x": 0.0, "y": 1.0}, canopyHeightRange={"x": 1.0, "y": 15.0})
+
+
+def look(x, z, bx, bz, eye=5.0, aim_height=0.25):
+    """(yaw, pitch) in degrees that point the view at a bush's middle from (x, z)."""
+    dx, dz = bx - x, bz - z
+    return float(np.degrees(np.arctan2(dx, dz))), float(np.degrees(np.arctan2(eye - aim_height, np.hypot(dx, dz))))
+
+
+def cross_log(rows, bushes=((0.0, 10.0, 1.0),), shape=0.0, cfg=None, n_fruits=3):
+    """`rows` are (x, z, yaw, pitch, keys) at HZ; every bush has the given shape (0 = squat, half a unit high), flat ground, eye height 5."""
+    log = multi_log(list(bushes), [(r[0], r[1], r[2], r[4]) for r in rows], n_fruits=n_fruits)
+    log.traj[:, 4] = [r[3] for r in rows]
+    log.manifest = {"config": cfg or CROSS}
+    log.bushes.shape = np.full(len(bushes), shape)
+    log.grids = {"elevation": np.zeros((11, 11), dtype=np.float32)}
+    log.half_extent = 100.0
+    return log
+
+
+def hold(x, z, yaw, pitch, seconds=0.3, keys=4):
+    return [(x, z, yaw, pitch, keys)] * int(seconds * HZ)
+
+
+def test_looking_above_or_below_the_bush_does_not_aim_at_it_but_looking_at_it_does():
+    yaw, pitch = look(0.0, 7.0, 0.0, 10.0)                 # a bush 3 away, 2 from the canopy's edge: in range whatever the rule
+    assert press_events(replay_harvests(cross_log(hold(0.0, 7.0, yaw, pitch))))
+    for off in (-25.0, 25.0):                              # the old cone ignored pitch: both of these started a harvest
+        assert not press_events(replay_harvests(cross_log(hold(0.0, 7.0, yaw, pitch + off)))), off
+
+
+def test_the_circle_widens_the_aim_a_little_beyond_the_canopys_edge():
+    # radius 1 at 30: its angular radius is 1.9 degrees; the circle of 1.5 adds about that much more
+    yaw, pitch = look(0.0, -20.0, 0.0, 10.0)
+    assert press_events(replay_harvests(cross_log(hold(0.0, -20.0, yaw + 3.0, pitch))))
+    assert not press_events(replay_harvests(cross_log(hold(0.0, -20.0, yaw + 4.5, pitch))))
+    wide = dict(CROSS, crosshairRadius=4.0)                # a larger circle takes the second one
+    assert press_events(replay_harvests(cross_log(hold(0.0, -20.0, yaw + 4.5, pitch), cfg=wide)))
+
+
+def test_a_tall_bush_is_aimed_higher_up_than_a_squat_one():
+    yaw, pitch = look(0.0, -20.0, 0.0, 10.0)
+    higher = pitch - 12.0                                  # looking 12 degrees above its middle: over a squat bush, into a tall one (up to 15 high)
+    assert not press_events(replay_harvests(cross_log(hold(0.0, -20.0, yaw, higher), shape=0.0)))
+    assert press_events(replay_harvests(cross_log(hold(0.0, -20.0, yaw, higher), shape=1.0)))
+
+
+def test_the_range_still_applies_to_the_crosshair_in_the_main_task_but_not_to_aiming():
+    near = dict(CROSS, harvestRangeGapBase=7.0)
+    yaw, pitch = look(0.0, -20.0, 0.0, 10.0)
+    assert not press_events(replay_harvests(cross_log(hold(0.0, -20.0, yaw, pitch), cfg=near)))     # 29 from the edge, beyond 7
+    aim = dict(near, isInterlude=True, interludeFormat=1, interludeAimTolerance=1.5)
+    assert press_events(replay_harvests(cross_log(hold(0.0, -20.0, yaw, pitch), cfg=aim)))          # ranking: no range
+
+
+def test_of_two_bushes_on_the_ray_the_nearer_is_the_target():
+    bushes = ((0.0, 10.0, 1.0), (0.0, 40.0, 1.0))
+    yaw, pitch = look(0.0, -20.0, 0.0, 10.0)
+    out = press_events(replay_harvests(cross_log(hold(0.0, -20.0, yaw, pitch), bushes=bushes)))
+    assert [e["tree_id"] for e in out] == [0]
+
+
+def test_a_harvest_in_progress_survives_a_small_drift_but_pauses_beyond_the_grown_circle():
+    # started on target; the view drifts 4.5 degrees (outside the circle of 1.5 beyond the canopy, inside the released one of 3), then 8
+    yaw, pitch = look(0.0, -20.0, 0.0, 10.0)
+    rows = hold(0.0, -20.0, yaw, pitch, 0.3) + hold(0.0, -20.0, yaw + 4.5, pitch, 0.3) + hold(0.0, -20.0, yaw + 8.0, pitch, 0.3) + hold(0.0, -20.0, yaw, pitch, 0.3)
+    out = replay_harvests(cross_log(rows))
+    assert [e["type"] for e in out if e["type"] in ("harvest_pause", "harvest_resume")] == ["harvest_pause", "harvest_resume"]
+    pause, resume = [e["t"] for e in out if e["type"] in ("harvest_pause", "harvest_resume")]
+    assert 0.6 < pause < 0.7 and 0.9 < resume < 1.0
+
+
+def test_without_a_crosshair_radius_the_log_is_replayed_by_the_old_cone():
+    yaw, pitch = look(0.0, 7.0, 0.0, 10.0)
+    old = dict(CFG)                                        # no crosshairRadius in the config: the 35 degree cone of yaw, pitch ignored
+    assert press_events(replay_harvests(cross_log(hold(0.0, 7.0, yaw, pitch + 25.0), cfg=old)))

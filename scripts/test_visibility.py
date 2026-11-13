@@ -219,3 +219,30 @@ def test_the_command_line_can_turn_bush_occlusion_off(monkeypatch):
         monkeypatch.setattr("sys.argv", ["visibility.py", *argv])
         visibility.main()
         assert seen_flags[-1] is expected
+
+
+def _rank_event(kind, t, **payload):
+    return dict(type=kind, t=t, real=0.0, tree_id=-1, k=-1, reward=float("nan"), payload=payload)
+
+
+def break_events(start=0.0, end=0.6):
+    both = {"break": 1}
+    return [_rank_event("rank_break_start", start, **both),
+            _rank_event("rank_set", 0.05, **{"break": 1, "set": 0, "fruits": 1, "bushes": [{"id": 101, "x": 0.0, "z": 40.0, "radius": 1.0, "shape": 0.0}]}),
+            _rank_event("trial_end", 0.5, **both), _rank_event("rank_break_end", end, **both)]
+
+
+def test_in_a_ranking_break_the_sets_bushes_stand_among_the_real_ones_and_carry_their_logged_ids():
+    log = make_log([[0.0, 20.0]], events=break_events())             # the frame is at 0.1 s, inside the break
+    assert sorted(seen(log)["tree_id"]) == [0, 101]
+
+
+def test_outside_a_ranking_break_the_real_bushes_are_there_and_the_sets_are_not():
+    log = make_log([[0.0, 20.0]], events=break_events(start=0.0, end=0.06))      # the break is over by 0.1 s
+    assert list(seen(log)["tree_id"]) == [0]
+
+
+def test_a_tall_real_bush_in_front_hides_a_sets_bush_in_a_break_as_it_does_outside_one():
+    # the real bush stays through a break, so it occludes like any bush: a tall one 20 away hides a low one behind it at 40, when both are straight ahead
+    log = make_log([[0.0, 20.0]], shape=1.0, events=break_events())
+    assert 101 not in set(seen(log)["tree_id"]) and 0 in set(seen(log)["tree_id"])

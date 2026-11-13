@@ -15,7 +15,10 @@ the camera, so it is recomputed here from `replay.SessionLog`:
   is an opaque half-ellipsoid, the same shape as the one that is sampled, and only bushes that exist at that moment can hide
   another, so in an Interlude only the pair). `visible_fraction` is the share of those points that qualify, a graded measure
   of how much of the bush is in view.
-* In an Interlude only the trial's two bushes exist (the rest are inactive objects), taken from the `trial_start` events. Under
+* In a ranking break (a session's in-place ranking: `rank_break_start` / `rank_break_end`) the real bushes stay (grey, not harvestable) and the current set's stand
+  among them (their table is the `rank_set` event); a set is taken as standing from its `rank_set` to its `trial_end` (the growth and the shrinking are not modelled),
+  and the returned `tree_id` of such a bush is its logged id. The grey is not modelled either: a real bush counts as visible as ever.
+* In an Interlude only the trial's bushes exist (the pair, or a ranking set's; the rest are inactive objects), taken from the `trial_start` events. Under
   the Hide switch policy the unchosen bush is gone HIDE_SECONDS after the `choice_lock` event (under Exhaust and Lock it stays
   visible).
 
@@ -38,7 +41,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from perception import canopy_height_of, hidden_by_bushes, hidden_by_terrain, sample_grid, unit_directions
-from replay import load_session_log
+from replay import break_windows, load_session_log, with_ranking_bushes
 
 HIDE_SECONDS = 0.4      # InterludeManager.hideSeconds: how long the unchosen bush takes to shrink away under policy Hide
 
@@ -96,7 +99,9 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
     trajectory `frames` (indices) when `dt` is None. `bush_occlusion=False` ignores bushes hiding each other (terrain still hides).
     See the module docstring for the model."""
     cfg, man = log.config, log.manifest
-    b = log.bushes
+    b, rank_sets, ids = with_ranking_bushes(log)
+    windows = break_windows(log.events)
+    n_real = len(log.bushes.pos)
     elevation = log.grids["elevation"]
     half = log.half_extent
     cam = man["camera"]
@@ -124,9 +129,10 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
     mid = np.stack([b.pos[:, 0], ground + ry * 0.5, b.pos[:, 1]], axis=-1)       # middle of the visible canopy
 
     # Which bushes exist when (an Interlude shows only the trial's pair).
-    trials = [e for e in log.events if e["type"] == "trial_start"]
+    trials = [e for e in log.events if e["type"] == "trial_start" and "break" not in (e.get("payload") or {})]
     trial_t = np.array([e["t"] for e in trials])
-    trial_pair = [(int(e["payload"]["left"]), int(e["payload"]["right"])) for e in trials]
+    trial_pair = [tuple(int(i) for i in e["payload"]["bushes"]) if "bushes" in e["payload"]          # a ranking set's bushes, or a pair
+                  else (int(e["payload"]["left"]), int(e["payload"]["right"])) for e in trials]
 
     hide_locks = []
     for e in log.events:
@@ -150,8 +156,10 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
         eye = np.array([x, float(sample_grid(elevation, half, x, z)) + eye_height, z])
         fwd, right, up = camera_axes(yaw, pitch)
 
-        candidates = np.arange(n)
-        if trials:
+        candidates = np.arange(n_real)
+        if any(lo < t <= hi for lo, hi in windows):
+            candidates = np.concatenate([candidates, *[rs["slots"] for rs in rank_sets if rs["t"] - 1e-4 <= t < rs["end"]]]).astype(int)
+        elif trials:
             k = max(int(np.searchsorted(trial_t, t + 1e-4, side="right")) - 1, 0)
             candidates = np.array(trial_pair[k], dtype=int)
             gone = [locked for t_lock, locked in hide_locks if t >= t_lock + HIDE_SECONDS]
@@ -193,7 +201,7 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
             if max(width, height) < min_angular_deg:
                 continue
             zc_m = float(d @ fwd)
-            rows["tree_id"].append(int(i))
+            rows["tree_id"].append(int(ids[i]))
             rows["azimuth"].append(math.degrees(math.atan2(float(d @ right), zc_m)))
             rows["elevation"].append(math.degrees(math.atan2(float(d @ up), math.hypot(zc_m, float(d @ right)))))
             rows["distance"].append(dd)

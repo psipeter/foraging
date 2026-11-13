@@ -46,6 +46,12 @@ BASELINE_INTERLUDE = {1: {"interludeTrialCount": 5, "interludeRepeatCount": 0, "
 WEIGHTED_INTERLUDE = {"interludeTrialCount": 20, "interludeRepeatCount": 2, "interludeFeatureTrials": 2}
 
 
+# The sessions whose Interlude is a ranking (docs/DECISIONS.md, "The ranking Interlude"): a set of bushes on a flat stage with one moisture, so only sessions in which shape and colour
+# are the only features that pay can have one. The others are still pairs until the design moves off moisture (PI, 2026-11-12: a later task).
+RANKING_INTERLUDES = (1,)
+RANKING_INTERLUDE = {"interludeFormat": 1, "interludeTrialSeconds": 30, "interludeSetSize": 5, "interludeSetCount": 3, "interludeArcSpan": 84.0, "interludeRankingDistance": 16.0}
+
+
 def seconds(n_visible, n_rewarded):
     return BASE_SECONDS + VISIBLE_STEP_SECONDS * (n_visible - 1) + REWARDED_STEP_SECONDS * (n_rewarded - 1)
 
@@ -133,14 +139,18 @@ def instances():
         baseline = cell["kind"] == "baseline"
         duration = seconds(cell["n_visible"], cell["n_rewarded"])
         text = f"instructions_S{number}.txt" if baseline else "instructions_weighted.txt"
+        ranked = number in RANKING_INTERLUDES
         out.append(Instance(f"{CODE}_S{number}", _fields(cell, FIRST_WORLD_SEED + number - 1),
                             {"sessionDuration": duration, "instructionsFile": f"Experiments/{CODE}/{text}", "isPractice": False},
-                            {"interludeMode": 4, **(BASELINE_INTERLUDE[cell["n_rewarded"]] if baseline else WEIGHTED_INTERLUDE)},
-                            _design(cell, number), f"Experiments/{CODE}/instructions_interlude.txt"))
+                            {"interludeMode": 4, **(BASELINE_INTERLUDE[cell["n_rewarded"]] if baseline else WEIGHTED_INTERLUDE), **(RANKING_INTERLUDE if ranked else {})},
+                            _design(cell, number), f"Experiments/{CODE}/instructions_{'ranking' if ranked else 'interlude'}.txt"))
     return out
 
 
 INTERLUDE_TEXT = "Choose the best fruit\n\nChoose the better bush based on what you learned in the last part.\nCorrect choices will earn hidden points.\n\nPress [Enter] to begin\n"
+
+
+RANKING_TEXT = "Ranking phase\n\nHarvest the bushes in order from most to least points, based on what you learned in the last part.\n\nPress [Enter] to begin\n"
 
 
 def _page(hint):
@@ -151,4 +161,5 @@ def texts():
     out = {f"instructions_S{n}.txt": _page(baseline_hint(c["visible"], c["n_rewarded"])) for n, c in enumerate(_cells(), start=1) if c["kind"] == "baseline"}
     out["instructions_weighted.txt"] = _page(HINT_WEIGHTED)
     out["instructions_interlude.txt"] = INTERLUDE_TEXT
+    out["instructions_ranking.txt"] = RANKING_TEXT
     return out

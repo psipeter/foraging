@@ -28,9 +28,12 @@ INTERLUDE_COLUMNS = (
     "left_id", "left_shape", "left_color", "left_moisture", "left_value",
     "right_id", "right_shape", "right_color", "right_moisture", "right_value",
     "correct_side", "choice", "choice_correct", "timed_out", "response_time", "first_harvest_time", "first_harvest_side",
-    "left_fruits", "right_fruits", "bonus", "locked_at", "paused_seconds")
-_INTEGER = {"seq", "presented_order", "trial_index", "left_id", "right_id", "choice_correct", "timed_out", "left_fruits", "right_fruits"}
+    "left_fruits", "right_fruits", "bonus", "locked_at", "paused_seconds",
+    "set_size", "correct_pairs", "total_pairs", "bushes")      # the last four are the ranking Interlude's (a set is one row; `bushes` is a list of dicts, JSON in the CSV)
+_INTEGER = {"seq", "presented_order", "trial_index", "left_id", "right_id", "choice_correct", "timed_out", "left_fruits", "right_fruits",
+            "set_size", "correct_pairs", "total_pairs"}
 _TEXT = {"type", "varied_feature", "correct_side", "choice", "first_harvest_side"}
+_JSON = {"bushes"}
 
 
 def _cell(value):
@@ -38,6 +41,8 @@ def _cell(value):
         return ""
     if isinstance(value, float):
         return format(value, ".10g")
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, separators=(",", ":"))
     return value
 
 
@@ -53,15 +58,23 @@ def _read_rows(path, columns, parse):
     text, cut = _complete_lines(Path(path).read_text())
     reader = csv.reader(io.StringIO(text, newline=""))
     header = next(reader, None)
-    if tuple(header or ()) != tuple(columns):
-        raise ValueError(f"{path}: header {header} is not {list(columns)}")
+    used = tuple(columns)
+    if tuple(header or ()) != used:
+        # a file written before columns were appended to the table has the table's first columns: read it, the later ones are missing (None)
+        if header and tuple(header) == used[:len(header)]:
+            used = tuple(header)
+        else:
+            raise ValueError(f"{path}: header {header} is not {list(columns)}")
     rows = list(reader)
     out, truncated = [], cut
     for i, row in enumerate(rows):
         try:
-            if len(row) != len(columns):
+            if len(row) != len(used):
                 raise ValueError("short or long row")
-            out.append(parse(dict(zip(columns, row))))
+            parsed = parse(dict(zip(used, row)))
+            if isinstance(parsed, dict):
+                parsed.update({c: None for c in columns if c not in used})
+            out.append(parsed)
         except (ValueError, TypeError, KeyError):
             if i != len(rows) - 1:
                 raise ValueError(f"{path}: bad row {i + 2}: {row}")
@@ -86,6 +99,8 @@ def _trial(row):
     for name, value in row.items():
         if name in _TEXT:
             out[name] = value
+        elif name in _JSON:
+            out[name] = json.loads(value) if value != "" else None
         elif name in _INTEGER:
             out[name] = int(value) if value != "" else None
         else:
