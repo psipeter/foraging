@@ -15,6 +15,8 @@ SeedSequence (the order below is part of the format; add new streams at the end)
     8 bush id order (a shuffle of the finished bush table: an id says nothing about where a bush is)
     9 per-bush random value (`randomBushValueRange`; drawn only when the range is not (0, 0))
     10 spatial balance (`spatialBalance`; used only when it is not Off, see spatial.py)
+    11 plateau levels and heights   12 plateau phase noise   13-15 feature balancing   16 plane coverage
+    17 tile grid (rotation, ground levels)   18 tile clusters   19 tiles' feature centres and scatter (tiles layout, see tiles.py)
 
 This module mirrors TreeGenerator.GenerateSites, TerrainManager (moisture field, mountain ramp,
 tree-site mask), Tree.ApplyAttributes (canopy radius) and RewardFunction/HarvestManager (bush value,
@@ -41,6 +43,7 @@ import numpy as np
 import yaml
 
 import spatial
+import tiles
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXPERIMENTS_DIR = PROJECT_ROOT / "Assets" / "ScriptableObjects" / "Experiments"            # <code>/<code>_S1.asset, <code>_I1.asset, <code>.asset
@@ -125,7 +128,10 @@ FIELD_DEFAULTS = {"spatial_balance": 0, "shape_varies": True, "color_varies": Tr
                   "feature_balance": 0, "feature_coverage": 0, "feature_balance_target": 0.7, "feature_balance_scales": (40.0, 60.0, 120.0, 240.0),
                   "moisture_terrace_mode": 0, "terrace_mean_width": 0.14, "terrace_width_spread": 0.7, "terrace_max_band": 0.30, "terrace_min_step": 0.08, "terrace_phase_shift": 0.4,
                   "terrace_phase_frequency": 0.6, "terrace_strength": 1.0, "terrace_diffusion_iterations": 500, "terrace_diffusion_edge": 0.1, "interlude_feature_trials": 0, "interlude_peak_trials": 0, "interlude_interaction_trials": 0,
-                  "layout": None, "assignment": None, "reward_stage": None}      # (stage names: None = the default, see stage_names)
+                  "layout": None, "assignment": None, "reward_stage": None,      # (stage names: None = the default, see stage_names)
+                  "tile_radius": 70.0, "tile_ramp_width": 14.0, "tile_moisture_levels": 4, "tile_bushes": 9, "tile_cluster_radius": 22.0, "tile_cluster_spacing": 12.0, "tile_spread": 0.12,
+                  "tile_arrangement": None, "tile_value_mode": None, "tile_within_mode": None, "tile_good_fraction": 0.25, "tile_smoothness": 0, "tile_gradient": 0.3, "tile_gradient_angle": -1.0,
+                  "tile_coverage_min": 0.0, "tile_start_spread_min": 0.0}               # (the tiles layout, tiles.py)
 
 
 FEATURES = ("shape", "color", "moisture")
@@ -353,8 +359,9 @@ def edge_preserving_diffusion(u, iterations, edge_quantile, dt=0.2):
 
 
 class Terrain:
-    def __init__(self, params, moisture_noise, boundary_noise, ridge_noise=None, rock_noise=None, snow_noise=None, level_rng=None, phase_noise=None):
+    def __init__(self, params, moisture_noise, boundary_noise, ridge_noise=None, rock_noise=None, snow_noise=None, level_rng=None, phase_noise=None, tile_rng=None):
         self.p = params
+        self.tiles = tiles.TileGrid(params, tile_rng) if getattr(params, "layout", None) == "tiles" else None      # the hexagonal tiles' ground (tiles.py)
         self._level_rng = level_rng
         self._levels = None
         self._phase_noise = phase_noise
@@ -369,8 +376,8 @@ class Terrain:
 
     @staticmethod
     def from_seed(params, seed):
-        rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(16)]
-        return Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]), rngs[11], Perlin(rngs[12]))
+        rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(18)]
+        return Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]), rngs[11], Perlin(rngs[12]), rngs[17])
 
     def _raw_moisture(self, x, z):
         """Octave sum of noise at frequency * 0.01 (the continuous moisture field, before any terracing)."""
@@ -478,6 +485,8 @@ class Terrain:
         p = self.p
         if not getattr(p, "moisture_varies", True):                  # one moisture over the valley: a flat, single-coloured ground
             return np.full(np.shape(x), float(getattr(p, "moisture_when_fixed", 0.5)))
+        if self.tiles is not None:                                    # the tiles layout: a plateau per hexagonal tile
+            return self.tiles.moisture(x, z)
         raw = self._raw_moisture(x, z)
         mode = int(getattr(p, "moisture_terrace_mode", 0))
         if mode:
@@ -708,6 +717,9 @@ def check_values(params):
         out["featureBalanceScales.sum"] = float(sum(params.feature_balance_scales))
     if int(getattr(params, "feature_coverage", 0)):                # plane coverage (the sparse-reward experiment) writes its mode; a session without it writes none
         out["featureCoverage"] = float(params.feature_coverage)
+    if getattr(params, "layout", None) == "tiles":                 # the tiles layout writes the numbers it reads (a world of another layout writes none)
+        for name in tiles.TILE_PARAMS:
+            out[_camel(name)] = float(getattr(params, name))
     if int(params.moisture_terrace_mode):                          # the new modes write their mode and every parameter they read (a session in the Levels mode writes none)
         out["moistureTerraceMode"] = float(params.moisture_terrace_mode)
         for name in TERRACE_PARAMS:
@@ -761,7 +773,7 @@ def export_unity(world, path):
     Layout: b"FWLD", uint32 version, uint32 header length, UTF-8 JSON header, then one gzip stream holding, per name in
     header["grids"], res*res little-endian unsigned codes (8 or 16 bits, header["gridBits"]) flattened as i*res + j (i across x,
     j across z); a code c is the value gridMin + c * (gridMax - gridMin) / (2^bits - 1). The header holds the bushes (flat
-    arrays, full precision) and the parameter echo used for staleness checks. Version 1 stored the grids as raw float32.
+    arrays, full precision), for a tiles layout the tile centres (`tileCentres`, x z pairs; `tileRadius`, `tileRamp`), and the parameter echo used for staleness checks. Version 1 stored the grids as raw float32.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -791,6 +803,11 @@ def export_unity(world, path):
         "checkNames": list(checks),
         "checkValues": list(checks.values()),
     }
+    tiles_grid = getattr(world.terrain, "tiles", None)
+    if tiles_grid is not None:                      # a tiles layout: where the tiles are, for the game's patch switches (the tile of a point is its nearest centre)
+        header["tileRadius"] = float(tiles_grid.radius)
+        header["tileRamp"] = float(tiles_grid.ramp)
+        header["tileCentres"] = [float(v) for _, _, c in tiles_grid.tile_centres() for v in c]
     blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
     block = b"".join(np.ascontiguousarray(coded[n][0]).tobytes() for n in GRID_NAMES)
     with open(path, "wb") as f:
@@ -939,8 +956,16 @@ def assign_plane(params, pos, terrain, rngs, reward):
     return shape, color, extra
 
 
-LAYOUTS = {"lattice": layout_lattice}
-ASSIGNMENTS = {"independent": assign_independent, "balanced": assign_balanced, "balanced_features": assign_balanced_features, "plane": assign_plane}
+def assign_tiles(params, pos, terrain, rngs, reward):
+    """(shape, colour) dealt tile by tile (tiles.py `deal_features`, stream 19): each tile's bushes lie around a centre of the tile in the feature plane. The independent draw is still made
+    (the other streams do not move) and gives the practice session's random value; a feature that does not vary is the same value everywhere."""
+    shape, color, extra = assign_independent(params, pos, terrain, rngs, reward)
+    tile_shape, tile_color = tiles.deal_features(params, pos, terrain.tiles, rngs[19], reward)
+    return (tile_shape if params.shape_varies else shape), (tile_color if params.color_varies else color), extra
+
+
+LAYOUTS = {"lattice": layout_lattice, "tiles": tiles.layout_tiles}
+ASSIGNMENTS = {"independent": assign_independent, "balanced": assign_balanced, "balanced_features": assign_balanced_features, "plane": assign_plane, "tiles": assign_tiles}
 REWARDS = {"terms": bush_value}
 RELEVANCE = {"terms": terms_relevance}          # per reward stage: {feature: how much it matters}, for the Interlude and the instruction texts
 
@@ -969,8 +994,8 @@ def generate_world(params, seed):
     """Build the world for (params, seed). `params` is a namespace from load_session()."""
     layout_name, assignment_name, reward_name = stage_names(params)
     reward = REWARDS[reward_name]
-    rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(17)]          # (streams 11 to 15, the terrace levels, the phase noise and the balancing of shape, colour and the random value, were added after the first 11, and 16, the plane coverage, after those: spawn(17) gives the same first 16 children as spawn(16), so no world moves)
-    terrain = Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]), rngs[11], Perlin(rngs[12]))
+    rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(20)]          # (streams 11 to 15, the terrace levels, the phase noise and the balancing of shape, colour and the random value, were added after the first 11, 16, the plane coverage, after those, and 17 to 19, the tiles, after those: spawn(20) gives the same first 16 children as spawn(16), so no world moves)
+    terrain = Terrain(params, Perlin(rngs[0]), Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]), rngs[11], Perlin(rngs[12]), rngs[17])
 
     pos = LAYOUTS[layout_name](params, terrain, rngs)
     n = len(pos)

@@ -27,15 +27,17 @@ from pathlib import Path
 import numpy as np
 
 import costs
+import tiles
 from specs import canonical_json
 from world import interlude_name, load_session
 
 SCRIPTS = Path(__file__).resolve().parent
 ROOT = SCRIPTS.parent
 
-ENGINE_FILES = ("sim.py", "costs.py", "perception.py", "world.py", "interlude.py", "spatial.py")
+ENGINE_FILES = ("sim.py", "costs.py", "perception.py", "world.py", "interlude.py", "ranking.py", "spatial.py", "tiles.py")
 AGENT_FILES = ("agents.py", "specs.py")
 
+TILE_FIELDS = (*tiles.TILE_PARAMS, "tile_arrangement", "tile_value_mode", "tile_within_mode")      # hashed only for the tiles layout (a session of another layout does not read them, and its hash stays as it was)
 OMITTED_AT_DEFAULT = {"interlude_peak_trials": 0, "interlude_interaction_trials": 0}      # fields of SIM_FIELDS left out of the hash while they have this value (so that adding them moved no stored result)
 
 
@@ -49,6 +51,7 @@ SIM_FIELDS = (
     "random_bush_value_range", "reward_function", "reward_std", "session_duration", "session_name", "shape_range", "shape_varies", "shape_when_fixed", "spatial_balance", "snow_line_fraction",
     "start_clearing_radius", "terrain_max_elevation", "terrain_mesh_resolution", "terrain_noise_frequency",
     "terrain_noise_octaves", "tree_edge_margin", "tree_spacing", "world_half_extent",
+    *TILE_FIELDS,
 )
 
 
@@ -79,6 +82,9 @@ def params_hash(name, overrides=None):
     fields["reward_function"] = _reward_without_new_defaults(fields["reward_function"])
     for f, default in OMITTED_AT_DEFAULT.items():                   # a field added later leaves the hash of every session that does not use it as it was
         if fields[f] in (None, default):
+            del fields[f]
+    if fields["layout"] != "tiles":
+        for f in TILE_FIELDS:
             del fields[f]
     return _digest(fields)
 

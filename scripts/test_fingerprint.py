@@ -162,6 +162,7 @@ def test_sim_fields_cover_every_session_parameter_the_simulator_reads(monkeypatc
         agent = REGISTRY["delta_rate_10"]()
         sim.run_episode(agent, worlds[0])
         sim.evaluate_interlude(agent, sidecar, bonus, practice, n_samples=5)
+    world.generate_world(traced("S1", layout="tiles", assignment="tiles"), 0)      # the tiles layout reads the tile fields
     missing = accessed - set(SIM_FIELDS) - {"world_seed"}
     assert not missing, f"add to fingerprint.SIM_FIELDS: {sorted(missing)}"
     assert "mountain_block_threshold" in accessed                      # the exploring walk was traced
