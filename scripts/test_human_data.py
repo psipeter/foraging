@@ -93,8 +93,8 @@ def test_download_writes_the_tidy_tables_and_the_raw_layout(server, tmp_path):
     assert a.minutes == pytest.approx(18.5)
     s = h.sessions.set_index(["run_id", "session_index"])
     assert s.loc[(RUN_A, 0), ["name", "duration_s", "n_fruits", "wall_s"]].tolist() == ["FOR_S1", 90.0, 2, 90.5]
-    assert s.loc[(RUN_A, 0), ["n_sets", "n_correct_pairs", "n_total_pairs", "points"]].tolist() == [2, 1, 2, 10.0]
-    assert s.loc[(RUN_A, 1), ["n_sets", "points"]].tolist() == [0, 0.0] and s.loc[(RUN_A, 0), "mean_frame_ms"] == 9.5
+    assert s.loc[(RUN_A, 0), ["n_sets", "n_correct_pairs", "n_total_pairs"]].tolist() == [2, 1, 2]
+    assert s.loc[(RUN_A, 1), "n_sets"] == 0 and s.loc[(RUN_A, 0), "mean_frame_ms"] == 9.5
     assert s.loc[(RUN_A, 0), ["foraging_points", "ranking_points"]].tolist() == [12.0, 10.0] and "final_score" not in s.columns
     assert len(h.events) == 6 and list(h.fruits["reward"][h.fruits.run_id == RUN_A]) == [5.0, 0.0]
     assert h.events.set_index(["run_id", "session_index", "seq"]).loc[(RUN_A, 0, 3), "payload"] == '{"x": 1}'

@@ -15,7 +15,7 @@ project) and writes, under `ForagingData/` (gitignored; it holds participant nam
                           build_commit, n_sessions, n_completed, feedback, on_server, ..., and at the end participant_id (the server's
                           identifier of the person, the same in every run of theirs) and experiment (the experiment's code: CF, TUT, ...)
         sessions          run_id, session_index, name, practice, started_at, ended_at, wall_s, duration_s (configured length),
-                          foraging_points and ranking_points (as logged at the session's end; the total is their sum), n_fruits, n_sets, n_correct_pairs, n_total_pairs, points (the ranking sets'), frames, mean_frame_ms, max_frame_ms,
+                          foraging_points and ranking_points (as logged at the session's end; the total is their sum), n_fruits, n_sets, n_correct_pairs, n_total_pairs, frames, mean_frame_ms, max_frame_ms,
                           config and display (JSON text), and at the end experiment (the run's)
         events            the `events` table (payload as JSON text); the view `fruits` is its type = 'fruit' rows
         ranking_sets      the `ranking_sets` table, as in rundata.RANKING_COLUMNS, plus run_id and session_index (a set is one row: `bushes`
@@ -75,7 +75,7 @@ create table if not exists participants (run_id text primary key, participant te
     n_sessions integer, n_completed integer, feedback text, last_event text, on_server integer, participant_id text, experiment text);
 create table if not exists sessions (run_id text, session_index integer, name text, practice integer,
     world_seed integer, world_file text, started_at text, ended_at text, wall_s real, duration_s real, completed integer, foraging_points real, ranking_points real,
-    n_fruits integer, n_sets integer, n_correct_pairs integer, n_total_pairs integer, points real, frames integer, mean_frame_ms real, max_frame_ms real,
+    n_fruits integer, n_sets integer, n_correct_pairs integer, n_total_pairs integer, frames integer, mean_frame_ms real, max_frame_ms real,
     config text, display text, experiment text, primary key (run_id, session_index));
 create table if not exists events (run_id text, session_index integer, seq integer, t real, real real, type text, tree_id integer, k integer,
     reward real, running_total real, payload text, received_at text, primary key (run_id, session_index, seq));
@@ -126,7 +126,7 @@ def _session_row(s, events, sets, experiment=None):
             (pd.Timestamp(ended) - pd.Timestamp(started)).total_seconds() if started and ended else None,
             config.get("sessionDuration"), int(s["completed"]), s["foraging_points"], s["ranking_points"],
             sum(e["type"] == "fruit" for e in events),
-            len(sets), sum(t["correct_pairs"] or 0 for t in sets), sum(t["total_pairs"] or 0 for t in sets), sum(t["points"] or 0 for t in sets),
+            len(sets), sum(t["correct_pairs"] or 0 for t in sets), sum(t["total_pairs"] or 0 for t in sets),
             frames.get("count"), frames.get("meanMs"), frames.get("maxMs"),
             json.dumps(config, sort_keys=True), json.dumps(s["display"], sort_keys=True), experiment)
 
@@ -144,7 +144,7 @@ def _store_run(con, out, run, sessions, events, chunks, sets):
         ev = events[index]
         server_admin.write_session_rows(out, run_id, s, ev, [dict(c, data=base64.b64decode(c["data"])) for c in chunks[index]],
                                         sets[index])
-        con.execute("insert into sessions values (" + ",".join("?" * 24) + ")", _session_row(s, ev, sets[index], run.get("experiment")))
+        con.execute("insert into sessions values (" + ",".join("?" * 23) + ")", _session_row(s, ev, sets[index], run.get("experiment")))
         con.executemany("insert into events values (?,?,?,?,?,?,?,?,?,?,?,?)",
                         [(run_id, index, e["seq"], e["t"], e["real"], e["type"], e["tree_id"], e["k"], e["reward"], e["running_total"],
                           json.dumps(e["payload"], sort_keys=True) if e["payload"] else None, _utc(e["received_at"])) for e in ev])
@@ -167,7 +167,7 @@ def download(out=DATA_DIR, everything=False, log=print):
     if con.execute("select 1 from sqlite_master where name = 'interlude_trials'").fetchone():       # made before the Interlude was removed: download everything again
         for old in ("view interlude_picks", "table interlude_trials", "table sessions", "table participants"):
             con.execute(f"drop {old.split()[0]} if exists {old.split()[1]}")
-    if "final_score" in [r[1] for r in con.execute("pragma table_info(sessions)")]:         # made before foraging_points / ranking_points: download everything again
+    if {"final_score", "points"} & {r[1] for r in con.execute("pragma table_info(sessions)")}:         # made before foraging_points / ranking_points: download everything again
         for old in ("view ranking_picks", "table ranking_sets", "table sessions", "table participants"):
             con.execute(f"drop {old.split()[0]} if exists {old.split()[1]}")
     con.executescript(SCHEMA)
