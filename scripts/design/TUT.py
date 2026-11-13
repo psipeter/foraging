@@ -49,6 +49,17 @@ You can **stop** harvesting a bush anytime, or **return** to a bush later
 Try harvesting a different bush
 
 Press [Enter] to continue
+
+@bout 2
+Features
+
+Harvesting this bush earned {points} points.
+A bush's **shape** and **color** determine how many points you get
+Your goal is to learn this pattern
+
+Try harvesting a few more bushes, then move to a new area
+
+Press [Enter] to continue
 """
 
 
