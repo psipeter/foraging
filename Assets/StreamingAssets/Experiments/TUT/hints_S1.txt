@@ -23,7 +23,7 @@ Press [Enter] to continue
 Features
 
 Harvesting this bush earned {points} points.
-A bush's **shape** and **color** determine how many points you get
+A bush's **shape** and/or **color** determine how many points you get
 Your goal is to learn this pattern
 
 Try harvesting a few more bushes, then move to a new area

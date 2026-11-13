@@ -1,6 +1,6 @@
 """TUT, the tutorial: its own experiment of one practice session that must be finished before FOR unlocks (FOR.REQUIRES). The world is the tiles world of FOR in its own seed, played for practice
-(`isPractice`: not paid, not counted in the menu's total), with popup hints fired by what the participant does (`SessionConfig.hintsFile`, `UI/TutorialHints.cs`). The reward pays through colour alone so
-the practice does not teach FOR's rule (shape and colour equally). TUTORIAL_TILES / TUTORIAL_BETWEEN / TUTORIAL_WITHIN / TUTORIAL_REWARD are the knobs for what the bushes of a cluster look like and pay.
+(`isPractice`: not paid, not counted in the menu's total), with popup hints fired by what the participant does (`SessionConfig.hintsFile`, `UI/TutorialHints.cs`). Shape and colour both pay, in a different mix (1:3)
+from FOR's equal one, so the practice does not teach FOR's rule exactly. TUTORIAL_TILES / TUTORIAL_BETWEEN / TUTORIAL_WITHIN / TUTORIAL_REWARD are the knobs for what the bushes of a cluster look like and pay.
 The instruction page and the hints are `instructions_S1.txt` and `hints_S1.txt`, written here; edit the text in this file and rebuild (`build_experiment.py TUT`).
 """
 
@@ -17,7 +17,7 @@ SECONDS = 240
 WORLD_SEED = 6001
 TUTORIAL_TILES = {}                     # tile fields that differ from FOR's (for example tileBushes, tileSpread)
 TUTORIAL_BETWEEN, TUTORIAL_WITHIN = "", ""      # the layers of tiles.py (default none + pool)
-TUTORIAL_REWARD = {"shape": 0.0, "color": 1.0}  # each feature's share of the reward scale
+TUTORIAL_REWARD = {"shape": 0.25, "color": 0.75}  # each feature's share of the reward scale: both pay (the hints say so), in a different mix from FOR's equal one
 LABEL = "Tutorial"                      # the small blue line over every instruction screen and popup, and on the end screen
 
 INSTRUCTIONS = """Controls
@@ -54,7 +54,7 @@ Press [Enter] to continue
 Features
 
 Harvesting this bush earned {points} points.
-A bush's **shape** and **color** determine how many points you get
+A bush's **shape** and/or **color** determine how many points you get
 Your goal is to learn this pattern
 
 Try harvesting a few more bushes, then move to a new area
