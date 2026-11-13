@@ -347,7 +347,8 @@ public class DataLogger : MonoBehaviour
             return;
         }
 
-        LogEvent("session_end", runningTotal: _lastRunningTotal);
+        LogEvent("session_end", runningTotal: _lastRunningTotal,
+            payload: Json.Obj(("foraging_points", _lastRunningTotal), ("ranking_points", RankingBreak.PaidPoints)));
         _finalized = true;
         try
         {
@@ -458,6 +459,7 @@ public class DataLogger : MonoBehaviour
             ("started_at", _startedAtUtc),
             ("ended_at", final ? DateTime.UtcNow.ToString("O") : null),
             ("completed", final && sunController != null && sunController.SessionComplete),
-            ("final_score", final ? (object)_lastRunningTotal : null));
+            ("foraging_points", final ? (object)_lastRunningTotal : null),
+            ("ranking_points", final ? (object)RankingBreak.PaidPoints : null));
     }
 }

@@ -99,7 +99,7 @@ def participant(index, args, key, world_sha, start_delay):
         if flush:
             seq_frames += len(body_frames)
             pending = []
-    end = {**row, "completed": True, "ended_at": "2026-10-31T00:10:00Z", "final_score": 1.0}
+    end = {**row, "completed": True, "ended_at": "2026-10-31T00:10:00Z", "foraging_points": 1.0, "ranking_points": 0.0}
     call("append", lambda: client.append(0, session=end, events=event_rows([{"t": args.seconds, "type": "session_end", "running_total": 1.0}], first_seq=seq_events)))
     call("run-finish", client.finish)
 

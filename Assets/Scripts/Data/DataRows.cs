@@ -34,7 +34,7 @@ public class SetRow
     public static readonly (string name, char kind)[] Columns =
     {
         ("set_index", 'I'), ("pool_index", 'I'), ("start_x", 'F'), ("start_z", 'F'), ("timed_out", 'I'), ("response_time", 'F'),
-        ("first_harvest_time", 'F'), ("bonus", 'F'), ("paused_seconds", 'F'),
+        ("first_harvest_time", 'F'), ("points", 'F'), ("paused_seconds", 'F'),
         // the set's size, the implied pairs ordered right and counted, and one JSON object per bush (J: raw JSON)
         ("set_size", 'I'), ("correct_pairs", 'I'), ("total_pairs", 'I'), ("bushes", 'J'),
     };

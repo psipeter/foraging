@@ -65,19 +65,19 @@ def test_a_break_the_data_stops_inside_is_held_until_the_last_thing_heard(conn):
     assert s["held_seconds"] == pytest.approx(6.0 + 7.0) and s["breaks"] == 2 and s["sets_played"] == 1 and s["clock"] == 47.0
 
 
-def test_the_bonus_of_the_sets_so_far_is_returned(conn):
+def test_the_points_of_the_sets_so_far_are_returned(conn):
     run = new_run(conn, "S4")
     log(conn, run, [(0.0, "session_start"), (20.0, "rank_break_start")])
-    assert state(conn, run)["break_bonus"] == 0
-    for seq, bonus in enumerate((4.0, 6.0)):
-        conn.execute("insert into public.ranking_sets (run_id, session_index, seq, set_index, pool_index, bonus) values (%s, 0, %s, %s, %s, %s)", (run, seq, seq, seq, bonus))
-    assert state(conn, run)["break_bonus"] == pytest.approx(10.0)
+    assert state(conn, run)["ranking_points"] == 0
+    for seq, points in enumerate((4.0, 6.0)):
+        conn.execute("insert into public.ranking_sets (run_id, session_index, seq, set_index, pool_index, points) values (%s, 0, %s, %s, %s, %s)", (run, seq, seq, seq, points))
+    assert state(conn, run)["ranking_points"] == pytest.approx(10.0)
 
 
-def test_the_points_of_a_run_include_the_bonus_of_a_foraging_sessions_ranking_sets(conn):
+def test_the_points_of_a_run_are_foraging_plus_ranking_points(conn):
     run = new_run(conn, "S5")
-    conn.execute("update public.sessions set completed = true, final_score = 10 where run_id = %s", (run,))
-    conn.execute("insert into public.ranking_sets (run_id, session_index, seq, set_index, pool_index, bonus) values (%s, 0, 0, 0, 0, 5)", (run,))
+    conn.execute("update public.sessions set completed = true, foraging_points = 10, ranking_points = 5 where run_id = %s", (run,))
+    conn.execute("insert into public.ranking_sets (run_id, session_index, seq, set_index, pool_index, points) values (%s, 0, 0, 0, 0, 5)", (run,))
     assert conn.execute("select server.run_points(%s) as p", (run,)).fetchone()["p"] == 15
     conn.execute("update public.sessions set is_practice = true where run_id = %s", (run,))
-    assert conn.execute("select server.run_points(%s) as p", (run,)).fetchone()["p"] == 0         # a practice session pays nothing, sets included
+    assert conn.execute("select server.run_points(%s) as p", (run,)).fetchone()["p"] == 0         # a practice session pays nothing

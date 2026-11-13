@@ -15,10 +15,10 @@ Edge Functions (service role) read or write.
 | `pid_registry` | participant | `prolific_pid`, `participant_id` (kept apart from analysis tables) |
 | `experiments`, `release_experiments` | experiment / experiment offered by a build | `code`, `title`, `requires`, `sort_order`, `completion_code`, `payout`; `build_commit`, `experiment`, `n_sessions` |
 | `consents` | signed consent (once per participant and consent version, at login) | `participant_id`, `version` (consent text), `signature` (typed name), `client_time`, `recorded_at` (kept apart from analysis tables) |
-| `sessions` | session in a run | `run_id`, `session_index`, `name`, `world_sha256`, `config` jsonb (the full `SessionConfig`), `display` jsonb, `frame_stats`, `started_at`, `ended_at`, `completed`, `final_score` |
+| `sessions` | session in a run | `run_id`, `session_index`, `name`, `world_sha256`, `config` jsonb (the full `SessionConfig`), `display` jsonb, `frame_stats`, `started_at`, `ended_at`, `completed`, `foraging_points` (the harvest points), `ranking_points` (the points its ranking sets paid, 0 in a practice session; both written at the session's end, the total is their sum and is not stored) |
 | `events` | event | `run_id`, `session_index`, `seq`, `t`, `real`, `type`, `tree_id`, `k`, `reward`, `running_total`, `payload` jsonb |
 | `trajectory` | chunk | `run_id`, `session_index`, `first_seq`, `n_frames`, `t_start`, `t_end`, `data` bytea |
-| `ranking_sets` | ranking set | `run_id`, `session_index`, `seq`, `set_index`, `pool_index`, `start_x`, `start_z`, `timed_out`, `response_time`, `first_harvest_time`, `bonus`, `paused_seconds` (real seconds the game was held still while the set was live), `set_size`, `correct_pairs`, `total_pairs`, `bushes` jsonb (one object per bush) |
+| `ranking_sets` | ranking set | `run_id`, `session_index`, `seq`, `set_index`, `pool_index`, `start_x`, `start_z`, `timed_out`, `response_time`, `first_harvest_time`, `points` (what the set paid; 0 in a practice session), `paused_seconds` (real seconds the game was held still while the set was live), `set_size`, `correct_pairs`, `total_pairs`, `bushes` jsonb (one object per bush) |
 | `feedback` | optional free text from the final screen | `run_id` (primary key: one per run, a second submit replaces it), `text` (1 to 5000 characters), `created_at`, `updated_at`; written by `server.save_feedback`, which accepts the run's token also after the run is finished |
 | `worlds`, `releases` | registered world hash / allowed build commit | filled by a release script, read by `run-start` |
 
@@ -71,14 +71,14 @@ state), reached over a direct database connection (`SUPABASE_DB_URL`). Errors: 4
   stored rows are harmless; a gap, or a chunk that overlaps a stored one without being identical, is a 409. The server decodes
   every chunk itself (checksum, frame count, time order) and takes `first_seq`, the time span and the last frame from it, never from
   the client. A session's first append carries its row (a world hash not in `worlds` is a 403); later appends may
-  update `ended_at`, `completed`, `final_score`, `frame_stats`, `display` and nothing else. Requests for one run are serialized
+  update `ended_at`, `completed`, `foraging_points`, `ranking_points`, `frame_stats`, `display` and nothing else. Requests for one run are serialized
   (advisory lock).
 - **`run-finish`** `{run_id, token}` returns `{ok, problems, completion_code}` (the experiment's code from `experiments.completion_code`, a dummy until one is set,
   returned even when `ok` is false); with no problems the run is marked finished and accepts nothing more. It checks the session count against the build's
   `release_experiments.n_sessions` for the run's experiment, that each session is
   complete and has a `session_end` event and a trajectory, and that the indices are contiguous.
-- **Resume state** (`run-start`'s `resume`, from the rows): `session_index`, `name`, `completed`, `final_score`, `pose` (the last
-  frame), `last_event_t`, `running_total`, `fruits_taken` (bush -> count), `open_bout_tree`, `held_seconds`, `breaks`, `sets_played`, `break_bonus` and the three `*_next` sequence numbers (`sets_next` for the ranking sets).
+- **Resume state** (`run-start`'s `resume`, from the rows): `session_index`, `name`, `completed`, `foraging_points`, `pose` (the last
+  frame), `last_event_t`, `running_total`, `fruits_taken` (bush -> count), `open_bout_tree`, `held_seconds`, `breaks`, `sets_played`, `ranking_points` (the sum of the in-progress session's sets' points; each `previous` entry carries `foraging_points` and `ranking_points`) and the three `*_next` sequence numbers (`sets_next` for the ranking sets).
 - **Tools:** `scripts/server_client.py` (the reference client, and `upload_session` to push a local-layout session in batches),
   `scripts/server_admin.py` (`register-release`, `register-worlds`, `runs`, `pull` = a run back into the local layout of section 2b). **Analysis download:** `scripts/human_data.py download` reads every run through the Supabase CLI (no `FORAGING_DB_URL`), writes the raw layout under `ForagingData/<run>/` and the tidy tables `ForagingData/humans.sqlite` (participants with Prolific ID, signed name and feedback; sessions; events and the `fruits` view; ranking sets); `load(exclude=[...])` filters participants by ID or name.
 
@@ -264,8 +264,8 @@ should say so; feedback is tied to the run (and so to the Prolific ID through `p
 
 **Optional TODO: a scoreboard on the final screen** (not built). Ask whether to show the score, then a ranked high-to-low table with the
 participant's own row, and "..." down to it when long. Design notes: a public, anonymised read endpoint (rank and score, "You" for the
-participant's row; no Prolific IDs); a stored yes/no per run (new column or table); the total computed on the server from `sessions.final_score`
-(sessions that are not practice) plus `ranking_sets.bonus`, as the final screen adds it; rank only runs of the same
+participant's row; no Prolific IDs); a stored yes/no per run (new column or table); the total computed on the server from `sessions.foraging_points` plus `sessions.ranking_points`
+(sessions that are not practice), as the final screen adds it; rank only runs of the same
 release (the frozen pilot build), among all finished runs with only opted-in rows listed (so ranks are true); the completion code and the Prolific
 return must not wait on it; consent/IRB text must cover showing a score to others; mention of the scoreboard in the instructions may change motivation.
 About a day of work plus a browser test.
@@ -277,11 +277,11 @@ A foraging session can contain ranking breaks (`RankingBreak`, DECISIONS "Rankin
 - **Events** (free-text `type`, JSON `payload`): `rank_break_start` (`break`, `switches`, `tile`, `pool_index`, `sets`), `rank_set` (`break`, `set`, `fruits`, `bushes`: id, x, z, radius, shape of each bush of the arc: they
   are not in the world file), `rank_go` (the end of the harvest block of a set), `rank_set_start` / `rank_pick` / `rank_set_end` with a `break` number, `rank_break_end`. The ranking bushes have tree ids
   `world bush count + pool id` and pay 0 (their `fruit` events carry reward 0, so the running total does not move).
-- **Sets** are rows of `ranking_sets` of the foraging session (`set_index` = sets played so far in the session, `pool_index`, `bushes` JSON, bonus).
+- **Sets** are rows of `ranking_sets` of the foraging session (`set_index` = sets played so far in the session, `pool_index`, `bushes` JSON, points).
 - **Time.** `t` is unpaused session seconds and keeps running through a break; the foraging clock is `t` minus the break windows (`rank_break_start` to `rank_break_end`).
-- **Resume.** `server.resume_state` also returns `held_seconds` (the sum of the windows, a break the data stops inside counted to the last thing heard), `breaks`, `sets_played` and `break_bonus`; the game continues
-  the foraging clock from `clock - held_seconds`, the break numbering, the pool position, the set rows and the end screen's bonus. An unfinished break is not resumed.
-- **Points.** `server.run_points` counts the bonus of a completed, non-practice session's sets (the sets are rows of `ranking_sets`).
+- **Resume.** `server.resume_state` also returns `held_seconds` (the sum of the windows, a break the data stops inside counted to the last thing heard), `breaks`, `sets_played` and `ranking_points`; the game continues
+  the foraging clock from `clock - held_seconds`, the break numbering, the pool position, the set rows and the end screen's ranking points. An unfinished break is not resumed.
+- **Points.** `server.run_points` is the sum of `foraging_points + ranking_points` over the run's completed, non-practice sessions. The `session_end` event's payload carries both too.
 - **Migrations to apply before any data is collected** (after `db_backup.py`): `20261112000000_ranking_sets.sql` (the set columns) and `20261113000000_ranking_breaks_resume.sql` (resume fields and run points).
   Neither is applied to the Supabase project. `scripts/test_resume_breaks.py` checks the second on a real PostgreSQL; `test_server.py` (Deno) has not been run against either.
 - **Replay.** `replay.py` appends each set's bushes (from `rank_set`) to the world's table and replays break windows with the aimed, quick rule; `visibility.py` keeps the real bushes and adds the current set's.

@@ -25,7 +25,7 @@ EVENTS = [
     {"t": 0.8, "real": 0.9, "type": "fruit", "tree_id": 3, "k": 0, "reward": 2.0, "running_total": 2.0},
     {"t": 1.0, "real": 1.1, "type": "rank_set_start", "payload": {"set": 0}},
 ]
-SESSION = {"name": "FIX_T0", "config": CFG, "world_file": "FIX_T0_seed1.world", "world_sha256": "0" * 64, "completed": True, "final_score": 2.0}
+SESSION = {"name": "FIX_T0", "config": CFG, "world_file": "FIX_T0_seed1.world", "world_sha256": "0" * 64, "completed": True, "foraging_points": 2.0}
 
 
 BUSHES = [{"id": 5, "slot": 0, "shape": 0.25, "color": 0.5, "moisture": 0.5, "value": 1.5, "rank": 2, "start_time": 3.0, "finish_time": 5.5, "fruits": 10},
@@ -35,7 +35,7 @@ BUSHES = [{"id": 5, "slot": 0, "shape": 0.25, "color": 0.5, "moisture": 0.5, "va
 
 def test_write_then_read_round_trips_every_stream(tmp_path):
     sets = [{"seq": 0, "set_index": 4, "pool_index": 7, "start_x": 1.5, "start_z": 2.5, "timed_out": 0, "response_time": 2.25,
-             "first_harvest_time": None, "bonus": 1.0, "paused_seconds": 3.5, "set_size": 3, "correct_pairs": 2, "total_pairs": 3, "bushes": BUSHES}]
+             "first_harvest_time": None, "points": 1.0, "paused_seconds": 3.5, "set_size": 3, "correct_pairs": 2, "total_pairs": 3, "bushes": BUSHES}]
     folder = rundata.write_session(tmp_path, RUN, 3, SESSION, traj(), EVENTS, sets=sets)
     assert folder == tmp_path / RUN / "03"
     got = rundata.read_session(folder)
@@ -48,7 +48,7 @@ def test_write_then_read_round_trips_every_stream(tmp_path):
     s0 = got["sets"][0]
     assert s0["set_index"] == 4 and s0["pool_index"] == 7 and s0["first_harvest_time"] is None and s0["seq"] == 0
     assert s0["bushes"] == BUSHES and s0["set_size"] == 3 and s0["correct_pairs"] == 2 and s0["total_pairs"] == 3
-    assert s0["bonus"] == 1.0 and s0["paused_seconds"] == 3.5 and s0["start_x"] == 1.5
+    assert s0["points"] == 1.0 and s0["paused_seconds"] == 3.5 and s0["start_x"] == 1.5
     assert (folder / "ranking_sets.csv").exists()
 
 
@@ -109,7 +109,7 @@ def test_load_session_log_reads_the_online_layout(tmp_path, monkeypatch):
     session = dict(SESSION, world_sha256=sha)
     rundata.write_session(tmp_path, RUN, 1, session, traj(), EVENTS)
     log = replay.load_session_log(tmp_path / RUN / "01")
-    assert log.name == "FIX_T0" and log.session_id == f"{RUN[:8]}/1" and log.final_score == 2.0
+    assert log.name == "FIX_T0" and log.session_id == f"{RUN[:8]}/1" and log.foraging_points == 2.0
     assert len(log.bushes.pos) == w.n and log.traj.shape == (50, 6) and log.events[1]["type"] == "fruit"
     assert log.events[0]["payload"] == {"x": 1.5, "yaw": 20.0}
 

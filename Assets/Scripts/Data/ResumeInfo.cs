@@ -20,7 +20,8 @@ public class TreeCount
 public class PreviousSession
 {
     public bool is_practice;
-    public float score;
+    public float foraging_points;
+    public float ranking_points;
 }
 
 [Serializable]
@@ -35,7 +36,7 @@ public class ResumeReply
     public double held_seconds;             // of it, the seconds the session clock was held in ranking breaks (the foraging clock continues from clock - held_seconds)
     public int breaks;                      // ranking breaks begun so far
     public int sets_played;                 // ranking sets shown so far (the pool continues from here)
-    public float break_bonus;               // the hidden bonus of the ranking sets so far (the end screen's total continues from it)
+    public float ranking_points;            // the points paid by the ranking sets so far (the end screen's total continues from it)
     public float running_total;
     public TreeCount[] fruits_taken;        // fruits already taken per bush
     public int open_bout_tree;              // the bush being harvested when the data stops, or -1

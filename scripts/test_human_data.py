@@ -26,7 +26,7 @@ def session_row(run_id, index, name):
     return {"run_id": run_id, "session_index": index, "name": name, "is_practice": False, "world_seed": 1,
             "world_file": None, "world_sha256": None,
             "config": {"sessionDuration": 90}, "camera": {}, "display": {"width": 1920}, "frame_stats": {"count": 100, "meanMs": 9.5, "maxMs": 30},
-            "started_at": "2026-11-03 10:00:00+00", "ended_at": "2026-11-03 10:01:30.5+00", "completed": True, "final_score": 12.0}
+            "started_at": "2026-11-03 10:00:00+00", "ended_at": "2026-11-03 10:01:30.5+00", "completed": True, "foraging_points": 12.0, "ranking_points": 10.0}
 
 
 def event_row(run_id, index, seq, type_, reward=None, total=None, payload=None):
@@ -37,7 +37,7 @@ def event_row(run_id, index, seq, type_, reward=None, total=None, payload=None):
 def set_row(run_id, index, seq, correct, total=1):
     row = {c: None for c in rundata.RANKING_COLUMNS}
     row.update(run_id=run_id, session_index=index, seq=seq, set_index=seq, pool_index=seq + 5, set_size=2, correct_pairs=int(correct), total_pairs=total,
-               bonus=10.0 if correct else 0.0, bushes=[{"id": 100 + seq, "slot": 0, "shape": 0.5, "color": 0.25, "moisture": 0.5, "value": 1.0, "rank": 1,
+               points=10.0 if correct else 0.0, bushes=[{"id": 100 + seq, "slot": 0, "shape": 0.5, "color": 0.25, "moisture": 0.5, "value": 1.0, "rank": 1,
                                                        "start_time": 1.0, "finish_time": 2.0, "fruits": 3}])
     return row
 
@@ -93,8 +93,9 @@ def test_download_writes_the_tidy_tables_and_the_raw_layout(server, tmp_path):
     assert a.minutes == pytest.approx(18.5)
     s = h.sessions.set_index(["run_id", "session_index"])
     assert s.loc[(RUN_A, 0), ["name", "duration_s", "n_fruits", "wall_s"]].tolist() == ["FOR_S1", 90.0, 2, 90.5]
-    assert s.loc[(RUN_A, 0), ["n_sets", "n_correct_pairs", "n_total_pairs", "bonus"]].tolist() == [2, 1, 2, 10.0]
-    assert s.loc[(RUN_A, 1), ["n_sets", "bonus"]].tolist() == [0, 0.0] and s.loc[(RUN_A, 0), "mean_frame_ms"] == 9.5
+    assert s.loc[(RUN_A, 0), ["n_sets", "n_correct_pairs", "n_total_pairs", "points"]].tolist() == [2, 1, 2, 10.0]
+    assert s.loc[(RUN_A, 1), ["n_sets", "points"]].tolist() == [0, 0.0] and s.loc[(RUN_A, 0), "mean_frame_ms"] == 9.5
+    assert s.loc[(RUN_A, 0), ["foraging_points", "ranking_points"]].tolist() == [12.0, 10.0] and "final_score" not in s.columns
     assert len(h.events) == 6 and list(h.fruits["reward"][h.fruits.run_id == RUN_A]) == [5.0, 0.0]
     assert h.events.set_index(["run_id", "session_index", "seq"]).loc[(RUN_A, 0, 3), "payload"] == '{"x": 1}'
     assert len(h.ranking_sets) == 3 and h.ranking_sets["correct_pairs"].sum() == 2

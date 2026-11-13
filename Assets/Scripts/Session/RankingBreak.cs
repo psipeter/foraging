@@ -55,6 +55,9 @@ public class RankingBreak : MonoBehaviour
     // The hidden bonus earned in this session's breaks so far (what the correct pairs would pay, also in a practice session); the session's end screen adds it to the points.
     public static float Points { get; private set; }
 
+    // The points the session's ranking sets actually paid (0 in a practice session): the session row's ranking_points.
+    public static float PaidPoints { get; private set; }
+
     // The running set's countdown (seconds), for the clock under the main one.
     public float SecondsLeft { get; private set; }
 
@@ -102,6 +105,8 @@ public class RankingBreak : MonoBehaviour
     public static RankingBreak Create(SessionConfig config, WorldData world, TreeGenerator treeGenerator, PlayerController player, CameraController camera,
         HarvestManager harvest, SunController sun, HarvestUI harvestUI, DataLogger log, SessionTimerUI timer)
     {
+        Points = 0f;        // statics outlive the scene: a session without breaks must not inherit the last one's
+        PaidPoints = 0f;
         if (config == null || config.RankingEvery <= 0 || world == null || !world.HasTiles)
         {
             return null;
@@ -134,10 +139,10 @@ public class RankingBreak : MonoBehaviour
         rankingBreak._log = log;
         rankingBreak._timer = timer;
         rankingBreak._pool = pool;
-        Points = 0f;
         if (ResumeInfo.MidSession(GameManager.CurrentSessionIndex))
         {
-            Points = ResumeInfo.Pending.break_bonus;
+            Points = ResumeInfo.Pending.ranking_points;
+            PaidPoints = ResumeInfo.Pending.ranking_points;
             // Continuing an interrupted session: the numbering, the pool and the rows carry on (an unfinished break is not resumed; the patch switch count starts again).
             rankingBreak._breakNumber = ResumeInfo.Pending.breaks;
             rankingBreak._poolIndex = ResumeInfo.Pending.sets_played;
@@ -467,8 +472,9 @@ public class RankingBreak : MonoBehaviour
         float tie = _pool.tieTolerance > 0f ? _pool.tieTolerance : 0.05f;
         RankingSets.ScorePairs(setIds, values, _picks, tie, out int correct, out int total);
         float worth = correct * _config.RankingBonusPerPair;
-        float bonus = _config.IsPractice ? 0f : worth;
+        float points = _config.IsPractice ? 0f : worth;
         Points += worth;
+        PaidPoints += points;
         OnSetScored?.Invoke();
         if (_log == null)
         {
@@ -483,7 +489,7 @@ public class RankingBreak : MonoBehaviour
 
         _log.LogEvent("rank_set_end", payload: Json.Obj(("picked", new Json.Raw("[" + string.Join(",", _picks) + "]")), ("pick_times", new Json.Raw("[" + string.Join(",", times) + "]")),
             ("correct_pairs", correct), ("total_pairs", total), ("first_harvest_time", _firstHarvestTime < 0f ? null : (object)_firstHarvestTime), ("timed_out", timedOut ? 1 : 0),
-            ("paused_seconds", paused), ("bonus", bonus), ("break", _breakNumber)));
+            ("paused_seconds", paused), ("points", points), ("break", _breakNumber)));
 
         var objects = new List<string>();
         foreach (PoolBush b in set.bushes)
@@ -497,7 +503,7 @@ public class RankingBreak : MonoBehaviour
 
         float response = timedOut ? _config.RankingSeconds : (_pickTimes.Count > 0 ? _pickTimes[_pickTimes.Count - 1] : 0f);
         Vector3 p = _player.transform.position;
-        _log.LogSet(RankingSets.RowCells(_setCounter++, set.index, p.x, p.z, timedOut, response, _firstHarvestTime, bonus, paused, _setSize, correct, total, objects));
+        _log.LogSet(RankingSets.RowCells(_setCounter++, set.index, p.x, p.z, timedOut, response, _firstHarvestTime, points, paused, _setSize, correct, total, objects));
     }
 
     private void HandleBoutStarted(Tree tree)

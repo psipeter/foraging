@@ -115,9 +115,9 @@ def event_rows(events, first_seq=0):
 def upload_session(client, session_index, data, frames_per_chunk=600, events_per_batch=200):
     """Upload `rundata.read_session(...)`'s dict (session, traj, events, sets) in batches, trajectory chunks of
     `frames_per_chunk` frames. The first batch carries the session row as it stands at the start, the last one the ranking
-    sets, and a final request the row's final fields (ended_at, completed, final_score, frame_stats). Returns its ack."""
+    sets, and a final request the row's final fields (ended_at, completed, foraging_points, ranking_points, frame_stats). Returns its ack."""
     final = {k: v for k, v in data["session"].items() if k not in ("run_id", "session_index")}
-    start = {**final, "ended_at": None, "completed": False, "final_score": None, "frame_stats": None}
+    start = {**final, "ended_at": None, "completed": False, "foraging_points": None, "ranking_points": None, "frame_stats": None}
     rows, traj = event_rows(data["events"]), data["traj"]
     n_batches = max(1, -(-len(traj) // frames_per_chunk), -(-len(rows) // events_per_batch))
     for b in range(n_batches):

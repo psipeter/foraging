@@ -59,13 +59,13 @@ public static class RankingSets
     }
 
     // The cells of a set's ranking_sets row, in SetRow.Columns order.
-    public static string[] RowCells(int position, int poolIndex, float startX, float startZ, bool timedOut, float response, float firstHarvestTime, float bonus,
+    public static string[] RowCells(int position, int poolIndex, float startX, float startZ, bool timedOut, float response, float firstHarvestTime, float points,
         float pausedSeconds, int setSize, int correct, int total, IEnumerable<string> bushObjects)
     {
         return new[]
         {
             position.ToString(), poolIndex.ToString(), F(startX), F(startZ), timedOut ? "1" : "0", F(response),
-            firstHarvestTime < 0f ? "" : F(firstHarvestTime), F(bonus), F(pausedSeconds),
+            firstHarvestTime < 0f ? "" : F(firstHarvestTime), F(points), F(pausedSeconds),
             setSize.ToString(), correct.ToString(), total.ToString(), "[" + string.Join(",", bushObjects) + "]",
         };
     }

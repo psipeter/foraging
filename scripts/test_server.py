@@ -263,7 +263,7 @@ def test_ranking_sets_are_stored_and_the_resume_state_has_them(env):
     assert env["db"].execute("select set_index, pool_index, paused_seconds from public.ranking_sets where run_id = %s order by seq", (c.run_id,)).fetchall() == [
         {"set_index": 0, "pool_index": 4, "paused_seconds": 2.5}, {"set_index": 1, "pool_index": 5, "paused_seconds": 2.5}]
     state = c.start(prolific_pid="PID_sets")["resume"]
-    assert state["session_index"] == 0 and state["sets_next"] == 2 and state["break_bonus"] == 7.0
+    assert state["session_index"] == 0 and state["sets_next"] == 2 and state["ranking_points"] == 7.0
     assert "is_interlude" not in state and "interlude_plan" not in state and "trial_rows" not in state
     with raises(409, "gap_sets"):
         c.append(0, sets=[{**sets[0], "seq": 5}])
@@ -277,9 +277,9 @@ def test_finish_lists_what_is_missing_and_a_finished_run_accepts_no_more(env):
     assert result["ok"] is False and any("1 sessions present, 2 expected" in p for p in result["problems"])
     assert result["completion_code"] is None                                  # the code goes only to a run the database confirms finished
     assert any("not complete" in p for p in result["problems"]) and any("no session_end" in p for p in result["problems"])
-    c.append(0, session=session_row(ended_at="2026-10-29T12:00:00Z", completed=True, final_score=0.0),
+    c.append(0, session=session_row(ended_at="2026-10-29T12:00:00Z", completed=True, foraging_points=0.0),
              events=event_rows([ev(1.0, "session_end", running_total=0.0)], first_seq=1))
-    c.append(1, session=session_row(1, completed=True, ended_at="2026-10-29T12:05:00Z", final_score=3.0),
+    c.append(1, session=session_row(1, completed=True, ended_at="2026-10-29T12:05:00Z", foraging_points=3.0),
              events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end")]), frames=frames(20))
     assert c.finish() == {"ok": True, "problems": [], "completion_code": "DUMMY-COMPLETION-CODE", "points": 3}
     with raises(401, "unauthorized"):
@@ -291,9 +291,9 @@ def test_finish_lists_what_is_missing_and_a_finished_run_accepts_no_more(env):
 def test_feedback_is_stored_after_finish_replaced_by_a_second_one_and_needs_the_run_token(env):
     c = client(env)
     c.start(prolific_pid="PID_feedback")
-    c.append(0, session=session_row(ended_at="2026-10-29T12:00:00Z", completed=True, final_score=0.0),
+    c.append(0, session=session_row(ended_at="2026-10-29T12:00:00Z", completed=True, foraging_points=0.0),
              events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end", running_total=0.0)]), frames=frames(20))
-    c.append(1, session=session_row(1, completed=True, ended_at="2026-10-29T12:05:00Z", final_score=3.0),
+    c.append(1, session=session_row(1, completed=True, ended_at="2026-10-29T12:05:00Z", foraging_points=3.0),
              events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end")]), frames=frames(20))
     assert c.finish()["ok"] is True
     assert c.feedback("The second session was confusing.") == {"ok": True}
@@ -360,7 +360,7 @@ def test_a_session_uploaded_in_batches_and_pulled_back_equals_the_original(env, 
     traj = codec.quantize(frames(1500))
     events = [ev(0.0, "session_start", payload={"x": 1.5}), *[ev(0.5 + 0.8 * i, "fruit", tree_id=i % 3, k=i // 3, reward=float(i % 4),
                                                                 running_total=float(i)) for i in range(40)], ev(12.0, "session_end", running_total=39.0)]
-    row = session_row(0, completed=True, ended_at="2026-10-29T12:00:00+00:00", final_score=39.0, frame_stats={"count": 1500})
+    row = session_row(0, completed=True, ended_at="2026-10-29T12:00:00+00:00", foraging_points=39.0, frame_stats={"count": 1500})
     run = "11111111-1111-1111-1111-111111111111"
     rundata.write_session(original, run, 0, row, traj, events)
     data = rundata.read_session(original / run / "00")
@@ -373,7 +373,7 @@ def test_a_session_uploaded_in_batches_and_pulled_back_equals_the_original(env, 
     assert np.array_equal(got["traj"], data["traj"]) and len(got["events"]) == len(events)
     assert [e["reward"] for e in got["events"] if e["type"] == "fruit"] == [e["reward"] for e in data["events"] if e["type"] == "fruit"]
     assert got["events"][0]["payload"] == {"x": 1.5}
-    assert got["session"]["final_score"] == 39.0 and got["session"]["completed"] is True and got["session"]["config"] == row["config"]
+    assert got["session"]["foraging_points"] == 39.0 and got["session"]["completed"] is True and got["session"]["config"] == row["config"]
     assert (out / "run.json").exists() and "token_hash" not in json.loads((out / "run.json").read_text())
 
 
@@ -396,8 +396,8 @@ def test_the_public_roles_can_read_nothing_and_call_nothing(env, role):
                 conn.execute(statement)
 
 
-def ranking_set(seq, correct, bonus):
-    return {"seq": seq, "set_index": seq, "pool_index": seq + 4, "timed_out": 0, "response_time": 1.5, "paused_seconds": 2.5, "bonus": bonus,
+def ranking_set(seq, correct, points):
+    return {"seq": seq, "set_index": seq, "pool_index": seq + 4, "timed_out": 0, "response_time": 1.5, "paused_seconds": 2.5, "points": points,
             "set_size": 2, "correct_pairs": correct, "total_pairs": 1}
 
 
@@ -405,13 +405,13 @@ def test_resume_state_carries_the_totals_of_finished_sessions(env):
     c = client(env)
     c.start(prolific_pid="PID_totals")
     done = {"completed": True, "ended_at": "2026-10-29T12:00:00Z"}
-    c.append(0, session=session_row(0, is_practice=True, final_score=58.0, **done), events=event_rows([ev(0.0, "session_start")]))
-    c.append(1, session=session_row(1, final_score=33.0, **done), events=event_rows([ev(0.0, "session_start")]), sets=[ranking_set(0, 1, 5.0)])
+    c.append(0, session=session_row(0, is_practice=True, foraging_points=58.0, **done), events=event_rows([ev(0.0, "session_start")]))
+    c.append(1, session=session_row(1, foraging_points=33.0, ranking_points=5.0, **done), events=event_rows([ev(0.0, "session_start")]), sets=[ranking_set(0, 1, 5.0)])
     c.append(2, session=session_row(2), events=event_rows([ev(0.0, "session_start")]), sets=[ranking_set(0, 1, 5.0), ranking_set(1, 0, 0.0)])
     state = c.start(prolific_pid="PID_totals")["resume"]
     assert state["session_index"] == 2 and state["completed"] is False
-    assert [(p["index"], p["is_practice"], p["score"]) for p in state["previous"]] == [(0, True, 58.0), (1, False, 33.0)]
-    assert state["break_bonus"] == 5.0 and state["sets_next"] == 2
+    assert [(p["index"], p["is_practice"], p["foraging_points"], p["ranking_points"]) for p in state["previous"]] == [(0, True, 58.0, 0.0), (1, False, 33.0, 5.0)]
+    assert state["ranking_points"] == 5.0 and state["sets_next"] == 2
     assert "previous_interlude" not in state and all("is_interlude" not in p for p in state["previous"])
     assert state["has_pose"] is False and state["pose"]["t"] == 0 and state["open_bout_tree"] == -1 and state["running_total"] == 0
 
@@ -419,9 +419,9 @@ def test_resume_state_carries_the_totals_of_finished_sessions(env):
 def test_a_completed_latest_session_is_reported_as_completed(env):
     c = client(env)
     c.start(prolific_pid="PID_completed")
-    c.append(0, session=session_row(0, completed=True, final_score=7.0, ended_at="2026-10-29T12:00:00Z"), events=event_rows([ev(0.0, "session_end")]))
+    c.append(0, session=session_row(0, completed=True, foraging_points=7.0, ended_at="2026-10-29T12:00:00Z"), events=event_rows([ev(0.0, "session_end")]))
     state = c.start(prolific_pid="PID_completed")["resume"]
-    assert state["completed"] is True and state["final_score"] == 7.0 and [p["index"] for p in state["previous"]] == [0]
+    assert state["completed"] is True and state["foraging_points"] == 7.0 and [p["index"] for p in state["previous"]] == [0]
 
 
 def test_consent_is_asked_once_per_participant_and_version(env):
@@ -455,7 +455,7 @@ def test_an_old_participant_token_stops_working_at_the_next_login(env):
 
 
 def finished_session():
-    return session_row(0, completed=True, ended_at="2026-11-06T12:00:00Z", final_score=4.0)
+    return session_row(0, completed=True, ended_at="2026-11-06T12:00:00Z", foraging_points=4.0)
 
 
 def play_one_session(c):
@@ -485,15 +485,15 @@ def test_the_menu_lists_the_experiments_with_the_participants_standing_and_locks
     assert env["db"].execute("select experiment, build_commit from public.runs where run_id = %s", (two["run_id"],)).fetchone() == {"experiment": "TWO", "build_commit": MENU_COMMIT}
 
 
-def test_menu_points_are_completed_session_scores_plus_ranking_bonuses_without_the_practice_ones(env):
+def test_menu_points_are_completed_foraging_plus_ranking_points_without_the_practice_ones(env):
     c = client(env)
     c.login("PID_points")
     c.start(login=False)
     done = {"completed": True, "ended_at": "2026-11-07T12:00:00Z"}
-    c.append(0, session=session_row(0, is_practice=True, final_score=58.0, **done), events=event_rows([ev(0.0, "session_start")]))         # practice: not counted
-    c.append(1, session=session_row(1, **done), events=event_rows([ev(0.0, "session_start")]), sets=[ranking_set(0, 1, 5.0), ranking_set(1, 0, 0.0)])
+    c.append(0, session=session_row(0, is_practice=True, foraging_points=58.0, **done), events=event_rows([ev(0.0, "session_start")]))         # practice: not counted
+    c.append(1, session=session_row(1, foraging_points=2.0, ranking_points=5.0, **done), events=event_rows([ev(0.0, "session_start")]), sets=[ranking_set(0, 1, 5.0), ranking_set(1, 0, 0.0)])
     standing = {m["code"]: m for m in c.login("PID_points")["experiments"]}["TEST"]
-    assert standing["points"] == 5.0 and standing["sessions_done"] == 2
+    assert standing["points"] == 7.0 and standing["sessions_done"] == 2
 
 
 def test_a_finished_experiment_is_not_rerun_but_shows_its_completion_code_and_takes_feedback(env):
@@ -526,7 +526,7 @@ def test_the_completion_code_is_the_experiments_own_and_a_dummy_until_one_is_set
 
 def play_two_sessions(c):
     c.append(0, session=finished_session(), events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end", running_total=4.0)]), frames=frames(20))
-    c.append(1, session=session_row(1, completed=True, ended_at="2026-11-06T12:05:00Z", final_score=1.0),
+    c.append(1, session=session_row(1, completed=True, ended_at="2026-11-06T12:05:00Z", foraging_points=1.0),
              events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end")]), frames=frames(20))
     return c.finish()
 
@@ -571,7 +571,7 @@ def test_the_load_test_script_runs_clean_against_the_local_server(env):
 
 def two_sessions(c):
     c.append(0, session=finished_session(), events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end", running_total=4.0)]), frames=frames(20))
-    c.append(1, session=session_row(1, completed=True, ended_at="2026-11-10T12:05:00Z", final_score=1.0),
+    c.append(1, session=session_row(1, completed=True, ended_at="2026-11-10T12:05:00Z", foraging_points=1.0),
              events=event_rows([ev(0.0, "session_start"), ev(1.0, "session_end")]), frames=frames(20))
 
 
@@ -622,6 +622,6 @@ def test_a_ranking_set_is_a_row_with_bushes_and_counts_in_the_tallies_and_the_lo
     ack = c.append(0, session=session_row(0), events=event_rows([ev(0.0, "session_start")]), sets=[row])
     assert ack["sets_next"] == 1
     state = c.start(prolific_pid="PID_ranking")["resume"]
-    assert state["break_bonus"] == 3.5 and state["sets_next"] == 1
+    assert state["ranking_points"] == 3.5 and state["sets_next"] == 1
     picks = env["db"].execute("select bush_id, slot, rank, finish_time, fruits from public.ranking_picks where run_id = %s order by bush_id", (c.run_id,)).fetchall()
     assert picks == [{"bush_id": 5, "slot": 0, "rank": 1, "finish_time": 2.5, "fruits": 10}, {"bush_id": 6, "slot": 1, "rank": None, "finish_time": None, "fruits": 0}]

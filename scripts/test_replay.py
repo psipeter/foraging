@@ -87,7 +87,7 @@ def test_a_screen_opening_on_the_exhausting_fruit_still_verifies():
     t_last = [e["t"] for e in fruits(replay_harvests(log))][-1]
     assert abs(t_last - 2.4) < 2 / HZ
     log.events = logged(log, extra=[("pause", t_last), ("resume", t_last)])
-    log.manifest["final_score"] = 6.0
+    log.manifest["foraging_points"] = 6.0
     assert verify(log)[0] == []
     assert [e["type"] for e in log.events].count("harvest_press") == 1
     # Every fruit lands on a trajectory row's time (the frame has a row), in non-decreasing event order.
@@ -104,7 +104,7 @@ def test_verify_flags_a_fruit_whose_frame_has_no_row():
     t_last = [e["t"] for e in log.events if e["type"] == "fruit"][-1]
     log.traj = log.traj[np.abs(log.traj[:, 0] - t_last) > 1e-9]
     log.traj[log.traj[:, 0] > t_last, 5] = 0
-    log.manifest["final_score"] = 6.0
+    log.manifest["foraging_points"] = 6.0
     assert verify(log)[0]
 
 
@@ -129,7 +129,7 @@ def test_verify_flags_a_release_the_keys_do_not_explain():
     assert verify(log)[0]
     # The same release is accepted when a rank_set_end coincides with it (a ranking set cancelling the bout).
     log.events.append(dict(type="rank_set_end", t=fr[2]["t"], real=0.0, tree_id=-1, k=-1, reward=float("nan"), payload={}))
-    log.manifest.pop("final_score", None)
+    log.manifest.pop("foraging_points", None)
     assert not [p for p in verify(log)[0] if p.startswith(("harvest_release", "fruit", "harvest_press"))]
 
 
@@ -231,7 +231,7 @@ def test_verify_flags_a_fruit_logged_50_ms_off():
     frames = [(0, 7.0, 0.0, 4)] * 250
     log = toy_log(frames)
     log.events = logged(log)
-    log.manifest["final_score"] = 6.0
+    log.manifest["foraging_points"] = 6.0
     assert verify(log)[0] == []
     for e in log.events:
         if e["type"] == "fruit":
@@ -243,7 +243,7 @@ def test_verify_ignores_events_on_the_last_frame_only():
     frames = [(0, 7.0, 0.0, 4)] * 150
     log = toy_log(frames)
     log.events = logged(log)
-    log.manifest["final_score"] = 1.0
+    log.manifest["foraging_points"] = 1.0
     last = float(log.traj[-1, 0])
     log.events.append(dict(type="harvest_release", t=last, tree_id=0, real=0.0, k=-1, reward=float("nan"), payload={}))
     assert verify(log)[0] == []                       # the session-end release on the last frame is not compared
@@ -311,16 +311,16 @@ def test_each_verify_score_check_stands_on_its_own():
     frames = [(0, 7.0, 0.0, 4)] * 250
     log = toy_log(frames)
     log.events = logged(log)
-    log.manifest["final_score"] = 6.0
+    log.manifest["foraging_points"] = 6.0
     assert verify(log)[0] == []
     fr = [e for e in log.events if e["type"] == "fruit"]
     fr[0]["reward"] += 1.0
-    fr[1]["reward"] -= 1.0                       # the per-fruit rewards are wrong but still sum to final_score
+    fr[1]["reward"] -= 1.0                       # the per-fruit rewards are wrong but still sum to foraging_points
     assert any(p.startswith("fruit") for p in verify(log)[0])
     fr[0]["reward"] -= 1.0
     fr[1]["reward"] += 1.0
-    log.manifest["final_score"] = 7.0             # the fruits are right but final_score is not their sum
-    assert any("final_score" in p for p in verify(log)[0])
+    log.manifest["foraging_points"] = 7.0             # the fruits are right but foraging_points is not their sum
+    assert any("foraging_points" in p for p in verify(log)[0])
 
 
 # --- a session continued after an interruption (session_resume) ------------------------------------------------------
@@ -360,10 +360,10 @@ def test_verify_leaves_out_the_events_of_the_gap_and_still_checks_the_rest():
     after = [dict(e, real=0.0, k=e.get("k", -1), reward=e.get("reward", nan), running_total=e.get("running_total", nan), payload={})
              for e in replay_harvests(dataclasses.replace(log, events=gap))]
     log.events = sorted(gap + after, key=lambda e: e["t"])
-    log.manifest["final_score"] = 6.0
+    log.manifest["foraging_points"] = 6.0
     assert verify(log)[0] == []
     after[-1]["reward"] += 1.0                          # a wrong reward after the resume is still caught
-    log.manifest["final_score"] = 7.0
+    log.manifest["foraging_points"] = 7.0
     assert any(p.startswith("fruit") for p in verify(log)[0])
 
 
@@ -386,7 +386,7 @@ def test_a_logged_fruit_decides_a_tie_between_frame_sums_and_the_fruit_time():
     log = toy_log([(0, 7.0, 0.0, 0)] * 400)
     log.traj = np.array([[t, 0.0, 7.0, 0.0, 0.0, 4 if i >= 13 else 0] for i, t in enumerate(ts)])
     log.manifest["config"] = dict(CFG, fruitHarvestDuration=0.2)
-    log.manifest["final_score"] = 1.0
+    log.manifest["foraging_points"] = 1.0
     assert abs(fruits(replay_harvests(log))[0]["t"] - 3.018) < 1e-9       # without a logged fruit: the plain comparison
     log.events = [dict(e, real=0.0, payload={}) for e in replay_harvests(log)]
     fruit = [e for e in log.events if e["type"] == "fruit"][0]
@@ -485,7 +485,7 @@ def test_a_harvest_started_in_a_break_is_finished_whatever_the_key_and_the_cross
 def test_a_break_replay_verifies_against_its_own_events():
     log = break_log()
     log.events = sorted(break_events() + logged(log), key=lambda e: e["t"])
-    log.manifest["final_score"] = 1.0
+    log.manifest["foraging_points"] = 1.0
     assert verify(log)[0] == []
 
 

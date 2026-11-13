@@ -1,12 +1,15 @@
 -- The cleanup that removed the Interlude (docs/CLEANUP_PLAN.md): a session is foraging with ranking sets played in place, and nothing is called an Interlude.
 --   * interlude_trials becomes ranking_sets, one row per ranking set, keeping only the columns a set uses:
 --       set_index (sets played before it in the session), pool_index (its place in the session's pool file), start_x and start_z (where the player stood),
---       timed_out, response_time (seconds from the set's start to its last pick), first_harvest_time, bonus, paused_seconds, set_size, correct_pairs, total_pairs,
+--       timed_out, response_time (seconds from the set's start to its last pick), first_harvest_time, points, paused_seconds, set_size, correct_pairs, total_pairs,
 --       bushes (jsonb, one object per bush)
---     the pair columns (left_*, right_*, correct_side, choice, ...) are dropped; seq, set_size, correct_pairs, total_pairs, bonus and bushes keep their meaning.
+--     the pair columns (left_*, right_*, correct_side, choice, ...) are dropped; seq, set_size, correct_pairs, total_pairs and bushes keep their meaning; bonus is renamed points (what the set paid: 0 in a practice session).
 --   * interlude_plan (the shuffled trial order of an Interlude) and the view interlude_picks (now ranking_picks) go; sessions loses is_interlude, interlude_file and
 --     interlude_sha256.
 --   * the upload's `trials` become `sets` (stream_state's trials_next is sets_next, the gap error gap_trials is gap_sets); resume_state loses the Interlude's fields.
+--   * a session's points are two parts, foraging and ranking: sessions.final_score is renamed foraging_points (the harvest points) and ranking_points is new (the sum of the
+--     points of the session's ranking sets, 0 in a practice session; both are written at the session's end). The total is computed, not stored. Existing rows get
+--     ranking_points from their sets. resume_state's break_bonus is ranking_points, its final_score is foraging_points, and `previous` carries both.
 -- Back up the database first (scripts/db_backup.py): the dropped columns held the old experiments' pair trials.
 
 drop view public.interlude_picks;
@@ -26,7 +29,14 @@ alter table public.ranking_sets
     drop column correct_side, drop column choice, drop column choice_correct, drop column first_harvest_side,
     drop column left_fruits, drop column right_fruits, drop column locked_at;
 
+alter table public.ranking_sets rename column bonus to points;
+
 alter table public.sessions drop column is_interlude, drop column interlude_file, drop column interlude_sha256;
+alter table public.sessions rename column final_score to foraging_points;
+alter table public.sessions add column ranking_points double precision;
+update public.sessions s set ranking_points = coalesce((select sum(t.points) from public.ranking_sets t
+                                                        where t.run_id = s.run_id and t.session_index = s.session_index), 0)
+    where s.completed;
 
 -- The long form: one row per bush of each set (the table stays deny-all; the view is read with the owner's rights only).
 create view public.ranking_picks with (security_invoker = true) as
@@ -94,7 +104,7 @@ begin
         'name', s.name,
         'is_practice', s.is_practice,
         'completed', s.completed,
-        'final_score', coalesce(s.final_score, 0),
+        'foraging_points', coalesce(s.foraging_points, 0),
         'started_at', coalesce(s.started_at::text, ''),
         'has_pose', last_chunk.run_id is not null,
         'pose', coalesce(last_chunk.last_frame, jsonb_build_object('t', 0, 'x', 0, 'z', 0, 'yaw', 0, 'pitch', 0, 'keys', 0)),
@@ -104,7 +114,7 @@ begin
         -- seconds the clock was held in ranking breaks (the foraging clock to continue from is 'clock' minus this), the breaks begun and the sets shown so far
         'held_seconds', held,
         'breaks', breaks,
-        'break_bonus', coalesce((select sum(bonus) from public.ranking_sets where run_id = p_run and session_index = s.session_index), 0),
+        'ranking_points', coalesce((select sum(points) from public.ranking_sets where run_id = p_run and session_index = s.session_index), 0),
         'sets_played', (select count(*) from public.events where run_id = p_run and session_index = s.session_index and type = 'rank_set'),
         'running_total', coalesce((select running_total from public.events
                                    where run_id = p_run and session_index = s.session_index and type = 'fruit' order by seq desc limit 1), 0),
@@ -114,21 +124,18 @@ begin
                                      where run_id = p_run and session_index = s.session_index and type = 'fruit' group by tree_id) f), '[]'::jsonb),
         'open_bout_tree', coalesce(case when last_bout.type = 'harvest_press' then last_bout.tree_id end, -1),
         -- earlier sessions, for the running totals on the final screen
-        'previous', coalesce((select jsonb_agg(jsonb_build_object('index', session_index, 'is_practice', is_practice, 'score', coalesce(final_score, 0))
+        'previous', coalesce((select jsonb_agg(jsonb_build_object('index', session_index, 'is_practice', is_practice, 'foraging_points', coalesce(foraging_points, 0), 'ranking_points', coalesce(ranking_points, 0))
                                                order by session_index)
                               from public.sessions where run_id = p_run and completed), '[]'::jsonb),
         'gap_seconds', coalesce(extract(epoch from now() - last_seen), 0))
         || server.stream_state(p_run, s.session_index);
 end $$;
 
--- The points of a run (menu, finish_run): the score of its completed, non-practice sessions plus the bonus of their ranking sets.
+-- The points of a run (menu, finish_run): foraging points plus ranking points of its completed, non-practice sessions.
 create or replace function server.run_points(p_run uuid) returns numeric
 language sql stable as $$
-    select coalesce((select sum(s.final_score) from public.sessions s
-                     where s.run_id = p_run and s.completed and not s.is_practice), 0)
-         + coalesce((select sum(coalesce(t.bonus, 0)) from public.ranking_sets t
-                     join public.sessions s on s.run_id = t.run_id and s.session_index = t.session_index
-                     where t.run_id = p_run and s.completed and not s.is_practice), 0);
+    select coalesce((select sum(coalesce(s.foraging_points, 0) + coalesce(s.ranking_points, 0)) from public.sessions s
+                     where s.run_id = p_run and s.completed and not s.is_practice), 0);
 $$;
 
 -- One upload: optional session row, events, trajectory chunks and ranking sets of one session. All or nothing; a repeat of rows already held is harmless
@@ -155,15 +162,16 @@ begin
             raise exception 'session_gap' using errcode = 'P0001';
         end if;
         insert into public.sessions (run_id, session_index, name, is_practice, world_seed, world_file, world_sha256,
-                                     config, camera, display, frame_stats, started_at, ended_at, completed, final_score)
+                                     config, camera, display, frame_stats, started_at, ended_at, completed, foraging_points, ranking_points)
         select p_run, p_session, x.name, coalesce(x.is_practice, false), x.world_seed, x.world_file,
                x.world_sha256, x.config, x.camera, x.display, x.frame_stats, x.started_at,
-               x.ended_at, coalesce(x.completed, false), x.final_score
+               x.ended_at, coalesce(x.completed, false), x.foraging_points, x.ranking_points
         from jsonb_populate_record(null::public.sessions, s) x
         on conflict (run_id, session_index) do update set
             ended_at    = coalesce(excluded.ended_at, public.sessions.ended_at),
             completed   = public.sessions.completed or excluded.completed,
-            final_score = coalesce(excluded.final_score, public.sessions.final_score),
+            foraging_points = coalesce(excluded.foraging_points, public.sessions.foraging_points),
+            ranking_points  = coalesce(excluded.ranking_points, public.sessions.ranking_points),
             frame_stats = coalesce(excluded.frame_stats, public.sessions.frame_stats),
             display     = coalesce(excluded.display, public.sessions.display);
     end if;

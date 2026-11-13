@@ -23,7 +23,7 @@ import numpy as np
 EVENT_COLUMNS = ("seq", "t", "real", "type", "tree_id", "k", "reward", "running_total", "payload")
 TRAJECTORY_COLUMNS = ("seq", "t", "x", "z", "yaw", "pitch", "keys")
 RANKING_COLUMNS = (
-    "seq", "set_index", "pool_index", "start_x", "start_z", "timed_out", "response_time", "first_harvest_time", "bonus", "paused_seconds",
+    "seq", "set_index", "pool_index", "start_x", "start_z", "timed_out", "response_time", "first_harvest_time", "points", "paused_seconds",
     "set_size", "correct_pairs", "total_pairs", "bushes")      # a set is one row; `bushes` is a list of dicts, JSON in the CSV
 _INTEGER = {"seq", "set_index", "pool_index", "timed_out", "set_size", "correct_pairs", "total_pairs"}
 _TEXT = set()
@@ -52,6 +52,8 @@ def _read_rows(path, columns, parse):
     text, cut = _complete_lines(Path(path).read_text())
     reader = csv.reader(io.StringIO(text, newline=""))
     header = next(reader, None)
+    if header and "bonus" in header and "points" in columns:
+        header = ["points" if h == "bonus" else h for h in header]       # a log made before bonus was renamed points
     used = tuple(columns)
     if tuple(header or ()) != used:
         # a file written before columns were appended to the table has the table's first columns: read it, the later ones are missing (None)

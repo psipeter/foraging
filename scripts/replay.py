@@ -77,8 +77,8 @@ class SessionLog:
         return f"{str(self.manifest.get('run_id'))[:8]}/{self.manifest.get('session_index')}"
 
     @property
-    def final_score(self):
-        return self.manifest.get("final_score")
+    def foraging_points(self):
+        return self.manifest.get("foraging_points", self.manifest.get("final_score"))      # the old spelling of a log made before the rename
 
 
 # --------------------------------------------------------------------------------------------------
@@ -378,9 +378,9 @@ def verify(log):
                 problems.append(f"{kind} #{j}: logged {_brief(ea)} vs replayed {_brief(eb)}")
                 break
     fruit_sum = sum(e["reward"] for e in log.events if e["type"] == "fruit")
-    final = log.final_score
+    final = log.foraging_points
     if final is not None and abs(fruit_sum - final) > 1e-6:
-        problems.append(f"final_score {final} != sum of logged fruit rewards {fruit_sum}")
+        problems.append(f"foraging_points {final} != sum of logged fruit rewards {fruit_sum}")
     return problems, replayed
 
 
@@ -450,7 +450,7 @@ def main():
 
     log = load_session_log(args.session)
     print(f"{log.name} ({log.session_id}): {len(log.traj)} frames, {log.traj[-1, 0]:.1f} s, "
-          f"{sum(e['type'] == 'fruit' for e in log.events)} fruits, final_score {log.final_score}")
+          f"{sum(e['type'] == 'fruit' for e in log.events)} fruits, foraging_points {log.foraging_points}")
     problems, replayed = verify(log)
     if problems:
         print("MISMATCH:")

@@ -88,7 +88,7 @@ def main():
     stale.run_id, stale.token = c.run_id, old
     check("the old token stopped working", refused(lambda: stale.append(0, events=event_rows([{"t": 3.0, "type": "x"}], first_seq=3)), 401, "unauthorized"))
     check("finish lists what is missing", timed("run-finish (incomplete)", c.finish, t)["ok"] is False)
-    timed("append (session end)", lambda: c.append(0, session={**row, "completed": True, "ended_at": "2026-10-29T12:00:00Z", "final_score": 2.0},
+    timed("append (session end)", lambda: c.append(0, session={**row, "completed": True, "ended_at": "2026-10-29T12:00:00Z", "foraging_points": 2.0, "ranking_points": 0.0},
                                                    events=event_rows([{"t": 2.0, "type": "session_end", "running_total": 2.0}], first_seq=3)), t)
     result = timed("run-finish (complete)", c.finish, t)
     check("finish accepts a complete run", result.get("ok") is True and result.get("problems") == [], result)
