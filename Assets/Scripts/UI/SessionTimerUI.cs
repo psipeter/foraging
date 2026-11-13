@@ -166,9 +166,9 @@ public class SessionTimerUI : MonoBehaviour
             }
         }
 
-        // The ranking sets' hidden bonus appears only here, never set by set. The totals are on the experiment's completion screen, after the last of these.
-        float points = _lastTotalScore + RankingBreak.Points;
-        _score = ScoreScreen.Show(GameManager.PartLabel, points, "Press [Enter] to continue", FindFirstObjectByType<CameraController>());
+        // The ranking sets' points appear only here (during play a set shows a sealed "+???"). The totals are on the experiment's completion screen, after the last of these.
+        bool split = sessionConfig != null && sessionConfig.RankingEvery > 0;
+        _score = ScoreScreen.Show(GameManager.PartLabel, _lastTotalScore, RankingBreak.Points, split, "Press [Enter] to continue", FindFirstObjectByType<CameraController>());
         Music.PlayScore();
     }
 }

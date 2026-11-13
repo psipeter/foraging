@@ -48,6 +48,10 @@ public class RankingBreak : MonoBehaviour
     // True from the start of a break to its end: the consumers of HarvestManager's events (HarvestUI, FeedbackAudio, InstructionsPanel) hide outcomes meanwhile.
     public static bool Active { get; private set; }
 
+    // Raised when a ranking set has been scored. It carries nothing on purpose: the HUD shows a sealed "+???" and plays a chime, the same whatever the set earned,
+    // so the ranking teaches nothing about the values.
+    public static event System.Action OnSetScored;
+
     // The hidden bonus earned in this session's breaks so far (what the correct pairs would pay, also in a practice session); the session's end screen adds it to the points.
     public static float Points { get; private set; }
 
@@ -465,6 +469,7 @@ public class RankingBreak : MonoBehaviour
         float worth = correct * _config.RankingBonusPerPair;
         float bonus = _config.IsPractice ? 0f : worth;
         Points += worth;
+        OnSetScored?.Invoke();
         if (_log == null)
         {
             return;

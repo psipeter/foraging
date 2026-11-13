@@ -9,7 +9,8 @@ public class FeedbackAudio : MonoBehaviour
     {
         FruitPick,
         BushExhausted,
-        RankingPick
+        RankingPick,
+        RankingDone
     }
 
     public SessionConfig sessionConfig;
@@ -39,12 +40,20 @@ public class FeedbackAudio : MonoBehaviour
     {
         HarvestManager.OnFruitCollected += HandleFruitCollected;
         HarvestManager.OnBushExhausted += HandleBushExhausted;
+        RankingBreak.OnSetScored += HandleSetScored;
     }
 
     private void OnDisable()
     {
         HarvestManager.OnFruitCollected -= HandleFruitCollected;
         HarvestManager.OnBushExhausted -= HandleBushExhausted;
+        RankingBreak.OnSetScored -= HandleSetScored;
+    }
+
+    // The ranking set was scored: one chime, always the same (it says the set is done, not how it went).
+    private void HandleSetScored()
+    {
+        Play(Cue.RankingDone, 1f);
     }
 
     private void HandleFruitCollected(float amount, Vector3 worldPos)
@@ -101,6 +110,23 @@ public class FeedbackAudio : MonoBehaviour
             const float f0 = 480f, f1 = 300f;
             float phase = 2f * Mathf.PI * (f0 * t + (f1 - f0) * t * t / (2f * length));
             return Mathf.Sin(phase) * Mathf.Exp(-t * 55f);
+        });
+
+        // Ranking done: a soft rising triad (C, E, G) of bell-like notes, slower and lower than the reward blip and the exhausted chime, so it is its own sound.
+        _clips[Cue.RankingDone] = Synthesize("RankingDone", 0.9f, (t) =>
+        {
+            float sum = 0f;
+            float[] notes = { 523.25f, 659.25f, 783.99f };
+            for (int i = 0; i < notes.Length; i++)
+            {
+                float local = t - i * 0.12f;
+                if (local > 0f)
+                {
+                    sum += (Mathf.Sin(2f * Mathf.PI * notes[i] * local) + 0.25f * Mathf.Sin(2f * Mathf.PI * notes[i] * 2f * local)) * Mathf.Exp(-local * 5f);
+                }
+            }
+
+            return 0.55f * sum;
         });
 
         // Exhausted: two soft rising chime notes.

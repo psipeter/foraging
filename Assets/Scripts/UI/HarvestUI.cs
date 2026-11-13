@@ -42,6 +42,7 @@ public class HarvestUI : MonoBehaviour
     {
         HarvestManager.OnFruitCollected += HandleFruitCollected;
         HarvestManager.OnScoreChanged += HandleScoreChanged;
+        RankingBreak.OnSetScored += HandleSetScored;
         HarvestManager.OnHintChanged += HandleHintChanged;
     }
 
@@ -49,6 +50,7 @@ public class HarvestUI : MonoBehaviour
     {
         HarvestManager.OnFruitCollected -= HandleFruitCollected;
         HarvestManager.OnScoreChanged -= HandleScoreChanged;
+        RankingBreak.OnSetScored -= HandleSetScored;
         HarvestManager.OnHintChanged -= HandleHintChanged;
     }
 
@@ -193,6 +195,46 @@ public class HarvestUI : MonoBehaviour
         }
 
         _punch = StartCoroutine(PunchScore());
+    }
+
+    // A ranking set was scored: the harvest popup's motion with a sealed "+???" (the amount is shown only on the end screen), and the score plate punches, the same
+    // whatever the set earned.
+    private void HandleSetScored()
+    {
+        if (canvas == null || floatingTextPrefab == null)
+        {
+            return;
+        }
+
+        float baseScale = sessionConfig != null ? sessionConfig.PopupScale : 1.7f;
+        Color color = sessionConfig != null ? sessionConfig.PopupColor : Color.white;
+        color.a = 1f;
+        RectTransform instance = Instantiate(floatingTextPrefab, canvas.transform);
+        instance.anchorMin = instance.anchorMax = new Vector2(0.5f, 0.5f);
+        instance.pivot = new Vector2(0.5f, 0.5f);
+        instance.localScale = Vector3.one;
+        int slot = ClaimSlot();
+        instance.anchoredPosition = popupOffset + Vector2.right * SlotOffsetX(slot);
+        TextMeshProUGUI tmp = instance.GetComponentInChildren<TextMeshProUGUI>();
+        if (tmp != null)
+        {
+            tmp.text = "+???";
+            tmp.fontStyle = FontStyles.Bold;
+            tmp.color = color;
+            tmp.outlineWidth = 0.22f;
+            tmp.outlineColor = new Color32(0, 0, 0, 215);
+        }
+
+        StartCoroutine(AnimatePopup(instance, baseScale, fruitTextDuration * 1.5f, fruitTextRise, slot));
+        if (totalScoreText != null)
+        {
+            if (_punch != null)
+            {
+                StopCoroutine(_punch);
+            }
+
+            _punch = StartCoroutine(PunchScore());
+        }
     }
 
     private void HandleHintChanged(HarvestHint hint)
