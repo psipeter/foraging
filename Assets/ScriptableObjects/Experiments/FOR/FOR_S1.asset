@@ -36,7 +36,7 @@ MonoBehaviour:
   rankingRimBoost: 3
   rankingMarkerLift: 0.75
   rankingRankScale: 3
-  rankingBonusPerPair: 2
+  rankingBonusPerPair: 4
   rankingAimTolerance: 1.5
   instructionsFile: Experiments/FOR/instructions_S1.txt
   controlsReminder: 

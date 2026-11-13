@@ -5,7 +5,7 @@ import pytest
 
 import ranking
 import synthetic
-from ranking import angular_radius, check_arc, generate_pool, horizontal_fov, kendall_tau, first_pick_regret, pair_accuracy, pair_scores, rank_gain, slot_bearings
+from ranking import angular_radius, check_arc, generate_pool, horizontal_fov, kendall_tau, first_pick_regret, implied_pair_scores, pair_accuracy, pair_scores, rank_gain, slot_bearings
 from world import bush_value
 
 SESSION = "FIX_T0"
@@ -139,9 +139,18 @@ def test_a_perfect_ranking_scores_one_and_a_reversed_one_zero():
 
 def test_ties_are_not_counted_and_unpicked_bushes_sit_below_the_picked():
     assert pair_scores([2.0, 1.0, 1.02], [2.0, 1.0, 1.02]) == (2, 2)               # the near tie is left out
-    assert pair_scores([2.0], [2.0, 1.0, 0.0]) == (2, 2)                           # one pick over two unpicked: right
-    assert pair_scores([0.0], [2.0, 1.0, 0.0]) == (0, 2)                           # the worst picked first
+    assert implied_pair_scores([2.0], [2.0, 1.0, 0.0]) == (2, 2)                   # (analysis) one pick over two unpicked: right
+    assert implied_pair_scores([0.0], [2.0, 1.0, 0.0]) == (0, 2)                   # the worst picked first
     assert math.isnan(pair_accuracy([1.0], [1.0, 1.01]))                           # nothing to score
+
+
+def test_the_payout_counts_every_pair_with_an_unranked_bush_as_incorrect():
+    values = [4.0, 3.0, 2.0, 1.0, 0.0]
+    assert pair_scores(values, values) == (10, 10)
+    assert pair_scores(values[:3], values) == (3, 10)                              # three ranked, right: only their 3 pairs; the 7 others are wrong
+    assert pair_scores([], values) == (0, 10)                                      # a timed-out set earns nothing
+    assert pair_scores([0.0, 1.0, 2.0, 3.0, 4.0], values) == (0, 10)
+    assert pair_scores([4.0, 3.0], [4.0, 3.0, 3.02, 0.0]) == (1, 5)                # the near tie is left out of total
 
 
 def test_a_random_ranking_scores_one_half():

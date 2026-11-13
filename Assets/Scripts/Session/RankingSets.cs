@@ -9,56 +9,45 @@ public static class RankingSets
         return value.ToString("0.####", CultureInfo.InvariantCulture);
     }
 
-    // The pairs a ranking implies: every picked bush above every bush not picked, the picked ones in the order picked; a pair whose true values differ by
-    // less than `tie` is not counted. `correct` are those whose higher-ranked bush is worth more.
+    // The payout rule: a set has one pair per two of its bushes, those whose true values differ by less than `tie` left out (`total`). A pair is `correct` only when
+    // both bushes were picked and the one picked first is worth more; a pair with an unpicked bush (a timed-out set) is never correct, so leaving bushes unranked
+    // costs every pair they are in. (scripts/ranking.py pair_scores is the same rule.)
     public static void ScorePairs(IReadOnlyList<int> setIds, IReadOnlyDictionary<int, float> values, IReadOnlyList<int> picks, float tie, out int correct, out int total)
     {
-        var rest = new List<int>();
-        foreach (int id in setIds)
-        {
-            if (!ContainsId(picks, id))
-            {
-                rest.Add(id);
-            }
-        }
-
         correct = 0;
         total = 0;
-        for (int i = 0; i < picks.Count; i++)
+        for (int i = 0; i < setIds.Count; i++)
         {
-            var below = new List<int>();
-            for (int j = i + 1; j < picks.Count; j++)
+            for (int j = i + 1; j < setIds.Count; j++)
             {
-                below.Add(picks[j]);
-            }
-
-            below.AddRange(rest);
-            foreach (int other in below)
-            {
-                float gap = values[picks[i]] - values[other];
-                if (UnityEngine.Mathf.Abs(gap) >= tie)
+                float gap = values[setIds[i]] - values[setIds[j]];
+                if (UnityEngine.Mathf.Abs(gap) < tie)
                 {
-                    total++;
-                    if (gap > 0f)
-                    {
-                        correct++;
-                    }
+                    continue;
+                }
+
+                total++;
+                int first = IndexOf(picks, setIds[i]);
+                int second = IndexOf(picks, setIds[j]);
+                if (first >= 0 && second >= 0 && (first < second) == (gap > 0f))
+                {
+                    correct++;
                 }
             }
         }
     }
 
-    private static bool ContainsId(IReadOnlyList<int> ids, int id)
+    private static int IndexOf(IReadOnlyList<int> ids, int id)
     {
         for (int i = 0; i < ids.Count; i++)
         {
             if (ids[i] == id)
             {
-                return true;
+                return i;
             }
         }
 
-        return false;
+        return -1;
     }
 
     // One bush of a set's `bushes` column. `rank` 0, `startTime` and `finishTime` below 0 mean not finished / not started.

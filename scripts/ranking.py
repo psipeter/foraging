@@ -10,7 +10,7 @@ the range evenly and the bushes fill the feature plane; within a set the values 
 (standing at the origin, facing +z), and the game turns and moves them to the player's pose.
 
 The module holds the generator (`generate_pool`), the geometry checks (`check_arc`) and the scores a ranking can be given from its picks
-(`pair_scores`, `kendall_tau`, `first_pick_regret`, `rank_gain`: all are computed from the raw order and the true values, so the metric
+(`pair_scores` (the payout rule), `implied_pair_scores`, `kendall_tau`, `first_pick_regret`, `rank_gain`: all are computed from the raw order and the true values, so the metric
 can be chosen at analysis time). Scoring is not part of a run (see CLAUDE.md, "Results database").
 """
 
@@ -277,9 +277,20 @@ def export_pool(name, out_dir=None):
 # --------------------------------------------------------------------------------------------------
 
 def pair_scores(picked_values, all_values, tol=TIE_TOLERANCE):
-    """(correct, total) over the pairs a ranking implies: every picked bush is above every bush not picked (a timed-out set), and the picked ones are
-    in the order picked. `picked_values` are the true values in pick order (best first), `all_values` those of the whole set. Pairs whose values
-    differ by less than `tol` are ties and are not counted. A pair is correct when the bush ranked higher is worth more."""
+    """(correct, total): the payout rule (`RankingSets.ScorePairs`). `total` is the number of non-tied pairs of the whole set (`all_values`, its true values); a pair is
+    correct only when both bushes were picked and the one picked first is worth more, so a pair with an unpicked bush (a timed-out set) is never correct.
+    `picked_values` are the true values in pick order (best first). Pairs whose values differ by less than `tol` are ties and are not counted."""
+    values = np.asarray(all_values, dtype=float)
+    gap = np.abs(values[:, None] - values[None, :])[np.triu_indices(len(values), 1)]
+    total = int((gap >= tol).sum())
+    picked = np.asarray(picked_values, dtype=float)
+    correct = sum(1 for i in range(len(picked)) for j in range(i + 1, len(picked)) if picked[i] - picked[j] >= tol)
+    return correct, total
+
+
+def implied_pair_scores(picked_values, all_values, tol=TIE_TOLERANCE):
+    """(correct, total) over the pairs the order itself implies (for analysis, not the payout): every picked bush is above every bush not picked, and the picked ones
+    are in the order picked; the pairs among unpicked bushes are not counted. Same arguments as `pair_scores`."""
     picked = np.asarray(picked_values, dtype=float)
     unpicked = list(np.asarray(all_values, dtype=float))
     for v in picked:                                    # remove the picked values from the multiset of all values
@@ -296,7 +307,7 @@ def pair_scores(picked_values, all_values, tol=TIE_TOLERANCE):
 
 
 def pair_accuracy(picked_values, all_values, tol=TIE_TOLERANCE):
-    correct, total = pair_scores(picked_values, all_values, tol)
+    correct, total = implied_pair_scores(picked_values, all_values, tol)
     return correct / total if total else float("nan")
 
 

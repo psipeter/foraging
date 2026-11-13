@@ -55,8 +55,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float rankingMarkerLift = 0.75f;
     [Tooltip("Size of the rank number, as a multiple of the number's size in the main task's units (the digits are about this times 1.2 degrees tall).")]
     [SerializeField] private float rankingRankScale = 3f;
-    [Tooltip("Hidden bonus points per correctly ordered pair (a set of k bushes implies k(k-1)/2 pairs; ties are not counted), shown only on the final screen. Practice sessions award none. Provisional: scoring is decided at analysis time.")]
-    [SerializeField] private float rankingBonusPerPair = 2f;
+    [Tooltip("Hidden bonus points per correctly ordered pair (a set of k bushes implies k(k-1)/2 pairs; pairs whose true values are tied are not counted, and a pair with an unranked bush is never correct), shown only on the final screen. Practice sessions award none. Provisional: scoring is decided at analysis time.")]
+    [SerializeField] private float rankingBonusPerPair = 4f;
     [Tooltip("Degrees beyond a canopy's edge at which the crosshair still selects it in a ranking when crosshairRadius is 0 (0 = the crosshair must be inside the canopy).")]
     [SerializeField] private float rankingAimTolerance = 1.5f;
 
