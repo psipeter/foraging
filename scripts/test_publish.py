@@ -28,8 +28,9 @@ def test_a_connection_string_file_others_can_read_is_refused(tmp_path):
 def test_the_catalog_lists_the_experiments_in_menu_order_with_their_prerequisites():
     experiments = server_admin.catalog_experiments()
     codes = [e["code"] for e in experiments]
-    assert codes == ["FOR"] and [e["order"] for e in experiments] == list(range(1, len(codes) + 1))
-    assert experiments[0]["requires"] == [] and experiments[0]["title"] == "Foraging in Tiles"
+    assert codes == ["TUT", "FOR"] and [e["order"] for e in experiments] == list(range(1, len(codes) + 1))
+    by = {e["code"]: e for e in experiments}
+    assert by["TUT"]["requires"] == [] and by["TUT"]["title"] == "Tutorial" and by["FOR"]["requires"] == ["TUT"] and by["FOR"]["title"] == "Foraging in Tiles"
 
 
 def fake_build(tmp_path, commit, dirty=False, experiments=("FOR",), development=None):

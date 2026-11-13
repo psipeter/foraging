@@ -1,0 +1,6 @@
+Controls
+
+In this study, you gather **points** by harvesting fruit from bushes.
+Walk up to a bush and hold [Space] to harvest it
+
+Press [Enter] to begin

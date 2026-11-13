@@ -41,7 +41,15 @@ public class GameManager : MonoBehaviour
 
     public static int SessionNumber => Mathf.Max(1, CurrentSessionIndex + 1);
 
-    public static string PartLabel => $"Session {SessionNumber} of {SessionCount}";
+    public static string PartLabel
+    {
+        get
+        {
+            bool inRange = AllSessionConfigs != null && CurrentSessionIndex >= 0 && CurrentSessionIndex < AllSessionConfigs.Count;
+            string label = inRange && AllSessionConfigs[CurrentSessionIndex] != null ? AllSessionConfigs[CurrentSessionIndex].SessionLabel : "";
+            return string.IsNullOrEmpty(label) ? $"Session {SessionNumber} of {SessionCount}" : label;
+        }
+    }
 
     private void Awake()
     {

@@ -318,7 +318,7 @@ public class TutorialHints : MonoBehaviour
         }
 
         string body = string.Join("\n", lines, 1, Mathf.Max(0, last)).Trim();
-        _screen.Show(null, title, body, prompt, true);
+        _screen.Show(GameManager.PartLabel, title, body, prompt, true);
         PauseGate.Instructions = true;
         _log?.LogEvent("hint_shown", payload: Json.Obj(("id", hint.Id), ("trigger", hint.trigger), ("n", hint.n)));
     }

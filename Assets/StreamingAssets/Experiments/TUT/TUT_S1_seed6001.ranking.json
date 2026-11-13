@@ -1,6 +1,6 @@
 {
  "format": "ranking-pool",
- "session": "FOR_T1",
+ "session": "TUT_S1",
  "seed": 6001,
  "n": 12,
  "setSize": 5,

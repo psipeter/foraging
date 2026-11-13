@@ -60,7 +60,7 @@ public class InstructionsScreen : MonoBehaviour
         float y = height / 2f - pad;
         if (!string.IsNullOrEmpty(eyebrow))
         {
-            UiStyle.Eyebrow(panel, eyebrow, 0f, y - 18f, textWidth);
+            UiStyle.Eyebrow(panel, eyebrow, 0f, y - 18f, textWidth, notice ? TextAlignmentOptions.Center : TextAlignmentOptions.Left);
         }
 
         y -= eyebrowHeight;

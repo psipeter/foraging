@@ -33,11 +33,11 @@ def test_publish_registers_experiments_files_and_release_and_can_be_repeated_wit
     first = server_admin.publish(db, plan, {"FOR": "KEEP-ME"})
     assert any("release" in line for line in first) and any(line.startswith("1 world") for line in first)
     row = db.execute("select title, requires, sort_order, completion_code from public.experiments where code = 'FOR'").fetchone()
-    assert row["title"] == "Foraging in Tiles" and row["requires"] == [] and row["completion_code"] == "KEEP-ME"
+    assert row["title"] == "Foraging in Tiles" and row["requires"] == ["TUT"] and row["completion_code"] == "KEEP-ME"
     server_admin.publish(db, plan)                                                        # again, no code given: the registered one stays
     assert db.execute("select completion_code from public.experiments where code = 'FOR'").fetchone()["completion_code"] == "KEEP-ME"
     offered = {r["experiment"]: r["n_sessions"] for r in db.execute("select experiment, n_sessions from public.release_experiments where build_commit = %s", (plan["commit"],))}
     assert offered == plan["sessions"]
     assert db.execute("select count(*) as n from public.worlds where name = 'x_seed1.world'").fetchone()["n"] == 1
-    server_admin.register_experiment(db, "FOR", "Foraging in Tiles", [], 2, "NEW-CODE")  # a code given later replaces it
+    server_admin.register_experiment(db, "FOR", "Foraging in Tiles", ["TUT"], 2, "NEW-CODE")  # a code given later replaces it
     assert db.execute("select completion_code from public.experiments where code = 'FOR'").fetchone()["completion_code"] == "NEW-CODE"

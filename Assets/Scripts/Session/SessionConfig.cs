@@ -63,6 +63,8 @@ public class SessionConfig : ScriptableObject
     [Header("Instructions")]
     [Tooltip("File in StreamingAssets shown before this session. '{part}' and '{total}' are replaced by this session's number and the count of sessions.")]
     [SerializeField] private string instructionsFile = "instructions.txt";
+    [Tooltip("The small blue line above the title of this session's instruction screens, its hint popups and its end screen, instead of \"Session n of m\" (for example \"Tutorial\"). Empty = the session's number.")]
+    [SerializeField] private string sessionLabel = "";
     [Tooltip("Optional file in StreamingAssets of popup hints that appear as the participant acts (the first line of a block is its trigger: see UI/TutorialHints.cs). Empty = no hints.")]
     [SerializeField] private string hintsFile = "";
     [Tooltip("Optional text kept on screen during the session (empty = none).")]
@@ -374,6 +376,7 @@ public class SessionConfig : ScriptableObject
     public float RankingBonusPerPair => rankingBonusPerPair;
     public float RankingAimTolerance => rankingAimTolerance;
     public string HintsFile => hintsFile;
+    public string SessionLabel => sessionLabel;
 
     // A copy for a reduced run (RunModes.Short; never the asset itself, which would be saved into the file): a session lasts `factor` of its length.
     // The copy keeps the asset's name, which names the world file.
