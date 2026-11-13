@@ -17,6 +17,19 @@ MonoBehaviour:
   isPractice: 0
   isInterlude: 1
   interludeFor: FN_S4
+  interludeFormat: 0
+  interludeSetSize: 5
+  interludeSetCount: 3
+  interludeArcSpan: 84
+  interludeRankingDistance: 16
+  interludeStageMoisture: 0.5
+  interludeStageSeed: 1
+  interludeRimScale: 1.15
+  interludeRimBoost: 3
+  interludeMarkerLift: 0.75
+  interludeRankScale: 3
+  interludeBonusPerPair: 2
+  interludeAimTolerance: 1.5
   interludeMode: 4
   interludeTrialCount: 10
   interludeTrialLimit: 0
@@ -34,6 +47,8 @@ MonoBehaviour:
   interludeMaxFeatureGap: 0.55
   interludeRepeatCount: 0
   interludeFeatureTrials: 1
+  interludePeakTrials: 0
+  interludeInteractionTrials: 0
   interludeRepeatSeparation: 8
   instructionsFile: Experiments/FN/instructions_interlude.txt
   controlsReminder: 
@@ -57,6 +72,7 @@ MonoBehaviour:
       width: 0
     bumps: []
     products: []
+    factors: []
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -135,6 +151,7 @@ MonoBehaviour:
   canopyHeightRange: {x: 1, y: 15}
   spatialBalance: 0
   featureBalance: 2
+  featureCoverage: 0
   featureBalanceTarget: 0.7
   featureBalanceScales:
   - 40
