@@ -1,7 +1,7 @@
 """TUT, the tutorial: its own experiment of one practice session that must be finished before FOR unlocks (FOR.REQUIRES). The world is the tiles world of FOR in its own seed, played for practice
 (`isPractice`: not paid, not counted in the menu's total), with popup hints fired by what the participant does (`SessionConfig.hintsFile`, `UI/TutorialHints.cs`). The reward pays through colour alone so
 the practice does not teach FOR's rule (shape and colour equally). TUTORIAL_TILES / TUTORIAL_BETWEEN / TUTORIAL_WITHIN / TUTORIAL_REWARD are the knobs for what the bushes of a cluster look like and pay.
-The instruction page and the hints are `instructions_S1.txt` and `hints_S1.txt`, written here; edit the text in this file and rebuild (`build_experiment.py TUT`).
+The instruction page and the hints (none yet) are `instructions_S1.txt` and `hints_S1.txt`, written here; edit the text in this file and rebuild (`build_experiment.py TUT`).
 """
 
 from design import Instance
@@ -28,13 +28,22 @@ Walk up to a bush and hold [Space] to harvest it
 Press [Enter] to begin
 """
 
-# One placeholder per trigger so the mechanism can be tried before the text is written; replace with the real hints (format: UI/TutorialHints.cs).
-HINT_TRIGGERS = ("harvest_available", "harvest_paused", "fruit", "bout", "exhausted", "patch_switch", "ranking_start", "ranking_end")
+# The hints: none yet. The file keeps the format and the list of triggers as comments; add blocks here (or in the design) when they are chosen.
+HINTS = """# Tutorial hints. A block is a trigger line, then the popup: title, text, and a "Press [Enter] to ..." prompt. Each block is shown once.
+#
+#     @fruit 1
+#     Your first fruit
+#     You earned {points} points.
+#
+#     Press [Enter] to continue
+#
+# Triggers (Assets/Scripts/UI/TutorialHints.cs): harvest_available, harvest_paused, fruit n, bout n, exhausted n, patch_switch n, ranking_start n, ranking_end n,
+# seconds n (foraging seconds into the session), idle n (seconds standing still without harvesting). {points} is the fruit or harvest that fired it.
+"""
 
 
 def hints_text():
-    return "# Tutorial hints (placeholders). Format: @trigger [n], then title, text, prompt; see Assets/Scripts/UI/TutorialHints.cs.\n\n" + "\n\n".join(
-        f"@{t}\n[hint: {t}]\n\nPlaceholder for the {t.replace('_', ' ')} hint. {{points}}\n\nPress [Enter] to continue" for t in HINT_TRIGGERS) + "\n"
+    return HINTS
 
 
 def instances():
