@@ -11,16 +11,15 @@ An episode (one agent, one world seed) is identified by (agent, environment, cod
 is one call (agent, environment, tag); `run_episodes` links it to every episode it used, computed or reused, so a tag finds exactly
 what that call saw. Episodes are never updated: `delete_run` removes what a run computed (and the links to it).
 
-An episode of kind "interlude" is the session played and then the agent's Interlude (the critic frozen), so it carries the session
-columns too. `episode_types` holds the Interlude accuracy per trial type, and `episode_fruits` one row per fruit taken in the session (time in session
-seconds, bush id, k-th fruit of that bush, reward, running total: the agent's counterpart of the human `fruit` events in events.csv).
-`episode_checkpoints` holds, for a run with checkpoints, the Interlude score of a copy of the agent as it was at each checkpoint time (see
-sim.run_episode); the episode's own Interlude columns are the score after the whole session. Times are session seconds; unused values are NULL.
+An episode is one session played by the agent. `episode_fruits` holds one row per fruit taken (time in session seconds, bush id, k-th fruit of that
+bush, reward, running total: the agent's counterpart of the human `fruit` events in events.csv). Times are session seconds; unused values are NULL.
+Historical: before schema 4 an episode could be of kind "interlude" (the session followed by a forced-choice evaluation with the critic frozen). That evaluation was
+removed; its columns (`episodes.interlude_*`, `environments.interlude_hash`), tables (`episode_types`, `episode_checkpoints`) and the old rows stay in the file, unused
+(NULL for new episodes), and old Interlude records are never selected by the current code, whose environment hash differs.
 
 Schema changes: bump SCHEMA_VERSION, add the step to MIGRATIONS, never drop data (the file is copied to `<db>.bak-v<old>` first).
 """
 
-import json
 import shutil
 import sqlite3
 from dataclasses import dataclass, field
@@ -35,7 +34,7 @@ from agents import REGISTRY, build_agent
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PATH = ROOT / "results" / "results.sqlite"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA_V1 = """
 CREATE TABLE agents (
@@ -89,10 +88,13 @@ CREATE TABLE episode_checkpoints (
     interlude_bonus REAL, PRIMARY KEY (episode_id, t)
 );
 """,
+    3: """
+CREATE TABLE schema_notes (version INTEGER PRIMARY KEY, note TEXT NOT NULL);
+INSERT INTO schema_notes VALUES (4, 'The Interlude evaluation was removed from the simulator. Old Interlude columns and tables are kept unchanged and unused; new episodes are sessions only.');
+""",
 }
 
-EPISODE_COLUMNS = ("total", "n_visits", "n_fruits", "walk_time", "harvest_time", "idle_time", "look_time", "press_time",
-                   "interlude_trials", "interlude_accuracy", "interlude_bonus")
+EPISODE_COLUMNS = ("total", "n_visits", "n_fruits", "walk_time", "harvest_time", "idle_time", "look_time", "press_time")
 
 
 def _now():
@@ -196,7 +198,7 @@ class Store:
         env_id = specs.spec_hash(env)
         with self.conn:
             self.conn.execute("INSERT OR IGNORE INTO environments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                              (env_id, env["session"], env["session_hash"], env["kind"], env["n_samples"], env.get("interlude_hash"),
+                              (env_id, env["session"], env["session_hash"], env["kind"], env["n_samples"], None,
                                _json(env["overrides"]), None if env["percept"] is None else _json(env["percept"]),
                                _json(env["costs"]), _json(env)))
         return env_id
@@ -229,7 +231,7 @@ class Store:
                            (agent_id, env_id, code_id, *seeds))
         return {r["seed"]: r for r in rows}
 
-    def add_episode(self, agent_id, env_id, code_id, seed, run_id, values, by_type=None, fruits=None, checkpoints=None):
+    def add_episode(self, agent_id, env_id, code_id, seed, run_id, values, fruits=None):
         unknown = set(values) - set(EPISODE_COLUMNS)
         if unknown:
             raise KeyError(f"unknown episode column(s) {sorted(unknown)}")
@@ -240,20 +242,10 @@ class Store:
                 f"VALUES (?, ?, ?, ?, ?{', ?' * len(cols)})",
                 (agent_id, env_id, code_id, int(seed), run_id, *[values[c] for c in cols]))
             episode_id = cur.lastrowid
-            for trial_type, accuracy in (by_type or {}).items():
-                self.conn.execute("INSERT INTO episode_types VALUES (?, ?, ?)", (episode_id, trial_type, float(accuracy)))
             self.conn.executemany("INSERT INTO episode_fruits VALUES (?, ?, ?, ?, ?, ?, ?)",
                                   [(episode_id, seq, float(t), int(bush), int(k), float(reward), float(total))
                                    for seq, (t, bush, k, reward, total) in enumerate(fruits or [])])
-            self.conn.executemany("INSERT INTO episode_checkpoints VALUES (?, ?, ?, ?, ?)",
-                                  [(episode_id, float(t), int(n), float(acc), float(bonus))
-                                   for t, (n, acc, bonus) in sorted((checkpoints or {}).items())])
         return episode_id
-
-    def checkpoints(self, episode_id):
-        """One episode's checkpoint scores by time: dicts with t, interlude_trials, interlude_accuracy, interlude_bonus."""
-        return self.select("SELECT t, interlude_trials, interlude_accuracy, interlude_bonus FROM episode_checkpoints "
-                           "WHERE episode_id = ? ORDER BY t", (episode_id,))
 
     def fruits(self, episode_id):
         """The fruits of one episode in the order they were taken: dicts with t, bush, k, reward, running_total."""
@@ -265,7 +257,7 @@ class Store:
         with self.conn:
             ids = [r[0] for r in self.conn.execute("SELECT episode_id FROM episodes WHERE computed_by = ?", (run_id,))]
             for episode_id in ids:
-                self.conn.execute("DELETE FROM episode_types WHERE episode_id = ?", (episode_id,))
+                self.conn.execute("DELETE FROM episode_types WHERE episode_id = ?", (episode_id,))      # (old Interlude rows)
                 self.conn.execute("DELETE FROM episode_fruits WHERE episode_id = ?", (episode_id,))
                 self.conn.execute("DELETE FROM episode_checkpoints WHERE episode_id = ?", (episode_id,))
                 self.conn.execute("DELETE FROM run_episodes WHERE episode_id = ?", (episode_id,))
@@ -275,12 +267,8 @@ class Store:
         return len(ids)
 
     def run_episodes(self, run_id):
-        """The episodes a run used (computed or reused), by seed, each with its per-type Interlude accuracies under `by_type`."""
-        rows = self.select("SELECT e.* FROM episodes e JOIN run_episodes r USING (episode_id) WHERE r.run_id = ? ORDER BY e.seed", (run_id,))
-        for row in rows:
-            row["by_type"] = {t["trial_type"]: t["accuracy"] for t in
-                              self.select("SELECT trial_type, accuracy FROM episode_types WHERE episode_id = ?", (row["episode_id"],))}
-        return rows
+        """The episodes a run used (computed or reused), by seed."""
+        return self.select("SELECT e.* FROM episodes e JOIN run_episodes r USING (episode_id) WHERE r.run_id = ? ORDER BY e.seed", (run_id,))
 
 
 # --------------------------------------------------------------------------------------------------
@@ -295,7 +283,7 @@ class RunReport:
     code_id: int
     tag: str
     seeds: list
-    rows: list                 # episode rows by seed (with `by_type`)
+    rows: list                 # episode rows by seed
     n_computed: int
     n_reused: int
     code: dict = field(default_factory=dict)
@@ -314,18 +302,13 @@ def _factory(agent):
     return agent
 
 
-def record_run(agent, session, seeds, tag, *, note=None, kind="session", percept=None, overrides=None, n_samples=200,
-               interlude_mode=None, checkpoints=None, store=None, progress=None):
+def record_run(agent, session, seeds, tag, *, note=None, percept=None, overrides=None, store=None, progress=None):
     """Run `agent` (a factory, a registry name or a spec dict) on one world per seed and record it, computing only the seeds that are
-    not already recorded for this agent, environment and code version. kind="interlude" also evaluates each agent on that world's
-    Interlude (n_samples repeated choices per trial; `interlude_mode` one of interlude.MODES, None = the asset's own; the trial count is
-    the override interlude_trial_count) and records the accuracy. `checkpoints` (kind interlude, session times in seconds) also scores a copy of the agent as
-    it was at each time, a learning curve from one session per seed (for an agent that plans for the end of the session, the agent as it stood at that time of a session of this length). `store` is a Store (default: the project database,
+    not already recorded for this agent, environment and code version. `store` is a Store (default: the project database,
     opened and closed here). Returns a RunReport."""
     if store is None:
         with Store() as own:
-            return record_run(agent, session, seeds, tag, note=note, kind=kind, percept=percept, overrides=overrides,
-                              n_samples=n_samples, interlude_mode=interlude_mode, checkpoints=checkpoints, store=own, progress=progress)
+            return record_run(agent, session, seeds, tag, note=note, percept=percept, overrides=overrides, store=own, progress=progress)
     import sim
     seeds = [int(s) for s in seeds]
     if len(set(seeds)) != len(seeds):
@@ -333,7 +316,7 @@ def record_run(agent, session, seeds, tag, *, note=None, kind="session", percept
     factory = _factory(agent)
     spec = factory().spec()
     overrides = dict(overrides or {})
-    env = fingerprint.environment(session, overrides, percept, kind, n_samples if kind == "interlude" else None, interlude_mode, checkpoints)
+    env = fingerprint.environment(session, overrides, percept)
     code = fingerprint.code_version()
     agent_id = store.record_agent(spec)
     env_id = store.record_environment(env)
@@ -364,20 +347,11 @@ def record_run(agent, session, seeds, tag, *, note=None, kind="session", percept
         worlds = sim.get_worlds(session, missing, **overrides) if missing else []
         for seed, world in zip(missing, worlds):
             player = factory()
-            res = sim.run_episode(player, world, percept=percept, checkpoints=env.get("checkpoints", ()))
+            res = sim.run_episode(player, world, percept=percept)
             values = {"total": res.total, "n_visits": res.n_visits, "n_fruits": res.n_fruits, "walk_time": res.walk_time,
                       "harvest_time": res.harvest_time, "idle_time": res.idle_time, "look_time": res.look_time,
                       "press_time": res.press_time}
-            by_type, scores = None, {}
-            if kind == "interlude":
-                sidecar, bonus, practice = sim.get_interlude(session, seed, env["interlude_mode"], **overrides)
-                score = sim.evaluate_interlude(player, sidecar, bonus, practice, n_samples=n_samples)
-                values.update(interlude_trials=score.n_trials, interlude_accuracy=score.accuracy, interlude_bonus=score.bonus)
-                by_type = score.by_type
-                for t, snapshot in res.snapshots.items():
-                    cs = sim.evaluate_interlude(snapshot, sidecar, bonus, practice, n_samples=n_samples)
-                    scores[t] = (cs.n_trials, cs.accuracy, cs.bonus)
-            store.add_episode(agent_id, env_id, code_id, seed, run_id, values, by_type, res.fruits, scores)
+            store.add_episode(agent_id, env_id, code_id, seed, run_id, values, res.fruits)
             done.append(seed)
             if progress is not None:
                 progress(seed, res.total)

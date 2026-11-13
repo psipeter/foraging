@@ -3,7 +3,7 @@ import pytest
 
 import analysis
 import fingerprint
-from agents import ComposedAgent, DeltaRuleCritic, FullKnowledge, FullMemory, OracleCritic, REGISTRY, RBFFeatures, Softmax, UtilityActor
+from agents import ComposedAgent, DeltaRuleCritic, FullMemory, OracleCritic, REGISTRY, RBFFeatures, Softmax, UtilityActor
 from results import Store, record_run
 
 
@@ -18,7 +18,7 @@ def delta(alpha=0.5, utility="rate", features=None, choice=None):
     return ComposedAgent(UtilityActor(utility, 10.0, choice), DeltaRuleCritic(features, None, alpha), FullMemory())
 
 
-def add(store, agent, totals, tag="t", seeds=None, overrides=None, code=None, by_type=None, accuracy=None):
+def add(store, agent, totals, tag="t", seeds=None, overrides=None, code=None):
     """Put a run with these totals (one per seed) straight into the database."""
     spec = agent.spec() if hasattr(agent, "spec") else agent
     agent_id = store.record_agent(spec)
@@ -30,9 +30,7 @@ def add(store, agent, totals, tag="t", seeds=None, overrides=None, code=None, by
                                     (agent_id, env_id, code_id, tag, ",".join(map(str, seeds)), len(seeds), len(seeds))).lastrowid
     for seed, total in zip(seeds, totals):
         values = {"total": float(total)}
-        if accuracy is not None:
-            values["interlude_accuracy"] = accuracy
-        e = store.add_episode(agent_id, env_id, code_id, seed, run_id, values, by_type)
+        e = store.add_episode(agent_id, env_id, code_id, seed, run_id, values)
         with store.conn:
             store.conn.execute("INSERT INTO run_episodes VALUES (?, ?)", (run_id, e))
     return agent_id
@@ -110,12 +108,11 @@ def test_paired_differences_use_only_the_seeds_both_agents_have(store):
     assert n == 2 and diff == pytest.approx(15.0) and se == pytest.approx(5.0)
 
 
-def test_metrics_can_be_a_column_a_trial_type_or_a_function(store):
-    a = add(store, REGISTRY["nearest"](), [1, 2], by_type={"contrast": 0.5, "graded": 0.75}, accuracy=0.6)
-    sel = analysis.select(store, kind=None)
-    assert sel.values(a, "interlude_accuracy") == {0: 0.6, 1: 0.6}
-    assert sel.values(a, "interlude:graded") == {0: 0.75, 1: 0.75}
-    assert sel.values(a, "interlude:extrapolation") == {}
+def test_metrics_can_be_a_column_or_a_function(store):
+    a = add(store, REGISTRY["nearest"](), [1, 2])
+    sel = analysis.select(store)
+    assert sel.values(a, "total") == {0: 1.0, 1: 2.0}
+    assert sel.values(a, "n_visits") == {}                                           # a column the episodes do not have: nothing
     assert sel.values(a, lambda row: row["total"] * 10) == {0: 10.0, 1: 20.0}
 
 
@@ -224,46 +221,6 @@ def test_one_seed_has_no_interval_and_episodes_without_fruit_events_are_refused(
         s.conn.commit()
         with pytest.raises(analysis.SelectionError, match="no stored fruit events"):
             analysis.cumulative_curve(s, analysis.select(s, tag="old"))
-
-
-# --- learning curves from checkpoints -----------------------------------------------------------------------------
-
-def recorded_checkpoints(tmp_path, agents=("nearest", "delta_rate_10"), seeds=(0, 1, 2, 3)):
-    s = Store(tmp_path / "r.sqlite")
-    for name in agents:
-        record_run(name, "P", list(seeds), "lc", kind="interlude", n_samples=5, interlude_mode="random", checkpoints=[0, 10, 30],
-                   overrides={"session_duration": 30, "interlude_trial_count": 6}, store=s)
-    return s, analysis.select(s, tag="lc", kind="interlude")
-
-
-@pytest.mark.slow
-def test_the_learning_curve_is_the_checkpoint_score_per_agent_with_an_interval(tmp_path):
-    from scipy import stats
-    s, sel = recorded_checkpoints(tmp_path)
-    with s:
-        curves = analysis.checkpoint_curve(s, sel)
-        assert list(curves.t) == [0.0, 10.0, 30.0] and curves.metric == "interlude_accuracy" and len(curves.agents) == 2
-        for aid, c in curves.agents.items():
-            by_hand = np.array([[cp["interlude_accuracy"] for cp in s.checkpoints(sel.rows[aid][seed]["episode_id"])] for seed in c["seeds"]])
-            assert np.allclose(c["per_seed"], by_hand) and np.allclose(c["mean"], by_hand.mean(axis=0))
-            half = stats.t.ppf(0.975, 3) * by_hand.std(axis=0, ddof=1) / 2.0
-            assert np.allclose(c["hi"] - c["mean"], half)
-            assert np.allclose(c["per_seed"][:, -1], [sel.rows[aid][sd]["interlude_accuracy"] for sd in c["seeds"]])   # last checkpoint = the session's
-        assert analysis.checkpoint_curve(s, sel, "interlude_bonus").metric == "interlude_bonus"
-        import plots
-        out = plots.plot_learning_curve(curves, tmp_path / "lc.png")
-        assert out.exists() and out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
-    analysis.main(["learning", "--tag", "lc", "--kind", "interlude", "--out", str(tmp_path / "cmd.png"), "--db", str(tmp_path / "r.sqlite")])
-    assert (tmp_path / "cmd.png").exists()
-
-
-def test_a_selection_without_checkpoints_cannot_make_a_learning_curve(tmp_path):
-    s, sel = recorded(tmp_path)
-    with s:
-        with pytest.raises(analysis.SelectionError, match="without checkpoints"):
-            analysis.checkpoint_curve(s, sel)
-        with pytest.raises(ValueError):
-            analysis.checkpoint_curve(s, sel, "total")
 
 
 # --- cumulative reward ---------------------------------------------------------------------------------------------

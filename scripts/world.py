@@ -46,15 +46,14 @@ import spatial
 import tiles
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-EXPERIMENTS_DIR = PROJECT_ROOT / "Assets" / "ScriptableObjects" / "Experiments"            # <code>/<code>_S1.asset, <code>_I1.asset, <code>.asset
-STREAMING_EXPERIMENTS = PROJECT_ROOT / "Assets" / "StreamingAssets" / "Experiments"        # <code>/<name>_seed<N>.world, .interlude.json, instruction texts
+EXPERIMENTS_DIR = PROJECT_ROOT / "Assets" / "ScriptableObjects" / "Experiments"            # <code>/<code>_S1.asset, <code>.asset
+STREAMING_EXPERIMENTS = PROJECT_ROOT / "Assets" / "StreamingAssets" / "Experiments"        # <code>/<name>_seed<N>.world, .ranking.json, instruction texts
 
-# The names the sessions had before they belonged to experiments (the practice session, S1 to S7 and their Interludes), still accepted wherever a session name
+# The names the sessions had before they belonged to experiments (the practice session and S1 to S7), still accepted wherever a session name
 # is: the simulator, the agent battery, the results database and the engine tests call sessions by them. Since the CF experiment was removed (2026-11-09) they
 # are frozen copies of the tutorial and the CF ladder in `scripts/fixtures/sessions/` (the environment the recorded results were made in), not live assets.
 FIXTURE_SESSIONS = Path(__file__).resolve().parent / "fixtures" / "sessions"
-LEGACY_NAMES = {"P": "FIX_S0", "P_Interlude": "FIX_I0",
-                **{f"S{n}": f"FIX_S{n}" for n in range(1, 8)}, **{f"S{n}_Interlude": f"FIX_I{n}" for n in range(1, 8)}}
+LEGACY_NAMES = {"P": "FIX_S0", **{f"S{n}": f"FIX_S{n}" for n in range(1, 8)}}
 
 
 def canonical(name):
@@ -65,12 +64,6 @@ def canonical(name):
 def experiment_of(name):
     """The experiment code of a session name: the part before the first underscore (`FN_S1` -> `FN`), as `SessionConfig.ExperimentCode`."""
     return canonical(name).split("_")[0]
-
-
-def interlude_name(session):
-    """The Interlude of a session: FN_S1 -> FN_I1 (the practice names too: P -> FIX_I0)."""
-    code, tail = canonical(session).split("_", 1)
-    return f"{code}_I{tail[1:]}"
 
 
 def session_asset_path(name):
@@ -127,7 +120,7 @@ FIELD_DEFAULTS = {"spatial_balance": 0, "shape_varies": True, "color_varies": Tr
                   "moisture_varies": True, "moisture_when_fixed": 0.5, "moisture_is_feature": False, "moisture_terrace_unevenness": 0.0,
                   "feature_balance": 0, "feature_coverage": 0, "feature_balance_target": 0.7, "feature_balance_scales": (40.0, 60.0, 120.0, 240.0),
                   "moisture_terrace_mode": 0, "terrace_mean_width": 0.14, "terrace_width_spread": 0.7, "terrace_max_band": 0.30, "terrace_min_step": 0.08, "terrace_phase_shift": 0.4,
-                  "terrace_phase_frequency": 0.6, "terrace_strength": 1.0, "terrace_diffusion_iterations": 500, "terrace_diffusion_edge": 0.1, "interlude_feature_trials": 0, "interlude_peak_trials": 0, "interlude_interaction_trials": 0,
+                  "terrace_phase_frequency": 0.6, "terrace_strength": 1.0, "terrace_diffusion_iterations": 500, "terrace_diffusion_edge": 0.1,
                   "layout": None, "assignment": None, "reward_stage": None,      # (stage names: None = the default, see stage_names)
                   "tile_radius": 70.0, "tile_ramp_width": 14.0, "tile_moisture_levels": 4, "tile_bushes": 9, "tile_cluster_radius": 22.0, "tile_cluster_spacing": 12.0, "tile_spread": 0.12,
                   "tile_arrangement": None, "tile_value_mode": None, "tile_within_mode": None, "tile_good_fraction": 0.25, "tile_smoothness": 0, "tile_gradient": 0.3, "tile_gradient_angle": -1.0,
@@ -138,8 +131,8 @@ FEATURES = ("shape", "color", "moisture")
 
 
 def moisture_matters(params):
-    """Whether the reward depends on moisture. If not, moisture (the ground colour and the elevation) is decoration: it is out of the Interlude's
-    feature gap (the designer knows the reward; the simulated agents sense moisture like participants do)."""
+    """Whether the reward depends on moisture. If not, moisture (the ground colour and the elevation) is decoration: it is out of the
+    features a ranking set spreads its bushes over (the designer knows the reward; the simulated agents sense moisture like participants do)."""
     rf = getattr(params, "reward_function", None)
     return rf is None or abs(float(rf["moistureComponent"]["weight"])) > 0.0
 
@@ -967,7 +960,7 @@ def assign_tiles(params, pos, terrain, rngs, reward):
 LAYOUTS = {"lattice": layout_lattice, "tiles": tiles.layout_tiles}
 ASSIGNMENTS = {"independent": assign_independent, "balanced": assign_balanced, "balanced_features": assign_balanced_features, "plane": assign_plane, "tiles": assign_tiles}
 REWARDS = {"terms": bush_value}
-RELEVANCE = {"terms": terms_relevance}          # per reward stage: {feature: how much it matters}, for the Interlude and the instruction texts
+RELEVANCE = {"terms": terms_relevance}          # per reward stage: {feature: how much it matters}, for the instruction texts
 
 
 def session_features(params):

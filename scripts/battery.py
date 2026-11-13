@@ -1,25 +1,19 @@
-"""The assessment battery: one fixed way to run an agent through every session and its Interlude, so agents are comparable.
+"""The assessment battery: one fixed way to run an agent through every session, so agents are comparable.
 
 (Called a battery, as in psychology, because "test suite" already means the pytest files here.)
 
     ./venv/bin/python scripts/battery.py run --population main --tag first-battery [--seeds 0-9] [--agents a,b,...] [--db PATH]
     ./venv/bin/python scripts/battery.py list
     ./venv/bin/python scripts/battery.py scores --tag first-battery --population main
-    ./venv/bin/python scripts/battery.py plot --tag first-battery --population main [--kinds reward,advantage,interlude]
+    ./venv/bin/python scripts/battery.py plot --tag first-battery --population main [--kinds reward,advantage]
 
 For each session the battery plays the agent for the session's design duration (passed as an override: the assets may carry a temporary
-shorter one), then scores a copy of the agent on the session's Interlude at several times (checkpoints, as fractions of the session)
-and once more at the end. Everything is an ordinary `results.record_run` (kind "interlude") under the tag `<tag>/<session>`, so reuse of
-what is already recorded, the environment and code fingerprints, and every query in analysis.py work unchanged.
+shorter one). Everything is an ordinary `results.record_run` under the tag `<tag>/<session>`, so reuse of what is already recorded, the
+environment and code fingerprints, and every query in analysis.py work unchanged. Each agent starts fresh in every session (no carry-over).
+Scores and plots are not part of the battery: they are computed later from the database (scripts/analysis.py).
 
-The Interlude is the random mode with `interlude_trial_count` trials, and each trial is answered ONCE per evaluation (n_samples 1), so the
-spread between seeds has the same source as a person's: a single run of that many forced choices, not a repeated-sampling estimate.
-Each agent starts fresh in every session (no carry-over). Scores and plots are not part of the battery: they are computed later from the
-database (scripts/analysis.py).
-
-Agents run in one process, session by session, so each Interlude (about a second to generate) is built once per (session, seed) and shared
-by every agent through sim's cache. A checkpoint is the agent as it stood at that time of a session of the battery's length (for an agent that
-plans for the end of the session, not what a shorter session would give).
+The battery's sessions are still the frozen S1 to S4 fixtures (scripts/fixtures/sessions/), not tiles worlds: the ranking evaluation that once
+followed each session is gone and has not been rebuilt, so the battery measures reward only.
 """
 
 import argparse
@@ -39,23 +33,16 @@ from world import _parse_seeds
 class Battery:
     name: str
     sessions: dict               # session name -> duration in seconds (the design duration; the assets may carry a temporary one)
-    checkpoint_fractions: tuple  # fractions of each session's length at which a copy of the agent is scored on the Interlude
     seeds: tuple = tuple(range(10))
-    interlude_trials: int = 50
-    n_samples: int = 1           # picks per trial: one, like a participant
-    interlude_mode: str = "random"
-
-    def checkpoints(self, session):
-        return [round(f * self.sessions[session], 6) for f in self.checkpoint_fractions]
 
     def overrides(self, session):
-        return {"session_duration": self.sessions[session], "interlude_trial_count": self.interlude_trials}
+        return {"session_duration": self.sessions[session]}
 
 
 BATTERIES = {
-    "standard": Battery("standard", {"S1": 90, "S2": 120, "S3": 120, "S4": 150}, (0.0, 0.1, 0.2, 0.35, 0.5, 0.75, 1.0)),
+    "standard": Battery("standard", {"S1": 90, "S2": 120, "S3": 120, "S4": 150}),
     # the same battery with longer sessions (PI): more time to exploit what has been learned
-    "long": Battery("long", {"S1": 120, "S2": 120, "S3": 180, "S4": 180}, (0.0, 0.1, 0.2, 0.35, 0.5, 0.75, 1.0)),
+    "long": Battery("long", {"S1": 120, "S2": 120, "S3": 180, "S4": 180}),
 }
 DEFAULT_BATTERY = "long"      # the battery every command uses unless `--battery` names another; `standard` stays for the records made with it
 
@@ -162,7 +149,7 @@ POPULATIONS = {
 # Agents a population records but its figures leave out: the scans compare their learners with one another, so the floor and the ceiling
 # (still in the population for `scores`) would only crowd the plots. Some figures still hold 6 or 7 agents (a warning above 5; the palette has 8).
 FIGURE_OMITS = {name: ("nearest", "oracle") for name in POPULATIONS if name.startswith(("scan-", "explore-", "delta-", "critic-")) or name == "learners"}
-KINDS = ("reward", "advantage", "interlude")
+KINDS = ("reward", "advantage")
 
 
 def resolve(names, population=None):
@@ -185,7 +172,7 @@ def resolve(names, population=None):
 
 def run_battery(agents, battery, tag, seeds=None, store=None, progress=print):
     """Run `agents` ({label: factory}) through every session of `battery`, recording each (agent, session) under the tag
-    `<tag>/<session>`. Sessions are the outer loop so each Interlude is generated once per seed and shared by all agents. Returns
+    `<tag>/<session>`. Returns
     {session: [RunReport per agent]}."""
     seeds = list(battery.seeds if seeds is None else seeds)
     if store is None:
@@ -195,9 +182,7 @@ def run_battery(agents, battery, tag, seeds=None, store=None, progress=print):
     for session in battery.sessions:
         reports[session] = []
         for label, factory in agents.items():
-            report = results.record_run(factory, session, seeds, f"{tag}/{session}", kind="interlude", n_samples=battery.n_samples,
-                                        interlude_mode=battery.interlude_mode, overrides=battery.overrides(session),
-                                        checkpoints=battery.checkpoints(session), store=store,
+            report = results.record_run(factory, session, seeds, f"{tag}/{session}", overrides=battery.overrides(session), store=store,
                                         note=f"battery {battery.name}; agent {label}")
             reports[session].append(report)
             if progress:
@@ -207,48 +192,39 @@ def run_battery(agents, battery, tag, seeds=None, store=None, progress=print):
 
 def plot_battery(store, tag, battery, population="main", kinds=KINDS, out_dir=None, mode="paper"):
     """Save one figure per kind for a population: a 2 x 2 grid of the battery's sessions, one line per agent. `kinds`: "reward" (cumulative reward so
-    far), "advantage" (lead over the lowest-performing agent of each session) and "interlude" (Interlude accuracy against training time).
+    far) and "advantage" (lead over the lowest-performing agent of each session).
     Returns the paths, `<out_dir>/<tag>_<population>_<kind>.png`."""
     import plots
     out_dir = out_dir if out_dir is not None else results.DEFAULT_PATH.parent
     members = {name: factory for name, factory in POPULATIONS[population]().items() if name not in FIGURE_OMITS.get(population, ())}
     names = {factory().spec_hash(): name for name, factory in members.items()}
     specs_of = [factory().spec() for factory in members.values()]
-    titles = {"reward": "cumulative reward", "advantage": "lead over the lowest-performing agent in cumulative reward",
-              "interlude": "Interlude accuracy against training time"}
+    titles = {"reward": "cumulative reward", "advantage": "lead over the lowest-performing agent in cumulative reward"}
     paths = []
     for kind in kinds:
         panels = {}
         for session in battery.sessions:
-            sel = analysis.select(store, tag=f"{tag}/{session}", kind="interlude", agents=specs_of)
-            if kind == "interlude":
-                panels[session] = analysis.checkpoint_curve(store, sel)
-            else:
-                panels[session] = analysis.cumulative_curve(store, sel, baseline="lowest" if kind == "advantage" else None)
-        draw = plots.plot_learning_curve if kind == "interlude" else plots.plot_cumulative_reward
-        paths.append(draw(panels, f"{out_dir}/{tag}_{population}_{kind}.png", names=names, order=list(members), title=f"{population}: {titles[kind]}", mode=mode))
+            sel = analysis.select(store, tag=f"{tag}/{session}", agents=specs_of)
+            panels[session] = analysis.cumulative_curve(store, sel, baseline="lowest" if kind == "advantage" else None)
+        paths.append(plots.plot_cumulative_reward(panels, f"{out_dir}/{tag}_{population}_{kind}.png", names=names, order=list(members), title=f"{population}: {titles[kind]}", mode=mode))
     return paths
 
 
 def scores(store, tag, battery, population, floor="nearest"):
     """Per agent and session numbers for a recorded population, against the `floor` agent (it must be in the population). Rows are dicts:
     session, agent, total (mean reward), lead (the paired mean difference to the floor in reward points) and lead_se, then the lead's
-    split into quality and efficiency, accuracy (final Interlude accuracy), auc and t80 (speed of learning).
+    split into quality and efficiency, with the fruits and the reward per fruit.
 
     Reward is fruits x reward per fruit, so with F the mean fruits taken and q = total / F (a ratio of means) the lead over the floor is
     exactly F_floor (q - q_floor)  +  (F - F_floor) q: `quality` is the first term (it picks better bushes, at the floor's pace) and
     `efficiency` the second (it takes more fruits, at its own reward per fruit). Both are in reward points and add up to `lead`.
-    `auc` is the area under the chance-corrected accuracy curve over the session's normalised time (0: chance throughout, 1: perfect from
-    the start; its standard error is across seeds; time is the checkpoint time over the last checkpoint's, the recorded session length) and `t80` the fraction of the session at which the mean accuracy first reaches 0.8
-    (interpolated; NaN if it never does). `accuracy`, `auc` and `t80` use all of an agent's seeds, `lead` only the seeds it shares with the floor
-    (the same under a complete battery). No normalisation to a ceiling is made: the oracle is just another agent in the population."""
+    `lead` uses only the seeds an agent shares with the floor (all of them under a complete battery). No normalisation to a ceiling is
+    made: the oracle is just another agent in the population."""
     members = POPULATIONS[population]()
     ids = {name: factory().spec_hash() for name, factory in members.items()}
     rows = []
     for session in battery.sessions:
-        sel = analysis.select(store, tag=f"{tag}/{session}", kind="interlude", agents=[f().spec() for f in members.values()])
-        curves = analysis.checkpoint_curve(store, sel)
-        x = np.asarray(curves.t, dtype=float) / float(curves.t[-1])     # the recorded session length, whichever battery is named
+        sel = analysis.select(store, tag=f"{tag}/{session}", agents=[f().spec() for f in members.values()])
         base = sel.rows[ids[floor]]
         for name, aid in ids.items():
             seeds = sorted(set(sel.rows[aid]) & set(base))
@@ -257,51 +233,38 @@ def scores(store, tag, battery, population, floor="nearest"):
             total0 = np.array([base[s]["total"] for s in seeds])
             fruits0 = np.array([base[s]["n_fruits"] for s in seeds], dtype=float)
             q, q0 = total.mean() / fruits.mean(), total0.mean() / fruits0.mean()
-            acc = np.asarray(curves.agents[aid]["per_seed"], dtype=float)
-            auc = np.trapezoid((acc - 0.5) / 0.5, x, axis=1)
-            mean = acc.mean(axis=0)
-            hit = np.flatnonzero(mean >= 0.8)
-            if len(hit) == 0:
-                t80 = float("nan")
-            elif hit[0] == 0:
-                t80 = float(x[0])
-            else:
-                k = hit[0]
-                t80 = float(x[k - 1] + (0.8 - mean[k - 1]) / (mean[k] - mean[k - 1]) * (x[k] - x[k - 1]))
             diff = total - total0
             rows.append({"session": session, "agent": name, "total": float(total.mean()), "lead": float(diff.mean()),
                          "lead_se": float(diff.std(ddof=1) / np.sqrt(len(diff))) if len(diff) > 1 else float("nan"),
                          "fruits": float(fruits.mean()), "per_fruit": float(q), "quality": float(fruits0.mean() * (q - q0)),
-                         "efficiency": float((fruits.mean() - fruits0.mean()) * q), "accuracy": float(acc[:, -1].mean()),
-                         "auc": float(auc.mean()), "auc_se": float(auc.std(ddof=1) / np.sqrt(len(auc))), "t80": t80})
+                         "efficiency": float((fruits.mean() - fruits0.mean()) * q)})
     return rows
 
 
 def format_scores(rows):
     lines = []
     for session in dict.fromkeys(r["session"] for r in rows):
-        lines.append(f"{session}:  {'agent':<20}{'total':>7}{'lead':>15}{'quality':>9}{'effic.':>8}{'fruits':>8}{'/fruit':>7}{'final acc':>10}{'auc':>13}{'t80':>6}")
+        lines.append(f"{session}:  {'agent':<20}{'total':>7}{'lead':>15}{'quality':>9}{'effic.':>8}{'fruits':>8}{'/fruit':>7}")
         for r in (r for r in rows if r["session"] == session):
             lines.append(f"     {r['agent']:<20}{r['total']:>7.0f}{r['lead']:>+9.1f} ±{r['lead_se']:>4.1f}{r['quality']:>+9.1f}{r['efficiency']:>+8.1f}"
-                         f"{r['fruits']:>8.1f}{r['per_fruit']:>7.2f}{r['accuracy']:>10.2f}{r['auc']:>8.2f} ±{r['auc_se']:>4.2f}{r['t80']:>6.2f}")
+                         f"{r['fruits']:>8.1f}{r['per_fruit']:>7.2f}")
         lines.append("")
     return "\n".join(lines)
 
 
 def session_readout(store, tag, battery, aliases=None):
-    """A text table per session (mean total reward, then final Interlude accuracy, per agent, with the paired difference to `nearest` when it
-    is there) from what is recorded under `tag`. `aliases` maps agent ids to the names to show instead of the generated labels."""
+    """A text table per session (mean total reward per agent, with the paired difference to `nearest` when it is there) from what is recorded
+    under `tag`. `aliases` maps agent ids to the names to show instead of the generated labels."""
     lines = []
     for session in battery.sessions:
-        sel = analysis.select(store, tag=f"{tag}/{session}", kind="interlude")
+        sel = analysis.select(store, tag=f"{tag}/{session}")
         baseline = "nearest" if _has(sel, "nearest") else None
-        for metric, title in (("total", "total reward"), ("interlude_accuracy", "Interlude accuracy at the end of the session")):
-            rows = analysis.table(sel, metric, baseline)
-            for row in rows:
-                row["label"] = (aliases or {}).get(row["agent_id"], row["label"])
-            lines.append(analysis.describe(sel, metric) if metric == "total" else "")
-            lines.append(f"{session}: {title}")
-            lines.append(analysis.format_table(rows))
+        rows = analysis.table(sel, "total", baseline)
+        for row in rows:
+            row["label"] = (aliases or {}).get(row["agent_id"], row["label"])
+        lines.append(analysis.describe(sel, "total"))
+        lines.append(f"{session}: total reward")
+        lines.append(analysis.format_table(rows))
         lines.append("")
     return "\n".join(lines)
 
@@ -325,7 +288,7 @@ def main(argv=None):
     p.add_argument("--tag", required=True)
     p.add_argument("--seeds", default=None, help="e.g. 0-9 (default: the battery's)")
     p.add_argument("--db", default=None)
-    p = sub.add_parser("scores", help="per agent and session scores of a recorded population (reward lead, gap closed, accuracy, learning-curve area)")
+    p = sub.add_parser("scores", help="per agent and session scores of a recorded population (reward lead, quality, efficiency)")
     p.add_argument("--battery", default=DEFAULT_BATTERY, choices=list(BATTERIES))
     p.add_argument("--population", default="main", choices=list(POPULATIONS))
     p.add_argument("--tag", required=True)
@@ -334,7 +297,7 @@ def main(argv=None):
     p.add_argument("--battery", default=DEFAULT_BATTERY, choices=list(BATTERIES))
     p.add_argument("--population", default="main", choices=list(POPULATIONS))
     p.add_argument("--tag", required=True)
-    p.add_argument("--kinds", default=",".join(KINDS), help="reward, advantage, interlude")
+    p.add_argument("--kinds", default=",".join(KINDS), help="reward, advantage")
     p.add_argument("--out", default=None, help="output directory (default results/)")
     p.add_argument("--mode", default="paper", choices=["paper", "presentation"], help="figure width and font sizes (plots.MODES)")
     p.add_argument("--db", default=None)
@@ -350,8 +313,7 @@ def main(argv=None):
         return
     if args.command == "list":
         for b in BATTERIES.values():
-            print(f"battery {b.name}: sessions {b.sessions}, checkpoints at {b.checkpoint_fractions} of each, {len(b.seeds)} seeds, "
-                  f"{b.interlude_trials} {b.interlude_mode} Interlude trials, {b.n_samples} pick per trial")
+            print(f"battery {b.name}: sessions {b.sessions}, {len(b.seeds)} seeds")
         for name, make in POPULATIONS.items():
             print(f"population {name}: {len(make())} agents: {', '.join(make())}")
         return

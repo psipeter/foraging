@@ -7,23 +7,15 @@ from agents import REGISTRY
 from battery import Battery, run_battery, session_readout
 
 
-TINY = Battery("tiny", {"P": 20, "S1": 30}, (0.0, 0.5, 1.0), seeds=(0, 1), interlude_trials=6)
+TINY = Battery("tiny", {"P": 20, "S1": 30}, seeds=(0, 1))
 
 
-def test_the_standard_battery_is_the_four_sessions_with_checkpoints_as_fractions_of_each():
-    b = battery.BATTERIES["standard"]
-    assert b.sessions == {"S1": 90, "S2": 120, "S3": 120, "S4": 150}
-    assert b.checkpoints("S1") == [0.0, 9.0, 18.0, 31.5, 45.0, 67.5, 90.0]
-    assert b.checkpoints("S4") == [0.0, 15.0, 30.0, 52.5, 75.0, 112.5, 150.0]
-    assert b.overrides("S3") == {"session_duration": 120, "interlude_trial_count": 50}
-    assert (b.n_samples, b.interlude_mode, len(b.seeds)) == (1, "random", 10)          # one pick per trial, like a participant
-
-
-def test_the_long_battery_has_longer_sessions_and_the_same_design_otherwise():
-    long, standard = battery.BATTERIES["long"], battery.BATTERIES["standard"]
+def test_the_standard_battery_is_the_four_sessions_and_the_long_one_has_longer_sessions():
+    standard, long = battery.BATTERIES["standard"], battery.BATTERIES["long"]
+    assert standard.sessions == {"S1": 90, "S2": 120, "S3": 120, "S4": 150}
     assert long.sessions == {"S1": 120, "S2": 120, "S3": 180, "S4": 180}
-    assert long.checkpoint_fractions == standard.checkpoint_fractions and long.checkpoints("S3") == [0.0, 18.0, 36.0, 63.0, 90.0, 135.0, 180.0]
-    assert (long.n_samples, long.interlude_mode, long.interlude_trials, long.seeds) == (standard.n_samples, standard.interlude_mode, standard.interlude_trials, standard.seeds)
+    assert standard.overrides("S3") == {"session_duration": 120} and long.overrides("S3") == {"session_duration": 180}
+    assert len(standard.seeds) == len(long.seeds) == 10
 
 
 def test_every_population_builds_round_trips_and_fits_a_figure():
@@ -75,22 +67,17 @@ def test_resolve_takes_population_names_then_registry_names():
 
 
 @pytest.mark.slow
-def test_a_battery_run_records_every_session_with_its_checkpoints_and_reuses_them(tmp_path):
+def test_a_battery_run_records_every_session_and_reuses_them(tmp_path):
     agents = battery.resolve(["nearest", "learner"], "main")
     with results.Store(tmp_path / "r.sqlite") as store:
         reports = run_battery(agents, TINY, "t", store=store, progress=None)
         assert list(reports) == ["P", "S1"] and all(len(r) == 2 and r[0].n_computed == 2 for r in reports.values())
-        sel = analysis.select(store, tag="t/S1", kind="interlude")
-        assert sel.env["session"] == "S1" and sel.env["overrides"] == {"session_duration": 30, "interlude_trial_count": 6}
-        assert sel.env["checkpoints"] == [0.0, 15.0, 30.0] and sel.env["n_samples"] == 1 and sel.env["interlude_mode"] == "random"
-        curves = analysis.checkpoint_curve(store, sel)
-        assert list(curves.t) == [0.0, 15.0, 30.0]
-        row = reports["S1"][1].rows[0]
-        assert row["interlude_trials"] == 6 and row["interlude_accuracy"] * 6 == pytest.approx(round(row["interlude_accuracy"] * 6))   # one pick per trial
+        sel = analysis.select(store, tag="t/S1")
+        assert sel.env["session"] == "S1" and sel.env["overrides"] == {"session_duration": 30} and sel.env["n_samples"] is None
         again = run_battery(agents, TINY, "t2", store=store, progress=None)
         assert all(r.n_computed == 0 and r.n_reused == 2 for rs in again.values() for r in rs)
         text = session_readout(store, "t", TINY, {r.agent_id: "nearest-alias" for r in reports["S1"][:1]})
-        assert "P: total reward" in text and "S1: Interlude accuracy" in text and "nearest-alias" in text
+        assert "P: total reward" in text and "S1: total reward" in text and "nearest-alias" in text
 
 
 def test_the_command_line_lists_and_runs(tmp_path, capsys, monkeypatch):
@@ -101,21 +88,21 @@ def test_the_command_line_lists_and_runs(tmp_path, capsys, monkeypatch):
     monkeypatch.setitem(battery.BATTERIES, battery.DEFAULT_BATTERY, TINY)
     battery.main(["run", "--agents", "nearest,learner", "--tag", "cli", "--seeds", "0-1", "--db", str(tmp_path / "r.sqlite")])
     out = capsys.readouterr().out
-    assert "P: total reward" in out and "S1: Interlude accuracy at the end" in out and "learner" in out
+    assert "P: total reward" in out and "S1: total reward" in out and "learner" in out
 
 
 @pytest.mark.slow
-def test_plot_battery_saves_the_three_figures_of_a_group_with_one_panel_per_session(tmp_path, monkeypatch):
+def test_plot_battery_saves_the_two_figures_of_a_group_with_one_panel_per_session(tmp_path, monkeypatch):
     agents = battery.resolve(["nearest", "learner"], "main")
     monkeypatch.setitem(battery.POPULATIONS, "tiny", lambda: agents)
     with results.Store(tmp_path / "r.sqlite") as store:
         run_battery(agents, TINY, "pt", store=store, progress=None)
         paths = battery.plot_battery(store, "pt", TINY, population="tiny", out_dir=tmp_path)
-    assert [p.name for p in paths] == ["pt_tiny_reward.png", "pt_tiny_advantage.png", "pt_tiny_interlude.png"]
+    assert [p.name for p in paths] == ["pt_tiny_reward.png", "pt_tiny_advantage.png"]
     assert all(p.exists() and p.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n" for p in paths)
     monkeypatch.setitem(battery.BATTERIES, battery.DEFAULT_BATTERY, TINY)
-    battery.main(["plot", "--tag", "pt", "--population", "tiny", "--kinds", "interlude", "--out", str(tmp_path / "cli"), "--db", str(tmp_path / "r.sqlite")])
-    assert (tmp_path / "cli" / "pt_tiny_interlude.png").exists()
+    battery.main(["plot", "--tag", "pt", "--population", "tiny", "--kinds", "advantage", "--out", str(tmp_path / "cli"), "--db", str(tmp_path / "r.sqlite")])
+    assert (tmp_path / "cli" / "pt_tiny_advantage.png").exists()
 
 
 @pytest.mark.slow
@@ -130,9 +117,6 @@ def test_scores_summarize_each_agent_in_each_session(tmp_path):
         assert r["total"] == pytest.approx(r["fruits"] * r["per_fruit"])
         if r["agent"] == "nearest":
             assert r["lead"] == 0.0 and r["quality"] == 0.0 and r["efficiency"] == 0.0
-        if r["agent"] == "oracle":
-            assert r["accuracy"] == 1.0 and r["auc"] == pytest.approx(1.0) and r["t80"] == 0.0
-        assert -1.0 <= r["auc"] <= 1.0 and (r["t80"] != r["t80"] or 0.0 <= r["t80"] <= 1.0)
         assert "gap" not in r
     text = battery.format_scores(rows)
-    assert "P:" in text and "S1:" in text and "learner" in text and "t80" in text and "quality" in text
+    assert "P:" in text and "S1:" in text and "learner" in text and "quality" in text

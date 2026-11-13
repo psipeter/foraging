@@ -24,11 +24,9 @@ What an agent may know is explicit. Components learn about the task through `beg
 positions); they see the world only through observations the engine gives them, and the engine's state only through a `Body`
 (position, heading, time left, total reward). Components that start with the world's own knowledge (FullKnowledge,
 OracleCritic) are flagged `omniscient = True` and are the only ones granted a `WorldKnowledge` (`grant`), so a learning
-critic or a limited memory cannot reach it. After a session `ComposedAgent.begin_interlude` gives the agent a fresh memory
-for the Interlude, freezes the critic and carries it over.
+critic or a limited memory cannot reach it.
 """
 
-import copy
 from dataclasses import dataclass
 
 import numpy as np
@@ -38,7 +36,6 @@ from specs import Component, SpecError, build, spec_hash
 from world import bush_value
 
 REGISTRY = {}   # name -> zero-argument agent factory
-INTERLUDE_TIME_TIE = 0.01   # seconds: travel times to the two bushes of an Interlude trial closer than this are a tie
 
 
 # --------------------------------------------------------------------------------------------------
@@ -115,14 +112,6 @@ class WorldKnowledge:
         return cls(np.asarray(world.pos, dtype=float), np.asarray(world.canopy_radius, dtype=float), attrs,
                    getattr(world, "value", None), getattr(world.params, "reward_function", None))
 
-    @classmethod
-    def from_sidecar(cls, sidecar):
-        """The Interlude's bush table (interlude.generate_interlude), whose `value` is each bush's true reward per fruit."""
-        n = len(sidecar["canopyRadius"])
-        attrs = np.column_stack([sidecar["shape"], sidecar["color"], sidecar["moisture"]]).astype(float)
-        values = np.asarray(sidecar["value"], dtype=float) if "value" in sidecar else None
-        return cls(np.asarray(sidecar["treePos"], dtype=float).reshape(n, 2), np.asarray(sidecar["canopyRadius"], dtype=float),
-                   attrs, values, None)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -155,10 +144,6 @@ class Memory(Component):
         self.rewards = [[] for _ in range(n)]
         self.map_version = 0
         self.experience_version = 0
-
-    def fresh(self):
-        """A new, empty memory of the same kind (the Interlude starts one). A memory with constructor arguments overrides this."""
-        return type(self)()
 
     def observe(self, obs):
         """Take in an Observation (perception.Observation): the bushes in view this moment, with their attributes and whether each
@@ -234,11 +219,9 @@ class FullMemory(Memory):
 class Critic(Component):
     """Value representation and learning rule. `value(attrs, ids=None) -> (mean, sd)` per bush: expected reward per fruit
     and the critic's uncertainty about it. `ids` identify the bushes (a participant can tell the bushes it has seen apart);
-    learned critics use the attributes only, and an oracle may look the ids up in what it was granted (in the Interlude only an
-    omniscient critic is given ids: the session's bush ids mean nothing there). `version` changes whenever the value function
+    learned critics use the attributes only, and an oracle may look the ids up in what it was granted. `version` changes whenever the value function
     does: `update` bumps it after every refit of a critic that learns (one that overrides `_fit`)."""
     version = 0
-    frozen = False
     omniscient = False    # True for critics that are granted the world's own knowledge (see grant)
     update_on = "fruit"   # when ComposedAgent calls `update`: after every "fruit", or when a visit to a "bush" ends
 
@@ -246,18 +229,14 @@ class Critic(Component):
         pass
 
     def update(self, memory):
-        """Learn from what memory now holds, unless frozen. A critic that learns (overrides `_fit`) has changed afterwards, so
+        """Learn from what memory now holds. A critic that learns (overrides `_fit`) has changed afterwards, so
         its `version` is bumped here and an actor that caches work on it (the planner) knows to redo it."""
-        if not self.frozen and type(self)._fit is not Critic._fit:
+        if type(self)._fit is not Critic._fit:
             self._fit(memory)
             self.version += 1
 
     def _fit(self, memory):
         pass
-
-    def freeze(self):
-        """Stop learning (the Interlude shows no outcomes, so humans do not learn there either)."""
-        self.frozen = True
 
     def value(self, attrs, ids=None):
         raise NotImplementedError
@@ -687,12 +666,6 @@ class Task:
         self.max_angle = costs.max_angle(p)   # the harvest cone's half-angle
         self.n_bushes = len(world.pos)       # capacity of a memory (how many bush ids exist), not where they are
 
-    def for_bushes(self, n_bushes):
-        """The same task with another number of bush ids (the Interlude has its own bush table)."""
-        other = copy.copy(self)
-        other.n_bushes = n_bushes
-        return other
-
     def reach(self, radius):
         """Center distance within which a bush of this canopy radius can be harvested."""
         return radius + self.gap_base + self.gap_per_radius * radius
@@ -702,10 +675,8 @@ class View:
     """Read-only view for the actor: its body (position, heading, time left, score), memory, critic and task. Value and rate
     utilities are computed from the critic here, so an actor cannot see the true rewards."""
 
-    def __init__(self, body, memory, critic, task, in_interlude=False):
+    def __init__(self, body, memory, critic, task):
         self.body, self.memory, self.critic, self.task = body, memory, critic, task
-        self.in_interlude = in_interlude
-        self._equalized = None       # (candidate ids, tolerance) once equalize_times has been applied
 
     @property
     def time_elapsed(self):
@@ -731,27 +702,12 @@ class View:
                                                        self.task.speed, self.task.max_angle)
         t = turn + press + walking
         t[~self.candidates()] = float("inf")
-        if self._equalized is not None:
-            ids, tolerance = self._equalized
-            if np.isfinite(t[ids]).all() and np.ptp(t[ids]) < tolerance:
-                t[ids] = t[ids].mean()
         return t
-
-    def equalize_times(self, candidates, tolerance):
-        """A copy of this view in which the travel times of `candidates` count as one (their mean) when they differ by less than `tolerance`
-        seconds: an Interlude pair is built to be equal in the terms the harvest rules use, and turning to the centre of a wider canopy
-        still takes a few milliseconds more, which must not decide a choice."""
-        other = copy.copy(self)
-        other._equalized = (np.asarray(candidates, dtype=int), float(tolerance))
-        return other
 
     def values(self):
         """(n,) the critic's expected reward per fruit for every bush in memory (and its uncertainty)."""
         m = self.memory
-        # In the Interlude a bush's id means nothing to a critic that learned in the session (the ids are another table's), so
-        # only a critic that was granted the Interlude's own table is given them.
-        ids = None if self.in_interlude and not getattr(self.critic, "omniscient", False) else np.arange(m.n)
-        return self.critic.value(m.attrs, ids)
+        return self.critic.value(m.attrs, np.arange(m.n))
 
 
 # --------------------------------------------------------------------------------------------------
@@ -790,11 +746,10 @@ UTILITIES = {"nearest": utility_nearest, "value": utility_value, "rate": utility
 
 class Actor(Component):
     """The policy. `act(view)` returns an action (or None to stop), `keep_harvesting(view, bush, reward)` is asked after
-    every fruit but the last, and `choose_between(view, candidates, rng)` picks one of a few bushes (used by the
-    Interlude evaluation). The default leaves a bush only when it is empty."""
+    every fruit but the last. The default leaves a bush only when it is empty."""
 
     choice = Argmax()
-    deadline_dependent = False    # True for an actor whose choices depend on how much of the session is left (it plans for the end): its checkpoints are within-session, not shorter sessions
+    deadline_dependent = False    # True for an actor whose choices depend on how much of the session is left (it plans for the end)
 
     def begin(self, task, rng):
         self.task = task
@@ -806,10 +761,6 @@ class Actor(Component):
     def keep_harvesting(self, view, bush, reward):
         return True
 
-    def choose_between(self, view, candidates, rng):
-        """Index into `candidates` of the bush the actor prefers, from the critic's value, greedily (ties broken at random)."""
-        u = utility_value(view)[np.asarray(candidates)]
-        return Argmax().pick(u, rng, random_ties=True)
 
 
 class UtilityActor(Actor):
@@ -865,10 +816,6 @@ class UtilityActor(Actor):
         j = self.choice.pick(u, self.rng)
         return None if j is None else Harvest(j)
 
-    def choose_between(self, view, candidates, rng):
-        view = view.equalize_times(candidates, INTERLUDE_TIME_TIE)
-        u = np.asarray(self.utility(view), dtype=float)[np.asarray(candidates)]
-        return Argmax().pick(u, rng, random_ties=True)       # greedy whatever the choice rule: the Interlude measures the critic, not the actor's noise
 
 
 class PosteriorActor(UtilityActor):
@@ -1222,7 +1169,6 @@ class ComposedAgent:
 
     def __init__(self, actor, critic, memory, percept=None):
         self.actor, self.critic, self.memory, self.percept = actor, critic, memory, percept
-        self.interlude_memory = None
 
     def __getattr__(self, name):
         if name in ("actor", "critic", "memory", "percept"):
@@ -1238,40 +1184,24 @@ class ComposedAgent:
     def spec_hash(self):
         return spec_hash(self.spec())
 
-    @property
-    def active_memory(self):
-        """The Interlude's memory once one has begun, else the session's."""
-        return self.interlude_memory if self.interlude_memory is not None else self.memory
-
-    def _start(self, memory, task, knowledge, new_critic=True):
+    def _start(self, memory, task, knowledge):
         memory.begin(task)
-        if new_critic:
-            self.critic.begin(task)
+        self.critic.begin(task)
         for component in (memory, self.critic):
             if getattr(component, "omniscient", False):
                 component.grant(knowledge)
 
     def begin_session(self, world, rng):
-        self.interlude_memory = None
         self.task = Task(world)
         self._start(self.memory, self.task, WorldKnowledge.from_world(world))
         self.actor.begin(self.task, rng)
         self.critic.update(self.memory)
 
-    def begin_interlude(self, knowledge):
-        """After the session: freeze the critic (an Interlude shows no outcomes, so nothing is learned there) and start a fresh
-        memory for the Interlude's own bushes (the session's bush ids mean nothing there); `knowledge` is the Interlude's bush
-        table, granted only to omniscient components. The session's memory is left as it was."""
-        self.critic.freeze()
-        self.interlude_memory = self.memory.fresh()
-        # The critic carries over: `begin` would let one that starts empty there forget what it learned in the session.
-        self._start(self.interlude_memory, self.task.for_bushes(knowledge.n), knowledge, new_critic=False)
-
     def view(self, body):
-        return View(body, self.active_memory, self.critic, self.task, in_interlude=self.interlude_memory is not None)
+        return View(body, self.memory, self.critic, self.task)
 
     def observe(self, obs):
-        self.active_memory.observe(obs)
+        self.memory.observe(obs)
 
     def record_reward(self, bush, reward):
         self.memory.record_reward(bush, reward)
@@ -1291,10 +1221,6 @@ class ComposedAgent:
 
     def keep_harvesting(self, body, bush, reward):
         return self.actor.keep_harvesting(self.view(body), bush, reward)
-
-    def choose_between(self, body, candidates, rng):
-        """Index into `candidates` (bush ids in the active memory) of the bush the actor prefers."""
-        return self.actor.choose_between(self.view(body), candidates, rng)
 
 
 def build_agent(spec, extra=None):

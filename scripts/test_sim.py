@@ -206,7 +206,7 @@ def test_a_walk_that_exactly_fits_arrives_but_one_that_does_not_stops_short():
 # --- the motor costs: turning the view and pressing keys (costs.py) ------------------------------------------------
 
 import costs
-from agents import Explore, FullKnowledge, Look, OracleCritic, Stop
+from agents import Explore, Look, OracleCritic, Stop
 
 
 
@@ -343,16 +343,6 @@ def test_fruit_timing_does_not_drift_over_hundreds_of_fruits():
     assert r.n_fruits == 300 and r.total == 300
 
 
-@pytest.mark.slow
-def test_an_interlude_is_shared_by_sessions_of_different_lengths():
-    sim._interlude_for.cache_clear()
-    a, _, _ = sim.get_interlude("P", 0, "random", session_duration=20, interlude_trial_count=4)
-    b, _, _ = sim.get_interlude("P", 0, "random", session_duration=90, interlude_trial_count=4)
-    assert a == b and sim._interlude_for.cache_info().misses == 1
-    sim.get_interlude("P", 0, "random", session_duration=20, interlude_trial_count=5)       # a setting that does change it
-    assert sim._interlude_for.cache_info().misses == 2
-
-
 def test_the_result_lists_every_fruit_with_its_time_bush_and_reward():
     w = tiny_world(np.array([[5.0, 0.0], [-5.0, 0.0]]), [[2, 4, 6], [8, 8, 8]])
     res = run_episode(NearestAgent(whole_map=True), w)
@@ -364,58 +354,6 @@ def test_the_result_lists_every_fruit_with_its_time_bush_and_reward():
     for t, bush, k, reward, total in res.fruits:
         assert k == ks.get(bush, -1) + 1 and reward == w.fruit_reward[bush, k]
         ks[bush] = k
-
-
-# --- checkpoints ---------------------------------------------------------------------------------------------------
-
-def checkpoint_agent():
-    from agents import DeltaRuleCritic, FullKnowledge
-    return ComposedAgent(UtilityActor("nearest"), DeltaRuleCritic(), FullKnowledge())
-
-
-def checkpoint_world(duration=60.0):
-    from test_agents import world_with
-    return world_with([[5, 0], [-6, 0]], rewards=[[2, 2, 2], [9, 9, 9]], attrs=[[0.1, 0.5, 0.5], [0.9, 0.5, 0.5]], duration=duration, fd=0.5)
-
-
-def test_a_checkpoint_is_the_agent_as_it_was_then_and_equals_a_shorter_session():
-    world = checkpoint_world()
-    agent = checkpoint_agent()
-    res = run_episode(agent, world, checkpoints=[0, 40, 60])
-    first_end = res.fruits[2][0]                                                  # the first bush's last fruit
-    mid = first_end + 0.1
-    res = run_episode(agent := checkpoint_agent(), world, checkpoints=[0, mid, 60])
-    assert sorted(res.snapshots) == [0.0, mid, 60.0]
-    assert not res.snapshots[0.0].critic.w.any()                                  # before anything was learned
-    assert np.allclose(res.snapshots[60.0].critic.w, agent.critic.w) and agent.critic.w.any()
-    shorter = checkpoint_agent()
-    run_episode(shorter, checkpoint_world(duration=mid))                          # a session that really ends at `mid`
-    assert np.allclose(res.snapshots[mid].critic.w, shorter.critic.w)
-    assert not np.allclose(res.snapshots[mid].critic.w, agent.critic.w)           # and it differs from the end: it learned after `mid`
-    mid_visit = res.fruits[4][0] + 0.1                                           # inside the second visit, after its second fruit
-    at_mid_visit = run_episode(checkpoint_agent(), world, checkpoints=[mid_visit])
-    shorter = checkpoint_agent()
-    run_episode(shorter, checkpoint_world(duration=mid_visit))                    # that session ends the visit (end_visit) when time runs out
-    assert np.allclose(at_mid_visit.snapshots[mid_visit].critic.w, shorter.critic.w) and shorter.critic.w.any()
-    assert res.snapshots[60.0] is not agent and res.snapshots[60.0].critic is not agent.critic
-    before = res.snapshots[mid].critic.w.copy()
-    agent.critic.w += 1.0
-    assert np.allclose(res.snapshots[mid].critic.w, before)                       # a snapshot is a copy
-
-
-def test_checkpoints_after_the_agent_stops_get_its_final_state_and_none_means_no_snapshots():
-    agent = ComposedAgent(Fixed([0]), OracleCritic(), FullKnowledge())
-    res = run_episode(agent, tiny_world([[3, 0]], [[1, 1]], duration=30.0), checkpoints=[5, 30])
-    assert sorted(res.snapshots) == [5.0, 30.0]
-    assert run_episode(NearestAgent(whole_map=True), tiny_world([[3, 0]], [[1, 1]])).snapshots == {}
-
-
-def test_checkpoints_must_be_inside_the_session_and_deadline_dependent_agents_get_within_session_snapshots():
-    w = tiny_world([[3, 0]], [[1, 1]], duration=30.0)
-    for bad in ([-1], [31]):
-        with pytest.raises(ValueError, match="within the session"):
-            run_episode(NearestAgent(whole_map=True), w, checkpoints=bad)
-    assert sorted(run_episode(PlannerAgent("beam"), w, checkpoints=[10]).snapshots) == [10.0]       # allowed: the plan is for this session
 
 
 @pytest.mark.motor_costs

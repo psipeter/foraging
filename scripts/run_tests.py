@@ -23,20 +23,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SESSION_CONFIGS = "Assets/ScriptableObjects/Experiments/"       # <code>/<code>_S1.asset, <code>_I1.asset, <code>.asset
-
-
-def _is_interlude_asset(path):
-    return path.startswith(SESSION_CONFIGS) and re.search(r"_I\d+\.asset$", path) is not None
+SESSION_CONFIGS = "Assets/ScriptableObjects/Experiments/"       # <code>/<code>_S1.asset, <code>.asset
 
 
 def _is_session_asset(path):
     return path.startswith(SESSION_CONFIGS) and re.search(r"_S\d+\.asset$", path) is not None
-
-
-def _is_interlude_file(path):
-    # the committed Interlude trial files are compared with a fresh generation (test_committed_interlude_file_is_fresh)
-    return path.startswith("Assets/StreamingAssets/Experiments/") and path.endswith(".interlude.json")
 
 
 def _is_world_file(path):
@@ -55,17 +46,16 @@ def _is_server_file(path):
 EXTRA = {
     "scripts/test_world.py": ({"Assets/Scripts/World/WorldData.cs"}, [_is_session_asset, _is_world_file]),   # (the C# check names are mirrored)
     "scripts/test_sim.py": (set(), [_is_session_asset]),
-    "scripts/test_agents.py": (set(), [_is_session_asset, _is_interlude_asset]),
+    "scripts/test_agents.py": (set(), [_is_session_asset]),
     "scripts/test_specs.py": (set(), [_is_session_asset]),
-    "scripts/test_fingerprint.py": (set(), [_is_session_asset, _is_interlude_asset]),
-    "scripts/test_results.py": (set(), [_is_session_asset, _is_interlude_asset]),
+    "scripts/test_fingerprint.py": (set(), [_is_session_asset]),
+    "scripts/test_results.py": (set(), [_is_session_asset]),
     "scripts/test_analysis.py": (set(), [_is_session_asset]),
-    "scripts/test_battery.py": (set(), [_is_session_asset, _is_interlude_asset]),
+    "scripts/test_battery.py": (set(), [_is_session_asset]),
     "scripts/test_replay.py": ({"scripts/trajectory_codec.py"}, [_is_session_asset]),   # (kept from the old table)
     "scripts/test_rundata.py": (set(), [_is_session_asset]),
     "scripts/test_server.py": ({"scripts/load_test.py"}, [_is_server_file]),       # skipped when deno, pgserver or psycopg is missing
     "scripts/test_mutation_check.py": ({"scripts/run_tests.py"}, []),               # mutation_check imports run_tests
-    "scripts/test_interlude.py": (set(), [_is_session_asset, _is_interlude_asset, _is_interlude_file]),
 }
 
 

@@ -4,13 +4,11 @@ import numpy as np
 import pytest
 
 from agents import (Actor, Argmax, Body, ComposedAgent, Critic, Explore, FullKnowledge, FullMemory, Harvest, Look, OracleCritic,
-                    PlannerActor, Softmax, Stop, Task, UtilityActor, View, WorldKnowledge, oracle_agent, utility_rate,
+                    PlannerActor, Softmax, Stop, Task, UtilityActor, WorldKnowledge, oracle_agent, utility_rate,
                     REGISTRY, ConstantPrior, DeltaRuleCritic, NeutralPrior, Prior, RBFFeatures)
 import costs
-from interlude import generate_interlude
-from world import load_session
 from perception import (ConePercept, NullPercept, Observation, horizontal_fov, percept_for, percept_from_params)
-from sim import State, evaluate_interlude, get_interlude, run_episode, run_n
+from sim import State, run_episode, run_n
 from test_sim import tiny_world
 
 
@@ -284,19 +282,13 @@ def test_the_tasks_reach_is_the_engines_reach():
 
 # --- critic ------------------------------------------------------------------------------------------------
 
-def test_the_critic_is_fed_per_fruit_and_stops_when_frozen():
+def test_the_critic_is_fed_per_fruit():
     w = world_with([[5, 0]], rewards=[[2, 4, 6, 8]])
     critic = MeanCritic()
     agent = ComposedAgent(UtilityActor("value"), critic, FullKnowledge())
     run_episode(agent, w)
     assert critic.seen == [0, 1, 2, 3, 4]                       # refit after every fruit, from memory
     assert critic.mean == pytest.approx(5.0)
-    critic2 = MeanCritic()
-    agent2 = ComposedAgent(UtilityActor("value"), critic2, FullKnowledge())
-    agent2.begin_session(w, np.random.default_rng(0))
-    critic2.freeze()
-    agent2.record_reward(0, 9.0)
-    assert critic2.seen == [0] and critic2.version == 1          # nothing more learned after the freeze
 
 
 def test_memory_limits_what_the_critic_can_learn_from():
@@ -390,75 +382,6 @@ def test_the_oracle_planner_plans_once_and_replans_only_when_the_map_changes():
     assert set(agent3.plan) == {0, 2} or set(agent3.plan) == {2}         # the new bush is now in the plan
 
 
-# --- Interlude evaluation ----------------------------------------------------------------------------------
-
-def toy_interlude():
-    """Three trials over six bushes; the critic below scores a bush by its color attribute."""
-    colors = [0.9, 0.1, 0.2, 0.8, 0.5, 0.5]
-    pos = [[10, 30], [-10, 30]] * 3
-    trials = [
-        {"type": "contrast", "correct": "left", "left": {"id": 0}, "right": {"id": 1}, "start": [0.0, 0.0], "yaw": 0.0},
-        {"type": "contrast", "correct": "right", "left": {"id": 2}, "right": {"id": 3}, "start": [0.0, 0.0], "yaw": 0.0},
-        {"type": "graded", "correct": "either", "left": {"id": 4}, "right": {"id": 5}, "start": [0.0, 0.0], "yaw": 0.0},
-    ]
-    return {"seed": 7, "fruitCount": 2, "treePos": np.array(pos, dtype=float).reshape(-1).tolist(), "canopyRadius": [1.0] * 6,
-            "shape": [0.0] * 6, "color": colors, "moisture": [0.0] * 6, "trials": trials}
-
-
-class ColorCritic(Critic):
-    def value(self, attrs, ids=None):
-        return np.asarray(attrs)[:, 1].copy(), np.zeros(len(attrs))
-
-
-def session_agent(actor):
-    agent = ComposedAgent(actor, ColorCritic(), FullKnowledge())
-    agent.begin_session(world_with([[20, 0]]), np.random.default_rng(0))
-    return agent
-
-
-def test_interlude_scoring_with_a_value_based_actor():
-    agent = session_agent(UtilityActor("value"))
-    score = evaluate_interlude(agent, toy_interlude(), bonus_per_correct=5.0, n_samples=50)
-    assert agent.critic.frozen
-    assert score.accuracy == 1.0 and score.by_type == {"contrast": 1.0, "graded": 1.0} and score.n_trials == 3
-    assert score.p_left == [1.0, 0.0, pytest.approx(score.p_left[2])] and score.bonus == pytest.approx(15.0)
-    practice = evaluate_interlude(session_agent(UtilityActor("value")), toy_interlude(), practice=True, n_samples=10)
-    assert practice.bonus == 0.0
-
-
-def test_interlude_scoring_chance_and_a_softmax_actor_is_greedy_there():
-    nearest = evaluate_interlude(session_agent(UtilityActor("nearest")), toy_interlude(), n_samples=2000)
-    assert abs(nearest.by_type["contrast"] - 0.5) < 0.05                  # equal distances, random ties: chance
-    for temperature in (100.0, 0.02):                                     # the Interlude is greedy whatever the actor's choice rule (PI decision)
-        soft = evaluate_interlude(session_agent(UtilityActor("value", choice=Softmax(temperature))), toy_interlude(), n_samples=200)
-        assert soft.by_type["contrast"] == 1.0
-
-
-@pytest.mark.slow
-def test_a_real_interlude_is_solved_by_the_oracle_and_not_by_nearest():
-    sidecar, params, terrain = generate_interlude("S3_Interlude", pool_samples=120_000, seed=3)
-    from sim import get_worlds
-    w = get_worlds("S3", [3])[0]
-    oracle = oracle_agent(UtilityActor("value"))
-    oracle.begin_session(w, np.random.default_rng(0))
-    best = evaluate_interlude(oracle, sidecar, n_samples=20)
-    assert best.accuracy == 1.0
-    blind = oracle_agent(UtilityActor("nearest"))
-    blind.begin_session(w, np.random.default_rng(0))
-    chance = evaluate_interlude(blind, sidecar, n_samples=400)
-    assert 0.3 < chance.accuracy < 0.8
-
-
-@pytest.mark.slow
-def test_seeded_generation_matches_the_assets_own_seed_and_applies_overrides():
-    a, _, _ = generate_interlude("S3_Interlude", pool_samples=60_000)
-    own = int(load_session("S3").world_seed)
-    b, _, _ = generate_interlude("S3_Interlude", pool_samples=60_000, seed=own)
-    assert a == b
-    c, _, _ = generate_interlude("S3_Interlude", pool_samples=60_000, seed=own + 1)
-    assert c["seed"] == own + 1 and c["treePos"] != a["treePos"]
-
-
 # --- boundaries: what an agent may know ----------------------------------------------------------------------
 
 def test_state_body_is_a_snapshot_of_what_an_actor_may_read():
@@ -514,74 +437,7 @@ def test_components_begin_with_a_task_and_the_agent_keeps_no_world():
     assert not hasattr(agent, "world") and agent.task is agent.memory.begun_with
 
 
-# --- the Interlude through the agent --------------------------------------------------------------------------
-
-def test_interlude_shows_both_bushes_to_every_agent_whatever_its_sensor():
-    for percept in (NullPercept(), ConePercept(5.0, 1.0)):
-        agent = ComposedAgent(UtilityActor("value"), ColorCritic(), FullMemory(), percept)
-        agent.begin_session(world_with([[20, 0]]), np.random.default_rng(0))
-        score = evaluate_interlude(agent, toy_interlude(), n_samples=20)
-        assert score.accuracy == 1.0                                       # blind to the session, still sees the pair
-
-
-def test_interlude_starts_a_fresh_memory_and_leaves_the_sessions_alone():
-    w = world_with([[20, 0]], attrs=[[0.0, 0.1, 0.0]])                    # session bush 0 has color 0.1
-    agent = ComposedAgent(UtilityActor("value"), ColorCritic(), FullMemory())
-    agent.begin_session(w, np.random.default_rng(0))
-    agent.observe(Observation(np.array([0]), w.pos, w.canopy_radius, np.array([[0.0, 0.1, 0.0]]), np.zeros(1, dtype=bool)))
-    session_memory = agent.memory
-    score = evaluate_interlude(agent, toy_interlude(), n_samples=20)      # Interlude bush 0 has color 0.9 (same id)
-    assert score.accuracy == 1.0
-    assert agent.memory is session_memory and agent.memory.attrs[0, 1] == 0.1 and agent.memory.n == 1
-    assert agent.interlude_memory is not agent.memory and agent.interlude_memory.n == 6
-    assert agent.interlude_memory.attrs[0, 1] == 0.9 and agent.active_memory is agent.interlude_memory
-
-
-def test_interlude_freezes_and_carries_over_the_critic():
-    w = world_with([[5, 0]], rewards=[[2, 4]])
-    critic = MeanCritic()
-    agent = ComposedAgent(UtilityActor("value"), critic, FullKnowledge())
-    run_episode(agent, w)
-    seen, version, mean = list(critic.seen), critic.version, critic.mean
-    evaluate_interlude(agent, toy_interlude(), n_samples=10)
-    assert critic.frozen and critic.seen == seen and critic.version == version and critic.mean == mean   # carried, not refit
-
-
-def test_an_oracle_is_granted_the_interludes_table_not_the_sessions():
-    w = world_with([[20, 0]], rewards=[[9, 9]])                           # the session's only bush is worth 9
-    sidecar = toy_interlude()
-    sidecar["value"] = list(sidecar["color"])                             # the Interlude's true values: its colors
-    agent = oracle_agent(UtilityActor("value"))
-    agent.begin_session(w, np.random.default_rng(0))
-    score = evaluate_interlude(agent, sidecar, n_samples=20)
-    assert score.accuracy == 1.0 and agent.critic.values[0] == pytest.approx(0.9)
-
-
 # --- gaps found by mutation testing ----------------------------------------------------------------------------
-
-class ResettingCritic(Critic):
-    """A critic that (re)initialises what it learns in `begin`, as Memory does: weights for color only."""
-    def begin(self, task):
-        self.w = 0.0
-
-    def _fit(self, memory):
-        attrs, rewards, ids = memory.experiences()
-        self.w = float(rewards.mean() / max(attrs[:, 1].mean(), 1e-9)) if len(rewards) else 0.0
-
-    def value(self, attrs, ids=None):
-        return self.w * np.asarray(attrs)[:, 1], np.zeros(len(attrs))
-
-
-def test_a_critic_that_resets_in_begin_keeps_what_it_learned_through_the_interlude():
-    w = world_with([[5, 0]], rewards=[[4, 4]], attrs=[[0.0, 0.5, 0.0]])
-    critic = ResettingCritic()
-    agent = ComposedAgent(UtilityActor("value"), critic, FullKnowledge())
-    run_episode(agent, w)
-    learned = critic.w
-    assert learned > 0
-    score = evaluate_interlude(agent, toy_interlude(), n_samples=10)
-    assert critic.w == learned and score.accuracy == 1.0       # w == 0 would tie every trial: chance, not 1.0
-
 
 def reachable(root, skip=()):
     """Every object reachable from `root` through attributes, dict values and sequence items (numpy arrays are leaves)."""
@@ -643,97 +499,9 @@ def test_argmax_tie_window_is_tiny():
     assert {Argmax().pick(np.array([1.0, 1.0 + 1e-14]), rng, random_ties=True) for _ in range(100)} == {0, 1}
 
 
-class ChoiceSpy(Actor):
-    def __init__(self):
-        self.bodies = []
-
-    def choose_between(self, view, candidates, rng):
-        self.bodies.append(view.body)
-        return 0
-
-
-def test_the_interlude_shows_the_actor_a_fresh_body_at_the_trials_spawn():
-    spy = ChoiceSpy()
-    agent = ComposedAgent(spy, ColorCritic(), FullMemory())
-    w = world_with([[20, 0]])
-    agent.begin_session(w, np.random.default_rng(0))
-    sidecar = toy_interlude()
-    sidecar["trials"][1]["start"], sidecar["trials"][1]["yaw"] = [3.0, 4.0], 30.0
-    evaluate_interlude(agent, sidecar, n_samples=1)
-    b = spy.bodies[1]
-    assert b.total == 0.0 and b.time_left == w.session_duration and b.heading == 30.0 and list(b.pos) == [3.0, 4.0]
-
-
-def test_accuracy_averages_over_trials_not_over_trial_types():
-    sidecar = toy_interlude()                   # two contrast trials (right) + one graded trial; make the graded one wrong
-    sidecar["trials"][2]["correct"] = "right"   # ColorCritic picks left for colors 0.5 vs 0.5 at random: 0.5
-    sidecar["color"][4], sidecar["color"][5] = 0.9, 0.1       # now it picks left every time, which is wrong
-    score = evaluate_interlude(session_agent(UtilityActor("value")), sidecar, n_samples=20)
-    assert score.by_type == {"contrast": 1.0, "graded": 0.0}
-    assert score.accuracy == pytest.approx(2 / 3)           # 2 of 3 trials, not the mean of the two types (0.5)
-    assert score.bonus == pytest.approx(2 / 3 * 3 * 5.0)
-
-
-def test_interlude_picks_depend_on_the_sidecars_seed_and_are_reproducible():
-    def p_left(seed, rng=None):
-        sidecar = toy_interlude()
-        sidecar["seed"] = seed
-        agent = session_agent(UtilityActor("value", choice=Softmax(0.5)))
-        return evaluate_interlude(agent, sidecar, n_samples=30, rng=rng).p_left
-    assert p_left(7) == p_left(7)
-    assert p_left(7) != p_left(8)
-    assert p_left(7, np.random.default_rng(1)) == p_left(8, np.random.default_rng(1))      # an explicit rng overrides the seed
-
-
-def test_the_critic_is_never_updated_during_an_interlude():
-    class Counting(ColorCritic):
-        updates = 0
-
-        def update(self, memory):
-            Counting.updates += 1
-            super().update(memory)
-    agent = ComposedAgent(UtilityActor("value"), Counting(), FullKnowledge())
-    agent.begin_session(world_with([[20, 0]]), np.random.default_rng(0))
-    before = Counting.updates
-    evaluate_interlude(agent, toy_interlude(), n_samples=5)
-    assert Counting.updates == before and agent.critic.frozen
-
-
-@pytest.mark.slow
-def test_interlude_overrides_reach_the_cache():
-    from sim import get_interlude
-    a = get_interlude("S3", 3, pool_samples=60_000, interlude_trial_count=3)[0]
-    b = get_interlude("S3", 3, pool_samples=60_000)[0]
-    assert a["n"] == 3 and b["n"] == int(load_session("S3_Interlude").interlude_trial_count) != 3
-
-
-# --- the planner and the actors under the motor costs; ids in the Interlude; the critic version --------------------
+# --- the planner and the actors under the motor costs; the critic version --------------------
 
 import itertools
-
-
-class IdSpy(Critic):
-    """Records the ids it is asked about (a per-id critic would key on them)."""
-    def __init__(self):
-        self.asked = []
-
-    def value(self, attrs, ids=None):
-        self.asked.append(None if ids is None else np.array(ids))
-        return np.asarray(attrs)[:, 1].copy(), np.zeros(len(attrs))
-
-
-def test_only_an_omniscient_critic_is_given_bush_ids_in_the_interlude():
-    spy = IdSpy()
-    agent = ComposedAgent(UtilityActor("value"), spy, FullKnowledge())
-    agent.begin_session(world_with([[20, 0]]), np.random.default_rng(0))
-    agent.act(Body(np.zeros(2), 0.0, 60.0, 0.0))
-    assert spy.asked[-1] is not None                                   # in the session ids identify the bushes
-    spy.asked.clear()
-    evaluate_interlude(agent, toy_interlude(), n_samples=3)
-    assert spy.asked and all(a is None for a in spy.asked)             # in the Interlude they are another table's
-    oracle = oracle_agent(UtilityActor("value"))
-    oracle.begin_session(world_with([[20, 0]]), np.random.default_rng(0))
-    assert evaluate_interlude(oracle, dict(toy_interlude(), value=list(toy_interlude()["color"])), n_samples=5).accuracy == 1.0
 
 
 def test_a_learning_critics_version_is_bumped_by_update_not_by_the_critic():
@@ -831,38 +599,6 @@ def test_travel_times_include_the_turn_and_the_presses_the_engine_charges():
 
 
 # --- shared data an agent could otherwise corrupt ------------------------------------------------------------------
-
-def test_a_grant_is_a_read_only_copy_of_the_world():
-    w = world_with([[10, 0], [0, 20]], rewards=[[3, 3], [5, 5]], attrs=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
-    k = WorldKnowledge.from_world(w)
-    for name in ("pos", "radius", "attrs", "values"):
-        arr = getattr(k, name)
-        assert not np.shares_memory(arr, getattr(w, {"values": "value", "attrs": "color", "radius": "canopy_radius"}.get(name, name)))
-        assert not arr.flags.writeable
-        with pytest.raises(ValueError):
-            arr[0] = 99.0
-    before = w.value.copy()
-    agent = oracle_agent(UtilityActor("value"))
-    agent.begin_session(w, np.random.default_rng(0))
-    with pytest.raises(ValueError):
-        agent.critic.values[0] = 99.0                      # an omniscient critic cannot edit what it was granted
-    assert np.array_equal(w.value, before)
-    sidecar = toy_interlude()
-    sidecar["value"] = list(sidecar["color"])
-    assert not WorldKnowledge.from_sidecar(sidecar).values.flags.writeable
-
-
-def test_get_interlude_hands_out_copies_and_accepts_list_overrides():
-    from sim import get_interlude
-    a = get_interlude("P", 100, pool_samples=40_000)[0]
-    original = a["trials"][0]["correct"]
-    a["trials"][0]["correct"] = "poisoned"
-    a["treePos"][0] = -999.0
-    b = get_interlude("P", 100, pool_samples=40_000)[0]
-    assert b["trials"][0]["correct"] == original and b["treePos"][0] != -999.0     # the cache was not edited through `a`
-    c = get_interlude("P", 100, pool_samples=40_000, canopy_width_range=[2.0, 5.0])[0]   # unhashable list: no TypeError
-    assert c["n"] == b["n"]
-
 
 # --- the delta-rule learner ------------------------------------------------------------------------------------
 
@@ -977,72 +713,6 @@ def test_the_engine_updates_a_per_bush_critic_once_per_visit_and_a_per_fruit_cri
     fruit_critic = MeanCritic()
     run_episode(ComposedAgent(UtilityActor("value"), fruit_critic, FullKnowledge()), w)
     assert fruit_critic.seen == [0, 1, 2, 3, 4, 5, 6]
-
-
-def test_the_delta_rule_agent_runs_a_session_and_its_critic_is_frozen_for_the_interlude():
-    w = world_with([[5, 0], [-5, 0], [0, 6]], rewards=[[2, 4, 6], [8, 8, 8], [1, 1, 1]],
-                   attrs=[[0.2, 0.5, 0.5], [0.8, 0.5, 0.5], [0.5, 0.5, 0.5]])
-    agent = REGISTRY["delta_rate_10"]()
-    res = run_episode(agent, w)
-    assert res.total > 0
-    v = agent.critic.version
-    agent.begin_interlude(WorldKnowledge.from_world(w))
-    agent.record_reward(0, 99.0)
-    agent.end_visit(0)
-    assert agent.critic.version == v
-
-
-# --- Interlude pairs: travel times that differ by milliseconds are a tie ----------------------------------------------
-
-def pair_view(gap, critic=None):
-    """A view at the origin facing +z of two bushes straight ahead whose travel times differ by `gap` seconds (the second is further
-    by gap * speed units; speed 5 in the toy world)."""
-    w = world_with([[0.0, 40.0], [0.0, 40.0 + 5.0 * gap]])
-    memory = begin_memory(FullKnowledge(), w)
-    view = View(Body(np.zeros(2), 0.0, 90.0, 0.0), memory, critic or OracleCritic(), Task(w))
-    return view, memory
-
-
-def picks(actor, view, n=400):
-    rng = np.random.default_rng(0)
-    return np.array([actor.choose_between(view, [0, 1], rng) for _ in range(n)])
-
-
-def test_equalize_times_averages_the_times_of_candidates_within_the_tolerance_only():
-    view, _ = pair_view(0.004)
-    t = view.travel_times()
-    assert t[1] - t[0] == pytest.approx(0.004)
-    close = view.equalize_times([0, 1], 0.01).travel_times()
-    assert close[0] == close[1] == pytest.approx(t[:2].mean())
-    far, _ = pair_view(0.04)
-    assert np.allclose(far.equalize_times([0, 1], 0.01).travel_times(), far.travel_times())      # 40 ms apart: left alone
-    assert view.travel_times()[1] == pytest.approx(t[1])                                           # the original view is unchanged
-
-
-def test_a_nearest_agent_picks_between_a_pair_at_random_when_the_times_differ_by_milliseconds():
-    near_tie, _ = pair_view(0.004)
-    p = picks(UtilityActor("nearest"), near_tie)
-    assert 0.4 < p.mean() < 0.6                                                                    # not always the quicker bush
-    clear, _ = pair_view(0.04)
-    assert picks(UtilityActor("nearest"), clear).sum() == 0                                        # 40 ms is a real difference: the nearer one
-
-
-def test_values_still_decide_a_pair_whose_times_are_a_tie():
-    for table, expected in (([5.0, 1.0], 0), ([1.0, 5.0], 1)):
-        view, _ = pair_view(0.004, TableCritic(table))
-        for utility in ("rate", "value"):
-            assert set(picks(UtilityActor(utility), view, 50)) == {expected}
-
-
-@pytest.mark.slow
-def test_nearest_is_at_chance_on_a_random_interlude_where_shape_is_rewarded():
-    # S4 rewards shape (inverted); the wider canopy of a pair needs a slightly larger turn, which used to make `nearest` pick the
-    # narrower one every time (accuracy 0.27 here): a floor agent that knew nothing about shape was using it
-    sidecar, bonus, practice = get_interlude("S4", 0, "random", interlude_trial_count=50, session_duration=150)
-    agent = REGISTRY["nearest"]()
-    run_episode(agent, world_with([[20, 0]]))
-    score = evaluate_interlude(agent, sidecar, bonus, practice, n_samples=200)
-    assert abs(score.accuracy - 0.5) < 0.05
 
 
 def test_a_constant_prior_never_moves_and_the_weights_then_carry_the_whole_level():
@@ -1371,3 +1041,22 @@ def test_agents_with_replay_run_a_session():
     w = world_with([[0, 20], [3, 23], [0, 60]], rewards=[[9] * 4, [1] * 4, [5] * 4], attrs=[[0.1] * 3, [0.5] * 3, [0.9] * 3], duration=60.0)
     for replay in (FullSweeps(3), SampledReplay(10), PrioritizedReplay(2)):
         assert run_episode(LearnerAgent(UtilityActor(), replay=replay), w).total > 0
+
+
+# --- shared data an agent could otherwise corrupt ------------------------------------------------------------------
+
+def test_a_grant_is_a_read_only_copy_of_the_world():
+    w = world_with([[10, 0], [0, 20]], rewards=[[3, 3], [5, 5]], attrs=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
+    k = WorldKnowledge.from_world(w)
+    for name in ("pos", "radius", "attrs", "values"):
+        arr = getattr(k, name)
+        assert not np.shares_memory(arr, getattr(w, {"values": "value", "attrs": "color", "radius": "canopy_radius"}.get(name, name)))
+        assert not arr.flags.writeable
+        with pytest.raises(ValueError):
+            arr[0] = 99.0
+    before = w.value.copy()
+    agent = oracle_agent(UtilityActor("value"))
+    agent.begin_session(w, np.random.default_rng(0))
+    with pytest.raises(ValueError):
+        agent.critic.values[0] = 99.0                      # an omniscient critic cannot edit what it was granted
+    assert np.array_equal(w.value, before)

@@ -137,7 +137,7 @@ def test_recorded_episodes_equal_what_the_engine_gives(store):
     assert np.allclose(report.totals, direct.totals)
     row = report.rows[0]
     assert row["n_visits"] == direct.results[0].n_visits and row["walk_time"] == pytest.approx(direct.results[0].walk_time)
-    assert row["interlude_accuracy"] is None
+    assert row["interlude_accuracy"] is None and row["interlude_trials"] is None        # (the retired columns stay NULL)
 
 
 def test_anything_that_changes_the_setup_makes_a_new_record(store, monkeypatch):
@@ -212,20 +212,6 @@ def test_deleting_a_run_removes_its_episodes_and_links(store):
     assert store.select("SELECT COUNT(*) AS n FROM runs")[0]["n"] == 1
 
 
-@pytest.mark.slow
-def test_an_interlude_run_records_the_session_and_the_interlude_scores(store):
-    report = record_run("nearest", "P", [0], "i", kind="interlude", n_samples=5, overrides=OVERRIDES, store=store)
-    row = report.rows[0]
-    assert row["interlude_trials"] > 0 and 0.0 <= row["interlude_accuracy"] <= 1.0 and row["total"] is not None
-    assert row["by_type"] and all(0.0 <= v <= 1.0 for v in row["by_type"].values())
-    env = store.select("SELECT * FROM environments WHERE env_id = ?", (report.env_id,))[0]
-    assert env["kind"] == "interlude" and env["n_samples"] == 5 and env["interlude_hash"]
-    again = record_run("nearest", "P", [0], "i2", kind="interlude", n_samples=5, overrides=OVERRIDES, store=store)
-    assert again.n_computed == 0 and again.rows[0]["interlude_accuracy"] == row["interlude_accuracy"]
-    other = record_run("nearest", "P", [0], "i3", kind="interlude", n_samples=7, overrides=OVERRIDES, store=store)
-    assert other.n_computed == 1                                                       # n_samples is part of the environment
-
-
 # --- the command line ----------------------------------------------------------------------------------------------
 
 def cli(monkeypatch, capsys, *args):
@@ -254,18 +240,6 @@ def test_sim_record_needs_a_tag_and_the_flags_need_record(monkeypatch, capsys, t
         cli(monkeypatch, capsys, "P", "--agents", "nearest", "--tag", "x")
     out = cli(monkeypatch, capsys, "P", "--seeds", "0-1", "--agents", "nearest,greedy_rate_10", "--set", "session_duration=20")
     assert "agent" in out and not (tmp_path / "r.sqlite").exists()
-
-
-@pytest.mark.slow
-def test_a_random_mode_interlude_run_is_its_own_environment_and_scores_the_random_trials(store):
-    overrides = {**OVERRIDES, "interlude_trial_count": 8}
-    rand = record_run("nearest", "S1", [0], "r", kind="interlude", n_samples=5, interlude_mode="random", overrides=overrides, store=store)
-    row = rand.rows[0]
-    assert row["interlude_trials"] == 8 and set(row["by_type"]) == {"random"}
-    env = store.select("SELECT env_json FROM environments WHERE env_id = ?", (rand.env_id,))[0]["env_json"]
-    assert '"interlude_mode":"random"' in env
-    other = record_run("nearest", "S1", [0], "d", kind="interlude", n_samples=5, interlude_mode="reward_gap", overrides=overrides, store=store)
-    assert other.env_id != rand.env_id and other.n_computed == 1
 
 
 # --- per-fruit events ----------------------------------------------------------------------------------------------
@@ -297,51 +271,45 @@ def test_reused_episodes_keep_their_fruits_and_deleting_a_run_removes_them(store
     assert store.select("SELECT COUNT(*) AS n FROM episode_fruits")[0]["n"] == 0
 
 
-@pytest.mark.slow
-def test_an_interlude_run_stores_the_sessions_fruits_only(store):
-    report = record_run("nearest", "P", [0], "i", kind="interlude", n_samples=3, overrides={**OVERRIDES, "interlude_trial_count": 4},
-                        store=store)
-    row = report.rows[0]
-    fruits = store.fruits(row["episode_id"])
-    assert len(fruits) == row["n_fruits"] and sum(f["reward"] for f in fruits) == pytest.approx(row["total"])
-
-
 # --- checkpoints ---------------------------------------------------------------------------------------------------
 
-@pytest.mark.slow
-def test_checkpoint_scores_are_stored_per_episode_and_the_last_one_is_the_sessions_own(store):
-    kw = dict(kind="interlude", n_samples=5, interlude_mode="random", overrides={"session_duration": 30, "interlude_trial_count": 6},
-              checkpoints=[0, 10, 30], store=store)
-    report = record_run("delta_rate_10", "P", [0, 1], "cp", **kw)
-    for row in report.rows:
-        cps = store.checkpoints(row["episode_id"])
-        assert [c["t"] for c in cps] == [0.0, 10.0, 30.0] and all(c["interlude_trials"] == 6 for c in cps)
-        assert cps[-1]["interlude_accuracy"] == row["interlude_accuracy"]              # the copy at the end is the agent after the session
-        assert cps[-1]["interlude_bonus"] == pytest.approx(row["interlude_bonus"])
-    env = store.select("SELECT env_json FROM environments WHERE env_id = ?", (report.env_id,))[0]["env_json"]
-    assert '"checkpoints":[0,10,30]' in env
-    again = record_run("delta_rate_10", "P", [0, 1], "cp2", **kw)
-    assert again.n_computed == 0
-    other = record_run("delta_rate_10", "P", [0], "cp3", **{**kw, "checkpoints": [0, 30]})
-    assert other.env_id != report.env_id and other.n_computed == 1
-    store.delete_run(report.run_id)
-    assert store.select("SELECT COUNT(*) AS n FROM episode_checkpoints")[0]["n"] == 2        # only the third run's remain
 
+# --- the migration that retired the forced-choice evaluation (schema 4) ---------------------------------------------
 
-@pytest.mark.slow
-def test_an_agent_that_does_not_learn_scores_the_same_at_every_checkpoint(store):
-    kw = dict(kind="interlude", n_samples=5, interlude_mode="random", overrides={"session_duration": 30, "interlude_trial_count": 6},
-              checkpoints=[0, 15, 30], store=store)
-    report = record_run("greedy_rate_10", "P", [0], "oracle", **kw)
-    accuracies = {c["interlude_accuracy"] for c in store.checkpoints(report.rows[0]["episode_id"])}
-    assert len(accuracies) == 1
-
-
-def test_a_version_2_file_gains_the_checkpoint_table(tmp_path):
-    path = tmp_path / "r.sqlite"
+def _old_file(path, version):
+    """A results file as an older code wrote it, with one episode of the retired kind in it."""
     conn = sqlite3.connect(path)
-    conn.executescript(results.SCHEMA_V1 + results.MIGRATIONS[1] + "PRAGMA user_version = 2;")
+    conn.executescript(results.SCHEMA_V1 + "".join(results.MIGRATIONS[v] for v in range(1, version)) + f"PRAGMA user_version = {version};")
+    conn.executescript("""
+        INSERT INTO agents VALUES ('a1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '{}');
+        INSERT INTO environments VALUES ('e1', 'S1', 'h', 'interlude', 5, 'ih', '{}', NULL, '{}', '{}');
+        INSERT INTO code_versions VALUES (1, 'eh', 'ah', 'c', 0, '3', '1', 't');
+        INSERT INTO runs VALUES (1, 'a1', 'e1', 1, 'old', NULL, '0', 1, 1, 0, 't');
+        INSERT INTO episodes (episode_id, agent_id, env_id, code_id, seed, computed_by, total, interlude_trials, interlude_accuracy, interlude_bonus)
+            VALUES (1, 'a1', 'e1', 1, 0, 1, 12.0, 6, 0.75, 3.0);
+        INSERT INTO episode_types VALUES (1, 'random', 0.75);
+    """)
+    conn.commit()
     conn.close()
+
+
+@pytest.mark.parametrize("version", [2, 3])
+def test_an_older_file_keeps_its_retired_interlude_rows_and_is_backed_up(tmp_path, version):
+    path = tmp_path / "r.sqlite"
+    _old_file(path, version)
     with Store(path) as s:
-        assert s.version == results.SCHEMA_VERSION and s.select("SELECT COUNT(*) AS n FROM episode_checkpoints")[0]["n"] == 0
-    assert (tmp_path / "r.sqlite.bak-v2").exists()
+        assert s.version == results.SCHEMA_VERSION == 4
+        row = s.select("SELECT * FROM episodes WHERE episode_id = 1")[0]
+        assert row["interlude_accuracy"] == 0.75 and row["total"] == 12.0
+        assert s.select("SELECT COUNT(*) AS n FROM episode_types")[0]["n"] == 1
+        assert s.select("SELECT version FROM schema_notes")[0]["version"] == 4
+    assert (tmp_path / f"r.sqlite.bak-v{version}").exists()
+
+
+def test_a_retired_interlude_record_is_never_selected_or_mixed_with_sessions(tmp_path):
+    import analysis
+    path = tmp_path / "r.sqlite"
+    _old_file(path, 3)
+    with Store(path) as s:
+        with pytest.raises(analysis.SelectionError):
+            analysis.select(s, engine="any")

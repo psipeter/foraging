@@ -3,7 +3,7 @@
 The old S3 (moisture and one other feature paid, terraced terrain), S4 (all three features additive, one inverted) and S5 (one Gaussian bump over shape and
 colour plus linear moisture) exercised parts of the generators (moisture as a reward feature, terraces, extrapolation trials, bumps) that the new sessions do
 not. Their asset files are kept in `fixtures/` (copied from git, commit d6f3576); `legacy(name)` returns the fields that make S2 behave like them, as overrides for
-`load_session`, `generate_world` and `generate_interlude`.
+`load_session` and `generate_world`.
 """
 
 from pathlib import Path
@@ -12,7 +12,7 @@ from world import load_session
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 FIELDS = ("reward_function", "world_seed", "moisture_terrace_levels", "moisture_terrace_sharpness", "moisture_terrace_residual", "terrain_noise_frequency",
-          "terrain_max_elevation", "interlude_min_elevation_difference", "shape_varies", "color_varies", "random_bush_value_range")
+          "terrain_max_elevation", "shape_varies", "color_varies", "random_bush_value_range")
 
 
 def legacy(name):

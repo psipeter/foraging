@@ -3,7 +3,7 @@
 Three things determine a result besides the agent (whose identity is `specs.spec_hash`):
 
   * the environment: which session, the session parameters the simulation actually reads (`SIM_FIELDS`), any overrides, the sensor
-    the run imposed, whether it was a session or an Interlude evaluation (and its `n_samples`), and the motor-cost constants.
+    the run imposed, and the motor-cost constants (the dict keeps `kind` = "session" and `n_samples` = None, the keys of the schema before the forced-choice evaluation was retired).
     `environment(...)` returns it as a dict and `environment_hash(...)` as 12 hex characters. The world seed is not part of it:
     seeds are the rows of the results, not the setup.
   * the engine code: a hash of the files that decide what the environment does (`ENGINE_FILES`),
@@ -29,26 +29,23 @@ import numpy as np
 import costs
 import tiles
 from specs import canonical_json
-from world import interlude_name, load_session
+from world import load_session
 
 SCRIPTS = Path(__file__).resolve().parent
 ROOT = SCRIPTS.parent
 
-ENGINE_FILES = ("sim.py", "costs.py", "perception.py", "world.py", "interlude.py", "ranking.py", "spatial.py", "tiles.py")
+ENGINE_FILES = ("sim.py", "costs.py", "perception.py", "world.py", "ranking.py", "spatial.py", "tiles.py")
 AGENT_FILES = ("agents.py", "specs.py")
 
 TILE_FIELDS = (*tiles.TILE_PARAMS, "tile_arrangement", "tile_value_mode", "tile_within_mode")      # hashed only for the tiles layout (a session of another layout does not read them, and its hash stays as it was)
-OMITTED_AT_DEFAULT = {"interlude_peak_trials": 0, "interlude_interaction_trials": 0}      # fields of SIM_FIELDS left out of the hash while they have this value (so that adding them moved no stored result)
 
 
 SIM_FIELDS = (
-    "camera_field_of_view", "canopy_width_range", "color_varies", "color_when_fixed", "eye_height", "fruit_count", "fruit_harvest_duration", "harvest_max_angle",
-    "harvest_range_gap_base", "harvest_range_gap_per_radius", "interlude_bonus_per_correct", "interlude_bush_bearing",
-    "interlude_bush_distance", "interlude_feature_trials", "interlude_for", "interlude_max_feature_gap", "interlude_max_reward_gap", "interlude_min_feature_gap",
-    "interlude_min_reward_gap", "interlude_mode", "interlude_peak_trials", "interlude_interaction_trials", "interlude_repeat_count", "interlude_repeat_separation", "interlude_trial_count", "is_interlude", "is_practice", "layout", "assignment", "reward_stage", "moisture_varies", "moisture_when_fixed", "moisture_is_feature", "moisture_terrace_levels",
-    "moisture_terrace_residual", "moisture_terrace_unevenness", "feature_balance", "feature_balance_target", "feature_balance_scales", "moisture_terrace_mode", "terrace_mean_width", "terrace_width_spread", "terrace_max_band", "terrace_min_step", "terrace_phase_shift", "terrace_phase_frequency", "terrace_strength", "terrace_diffusion_iterations", "terrace_diffusion_edge", "moisture_terrace_sharpness", "mountain_band_width", "mountain_block_threshold",
+    "camera_field_of_view", "canopy_height_range", "canopy_width_range", "color_varies", "color_when_fixed", "eye_height", "fruit_count", "fruit_harvest_duration", "harvest_max_angle",
+    "harvest_range_gap_base", "harvest_range_gap_per_radius", "layout", "assignment", "reward_stage", "moisture_varies", "moisture_when_fixed", "moisture_terrace_levels",
+    "moisture_terrace_residual", "moisture_terrace_unevenness", "feature_balance", "feature_coverage", "feature_balance_target", "feature_balance_scales", "moisture_terrace_mode", "terrace_mean_width", "terrace_width_spread", "terrace_max_band", "terrace_min_step", "terrace_phase_shift", "terrace_phase_frequency", "terrace_strength", "terrace_diffusion_iterations", "terrace_diffusion_edge", "moisture_terrace_sharpness", "mountain_band_width", "mountain_block_threshold",
     "mountain_boundary_jitter", "mountain_height", "mountain_noise_scale", "placement_jitter", "player_move_speed",
-    "random_bush_value_range", "reward_function", "reward_std", "session_duration", "session_name", "shape_range", "shape_varies", "shape_when_fixed", "spatial_balance", "snow_line_fraction",
+    "random_bush_value_range", "reward_function", "reward_std", "session_duration", "shape_range", "shape_varies", "shape_when_fixed", "spatial_balance", "snow_line_fraction",
     "start_clearing_radius", "terrain_max_elevation", "terrain_mesh_resolution", "terrain_noise_frequency",
     "terrain_noise_octaves", "tree_edge_margin", "tree_spacing", "world_half_extent",
     *TILE_FIELDS,
@@ -80,9 +77,6 @@ def params_hash(name, overrides=None):
     params = load_session(name, **(overrides or {}))
     fields = {f: getattr(params, f, None) for f in SIM_FIELDS}      # (None: a field an older asset file does not have yet)
     fields["reward_function"] = _reward_without_new_defaults(fields["reward_function"])
-    for f, default in OMITTED_AT_DEFAULT.items():                   # a field added later leaves the hash of every session that does not use it as it was
-        if fields[f] in (None, default):
-            del fields[f]
     if fields["layout"] != "tiles":
         for f in TILE_FIELDS:
             del fields[f]
@@ -94,37 +88,12 @@ def motor_costs():
     return {k: float(v) for k, v in vars(costs).items() if k.isupper() and isinstance(v, (int, float))}
 
 
-def interlude_mode_of(name, mode=None, overrides=None):
-    """The mode an Interlude is generated in: `mode`, else the asset's own `interludeMode` (absent in an older asset = hybrid)."""
-    from interlude import interlude_mode
-    return interlude_mode(load_session(name, **(overrides or {})), mode)
-
-
-def environment(session, overrides=None, percept=None, kind="session", n_samples=None, interlude_mode=None, checkpoints=None):
+def environment(session, overrides=None, percept=None):
     """The environment a result was computed in, as a plain dict. `percept` is the run's sensor override (a Component, or None for
-    the world's own); `kind` is "session" or "interlude" (then `n_samples` is the number of repeated choices per trial and
-    `interlude_mode` the trial design, one of interlude.MODES, None = the Interlude asset's own, and `checkpoints` the session times
-    (seconds) at which a copy of the agent is also scored on the Interlude)."""
-    if kind not in ("session", "interlude"):
-        raise ValueError(f"kind must be 'session' or 'interlude', not '{kind}'")
+    the world's own)."""
     overrides = dict(overrides or {})
-    if kind == "session" and n_samples is not None:
-        raise ValueError("n_samples applies to an Interlude evaluation only")
-    env = {"session": session, "session_hash": params_hash(session, overrides), "overrides": overrides,
-           "percept": None if percept is None else percept.spec(), "kind": kind,
-           "n_samples": None if n_samples is None else int(n_samples), "costs": motor_costs()}
-    if kind == "interlude":
-        env["interlude_hash"] = params_hash(interlude_name(session), overrides)
-        env["interlude_mode"] = interlude_mode_of(interlude_name(session), interlude_mode, overrides)
-        if checkpoints is not None:
-            times = sorted({float(t) for t in checkpoints})
-            length = float(load_session(session, **overrides).session_duration)
-            if not times or times[0] < 0.0 or times[-1] > length:
-                raise ValueError(f"checkpoints must be session times between 0 and {length:g} s, got {list(checkpoints)}")
-            env["checkpoints"] = times
-    elif interlude_mode is not None or checkpoints is not None:
-        raise ValueError("interlude_mode and checkpoints apply to an Interlude evaluation only")
-    return env
+    return {"session": session, "session_hash": params_hash(session, overrides), "overrides": overrides,
+            "percept": None if percept is None else percept.spec(), "kind": "session", "n_samples": None, "costs": motor_costs()}
 
 
 def environment_hash(*args, **kwargs):

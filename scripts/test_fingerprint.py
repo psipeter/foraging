@@ -6,12 +6,11 @@ import pytest
 
 import costs
 import fingerprint
-import interlude
 import sim
 import world
 from agents import ComposedAgent, Explore, FullMemory, OracleCritic
 from fingerprint import SIM_FIELDS, code_version, environment, environment_hash, git_state, hash_files, params_hash
-from perception import ConePercept
+from perception import ConePercept, OccludedConePercept
 from test_agents import Script
 
 
@@ -42,7 +41,7 @@ def test_a_changed_reward_function_changes_the_hash():
 def test_environment_records_what_was_run_and_hashes_every_part():
     env = environment("S1", {"session_duration": 90})
     assert env["session"] == "S1" and env["overrides"] == {"session_duration": 90} and env["kind"] == "session"
-    assert env["percept"] is None and env["n_samples"] is None and "interlude_hash" not in env
+    assert env["percept"] is None and env["n_samples"] is None
     assert env["costs"]["TURN_RATE"] == costs.TURN_RATE
     base = environment_hash("S1", {"session_duration": 90})
     assert base == environment_hash("S1", {"session_duration": 90.0})                 # numbers by value
@@ -51,17 +50,6 @@ def test_environment_records_what_was_run_and_hashes_every_part():
     assert environment_hash("S1", {"session_duration": 90}, percept=ConePercept(60, 50)) != \
         environment_hash("S1", {"session_duration": 90}, percept=ConePercept(60, 60))
     assert environment_hash("S2", {"session_duration": 90}) != base
-
-
-def test_an_interlude_environment_adds_its_own_asset_and_sample_count():
-    env = environment("S1", kind="interlude", n_samples=200)
-    assert env["kind"] == "interlude" and env["n_samples"] == 200 and re.fullmatch(r"[0-9a-f]{12}", env["interlude_hash"])
-    assert environment_hash("S1", kind="interlude", n_samples=100) != environment_hash("S1", kind="interlude", n_samples=200)
-    assert environment_hash("S1", kind="interlude", n_samples=200) != environment_hash("S1")
-    with pytest.raises(ValueError):
-        environment("S1", n_samples=5)
-    with pytest.raises(ValueError):
-        environment("S1", kind="practice")
 
 
 def test_the_motor_costs_are_part_of_the_environment(monkeypatch):
@@ -149,49 +137,23 @@ def test_sim_fields_cover_every_session_parameter_the_simulator_reads(monkeypatc
     def traced(name="S1", **overrides):
         return Recording(**vars(original(name, **overrides)))
 
-    for module in (world, sim, interlude):
+    for module in (world, sim):
         monkeypatch.setattr(module, "load_session", traced)
     from agents import REGISTRY
     for session in ("P", "S1", "S3", "S4"):
         worlds = sim.get_worlds(session, range(2))
-        for name in ("nearest", "greedy_rate_10", "plan_beam", "delta_rate_10"):
+        for name in ("nearest", "delta_rate_10"):
             for w in worlds:
                 sim.run_episode(REGISTRY[name](), w)
         sim.run_episode(ComposedAgent(Script(Explore(0.0, 40.0)), OracleCritic(), FullMemory()), worlds[0])   # walks: reads the mountain block
-        sidecar, bonus, practice = sim.get_interlude(session, 0)
-        agent = REGISTRY["delta_rate_10"]()
-        sim.run_episode(agent, worlds[0])
-        sim.evaluate_interlude(agent, sidecar, bonus, practice, n_samples=5)
-    world.generate_world(traced("S1", layout="tiles", assignment="tiles"), 0)      # the tiles layout reads the tile fields
+    tiles = dict(layout="tiles", assignment="tiles")                                # the modes that read their own fields
+    for extra in (dict(tile_value_mode="bimodal", tile_within_mode="scatter"), dict(tile_value_mode="graded", tile_within_mode="gradient"), dict(tile_within_mode="pool"),
+                  dict(moisture_terrace_mode=1), dict(moisture_terrace_mode=2), dict(feature_balance=1, spatial_balance=0), dict(moisture_varies=False), dict(color_varies=False), dict(shape_varies=False)):
+        world.generate_world(traced("S1", **({**tiles, **extra} if any(k.startswith("tile_") for k in extra) else extra)), 0)
+    world.generate_world(traced("S1", **tiles), 0)
+    worlds[0].terrain.grids()                                                       # the terrain's own mesh fields (the occluded sensor reads them)
+    sim.run_episode(REGISTRY["nearest"](), worlds[0], percept=OccludedConePercept(60, 50))   # ... and the eye height
     missing = accessed - set(SIM_FIELDS) - {"world_seed"}
     assert not missing, f"add to fingerprint.SIM_FIELDS: {sorted(missing)}"
     assert "mountain_block_threshold" in accessed                      # the exploring walk was traced
     assert set(SIM_FIELDS) <= accessed | {"world_seed"}, sorted(set(SIM_FIELDS) - accessed)   # and nothing listed is unread
-
-
-def test_an_interlude_environment_records_its_mode_and_only_an_interlude_has_one():
-    asset_mode = environment("S1", kind="interlude", n_samples=5)["interlude_mode"]                  # whatever the asset says
-    assert asset_mode in ("random", "reward_gap", "feature_gap", "hybrid")
-    other = "reward_gap" if asset_mode != "reward_gap" else "random"
-    assert environment("S1", kind="interlude", n_samples=5, interlude_mode=asset_mode) == environment("S1", kind="interlude", n_samples=5)
-    assert environment("S1", kind="interlude", n_samples=5, interlude_mode=other)["interlude_mode"] == other
-    assert environment_hash("S1", kind="interlude", n_samples=5, interlude_mode=other) != environment_hash("S1", kind="interlude", n_samples=5)
-    assert environment_hash("S1", {"interlude_trial_count": 50}, kind="interlude", n_samples=5) != environment_hash("S1", kind="interlude", n_samples=5)
-    with pytest.raises(ValueError):
-        environment("S1", interlude_mode="random")                                    # a session run has no Interlude mode
-    with pytest.raises(ValueError):
-        environment("S1", kind="interlude", interlude_mode="shuffled")
-
-
-def test_checkpoints_are_part_of_an_interlude_environment_and_must_fit_the_session():
-    base = environment_hash("S1", {"session_duration": 90}, kind="interlude", n_samples=5)
-    with_cp = environment_hash("S1", {"session_duration": 90}, kind="interlude", n_samples=5, checkpoints=[0, 30, 90])
-    assert with_cp != base
-    assert with_cp == environment_hash("S1", {"session_duration": 90}, kind="interlude", n_samples=5, checkpoints=[90.0, 0, 30, 30])
-    assert environment("S1", {"session_duration": 90}, kind="interlude", n_samples=5, checkpoints=[30, 0])["checkpoints"] == [0.0, 30.0]
-    assert "checkpoints" not in environment("S1", kind="interlude", n_samples=5)
-    for bad in ([91], [-1], []):
-        with pytest.raises(ValueError):
-            environment("S1", {"session_duration": 90}, kind="interlude", n_samples=5, checkpoints=bad)
-    with pytest.raises(ValueError):
-        environment("S1", checkpoints=[10])

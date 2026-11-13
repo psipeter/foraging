@@ -8,11 +8,11 @@ component. Everything here only reads; open the file with `results.Store(path, r
 
 A `Selection` is guaranteed to be comparable: exactly one environment, and for each agent one episode per seed (one code version
 each). By default only results from the current engine code are used (`engine="current"`); pass an engine hash or "any" to look
-at older ones, and the selection says so in `notes`. The metric is chosen at query time (a column, "interlude:<trial type>", or a
+at older ones, and the selection says so in `notes`. The metric is chosen at query time (a column or a
 function of the episode row). There is deliberately no normalised score: the paired lead over a baseline (`paired`, `table`) is the
 quantity to optimise, in reward points; scores per session are in battery.py (`scores`).
 
-CLI:  ./venv/bin/python scripts/analysis.py {runs,table,effect,curve,learning} ...   (see --help)
+CLI:  ./venv/bin/python scripts/analysis.py {runs,table,effect,curve} ...   (see --help)
 """
 
 import argparse
@@ -42,7 +42,7 @@ class Selection:
     env_id: str
     code: dict                   # {engine_hash, agents_hash(es), commit, dirty}: provenance of the episodes
     agents: dict                 # agent_id -> spec
-    rows: dict                   # agent_id -> {seed: episode row (with `by_type`)}
+    rows: dict                   # agent_id -> {seed: episode row}
     tags: list
     notes: list = field(default_factory=list)
 
@@ -61,13 +61,9 @@ class Selection:
 
 
 def metric_function(metric):
-    """A function of an episode row: a column name (`total`, `interlude_accuracy`, `n_visits`...), `interlude:<trial type>`, or a
-    callable taken as is."""
+    """A function of an episode row: a column name (`total`, `n_visits`...) or a callable taken as is."""
     if callable(metric):
         return metric
-    if metric.startswith("interlude:"):
-        trial_type = metric.split(":", 1)[1]
-        return lambda row: row["by_type"].get(trial_type)
     return lambda row: row.get(metric)
 
 
@@ -84,11 +80,11 @@ def resolve_agent(store, agent):
     raise KeyError(f"no agent '{agent}' (not a registry name, a spec, or a recorded agent id)")
 
 
-def select(store, *, tag=None, session=None, kind="session", env_id=None, overrides=None, agents=None, engine="current"):
+def select(store, *, tag=None, session=None, env_id=None, overrides=None, agents=None, engine="current"):
     """The episodes matching the filters as one comparable set.
 
     tag        episodes used by the runs with this tag (a string, or a list of tags)
-    session    session name; kind "session" or "interlude"; env_id an exact environment; overrides: the environment's session
+    session    session name; env_id an exact environment; overrides: the environment's session
                overrides must equal this dict
     agents     agent ids, registry names or specs to keep
     engine     "current" (the engine code now), an engine hash, or "any"
@@ -102,9 +98,7 @@ def select(store, *, tag=None, session=None, kind="session", env_id=None, overri
     if session is not None:
         where.append("v.session = ?")
         params.append(session)
-    if kind is not None:
-        where.append("v.kind = ?")
-        params.append(kind)
+    where.append("v.kind = 'session'")        # (records of the retired forced-choice evaluation are never selected)
     if env_id is not None:
         where.append("e.env_id = ?")
         params.append(env_id)
@@ -132,23 +126,16 @@ def select(store, *, tag=None, session=None, kind="session", env_id=None, overri
     envs = sorted({r["env_id"] for r in rows})
     if len(envs) > 1:
         shown = [f"{e}: {json.loads(next(r for r in rows if r['env_id'] == e)['env_json'])['overrides']}" for e in envs]
-        raise SelectionError(f"{len(envs)} environments match; narrow with session=, kind=, overrides= or env_id= ({'; '.join(shown)})")
+        raise SelectionError(f"{len(envs)} environments match; narrow with session=, overrides= or env_id= ({'; '.join(shown)})")
     by_agent, specs_by, code_ids = {}, {}, {}
     for r in rows:
         slot = by_agent.setdefault(r["agent_id"], {})
         if r["seed"] in slot:
             raise SelectionError(f"agent {r['agent_id']} has seed {r['seed']} from more than one code version "
                                  f"(engine {slot[r['seed']]['engine_hash']} and {r['engine_hash']}); pass engine=<hash>")
-        r["by_type"] = {}
         slot[r["seed"]] = r
         specs_by[r["agent_id"]] = json.loads(r["spec_json"])
         code_ids[r["code_id"]] = r
-    types = store.select("SELECT t.episode_id, t.trial_type, t.accuracy FROM episode_types t JOIN episodes e USING (episode_id) "
-                         "WHERE e.env_id = ?", (envs[0],))
-    index = {r["episode_id"]: r for slot in by_agent.values() for r in slot.values()}
-    for t in types:
-        if t["episode_id"] in index:
-            index[t["episode_id"]]["by_type"][t["trial_type"]] = t["accuracy"]
     engines = sorted({r["engine_hash"] for r in code_ids.values()})
     agent_hashes = sorted({r["agents_hash"] for r in code_ids.values()})
     dirty = any(r["dirty"] for r in code_ids.values() if r["dirty"] is not None)
@@ -238,12 +225,12 @@ def table(sel, metric="total", baseline=None, sort=True):
 
 
 def describe(sel, metric="total"):
-    """The header every report states: session and overrides, kind, seeds, tags, metric, engine and agents hashes, commit, dirty."""
+    """The header every report states: session and overrides, seeds, tags, metric, engine and agents hashes, commit, dirty."""
     env = sel.env
     seeds = sorted({s for slot in sel.rows.values() for s in slot})
     code = sel.code
     commits = code["commit"]
-    lines = [f"{env['session']} ({env['kind']}), overrides {env['overrides'] or 'none'}, "
+    lines = [f"{env['session']}, overrides {env['overrides'] or 'none'}, "
              f"{'sensor ' + json.dumps(env['percept']) if env['percept'] else 'default sensor'}, "
              f"seeds {seeds[0]}-{seeds[-1]} ({len(seeds)}), metric {metric if isinstance(metric, str) else getattr(metric, '__name__', 'custom')}",
              f"tag {', '.join(sel.tags) or 'any'}, environment {sel.env_id}, engine {code['engine_hash']}, agents {code['agents_hash']}, "
@@ -437,52 +424,6 @@ def cumulative_curve(store, sel, step=1.0, confidence=0.95, baseline=None):
 
 
 # --------------------------------------------------------------------------------------------------
-# Interlude score against training time
-# --------------------------------------------------------------------------------------------------
-
-@dataclass
-class LearningCurves:
-    t: np.ndarray                 # (n_t,) checkpoint times: seconds of training in the session
-    metric: str
-    confidence: float
-    agents: dict                  # agent_id -> {"label", "n", "mean", "lo", "hi", "per_seed" (n, n_t), "seeds"}
-    sel: Selection = None
-
-
-def checkpoint_curve(store, sel, metric="interlude_accuracy", confidence=0.95):
-    """The Interlude score of each agent against how long it had trained in the session, from a run recorded with checkpoints (a copy
-    of the agent scored at each checkpoint time): the mean over seeds and a `confidence` t-interval, one curve per agent. `metric` is
-    interlude_accuracy, interlude_bonus or interlude_trials."""
-    times = sel.env.get("checkpoints")
-    if not times:
-        raise SelectionError("this selection was recorded without checkpoints (record with --interlude --checkpoints T1,T2,...)")
-    if metric not in ("interlude_accuracy", "interlude_bonus", "interlude_trials"):
-        raise ValueError(f"unknown checkpoint metric '{metric}'")
-    by_episode = {}
-    ids = [row["episode_id"] for slot in sel.rows.values() for row in slot.values()]
-    for chunk in range(0, len(ids), 500):
-        part = ids[chunk:chunk + 500]
-        for r in store.select(f"SELECT episode_id, t, {metric} AS v FROM episode_checkpoints WHERE episode_id IN ({','.join('?' * len(part))})", part):
-            by_episode.setdefault(r["episode_id"], {})[r["t"]] = r["v"]
-    labels = dict(zip(sel.agents, specs.labels(list(sel.agents.values()))))
-    out = {}
-    for aid, slot in sel.rows.items():
-        seeds = sorted(slot)
-        rows = []
-        for seed in seeds:
-            got = by_episode.get(slot[seed]["episode_id"], {})
-            if sorted(got) != sorted(times):
-                raise SelectionError(f"agent {aid} seed {seed} has checkpoints {sorted(got)}, expected {times}")
-            rows.append([got[t] for t in times])
-        m = np.array(rows, dtype=float)
-        mean = m.mean(axis=0)
-        half = (stats.t.ppf(0.5 + confidence / 2.0, len(m) - 1) * m.std(axis=0, ddof=1) / np.sqrt(len(m))
-                if len(m) > 1 else np.full_like(mean, np.nan))
-        out[aid] = {"label": labels[aid], "n": len(m), "mean": mean, "lo": mean - half, "hi": mean + half, "per_seed": m, "seeds": seeds}
-    return LearningCurves(np.array(times, dtype=float), metric, confidence, out, sel)
-
-
-# --------------------------------------------------------------------------------------------------
 # Runs and command line
 # --------------------------------------------------------------------------------------------------
 
@@ -490,7 +431,7 @@ def list_runs(store, tag=None):
     """The runs recorded (newest first), with the agent, session and what each computed or reused."""
     where, params = ("WHERE r.tag = ?", (tag,)) if tag else ("", ())
     return store.select(
-        "SELECT r.run_id, r.tag, r.note, r.created, r.n_seeds, r.n_computed, r.n_reused, v.session, v.kind, v.overrides_json, "
+        "SELECT r.run_id, r.tag, r.note, r.created, r.n_seeds, r.n_computed, r.n_reused, v.session, v.overrides_json, "
         f"r.agent_id, a.critic, a.actor, c.engine_hash, c.dirty FROM runs r JOIN agents a USING (agent_id) JOIN environments v USING (env_id) "
         f"JOIN code_versions c USING (code_id) {where} ORDER BY r.run_id DESC", params)
 
@@ -498,7 +439,6 @@ def list_runs(store, tag=None):
 def _common_filters(ap):
     ap.add_argument("--tag", action="append", help="select the runs with this tag (repeatable)")
     ap.add_argument("--session")
-    ap.add_argument("--kind", default="session", choices=["session", "interlude"])
     ap.add_argument("--env", dest="env_id")
     ap.add_argument("--engine", default="current", help="'current' (default), 'any' or an engine hash")
     ap.add_argument("--metric", default="total")
@@ -518,9 +458,6 @@ def main(argv=None):
     _common_filters(p)
     p.add_argument("--baseline", default=None, help="agent id or registry name, or 'lowest' (the lowest-performing agent): plot each agent's paired lead over it instead")
     p.add_argument("--out", default=None, help="figure path (default results/<tag>_reward.png, or _advantage.png with --baseline)")
-    p = sub.add_parser("learning", help="Interlude score against training time (a run recorded with --checkpoints); saves a figure")
-    _common_filters(p)
-    p.add_argument("--out", default=None, help="figure path (default results/<tag>_interlude.png)")
     p = sub.add_parser("effect", help="the effect of one component, holding the rest fixed")
     _common_filters(p)
     p.add_argument("--factor", required=True, help="path into the agent spec, e.g. critic.alpha or critic.features")
@@ -530,18 +467,12 @@ def main(argv=None):
     with Store(db, readonly=True) as store:
         if args.command == "runs":
             for r in list_runs(store, args.tag):
-                print(f"{r['run_id']:>4} {r['tag']:<20} {r['session']} {r['kind']} {r['overrides_json']} agent {r['agent_id']} "
+                print(f"{r['run_id']:>4} {r['tag']:<20} {r['session']} {r['overrides_json']} agent {r['agent_id']} "
                       f"({r['critic']}/{r['actor']}) seeds {r['n_seeds']} computed {r['n_computed']} reused {r['n_reused']} "
                       f"engine {r['engine_hash']}{' dirty' if r['dirty'] else ''}")
             return
-        sel = select(store, tag=args.tag, session=args.session, kind=args.kind, env_id=args.env_id, engine=args.engine)
-        if args.command == "learning":
-            import plots
-            curves = checkpoint_curve(store, sel, "interlude_accuracy" if args.metric == "total" else args.metric)
-            out = args.out or DEFAULT_PATH.parent / f"{'+'.join(args.tag or ['all'])}_interlude.png"
-            print(plots.plot_learning_curve(curves, out))
-            print(describe(sel, curves.metric))
-        elif args.command == "curve":
+        sel = select(store, tag=args.tag, session=args.session, env_id=args.env_id, engine=args.engine)
+        if args.command == "curve":
             import plots
             curves = cumulative_curve(store, sel, baseline=args.baseline)
             name = "advantage" if args.baseline else "reward"

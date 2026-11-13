@@ -1,11 +1,10 @@
 """Milestone 2 of the new session structure: a feature that does not vary, the random per-bush value of the practice session, and moisture as
-decoration (out of the Interlude's feature gap and out of what the simulated agents sense)."""
+decoration (out of what the simulated agents sense)."""
 
 import numpy as np
 
 import synthetic
 import world
-from interlude import feature_gap, feature_weights, generate_interlude
 from world import generate_world, moisture_matters
 from world import load_session as _load_session
 
@@ -75,20 +74,6 @@ def test_session_features_declare_what_is_visible_and_what_pays():
     assert pays["moisture"]["visible"] and pays["moisture"]["rewarded"] and pays["moisture"]["relevance"] == 1.5
     assert session_features(load_session(reward_function=moisture_weight(0.0), moisture_is_feature=True))["moisture"]["visible"]   # declared, though it pays nothing
     assert not session_features(load_session(reward_function=moisture_weight(1.5), moisture_varies=False))["moisture"]["visible"]   # a flat valley shows no moisture
-
-
-def test_feature_gap_counts_only_the_channels_that_vary_and_pay():
-    a, b = {"shape": 0.0, "color": 0.0, "moisture": 0.0}, {"shape": 1.0, "color": 0.0, "moisture": 1.0}
-    assert feature_gap(a, b) == (2 / 3) ** 0.5                                                      # the default: all three channels
-    w = feature_weights(load_session(color_varies=False, reward_function=moisture_weight(0.0)))   # moisture is decoration
-    assert w == {"shape": 1.0, "color": 0.0, "moisture": 0.0}
-    assert feature_gap(a, b, w) == 1.0                                                              # only the shape counts
-
-
-def test_a_random_reward_interlude_has_no_correct_side_and_constant_flat_features():
-    sidecar, params, _ = generate_interlude("FIX_I0", pool_samples=60_000, random_bush_value_range=(1.0, 3.0), shape_varies=False, color_varies=True)
-    assert all(t["correct"] == "either" for t in sidecar["trials"])
-    assert set(sidecar["shape"]) == {0.5} and len(set(sidecar["color"])) > 1
 
 
 def test_a_flat_moisture_gives_a_flat_valley_and_leaves_the_other_worlds_alone():
