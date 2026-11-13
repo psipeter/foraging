@@ -1,6 +1,6 @@
 # docs/ONLINE_DATA_PLAN.md — online data collection: protocol and build plan
 
-Rationale and rejected alternatives: `docs/DECISIONS.md` ("Online data collection"). Status: **phases 1 to 5 built (schema, codec, local layout, replay adaptation; server functions, reference client, admin and pull, end-to-end tests; the Unity recorder, sinks, uploader and pause gate; resume; the WebGL build); phase 6 not started.** Phase 2 is **deployed** to the Supabase project `emdgczidpqdhftzujyte` (2026-10-29) and passes `scripts/server_smoke.py` there; the 10 world and Interlude files are registered, no release is (the first real one is registered with the first Unity build). Nothing
+Rationale and rejected alternatives: `docs/DECISIONS.md` ("Online data collection"). Status: **phases 1 to 5 built (schema, codec, local layout, replay adaptation; server functions, reference client, admin and pull, end-to-end tests; the Unity recorder, sinks, uploader and pause gate; resume; the WebGL build); phase 6 not started.** Phase 2 is **deployed** to the Supabase project `emdgczidpqdhftzujyte` (2026-10-29) and passes `scripts/server_smoke.py` there; the world files of that day are registered, no release is (the first real one is registered with the first Unity build). Nothing
 below changes task design, reward, visuals or session flow; it changes how a session is recorded, uploaded and resumed.
 
 ## 1. Data model (Postgres, separate Supabase project)
@@ -15,17 +15,16 @@ Edge Functions (service role) read or write.
 | `pid_registry` | participant | `prolific_pid`, `participant_id` (kept apart from analysis tables) |
 | `experiments`, `release_experiments` | experiment / experiment offered by a build | `code`, `title`, `requires`, `sort_order`, `completion_code`, `payout`; `build_commit`, `experiment`, `n_sessions` |
 | `consents` | signed consent (once per participant and consent version, at login) | `participant_id`, `version` (consent text), `signature` (typed name), `client_time`, `recorded_at` (kept apart from analysis tables) |
-| `sessions` | session in a run | `run_id`, `session_index`, `name`, `world_sha256`, `interlude_sha256`, `config` jsonb (the full `SessionConfig`), `display` jsonb, `frame_stats`, `started_at`, `ended_at`, `completed`, `final_score` |
+| `sessions` | session in a run | `run_id`, `session_index`, `name`, `world_sha256`, `config` jsonb (the full `SessionConfig`), `display` jsonb, `frame_stats`, `started_at`, `ended_at`, `completed`, `final_score` |
 | `events` | event | `run_id`, `session_index`, `seq`, `t`, `real`, `type`, `tree_id`, `k`, `reward`, `running_total`, `payload` jsonb |
 | `trajectory` | chunk | `run_id`, `session_index`, `first_seq`, `n_frames`, `t_start`, `t_end`, `data` bytea |
-| `interlude_plan` | session | `run_id`, `session_index`, `order` (the shuffled trial list, written at the Interlude's start) |
-| `interlude_trials` | trial | the columns of today's `interlude.csv`, plus `run_id`, `session_index`, `seq` and, at the end, `paused_seconds` (real seconds the game was held still while the trial was live) |
+| `ranking_sets` | ranking set | `run_id`, `session_index`, `seq`, `set_index`, `pool_index`, `start_x`, `start_z`, `timed_out`, `response_time`, `first_harvest_time`, `bonus`, `paused_seconds` (real seconds the game was held still while the set was live), `set_size`, `correct_pairs`, `total_pairs`, `bushes` jsonb (one object per bush) |
 | `feedback` | optional free text from the final screen | `run_id` (primary key: one per run, a second submit replaces it), `text` (1 to 5000 characters), `created_at`, `updated_at`; written by `server.save_feedback`, which accepts the run's token also after the run is finished |
 | `worlds`, `releases` | registered world hash / allowed build commit | filled by a release script, read by `run-start` |
 
-Unique keys make every upload idempotent: `(run_id, session_index, seq)` for `events` and `interlude_trials`, `(run_id,
+Unique keys make every upload idempotent: `(run_id, session_index, seq)` for `events` and `ranking_sets`, `(run_id,
 session_index, first_seq)` for `trajectory`. `harvests` is a derived view/step, not an uploaded table. Event types are today's
-(`session_start/end`, `pause/resume`, `harvest_press/release/pause/resume`, `fruit`, `focus_*`, teleports, Interlude trials) plus
+(`session_start/end`, `pause/resume`, `harvest_press/release/pause/resume`, `fruit`, `focus_*`, teleports, ranking sets) plus
 `resume` and `upload_pause`/`upload_resume`; the old `note` strings move into `payload`.
 
 ## 2. Trajectory chunk format
@@ -43,9 +42,9 @@ The C# codec is tested against the golden bytes and a Python-produced fixture in
 ## 2b. Local layout (the developer mirror), `scripts/rundata.py`
 
 One folder per session, one file per table, the same columns as the database (`events.csv`, `trajectory.csv` of the quantized
-values, `interlude_trials.csv`, `interlude_plan.json`, `session.json` = the `sessions` row, `run.json` above them). `rundata.py`
+values, `ranking_sets.csv`, `session.json` = the `sessions` row, `run.json` above them). `rundata.py`
 reads and writes it (a cut-short last line is dropped and reported, anything else bad is an error); `replay.load_session_log`
-reads it (the legacy DataLogger folder format and its loader and converter are gone). `pull` also writes the world and Interlude files the run's sessions used into `<out>/_worlds/<sha8>_<name>`, taken from git at the run's build commit (a browser never archives worlds); replay looks there. The
+reads it (the legacy DataLogger folder format and its loader and converter are gone). `pull` also writes the world files the run's sessions used into `<out>/_worlds/<sha8>_<name>`, taken from git at the run's build commit (a browser never archives worlds); replay looks there. The
 migration is `supabase/migrations/20261029000000_online_data.sql` (with `20261029000100_online_functions.sql`; applied to the project and run
 by `test_server.py` against a real PostgreSQL).
 
@@ -71,7 +70,7 @@ state), reached over a direct database connection (`SUPABASE_DB_URL`). Errors: 4
   `{ok, events_next, trajectory_next, trials_next}`. **A 200 means every row of the request is stored** (all or nothing). Repeats of
   stored rows are harmless; a gap, or a chunk that overlaps a stored one without being identical, is a 409. The server decodes
   every chunk itself (checksum, frame count, time order) and takes `first_seq`, the time span and the last frame from it, never from
-  the client. A session's first append carries its row (a world or Interlude hash not in `worlds` is a 403); later appends may
+  the client. A session's first append carries its row (a world hash not in `worlds` is a 403); later appends may
   update `ended_at`, `completed`, `final_score`, `frame_stats`, `display` and nothing else. Requests for one run are serialized
   (advisory lock).
 - **`run-finish`** `{run_id, token}` returns `{ok, problems, completion_code}` (the experiment's code from `experiments.completion_code`, a dummy until one is set,
@@ -79,10 +78,9 @@ state), reached over a direct database connection (`SUPABASE_DB_URL`). Errors: 4
   `release_experiments.n_sessions` for the run's experiment, that each session is
   complete and has a `session_end` event and a trajectory, and that the indices are contiguous.
 - **Resume state** (`run-start`'s `resume`, from the rows): `session_index`, `name`, `completed`, `final_score`, `pose` (the last
-  frame), `last_event_t`, `running_total`, `fruits_taken` (bush -> count), `open_bout_tree`, `interlude_plan`,
-  `interlude_trials_done` and the three `*_next` sequence numbers.
+  frame), `last_event_t`, `running_total`, `fruits_taken` (bush -> count), `open_bout_tree`, `held_seconds`, `breaks`, `sets_played`, `break_bonus` and the three `*_next` sequence numbers (`sets_next` for the ranking sets).
 - **Tools:** `scripts/server_client.py` (the reference client, and `upload_session` to push a local-layout session in batches),
-  `scripts/server_admin.py` (`register-release`, `register-worlds`, `runs`, `pull` = a run back into the local layout of section 2b). **Analysis download:** `scripts/human_data.py download` reads every run through the Supabase CLI (no `FORAGING_DB_URL`), writes the raw layout under `ForagingData/<run>/` and the tidy tables `ForagingData/humans.sqlite` (participants with Prolific ID, signed name and feedback; sessions; events and the `fruits` view; Interlude trials); `load(exclude=[...])` filters participants by ID or name.
+  `scripts/server_admin.py` (`register-release`, `register-worlds`, `runs`, `pull` = a run back into the local layout of section 2b). **Analysis download:** `scripts/human_data.py download` reads every run through the Supabase CLI (no `FORAGING_DB_URL`), writes the raw layout under `ForagingData/<run>/` and the tidy tables `ForagingData/humans.sqlite` (participants with Prolific ID, signed name and feedback; sessions; events and the `fruits` view; ranking sets); `load(exclude=[...])` filters participants by ID or name.
 
 Still the client's job (phase 3): an `IDataSink` with the three implementations, the in-memory queue with backoff and the
 pause-until-acknowledged overlay (grace window in `SessionConfig`), the cadence (events within about 1 s, trajectory every 5 s,
@@ -99,7 +97,7 @@ harmless "failed to cache migrations catalog ... Docker" warning. Edge Functions
 platform (the direct connection and the `apikey` check both worked). `ALLOWED_ORIGIN` (optional secret) restricts CORS to the game's
 web origin. Worlds are registered by SQL (`db query --linked -f`, the hashes of `Assets/StreamingAssets/Experiments/*/*`) or with
 `server_admin.py register-worlds` (needs `FORAGING_DB_URL`); experiments with `register-experiment --code CF --title "Complex Features" --requires TUT [--completion-code ...]`;
-a release with `register-release --commit <hash> --experiment TUT --experiment CF` (each experiment's session count, Interludes included, is read from its asset at that commit). **Re-register worlds after regenerating them.** The publishable key is in the
+a release with `register-release --commit <hash> --experiment FOR` (each experiment's session count is read from its asset at that commit). **Re-register worlds after regenerating them.** The publishable key is in the
 dashboard (API Keys) or `supabase projects api-keys`: that listing also prints the secret keys, so do not paste its output anywhere.
 
 `scripts/server_smoke.py` runs one throwaway run through every endpoint and prints the latency of each call; it needs a release
@@ -125,7 +123,7 @@ history would grow by that much per deploy).
    they were regenerated).
 2. Commit the code (and push it), build (step 3), then register everything with one command: `./venv/bin/python scripts/server_admin.py publish --build Builds/web [--dry-run]`.
    It reads the experiments from the catalog (code, title, prerequisites, menu order), the commit from the build's own `StreamingAssets/build_info.json`, the number of sessions
-   of each experiment from git at that commit, and registers the world and Interlude files **of the build** (the files participants download). It keeps a completion code
+   of each experiment from git at that commit, and registers the world and ranking pool files **of the build** (the files participants download). It keeps a completion code
    already registered (`--completion-code FN=XXXX` sets one) and can be repeated. A new experiment needs no registration step of its own: building it adds it to the catalog and
    the next `publish` registers it. The connection string is read from `FORAGING_DB_URL` or the first line of `~/.config/foraging/db_url` (mode 600, outside the repository).
    The single commands (`register-experiment`, `register-worlds`, `register-release`) remain for odd cases. A build from a dirty tree is accepted but flagged.
@@ -159,9 +157,7 @@ a later option). A finished run gets a notice and no token.
 
 **The state** (`server.resume_state`, migration `20261030000000`): the latest session's index, name, kind and `completed`; `pose` (the
 last stored frame); `clock` (later than every stored frame and event: the session clock to continue from); `running_total`;
-`fruits_taken` (bush, count; the k-th fruit pays the pre-drawn reward); `open_bout_tree` (-1 if none); the Interlude's `interlude_plan`
-and `trial_rows` (finished trials: correct, bonus); `previous` (completed sessions and scores) and `previous_interlude` (totals over
-completed non-practice Interludes), for the running totals on the final screen; `gap_seconds` (server clock, from the new
+`fruits_taken` (bush, count; the k-th fruit pays the pre-drawn reward); `open_bout_tree` (-1 if none); `previous` (completed sessions and scores), for the running totals on the final screen; `gap_seconds` (server clock, from the new
 `received_at` columns); `started_at`; and the three `*_next` sequence numbers. It is flat (no nulls) so JsonUtility reads it.
 
 **The client** (`DataPipeline`, `DataLogger`, `ResumeInfo`): when `run-start` returns a resume the pipeline restores the running
@@ -170,14 +166,14 @@ and reloads the scene for the session to continue: the next one when the latest 
 carries `resumed_run`), the same one otherwise. In the same session the logger continues the sequence numbers and the clock, logs a
 `session_resume` event (payload: `gap_s`, `stale_s`, `open_bout_tree`, `frames_held`, `has_pose`) before anything else, and two frames
 later puts the player at the last pose and view, takes the fruits already taken off their bushes (which ones is not recorded: the
-first n; a bush left with none turns spent), sets the score and sets the sun's clock; the Interlude takes its order from the plan,
+first n; a bush left with none turns spent), sets the score and sets the sun's clock; the ranking pool continues from `sets_played`,
 restarts at its first unfinished trial and counts the finished trials again. The participant sees "Welcome back"
 (`StreamingAssets/instructions_resume.txt`) and presses Enter. If every session is already complete the pipeline calls `run-finish`
 and shows a notice. After the last session's end screen, Enter calls `run-finish` once everything is stored (`TryFinish`).
 The local copy continues too: `FileSink.PrepareResume` cuts the local files back to the rows the server holds before appending.
 
 **What a resume does not restore:** an open harvest bout and the progress on the fruit being picked (they start over; the bout is
-named in the event), the view of an Interlude trial in progress (the trial restarts), which individual fruits were taken. The
+named in the event), the view of a ranking in progress (an unfinished break is not resumed), which individual fruits were taken. The
 frame statistics of a resumed session count only its later frames. An abandoned session (Escape, or the Editor stopped) logs a
 `session_end` with `completed` false; if it is later resumed, its events continue after that `session_end`.
 
@@ -205,7 +201,7 @@ count of `session_resume` events are what to apply them to.
    one request in flight, backoff on network errors and 5xx, a 4xx stops uploading with a message), starts the run (`run-start`), and
    gates the game with `PauseGate` (the only writer of `Time.timeScale`; `pause` events carry a `reason`: `instructions`, `upload`, `pointer` (browser) and
    their combinations joined by `+` (`upload` also covers the Connecting, Finishing up, error and completion screens); this replaces the planned `upload_pause`/`upload_resume` event types). Leaving a session's end screen and
-   quitting wait for the drain. The Interlude's shuffled order is logged (`interlude_plan`) and its trials go through the logger.
+   quitting wait for the drain. Ranking sets go through the logger.
    `harvests.csv` and `manifest.json` are gone (derived / replaced by the session row); `note` strings became JSON payloads.
    `online.json` in `StreamingAssets` (`enabled`, `url`, `apikey`, `uploadInEditor`; committed with `enabled: false`) or `-onlineUrl` /
    `-onlineKey` / `-pid` on the command line turn uploading on. *Verified:* the C# codec decodes Python's chunks and Python decodes C#'s
@@ -219,7 +215,7 @@ count of `session_resume` events are what to apply them to.
 4. **Resume. Done (2026-10-30).** Server state, client restore, replay and the finish call (section 4). *Verified* with a Linux build on
    a private display against a local server, killing the build with SIGKILL as a crash: a session killed 9 s in (last frames 3.5 s
    stale) came back at the right clock (the countdown continued), the data is continuous (sequence numbers, monotone `t`, the DB equal
-   to the local copy, replay verifies); a session boundary resume starts the next session normally; an Interlude killed in its second
+   to the local copy, replay verifies); a session boundary resume starts the next session normally; a session killed in its second
    trial came back with the same trial order, restarted that trial and went on to the third (the trial rows continue); a run injected
    with fruits and a pose came back with the score restored (36), the bush spent, and the player at the bush facing it; a run whose
    sessions were all complete was closed with `run-finish` and showed a notice, as did a finished one. Not verified: the Enter on the
@@ -234,7 +230,7 @@ count of `session_resume` events are what to apply them to.
    `PointerLockGuard` that holds the game behind "Click to continue" whenever the mouse capture is released (Escape). *Verified in
    headless Chromium with software GL (`scripts/webgl_smoke.mjs`):* a development build and a release build load, fetch the files,
    show the click prompt, load the game scene, run the practice session (timer, terrain, fruit, instruction and end screens), go on
-   to the Interlude, and upload to the server as `WebGLPlayer` (events, trajectory, plan, a resume with `session_resume`); the release
+   to a ranking break, and upload to the server as `WebGLPlayer` (events, trajectory, sets, a resume with `session_resume`); the release
    build was served **without** `Content-Encoding` headers, as GitHub Pages does, and loaded through Unity's decompression fallback.
    *Sizes (release):* `.data` 12.8 MB, `.wasm` 8.4 MB, framework 78 KB, loader 118 KB (compressed), StreamingAssets about 20 MB raw
    (the five worlds compress about 2.4x): about 41 MB, no file near GitHub's 100 MB limit. *Not verified, needs a real browser:* pointer
@@ -269,7 +265,7 @@ should say so; feedback is tied to the run (and so to the Prolific ID through `p
 **Optional TODO: a scoreboard on the final screen** (not built). Ask whether to show the score, then a ranked high-to-low table with the
 participant's own row, and "..." down to it when long. Design notes: a public, anonymised read endpoint (rank and score, "You" for the
 participant's row; no Prolific IDs); a stored yes/no per run (new column or table); the total computed on the server from `sessions.final_score`
-(sessions that are neither practice nor Interlude) plus `interlude_trials.bonus`, as the final screen adds it; rank only runs of the same
+(sessions that are not practice) plus `ranking_sets.bonus`, as the final screen adds it; rank only runs of the same
 release (the frozen pilot build), among all finished runs with only opted-in rows listed (so ranks are true); the completion code and the Prolific
 return must not wait on it; consent/IRB text must cover showing a score to others; mention of the scoreboard in the instructions may change motivation.
 About a day of work plus a browser test.
@@ -279,13 +275,13 @@ About a day of work plus a browser test.
 
 A foraging session can contain ranking breaks (`RankingBreak`, DECISIONS "Ranking breaks inside the session"). Nothing about the tables changes except what is stored in them:
 - **Events** (free-text `type`, JSON `payload`): `rank_break_start` (`break`, `switches`, `tile`, `pool_index`, `sets`), `rank_set` (`break`, `set`, `fruits`, `bushes`: id, x, z, radius, shape of each bush of the arc: they
-  are not in the world file), `rank_go` (the end of the harvest block of a set), `trial_start` / `pick` / `trial_end` as in a ranking Interlude plus a `break` number, `rank_break_end`. The ranking bushes have tree ids
+  are not in the world file), `rank_go` (the end of the harvest block of a set), `rank_set_start` / `rank_pick` / `rank_set_end` with a `break` number, `rank_break_end`. The ranking bushes have tree ids
   `world bush count + pool id` and pay 0 (their `fruit` events carry reward 0, so the running total does not move).
-- **Sets** are rows of `interlude_trials` of the foraging session (`type` ranking, `presented_order` = sets played so far in the session, `bushes` JSON, bonus), as for a ranking Interlude.
+- **Sets** are rows of `ranking_sets` of the foraging session (`set_index` = sets played so far in the session, `pool_index`, `bushes` JSON, bonus).
 - **Time.** `t` is unpaused session seconds and keeps running through a break; the foraging clock is `t` minus the break windows (`rank_break_start` to `rank_break_end`).
 - **Resume.** `server.resume_state` also returns `held_seconds` (the sum of the windows, a break the data stops inside counted to the last thing heard), `breaks`, `sets_played` and `break_bonus`; the game continues
   the foraging clock from `clock - held_seconds`, the break numbering, the pool position, the set rows and the end screen's bonus. An unfinished break is not resumed.
-- **Points.** `server.run_points` counts the bonus of a completed, non-practice session's sets whether or not the session is an Interlude.
+- **Points.** `server.run_points` counts the bonus of a completed, non-practice session's sets (the sets are rows of `ranking_sets`).
 - **Migrations to apply before any data is collected** (after `db_backup.py`): `20261112000000_ranking_sets.sql` (the set columns) and `20261113000000_ranking_breaks_resume.sql` (resume fields and run points).
   Neither is applied to the Supabase project. `scripts/test_resume_breaks.py` checks the second on a real PostgreSQL; `test_server.py` (Deno) has not been run against either.
 - **Replay.** `replay.py` appends each set's bushes (from `rank_set`) to the world's table and replays break windows with the aimed, quick rule; `visibility.py` keeps the real bushes and adds the current set's.

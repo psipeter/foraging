@@ -11,12 +11,12 @@ silently harden into assumptions.
 
 ---
 
-## Current design: FOR, foraging in tiles with ranking breaks (2026-11-13)
+## Current design: FOR, foraging in tiles with ranking breaks (2026-11-13, cleaned up 2026-11-14)
 
 **Direction.** After PI discussions the five planned experiments (FN, RW, FI, PL, PA; `docs/EXPERIMENTS.md`) are replaced by **one experiment, FOR**, in which the reward function (number, form and sparsity of
 features) and the spatial arrangement (tile value, distance, heterogeneity) vary from session to session, and a **ranking** of a few bushes is asked for periodically *inside* the session. Harvesting earns the
-main points; the rankings add a bonus per correct pair. The old tutorials, sessions and Interludes (TUT, FN, RW, FI, the P to S7 ladder) and the sections below that describe them are slated for removal; where
-they disagree with this section, this section is current. DECISIONS ("FOR ...", "The crosshair harvest rule", "Ranking breaks inside the session") hold the reasoning and the rejected alternatives.
+main points; the rankings add a bonus per correct pair. The old tutorials, sessions and Interludes (TUT, FN, RW, FI, the P to S7 ladder) were removed in the cleanup of 2026-11-14 (DECISIONS, "Cleanup: everything is FOR");
+the sections below that describe them are history, kept for the reasoning, and where they disagree with this section, this section is current. DECISIONS ("FOR ...", "The crosshair harvest rule", "Ranking breaks inside the session") hold the reasoning and the rejected alternatives.
 
 **Questions it can answer** (two families, one design): how people learn which features pay and how well they know it (the rankings read the learned value function out, without the confound of the
 harvesting itself, and the same sessions give harvesting efficiency in real time), and how they forage in patches (when they leave a tile, how far they walk, how that depends on how different the tiles are).
@@ -40,20 +40,20 @@ and the forager is an oracle, so these are provisional; radius 45 and 9 bushes a
 (degrees of view angle; default 7, about five times the drawn crosshair's radius) against the canopy's real 3D shape, so looking above or below a bush does not count; a harvest in progress releases at 2 Z. A thin
 grey crosshair is always drawn (`crosshairAlpha`, default 0.25) and brightens on a bush that can be harvested. Z = 0 restores the old 35 degree cone of yaw. Per fruit 0.2 s.
 
-**Ranking breaks.** After a patch switch (the nearest tile changes; `rankingBreakEvery` of them, default 1; settle depth 0, a cooldown of 10 s, none before the first bush is harvested or in the last 10 s) the world's
+**Ranking breaks.** After a patch switch (the nearest tile changes; `rankingEvery` of them, default 1; settle depth 0, a cooldown of 10 s, none before the first bush is harvested or in the last 10 s) the world's
 bushes fade to grayscale (0.25 s) and cannot be aimed at, a set of 5 ranking bushes grows on an arc of 84 degrees at 16 units in front of the player on the terrain they stand on, and the player, standing still,
 harvests them from most to least points (any bush in view, a started harvest is finished, 0.05 s a fruit, no outcomes shown). The session clock is held (the main clock goes grey) and a second clock counts
-the set's 20 s down; the player is free to walk again the moment the last bush is done. `rankingBreakSets` sets per break (default 1). Sets come in order from a pool of 12 per session (`ranking.py pool`), chosen
-jointly so the true values form a ladder (no ties) and the bushes spread over the feature plane. Each set scores its implied pairs (the order against the true values) at `interludeBonusPerPair` (2, provisional) per
+the set's 20 s down; the player is free to walk again the moment the last bush is done. `rankingSets` sets per break (default 1). Sets come in order from a pool of 12 per session (`ranking.py pool`), chosen
+jointly so the true values form a ladder (no ties) and the bushes spread over the feature plane. Each set scores its implied pairs (the order against the true values) at `rankingBonusPerPair` (2, provisional) per
 correct non-tied pair, shown only on the session's end screen. **TODO(PI):** the bonus rule, a schedule of which transitions ask (for example the 1st, 2nd, 4th and 8th), the size and number of sets, the
 instructions for the first break.
 
-**Recording.** The log's `t` runs through a break; `rank_break_start` / `rank_break_end` events bound it and each set is one `interlude_trials` row of the foraging session plus `rank_set`, `rank_go`, `trial_start`,
-`pick`, `trial_end` events (`docs/ONLINE_DATA_PLAN.md`, "Ranking breaks"). `replay.py` re-derives the harvests of break windows and of the crosshair rule from the trajectory.
+**Recording.** The log's `t` runs through a break; `rank_break_start` / `rank_break_end` events bound it and each set is one `ranking_sets` row of the foraging session plus `rank_set`, `rank_go`, `rank_set_start`,
+`rank_pick`, `rank_set_end` events (`docs/ONLINE_DATA_PLAN.md`, "Ranking breaks"). `replay.py` re-derives the harvests of break windows and of the crosshair rule from the trajectory.
 
 **Built and not.** Built: the tiles world and assignment modes, the calibration, the crosshair rule, ranking breaks (trigger, arc, clocks, fade, scoring, logging, replay, resume, pool), the single prototype session
-`FOR_S1` (`scripts/design/FOR.py`). Not built: the parameter specification and samplers that swap reward and spatial settings from session to session (phase 3 of the plan), simulated agents on the break schedule,
-the tutorial, a difficulty score, instructions text for the rankings. Not play-tested yet: all of the Unity side.
+`FOR_S1` (`scripts/design/FOR.py`). Not built: the tutorial or any practice session (FOR_S1 is the only session), the parameter specification and samplers that swap reward and spatial settings from session to session (phase 3 of the plan), simulated agents on the break schedule,
+a difficulty score, instructions text for the rankings. Not play-tested since the cleanup: the Unity side (it compiles; the Editor did not advance frames when driven from the CLI).
 
 ---
 
@@ -286,6 +286,9 @@ is deterministic and independent of the reward and the bush, so position is not 
 
 ### Interlude (between-session forced choice)
 
+> **History (cleanup 2026-11-14).** This section describes the old ladder or Interlude, which no longer exist in the code or the assets; it is kept for the reasoning. See "Current design: FOR" above.
+
+
 > **Ranking format, in development (2026-11-12).** The forced-choice pair below is to be replaced by a ranking: sets of 4 to 6 bushes in view at once, harvested from best to worst without walking, about 3 sets, on a flat stage with one moisture (only shape and colour can vary or pay). A pair is the k = 2 case. So far only the Python side exists (`scripts/ranking.py`, the simulator's `evaluate_ranking`, and a pairs-against-rankings comparison in `scripts/ranking_design.py`: 3 sets of 6 recovered a learned value function better than 20 pairs at matched harvests); the game, the data tables and the experiments' set designs are not built. The rationale, geometry and scores are in `docs/DECISIONS.md` ("The ranking Interlude replaces the forced-choice pair"); this section still describes what the shipped Interludes do.
 
 > **Generator changes, 2026-11-09 (Phase 0 of building the planned experiments).** The Designed mode (contrast, graded and extrapolation trials) and everything
@@ -492,6 +495,9 @@ running score.
 
 ### Earlier session configurations (P–S4, superseded 2026-11-05)
 
+> **History (cleanup 2026-11-14).** This section describes the old ladder or Interlude, which no longer exist in the code or the assets; it is kept for the reasoning. See "Current design: FOR" above.
+
+
 *The current sessions are in "Session structure" below; this section and "Terrain by session"'s old table describe the earlier build and are kept for the record.*
 
 `sessionDuration` is the design value on P and S1–S5 (the table below; restored from a temporary 15 s on 2026-10-31). The Interlude assets' `sessionDuration` is only a cap (they end when the
@@ -523,6 +529,9 @@ a 60 s S1–S3 (one linear; three linear; mixed), replaced by this progression; 
 
 ### Terrain by session
 
+> **History (cleanup 2026-11-14).** This section describes the old ladder or Interlude, which no longer exist in the code or the assets; it is kept for the reasoning. See "Current design: FOR" above.
+
+
 **Current (PI, 2026-11-05):** with moisture out of the reward function every session has the same terrain: the terraced moisture field of the old S3 and S4 (4 plateau
 levels, sharpness 0.3, residual 0.1, noise frequency 2) with a lower relief, `terrainMaxElevation` 6 (the old terraced sessions used 12 and hid 65-68% of the bushes near the start
 from the player). The plateaus, their ground colours and their heights are decoration; they are set by `scripts/ladder.py` (`TERRAIN`) on every template session and the worlds and
@@ -553,6 +562,9 @@ units against 72 of level 0), so reaching them took travel (not rechecked on the
 likely to be revisited (TODO below). Design decision and alternatives: DECISIONS ("Terraced moisture").
 
 ### Session structure (built 2026-11-05)
+
+> **History (cleanup 2026-11-14).** This section describes the old ladder or Interlude, which no longer exist in the code or the assets; it is kept for the reasoning. See "Current design: FOR" above.
+
 
 **Experiments (2026-11-06).** The sessions below belong to experiments, each a titled progression with its own assets and downloads: **Tutorial** (`TUT`: `TUT_S1`, the practice session with random reward, and its Interlude `TUT_I1`) and **Complex Features** (`CF`: `CF_S1` to `CF_S7` with `CF_I1` to `CF_I7`, the ladder below; this is what the tables and "S1" to "S7" in this section mean). A participant completes the Tutorial first (a prerequisite the server enforces), then Complex Features; each experiment has its own run, completion code, points and payout, and later experiments will add their own. The old names (P, S1 to S7) are used in this section and in the older notes; the mapping is in `world.LEGACY_NAMES`. See DECISIONS, "Experiments" and "Experiment assets and the naming scheme".
 
@@ -607,6 +619,9 @@ decoration steers choices); the simulated agents' critics are unchanged (an addi
 
 ### Planned experiments (2026-11-06)
 
+> **History (cleanup 2026-11-14).** This section describes the old ladder or Interlude, which no longer exist in the code or the assets; it is kept for the reasoning. See "Current design: FOR" above.
+
+
 The single Complex Features ladder above changes the number of rewarded features, the nonlinearity and the feature interaction together, and
 duration and practice with them. The plan is to split it into experiments that each vary one family of things, and to add experiments on
 foraging policy. **FN is built (2026-11-09, provisional numbers; see `scripts/design/FN.py`); the others are not**; the game plays `TUT` and `FN` (the CF experiment, the ladder described above, was removed 2026-11-09; its sessions are kept as frozen test and simulation environments `S1` to `S7` in `scripts/fixtures/sessions/`, and in git). The full designs (hypotheses, session types, order and hints, open
@@ -630,6 +645,9 @@ Interlude trial counts (they wait for measured timing), moisture as FN's third f
 tiles for the patch experiments.
 
 ### Earlier session progression (P–S5, superseded 2026-11-05 by "Session structure" above)
+
+> **History (cleanup 2026-11-14).** This section describes the old ladder or Interlude, which no longer exist in the code or the assets; it is kept for the reasoning. See "Current design: FOR" above.
+
 
 Goal: each session is long enough for a participant to sample many bushes and
 learn the reward mapping, but not so long that most of it is spent exploiting a
@@ -796,6 +814,9 @@ should reach the oracle's accuracy, so 0.91 leaves room for stronger critics. Th
 `rate-trial`, `learning-trial`) are superseded by this run.
 
 ### Simulated agent baselines (preliminary, STALE)
+
+> **History (cleanup 2026-11-14).** This section describes the old ladder or Interlude, which no longer exist in the code or the assets; it is kept for the reasoning. See "Current design: FOR" above.
+
 
 **Superseded by the battery table above** (view-cone agents, the current terrain, motor costs, the speed and harvest rate of the current build). The table below is kept only for the full-information reference agents (`greedy_rate_15`, `plan_beam`), which the battery does not run; its `nearest` is the old full-map agent and its S3/S4 columns are for the old terrain.
 

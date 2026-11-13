@@ -1,11 +1,10 @@
 # docs/EXPERIMENTS.md — the planned experiments
 
-The designs for the experiments that replace and extend the single Complex Features (`CF`) ladder. **Status (2026-11-06): a plan.
-Nothing here is built**; the game still plays `TUT` and `CF` (`docs/SCIENCE.md`, "Session structure"). `docs/SCIENCE.md` ("Planned
+The designs for the experiments that replace and extend the single Complex Features (`CF`) ladder. **Status: history.** Nothing here is in the game. `docs/SCIENCE.md` ("Planned
 experiments") has the summary; the reasoning and the rejected alternatives are in `docs/DECISIONS.md` ("Experiments split by question
 (2026-11-06)"). Entries marked **TODO** are decisions still open.
 
-> **2026-11-12: superseded in direction.** The plan below (five experiments) is being replaced by one experiment, `FOR`, in a world of hexagonal tiles that varies the reward function and the spatial arrangement together, with ranking Interludes injected periodically and both harvesting and the rankings paying; FN, RW and FI remain as generators. The prototype (phases 1 and 2: the tiles terrain, layout and assignment, two instances) is `scripts/tiles.py`, `scripts/design/FOR.py`; the reasoning is in `docs/DECISIONS.md` ("FOR: one experiment in a world of tiles"). The sections below are kept as the record of the single-variable designs.
+> **2026-11-14: superseded, and the code is gone.** The plan below (five experiments) was replaced by one experiment, `FOR`, in a world of hexagonal tiles that varies the reward function and the spatial arrangement together, with ranking sets played in place and both harvesting and the rankings paying. The cleanup of 2026-11-14 deleted the experiments FN, RW and FI (their generators, screens, assets and tests; tag `pre-cleanup` has them), the tutorial TUT and the Interlude. The prototype is `scripts/tiles.py`, `scripts/design/FOR.py`; the reasoning is in `docs/DECISIONS.md` ("FOR: one experiment in a world of tiles", "Cleanup: everything is FOR"). The sections below are kept as the record of the single-variable designs and as the source of ideas for FOR's later sessions.
 
 ## Why the experiments are separate
 

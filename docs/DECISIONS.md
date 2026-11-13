@@ -11,6 +11,10 @@ says so rather than inventing one — fill those in (**TODO(PI)**) when
 remembered. Newest entries at the bottom of each section's group; add new
 ones at the end.
 
+**After the cleanup of 2026-11-14 the game has one experiment, FOR, and no Interlude.** Entries below that describe the Interlude, the practice session and S1-S7
+ladder, the experiments TUT, FN, RW and FI, or their tools are history: what the code did then and why, not what it does now. The last entry,
+"Cleanup: everything is FOR", has the glossary from the old names to the current ones.
+
 ---
 
 ## Research-tool-first design priority
@@ -2177,3 +2181,37 @@ Same day, after the first playtest: `tileClusterRadius` 15 and `tileClusterSpaci
 - **The world's bushes fade to grayscale instead of shrinking (PI, 2026-11-13, an experiment):** at a break the real bushes stay where they are, marked not aimable, and fade to grey over `rankingBreakGraySeconds` (0.25 s), then the set grows; at the end they fade back while the set shrinks and the player already moves. `Tree.SetGray`: the canopy tint goes to its luminance smoothly and the canopy texture steps through five desaturated copies (`CanopyGrayscale`, made once at half size; the canopy is URP/Lit, which has no saturation control and must stay as it is), the fruit shader has a `_Gray` property set per renderer through a property block (no shared material is written). Replay is unchanged (the real bushes are not harvestable in a window either way); `visibility.py` now keeps them in a window, since they are still there to hide each other. Not modelled: the grey itself.
 - **Does the arc land on real bushes? (measured 2026-11-13; with the bushes staying, it shows).** For every crossing between neighbouring tiles of the default world (arc 5 bushes at 16 units, canopies counted at the largest radius 3, headings straight and 20 degrees either side), the arc overlapped a real bush in **93%** of crossings when the break starts 7 units past the edge (tile radius 45, the half-ramp settle depth), in 8% when it starts at the edge itself, and in none from tile radius 55 (clearance 5th percentile 1.3 units at depth 7, 8.2 at depth 0), 60 (6.0 and 12.9) or 70. The walk speed does not enter: the break starts within a frame of the settle depth. At radius 45 the nearest cluster is 17 to 20 units from where the player stands, exactly where the arc lands.
 - **Break starts at the edge (PI, 2026-11-13):** the settle depth, how far past the edge between tiles a crossing counts as a patch switch, is now `rankingBreakSettleDepth`, default 0 (it was half the ramp, 7 units), so the arc appears as far from the next cluster as it can be. Tile radius stays 45; by the measurement above the arc still overlaps a real bush in about 8% of crossings (clearance median 2.4 units, 5th percentile -0.2), accepted for now. Raising the settle depth, or the tile radius, trades that against the early start and the calibration. Along-the-edge walking can now count several switches; the cooldown and the harvest gate limit it.
+
+### Cleanup: everything is FOR (PI plan 2026-11-13, done 2026-11-14)
+**Decision.** One experiment, `FOR` (foraging in hexagonal tiles); a session is foraging with ranking sets played in place (ranking breaks). The old tutorial and experiments
+(TUT, FN, RW, FI), the Interlude as a session kind (a forced choice or a ranking played apart, in a flat stage or in the probed session's world), the simulator's Interlude
+evaluation and every tool that only served them were deleted. Git has all of it (tag `pre-cleanup` is the last commit before). The tutorial is redesigned later, on the prototype; until then
+FOR_S1 is the only session and no practice session exists.
+
+**What was kept, and why.** The tiles generator, the simulator and the agents (`sim.py`, `agents.py`, `battery.py`, `results.py`, ...: sessions only; `tile_calibration.py` runs on them), the frozen
+fixture sessions `FIX_S0`-`FIX_S7` (the engine tests' arbitrary environments; the non-tiles world generator stays for now, which replacing them with a tiles environment would let go), and every
+data-format rule (columns only appended once real data exists; none had been collected, so this cleanup could rename).
+
+**Rejected.** Keeping the old names for the data (`interlude_trials`) for stability: no participant data existed, and a table called interlude_trials holding ranking sets would have kept
+the old concept alive in every query. Keeping `RankingBreak` as `RankingPhase`: "ranking break" is the term the experiment's text and docs already use; fields lost the word "Break".
+
+**Glossary, old to new.**
+
+| Old | New |
+|---|---|
+| `isInterlude`, `interludeFor`, `interludeFormat`, `interludeMode`, trial and gap fields | removed |
+| `rankingBreakEvery`, `rankingBreakSets`, `...Seconds`, `...Cooldown`, `...SettleDepth`, `...PoolSets`, `...FadeSeconds`, `...GraySeconds`, `...FruitSeconds`, `...LastSeconds`, `...MinBushes`, `...Text` | `rankingEvery`, `rankingSets`, `rankingSeconds`, `rankingCooldown`, `rankingSettleDepth`, `rankingPoolSets`, `rankingFadeSeconds`, `rankingGraySeconds`, `rankingFruitSeconds`, `rankingLastSeconds`, `rankingMinBushes`, `rankingText` |
+| `interludeSetSize`, `interludeArcSpan`, `interludeRankingDistance`, `interludeMinRewardGap` | `rankingSetSize`, `rankingArcSpan`, `rankingDistance`, `rankingTieGap` |
+| `interludeRimScale`, `...RimBoost`, `...MarkerLift`, `...RankScale`, `...BonusPerPair`, `...AimTolerance` | `rankingRimScale`, `rankingRimBoost`, `rankingMarkerLift`, `rankingRankScale`, `rankingBonusPerPair`, `rankingAimTolerance` |
+| `InterludeManager`, `InterludePick` (sound), `HarvestUI.SetProgressText` | removed; `RankingPick` |
+| events `trial_start`, `pick`, `trial_end`, `choice_lock`, `trial_go`; payload key `trial` | `rank_set_start`, `rank_pick`, `rank_set_end`; removed; `set` |
+| table `interlude_trials`, files `interlude_trials.csv`, `interlude_plan.json`, table `interlude_plan`, view `interlude_picks` | `ranking_sets` (pair columns dropped: columns `set_index`, `pool_index`, `start_x`, `start_z`, `timed_out`, `response_time`, `first_harvest_time`, `bonus`, `paused_seconds`, `set_size`, `correct_pairs`, `total_pairs`, `bushes`), `ranking_sets.csv`, removed, `ranking_picks` |
+| `sessions.is_interlude`, `interlude_file`, `interlude_sha256` | dropped |
+| upload `trials`, `plan`; reply `trials_next`; error `gap_trials` | `sets`; removed; `sets_next`; `gap_sets` |
+| `ranking.py` `generate_ranking`, `export`, `stage`, `generate_break_pool`; pool format `ranking-break`, key `trials` | `generate_pool`; format `ranking-pool`, key `sets` |
+| `Humans.interlude_trials` and the tidy sessions' `block`, `kind`, `n_trials`, `n_correct` | `Humans.ranking_sets`; `n_sets`, `n_correct_pairs`, `n_total_pairs` |
+| "Session 3 of 21 - Part A", the instruction placeholder `{trial_seconds}` | "Session 3 of 4"; removed |
+
+**Migration.** `supabase/migrations/20261114000000_ranking_rename.sql` (with the two before it, 20261112 and 20261113) renames and drops as above; apply after `scripts/db_backup.py`. The database held
+only development runs (48 runs when backed up, `ForagingData/_db_backup_precleanup_*`); an old `humans.sqlite` is rebuilt by the next `human_data.py download`.
+
