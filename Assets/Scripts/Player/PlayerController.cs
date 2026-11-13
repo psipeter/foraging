@@ -13,8 +13,10 @@ public class PlayerController : MonoBehaviour
     private Rigidbody playerRigidbody;
     private CapsuleCollider _capsuleCollider;
     private Vector2 moveInput;
+    private Vector2 _rawMove;           // what the movement keys say now, whether or not the player may walk (a key held through a stationary stretch walks the moment it ends)
     private bool _frozen;
     private bool _movementLocked;
+    private bool _stationary;
     private bool _harvestHeld;
     private bool _harvestPressed;
 
@@ -63,7 +65,7 @@ public class PlayerController : MonoBehaviour
     private void FixedUpdate()
     {
         // Harvesting locks walking only (looking stays free); session end freezes everything.
-        if (_frozen || _movementLocked)
+        if (_frozen || _movementLocked || _stationary)
         {
             if (playerRigidbody != null)
             {
@@ -199,14 +201,14 @@ public class PlayerController : MonoBehaviour
 
         if (context.canceled)
         {
-            moveInput = Vector2.zero;
-            return;
+            _rawMove = Vector2.zero;
+        }
+        else if (context.performed)
+        {
+            _rawMove = context.ReadValue<Vector2>();
         }
 
-        if (context.performed)
-        {
-            moveInput = context.ReadValue<Vector2>();
-        }
+        moveInput = _stationary ? Vector2.zero : _rawMove;        // a stationary player (the ranking Interlude) has no walking input at all, so no walking key is read or logged as held
     }
 
     // Space: started = pressed, canceled = released (Invoke Unity Events fires all phases).
@@ -229,6 +231,13 @@ public class PlayerController : MonoBehaviour
         bool pressed = _harvestPressed;
         _harvestPressed = false;
         return pressed;
+    }
+
+    // The ranking Interlude: the player stands where they are for the whole block (looking stays free). Unlike the harvest lock, a bout ending does not release it.
+    public void SetStationary(bool stationary)
+    {
+        _stationary = stationary;
+        moveInput = stationary ? Vector2.zero : _rawMove;
     }
 
     public void SetMovementLocked(bool locked)

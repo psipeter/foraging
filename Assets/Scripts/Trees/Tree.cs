@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 /*
@@ -39,6 +40,8 @@ public class Tree : MonoBehaviour
 
     private float _highlightLevel;
     private bool _highlightSelected;
+    private bool _highlightEmphasis;
+    private const float RimScale = 1.03f;
     private GameObject _rimObject;
     private Material _rimInstance;
     private float _softCurrent;
@@ -48,7 +51,14 @@ public class Tree : MonoBehaviour
     private bool _spent;
     private Color _canopyBaseColor = Color.white;
     private Color _canopyNeutralColor = Color.white;
+    private Color _canopyCurrent = Color.white;          // the tint the canopy has now (before any grey), whatever last set it
+    private Texture _canopyTexture;
+    private int _grayLevel;
+    private MaterialPropertyBlock _grayBlock;
+    private Renderer[] _fruitRenderers;
     private GameObject _ringObject;
+    private TextMeshPro _rankLabel;
+    private Transform _rankCamera;
     private Material _ringInstance;
     private static Mesh _quadMesh;
     private bool[] _collected;
@@ -64,6 +74,8 @@ public class Tree : MonoBehaviour
 
     public int FruitCount => _fruits.Count;
     public float CanopyRadius { get; private set; }
+    // Half the canopy's height: the vertical radius of its ellipsoid, which is centred on the ground at the bush (the lower half is buried).
+    public float CanopyHalfHeight => canopy != null ? canopy.transform.lossyScale.y * 0.5f : CanopyRadius;
 
     // Seconds already spent on the fruit currently being picked; kept here so a bush left mid-fruit resumes
     // where it was (and the progress ring does not jump back up).
@@ -114,6 +126,7 @@ public class Tree : MonoBehaviour
                 {
                     _canopyBaseColor = _canopyMaterial.GetColor("_BaseColor");
                     _canopyNeutralColor = _canopyBaseColor;
+                    _canopyCurrent = _canopyBaseColor;
                 }
             }
         }
@@ -131,8 +144,9 @@ public class Tree : MonoBehaviour
     // Both ease toward their targets so the cues fade in and out instead of popping.
     private void UpdateRim()
     {
-        float softTarget = _highlightLevel * sessionConfig.RimApproachIntensity;
-        float crispTarget = _highlightSelected ? sessionConfig.RimSelectedIntensity : 0f;
+        float softTarget = _highlightLevel * sessionConfig.RimApproachIntensity * (_highlightEmphasis ? sessionConfig.InterludeRimBoost * 0.5f : 1f);
+        float boost = _highlightEmphasis ? sessionConfig.InterludeRimBoost : 1f;
+        float crispTarget = _highlightSelected ? sessionConfig.RimSelectedIntensity * boost : 0f;
         float ease = 1f - Mathf.Exp(-12f * Time.deltaTime);
         _softCurrent = Mathf.Lerp(_softCurrent, softTarget, ease);
         _crispCurrent = Mathf.Lerp(_crispCurrent, crispTarget, ease);
@@ -152,6 +166,7 @@ public class Tree : MonoBehaviour
         // Slightly different rim color once the bush is selected (harvestable).
         _selectedBlend = Mathf.Lerp(_selectedBlend, _highlightSelected ? 1f : 0f, ease);
         _rimInstance.SetColor("_RimColor", Color.Lerp(sessionConfig.RimColor, sessionConfig.RimSelectedColor, _selectedBlend));
+        _rimObject.transform.localScale = Vector3.one * Mathf.Lerp(RimScale, _highlightEmphasis ? sessionConfig.InterludeRimScale : RimScale, _selectedBlend);
         _rimInstance.SetFloat("_SoftIntensity", _softCurrent);
         _rimInstance.SetFloat("_SoftPower", sessionConfig.RimApproachPower);
         _rimInstance.SetFloat("_CrispIntensity", _crispCurrent);
@@ -170,6 +185,7 @@ public class Tree : MonoBehaviour
         {
             float tintPosition = (float)new System.Random(fruitSeed ^ 0x1bd1e995).NextDouble();
             _canopyBaseColor = _canopyNeutralColor * sessionConfig.CanopyTint(tintPosition);
+            _canopyCurrent = _canopyBaseColor;
             _canopyMaterial.SetColor("_BaseColor", _canopyBaseColor);
         }
 
@@ -349,7 +365,7 @@ public class Tree : MonoBehaviour
 
         _rimObject = new GameObject("Rim");
         _rimObject.transform.SetParent(canopy.transform, false);
-        _rimObject.transform.localScale = Vector3.one * 1.03f;
+        _rimObject.transform.localScale = Vector3.one * RimScale;
         _rimObject.AddComponent<MeshFilter>().sharedMesh = _sphereMesh;
 
         MeshRenderer rimRenderer = _rimObject.AddComponent<MeshRenderer>();
@@ -360,9 +376,125 @@ public class Tree : MonoBehaviour
         _rimObject.SetActive(false);
     }
 
+    // Fades the bush to grayscale (0 = as it is, 1 = grey), for the world's bushes while a ranking break runs: the canopy's tint goes smoothly to its luminance and its
+    // texture steps through desaturated copies (CanopyGrayscale), the fruit's shader has a _Gray property set through a property block (no shared material is written).
+    public void SetGray(float amount)
+    {
+        amount = Mathf.Clamp01(amount);
+        if (_canopyMaterial != null)
+        {
+            float luminance = 0.299f * _canopyCurrent.r + 0.587f * _canopyCurrent.g + 0.114f * _canopyCurrent.b;
+            _canopyMaterial.SetColor("_BaseColor", Color.Lerp(_canopyCurrent, new Color(luminance, luminance, luminance, _canopyCurrent.a), amount));
+            if (_canopyTexture == null && _canopyMaterial.HasProperty("_BaseMap"))
+            {
+                _canopyTexture = _canopyMaterial.GetTexture("_BaseMap");
+            }
+
+            int level = Mathf.RoundToInt(amount * (CanopyGrayscale.Levels - 1));
+            if (level != _grayLevel && _canopyTexture != null)
+            {
+                _grayLevel = level;
+                _canopyMaterial.SetTexture("_BaseMap", CanopyGrayscale.Texture(_canopyTexture, level));
+            }
+        }
+
+        if (_fruitRenderers == null)
+        {
+            _fruitRenderers = new Renderer[_fruits.Count];
+            for (int i = 0; i < _fruits.Count; i++)
+            {
+                _fruitRenderers[i] = _fruits[i] != null ? _fruits[i].GetComponent<Renderer>() : null;
+            }
+
+            _grayBlock = new MaterialPropertyBlock();
+        }
+
+        _grayBlock.SetFloat("_Gray", amount);
+        foreach (Renderer r in _fruitRenderers)
+        {
+            if (r != null)
+            {
+                r.SetPropertyBlock(_grayBlock);
+            }
+        }
+    }
+
+    // Makes the desaturated canopy textures (once for every bush) ahead of the first SetGray.
+    public void PrepareGray()
+    {
+        if (_canopyMaterial != null && _canopyMaterial.HasProperty("_BaseMap"))
+        {
+            CanopyGrayscale.Texture(_canopyMaterial.GetTexture("_BaseMap"), 1);
+        }
+    }
+
+    // Ranking Interlude: the rank this bush was given (1 = the first harvested) shown as a number above the crown, facing the camera at the
+    // ring's constant apparent size. 0 removes it. A spent bush keeps its number.
+    public void SetRank(int rank)
+    {
+        if (rank <= 0)
+        {
+            if (_rankLabel != null)
+            {
+                _rankLabel.gameObject.SetActive(false);
+            }
+
+            return;
+        }
+
+        if (_rankLabel == null)
+        {
+            var go = new GameObject("RankLabel");
+            go.transform.SetParent(transform, false);
+            _rankLabel = go.AddComponent<TextMeshPro>();
+            _rankLabel.font = UiStyle.DisplayFont;
+            _rankLabel.alignment = TextAlignmentOptions.Center;
+            _rankLabel.color = Color.white;
+            _rankLabel.outlineColor = Color.black;
+            _rankLabel.outlineWidth = 0.3f;
+            _rankLabel.fontSize = 10f;
+            _rankLabel.rectTransform.sizeDelta = new Vector2(10f, 4f);
+        }
+
+        _rankLabel.text = rank.ToString();
+        _rankLabel.gameObject.SetActive(true);
+        _rankCamera = Camera.main != null ? Camera.main.transform : null;
+        PlaceRank();
+    }
+
+    private void LateUpdate()
+    {
+        if (_rankLabel != null && _rankLabel.gameObject.activeSelf)
+        {
+            PlaceRank();
+        }
+    }
+
+    private void PlaceRank()
+    {
+        if (_rankCamera == null || canopy == null)
+        {
+            return;
+        }
+
+        Vector3 crown = GetWorldCenter() + Vector3.up * (canopy.transform.lossyScale.y * 0.5f);
+        float dist = Vector3.Distance(_rankCamera.position, crown);
+        if (sessionConfig == null)
+        {
+            return;
+        }
+
+        float degrees = sessionConfig.HarvestRingSizeDeg;
+        float size = 2f * dist * Mathf.Tan(degrees * 0.5f * Mathf.Deg2Rad);
+        Transform label = _rankLabel.transform;
+        label.position = crown + Vector3.up * (0.4f + size * (0.5f + sessionConfig.InterludeMarkerLift));
+        label.rotation = _rankCamera.rotation;
+        label.localScale = Vector3.one * (size / Mathf.Max(transform.lossyScale.x, 0.0001f) * 0.25f * sessionConfig.InterludeRankScale);
+    }
+
     // Clock-style harvest progress ring above the crown, facing the camera at a constant apparent size.
     // fill = remaining fraction of the bush (1 untouched, 0 empty).
-    public void SetRing(bool visible, float fill, Transform cameraTransform)
+    public void SetRing(bool visible, float fill, Transform cameraTransform, float lift = 0f)
     {
         if (!visible || ringMaterial == null || canopy == null || cameraTransform == null || sessionConfig == null)
         {
@@ -389,7 +521,7 @@ public class Tree : MonoBehaviour
         float size = 2f * dist * Mathf.Tan(sessionConfig.HarvestRingSizeDeg * 0.5f * Mathf.Deg2Rad);
 
         Transform ring = _ringObject.transform;
-        ring.position = crown + Vector3.up * (0.4f + size * 0.5f);
+        ring.position = crown + Vector3.up * (0.4f + size * (0.5f + lift));
         ring.rotation = cameraTransform.rotation;
         ring.localScale = Vector3.one * (size / Mathf.Max(transform.lossyScale.x, 0.0001f));
 
@@ -453,7 +585,8 @@ public class Tree : MonoBehaviour
             canopyTransform.localScale = Vector3.Lerp(startScale, endScale, t);
             if (_canopyMaterial != null)
             {
-                _canopyMaterial.SetColor("_BaseColor", Color.Lerp(_canopyBaseColor, endColor, t));
+                _canopyCurrent = Color.Lerp(_canopyBaseColor, endColor, t);
+                _canopyMaterial.SetColor("_BaseColor", _canopyCurrent);
             }
 
             if (blocker != null)
@@ -674,9 +807,11 @@ public class Tree : MonoBehaviour
     }
 
     // level: 0-1 graded cue while approaching; selected: this is the bush Space would harvest (or is harvesting).
-    public void SetHighlight(float level, bool selected)
+    // `emphasized` (the ranking Interlude): the selected bush gets a bigger, brighter halo, so it shows at the stage's distance.
+    public void SetHighlight(float level, bool selected, bool emphasized = false)
     {
         _highlightLevel = Mathf.Clamp01(level);
         _highlightSelected = selected;
+        _highlightEmphasis = emphasized;
     }
 }

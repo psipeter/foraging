@@ -10,6 +10,7 @@ Shader "Foraging/FruitUnlit"
         _ColorPreservation ("Color Preservation", Range(0,1)) = 0.5
         _ShadingFloor ("Shading Floor", Range(0,1)) = 0.3
         _Brightness ("Brightness", Float) = 1
+        _Gray ("Gray", Range(0,1)) = 0
     }
 
     SubShader
@@ -53,6 +54,7 @@ Shader "Foraging/FruitUnlit"
                 float _ColorPreservation;
                 float _ShadingFloor;
                 float _Brightness;
+                float _Gray;
             CBUFFER_END
 
             // Set each frame by SunController: the inverse of the post-exposure, so fruit keep their brightness through the day (0 = never set).
@@ -126,6 +128,8 @@ Shader "Foraging/FruitUnlit"
                 half3 lit = lerp(fullyLit, colorPreserved, (half)_ColorPreservation);
                 half exposureComp = _FruitExposureComp > 0.0 ? (half)_FruitExposureComp : 1.0h;
                 half4 color = half4(lit * (half)_Brightness * exposureComp, _Color.a);
+                half grey = dot(color.rgb, half3(0.299h, 0.587h, 0.114h));          // _Gray fades the fruit to grayscale (a ranking break), set per renderer
+                color.rgb = lerp(color.rgb, grey.xxx, (half)_Gray);
                 color.rgb = MixFog(color.rgb, i.fogCoord);
                 return color;
             }

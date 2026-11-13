@@ -42,6 +42,9 @@ public class SunController : MonoBehaviour
 
     public bool SessionComplete => sessionTime >= SessionDuration;
 
+    // While held the session clock does not advance (a ranking break): the timer, the sun and the end of the session wait.
+    public bool ClockHeld { get; set; }
+
     public static event Action OnSessionEnd;
 
     public float SessionTimeRemaining => Mathf.Max(0f, SessionDuration - sessionTime);
@@ -113,7 +116,11 @@ public class SunController : MonoBehaviour
             return;
         }
 
-        sessionTime += Time.deltaTime;
+        if (!ClockHeld)
+        {
+            sessionTime += Time.deltaTime;
+        }
+
         // The sun follows a real solar path from sunStartElevation in the morning to
         // sunEndElevation in the afternoon, mapped onto the session's length (a shorter session plays the same path faster).
         // Interludes hold the sun still at solar noon.

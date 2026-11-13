@@ -38,6 +38,9 @@ public class WorldData
         public int[] fruitRewards;
         public string[] checkNames;
         public float[] checkValues;
+        public float tileRadius;
+        public float tileRamp;
+        public float[] tileCentres;
     }
 
     public string Path { get; private set; }
@@ -63,6 +66,41 @@ public class WorldData
     public float[] SnowGrid { get; private set; }
     public float[] RampGrid { get; private set; }
 
+    // A tiles layout (scripts/world.py): the tile centres (x0, z0, x1, z1, ...), circumradius and ramp width. The tile of a point is the one with the nearest centre.
+    public float[] TileCentres { get; private set; }
+    public float TileRadius { get; private set; }
+    public float TileRamp { get; private set; }
+    public bool HasTiles => TileCentres != null && TileCentres.Length >= 2;
+
+    public int NearestTile(float x, float z)
+    {
+        int best = -1;
+        float bestDistance = float.MaxValue;
+        for (int i = 0; i + 1 < (TileCentres?.Length ?? 0); i += 2)
+        {
+            float dx = TileCentres[i] - x;
+            float dz = TileCentres[i + 1] - z;
+            float d = dx * dx + dz * dz;
+            if (d < bestDistance)
+            {
+                bestDistance = d;
+                best = i / 2;
+            }
+        }
+
+        return best;
+    }
+
+    // How far (x, z) lies on the side of tile `to` of the edge it shares with tile `from` (negative on the other side): the distance to the perpendicular bisector of their centres.
+    public float DepthIntoTile(float x, float z, int from, int to)
+    {
+        float fx = TileCentres[2 * from], fz = TileCentres[2 * from + 1], tx = TileCentres[2 * to], tz = TileCentres[2 * to + 1];
+        float toFrom = (x - fx) * (x - fx) + (z - fz) * (z - fz);
+        float toTo = (x - tx) * (x - tx) + (z - tz) * (z - tz);
+        float apart = Mathf.Sqrt((tx - fx) * (tx - fx) + (tz - fz) * (tz - fz));
+        return (toFrom - toTo) / (2f * Mathf.Max(apart, 0.0001f));
+    }
+
     private string[] _checkNames;
     private float[] _checkValues;
 
@@ -70,14 +108,32 @@ public class WorldData
     // terrain of the session it probes.
     public static string PathFor(SessionConfig config)
     {
+        if (config.IsRanking)
+        {
+            return StagePath(config.InterludeStageSeed);
+        }
+
         string owner = config.IsInterlude ? config.InterludeFor : config.name;
         return $"Experiments/{config.ExperimentCode}/{owner}_seed{config.WorldSeed}.world";
+    }
+
+    // The flat stage every ranking Interlude is played on (scripts/ranking.py stage): one world file at the root of StreamingAssets, so a browser
+    // build fetches it with the common files.
+    public static string StagePath(int seed)
+    {
+        return $"stage_seed{seed}.world";
     }
 
     // An Interlude's bush table and trial list (written by scripts/interlude.py), relative to StreamingAssets.
     public static string InterludePathFor(SessionConfig config)
     {
         return $"Experiments/{config.ExperimentCode}/{config.name}_seed{config.WorldSeed}.interlude.json";
+    }
+
+    // A session's ranking-break pool (written by scripts/ranking.py pool), relative to StreamingAssets.
+    public static string RankingPoolPathFor(SessionConfig config)
+    {
+        return $"Experiments/{config.ExperimentCode}/{config.name}_seed{config.WorldSeed}.ranking.json";
     }
 
     [Serializable]
@@ -168,7 +224,10 @@ public class WorldData
                 Value = h.value,
                 FruitRewards = h.fruitRewards,
                 _checkNames = h.checkNames,
-                _checkValues = h.checkValues
+                _checkValues = h.checkValues,
+                TileCentres = h.tileCentres,
+                TileRadius = h.tileRadius,
+                TileRamp = h.tileRamp
             };
 
             int cells = h.res * h.res;
@@ -303,6 +362,19 @@ public class WorldData
             { "featureBalanceTarget", config.FeatureBalanceTarget },
             { "featureBalanceScales.count", config.FeatureBalanceScales != null ? config.FeatureBalanceScales.Length : 0 },
             { "featureBalanceScales.sum", SumOf(config.FeatureBalanceScales) },
+            { "tileRadius", config.TileRadius },        // (scripts/world.py writes the tile names only for a tiles layout, so a file of another layout does not mention them)
+            { "tileRampWidth", config.TileRampWidth },
+            { "tileMoistureLevels", config.TileMoistureLevels },
+            { "tileBushes", config.TileBushes },
+            { "tileClusterRadius", config.TileClusterRadius },
+            { "tileClusterSpacing", config.TileClusterSpacing },
+            { "tileSpread", config.TileSpread },
+            { "tileGoodFraction", config.TileGoodFraction },
+            { "tileSmoothness", config.TileSmoothness },
+            { "tileGradient", config.TileGradient },
+            { "tileGradientAngle", config.TileGradientAngle },
+            { "tileCoverageMin", config.TileCoverageMin },
+            { "tileStartSpreadMin", config.TileStartSpreadMin },
             { "terraceMeanWidth", config.TerraceMeanWidth },
             { "terraceWidthSpread", config.TerraceWidthSpread },
             { "terraceMaxBand", config.TerraceMaxBand },

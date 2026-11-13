@@ -52,7 +52,7 @@ public class FeedbackAudio : MonoBehaviour
         // An Interlude never reveals the reward, so its pick sound is a different, neutral sound that never changes
         // pitch. (The main pick sound rises in pitch with the reward, and reusing it, even at a fixed pitch, would
         // pair the harvest with that low-versus-high-reward cue.)
-        if (sessionConfig != null && sessionConfig.IsInterlude)
+        if ((sessionConfig != null && sessionConfig.IsInterlude) || RankingBreak.Active)
         {
             Play(Cue.InterludePick, 1f);
             return;

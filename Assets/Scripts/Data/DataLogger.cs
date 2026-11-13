@@ -168,7 +168,7 @@ public class DataLogger : MonoBehaviour
             }
 
             harvestManager?.RestoreState(r.fruits_taken, r.running_total);
-            sunController?.SetSessionTime((float)r.clock);
+            sunController?.SetSessionTime((float)(r.clock - r.held_seconds));      // the logged clock runs on through ranking breaks; the session clock does not
         }
 
         ResumeInfo.Pending = null;

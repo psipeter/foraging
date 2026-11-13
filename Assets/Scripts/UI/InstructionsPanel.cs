@@ -41,7 +41,7 @@ public class InstructionsPanel : MonoBehaviour
     // One-time message after the first harvest that actually collected fruit (e.g. in practice).
     private void HandleHarvestBoutEnded(HarvestBout bout)
     {
-        if (_firstHarvestShown || _sessionEnded || bout.endedBySession || sessionConfig == null || sessionConfig.IsInterlude ||
+        if (_firstHarvestShown || _sessionEnded || bout.endedBySession || sessionConfig == null || sessionConfig.IsInterlude || RankingBreak.Active ||
             string.IsNullOrEmpty(sessionConfig.FirstHarvestMessage) ||
             bout.fruitRewards.Count == 0 || _screen == null)
         {
@@ -68,11 +68,11 @@ public class InstructionsPanel : MonoBehaviour
     }
 
     // The file's first line is the central instruction (the title), the last "Press [Key] to ..." line the prompt, the rest the text; the label above is
-    // "Session n of m · Part A" (B for the Interlude), and [Key] in the text becomes a key chip.
+    // "Session n of m · Part A" (B for the Interlude), and [Key] in the text becomes a key chip. " // " in the title is a line break.
     private void ShowText(string text, bool notice = false)
     {
         string[] lines = text.Replace("\r", "").Trim().Split('\n');
-        string title = System.Text.RegularExpressions.Regex.Replace(lines[0], "<[^>]+>", "").Trim();
+        string title = System.Text.RegularExpressions.Regex.Replace(lines[0], "<[^>]+>", "").Trim().Replace(" // ", "\n");      // " // " is a line break in the title, to choose where it wraps
         int last = lines.Length - 1;
         string prompt = "Press [Enter] to begin";
         if (last > 0 && lines[last].TrimStart().StartsWith("Press"))

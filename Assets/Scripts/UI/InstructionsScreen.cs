@@ -40,6 +40,10 @@ public class InstructionsScreen : MonoBehaviour
         TextAlignmentOptions bodyAlign = notice ? TextAlignmentOptions.Top : TextAlignmentOptions.TopLeft;
         float titleSize = notice ? UiStyle.Heading : UiStyle.Title;
         float titleHeight = notice ? 64f : 90f;
+        TextMeshProUGUI titleMeasure = UiStyle.Text(_root.transform, "TitleMeasure", title, titleSize, align, 0f, 0f, textWidth, 100f);
+        titleMeasure.textWrappingMode = TextWrappingModes.Normal;
+        titleHeight = Mathf.Max(titleHeight, titleMeasure.GetPreferredValues(title, textWidth, 0f).y + 14f);       // a title of two or more lines gets the room
+        Destroy(titleMeasure.gameObject);
         body = UiStyle.Chips(body.Trim());
         TextMeshProUGUI measure = UiStyle.Text(_root.transform, "Measure", body, BodySize, bodyAlign, 0f, 0f, textWidth, 100f, UiStyle.Ink);
         measure.richText = true;

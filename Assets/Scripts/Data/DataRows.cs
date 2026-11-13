@@ -30,7 +30,7 @@ public class TrialRow
     public int Seq;
     public string[] Cells;
 
-    // name, kind (I integer, F float, S text), in the order of the table.
+    // name, kind (I integer, F float, S text, J raw JSON), in the order of the table.
     public static readonly (string name, char kind)[] Columns =
     {
         ("presented_order", 'I'), ("trial_index", 'I'), ("type", 'S'), ("varied_feature", 'S'), ("stage_x", 'F'), ("stage_z", 'F'),
@@ -38,6 +38,8 @@ public class TrialRow
         ("right_id", 'I'), ("right_shape", 'F'), ("right_color", 'F'), ("right_moisture", 'F'), ("right_value", 'F'),
         ("correct_side", 'S'), ("choice", 'S'), ("choice_correct", 'I'), ("timed_out", 'I'), ("response_time", 'F'),
         ("first_harvest_time", 'F'), ("first_harvest_side", 'S'), ("left_fruits", 'I'), ("right_fruits", 'I'), ("bonus", 'F'), ("locked_at", 'F'), ("paused_seconds", 'F'),
+        // appended for the ranking Interlude (a row is one set; the pair columns are empty): its size, the implied pairs ordered right and counted, and one JSON object per bush (J: raw JSON)
+        ("set_size", 'I'), ("correct_pairs", 'I'), ("total_pairs", 'I'), ("bushes", 'J'),
     };
 
     public string ToJson()

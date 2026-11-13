@@ -39,10 +39,13 @@ public class HarvestManager : MonoBehaviour
     private Tree[] _trees;
     private float[] _levels;
     private bool[] _inRange;
+    private bool _aimMode;
+    private float _aimTolerance;
 
     private bool _harvesting;
     private Tree _target;
     private float _fruitTimer;
+    private float _fruitSecondsOverride = -1f;
     private HarvestBout _bout;
     private float _runningTotal;
     private bool _highlightsCleared;
@@ -50,6 +53,8 @@ public class HarvestManager : MonoBehaviour
     private bool _targetInCone;
     private bool _blocked;
     private float _targetSignedOffAngle;
+    private Vector3 _eye;                       // the camera's position and forward this frame, for the crosshair's hit test
+    private Vector3 _forward;
 
     public static event Action<float, Vector3> OnFruitCollected;
     public static event Action<float> OnScoreChanged;
@@ -143,6 +148,7 @@ public class HarvestManager : MonoBehaviour
 
         Vector3 pos = playerController.transform.position;
         float yaw = cameraController.Yaw;
+        UpdateAimRay();
 
         // Pass 1: glow level for every tree; pick the best harvestable one.
         int focusIndex = -1;
@@ -171,18 +177,34 @@ public class HarvestManager : MonoBehaviour
             float fullAngle = sessionConfig.HighlightFullAngle;
             float fadeAngle = Mathf.Max(sessionConfig.HighlightFadeAngle, fullAngle + 0.01f);
 
-            float distLevel = Smooth(Mathf.InverseLerp(highlightGap, harvestGap, edge));
+            float distLevel = _aimMode ? 1f : Smooth(Mathf.InverseLerp(highlightGap, harvestGap, edge));
             float angleLevel = 1f - Smooth(Mathf.InverseLerp(fullAngle, fadeAngle, bearing));
-            _levels[i] = distLevel * angleLevel;
+            _levels[i] = _aimMode ? 0f : distLevel * angleLevel;        // aiming: only the bush being aimed at is marked (below)
 
-            if (edge <= harvestGap && bearing <= sessionConfig.HarvestMaxAngle)
+            if (_aimMode || edge <= harvestGap)
             {
-                _inRange[i] = true;
-                if (bearing < focusBearing || (Mathf.Approximately(bearing, focusBearing) && edge < focusEdge))
+                if (UseCrosshair)
                 {
-                    focusIndex = i;
-                    focusBearing = bearing;
-                    focusEdge = edge;
+                    // the crosshair's circle must touch the canopy; of the bushes it touches, the nearest is the target
+                    if (Aimed(tree, sessionConfig.CrosshairRadius))
+                    {
+                        _inRange[i] = true;
+                        if (edge < focusEdge)
+                        {
+                            focusIndex = i;
+                            focusEdge = edge;
+                        }
+                    }
+                }
+                else if (bearing <= HarvestAngle)
+                {
+                    _inRange[i] = true;
+                    if (bearing < focusBearing || (Mathf.Approximately(bearing, focusBearing) && edge < focusEdge))
+                    {
+                        focusIndex = i;
+                        focusBearing = bearing;
+                        focusEdge = edge;
+                    }
                 }
             }
         }
@@ -197,7 +219,7 @@ public class HarvestManager : MonoBehaviour
                 targetIndex = focusIndex;
             }
         }
-        else if (!playerController.HarvestHeld)
+        else if (!_aimMode && !playerController.HarvestHeld)        // aiming: a bout started is finished, whatever the key does (the Interlude's commitment)
         {
             EndBout();
             targetIndex = -1;
@@ -223,20 +245,20 @@ public class HarvestManager : MonoBehaviour
             }
 
             bool pulsing = _harvesting ? (i == targetIndex && _targetInCone) : (i == focusIndex);
-            tree.SetHighlight(pulsing ? 1f : _levels[i], pulsing);
+            tree.SetHighlight(pulsing ? 1f : _levels[i], pulsing, _aimMode);
 
             // Progress ring on every bush in harvest range (and the one being harvested): remaining fraction,
             // counting the fruit in progress so it ticks down smoothly.
-            bool showRing = !tree.isHarvested && (_inRange[i] || i == targetIndex);
+            bool showRing = !tree.isHarvested && (_aimMode ? (i == focusIndex || i == targetIndex) : (_inRange[i] || i == targetIndex));
             float fill = 0f;
             if (showRing)
             {
                 float partial = i == targetIndex ? _fruitTimer : tree.PartialProgress;
-                float perFruit = Mathf.Max(sessionConfig.FruitHarvestDuration, 0.0001f);
+                float perFruit = Mathf.Max(FruitSeconds, 0.0001f);
                 fill = (tree.FruitsRemaining - Mathf.Clamp01(partial / perFruit)) / Mathf.Max(1, tree.FruitCount);
             }
 
-            tree.SetRing(showRing, fill, cameraController.PlayerCamera != null ? cameraController.PlayerCamera.transform : null);
+            tree.SetRing(showRing, fill, cameraController.PlayerCamera != null ? cameraController.PlayerCamera.transform : null, _aimMode ? sessionConfig.InterludeMarkerLift : 0f);
         }
 
         if (_harvesting)
@@ -269,8 +291,9 @@ public class HarvestManager : MonoBehaviour
         Measure(_target, pos, yaw, out float edge, out float bearing, out float signedBearing);
         float harvestGap = sessionConfig.HarvestRangeGap(_target.CanopyRadius);
         bool wasInCone = _targetInCone;
-        _targetInCone = edge <= harvestGap && bearing <= sessionConfig.HarvestMaxAngle;
-        _targetSignedOffAngle = signedBearing;
+        // (the crosshair rule: the circle grown by crosshairReleaseScale still touches the bush; the old rule: the cone)
+        _targetInCone = _aimMode || (edge <= harvestGap && (UseCrosshair ? Aimed(_target, sessionConfig.CrosshairRadius * Mathf.Max(sessionConfig.CrosshairReleaseScale, 1f)) : bearing <= HarvestAngle));       // aiming: the crosshair may leave the bush, the harvest goes on
+        _targetSignedOffAngle = _aimMode ? 0f : signedBearing;                             // (and the view is not held to it)
         if (_targetInCone != wasInCone)
         {
             OnHarvestConeChanged?.Invoke(_target, _targetInCone);
@@ -282,7 +305,7 @@ public class HarvestManager : MonoBehaviour
         }
 
         _fruitTimer += Time.deltaTime;
-        float perFruit = Mathf.Max(sessionConfig.FruitHarvestDuration, 0.0001f);
+        float perFruit = Mathf.Max(FruitSeconds, 0.0001f);
         while (_fruitTimer >= perFruit && _harvesting)
         {
             _fruitTimer -= perFruit;
@@ -381,6 +404,54 @@ public class HarvestManager : MonoBehaviour
     {
         _trees = null;
     }
+
+    // Ranking Interlude: the player stands still and picks by aiming; a harvest started (Space pressed on the bush aimed at) runs to the bush's last fruit whatever the
+    // key and the crosshair do afterwards (the commitment: the rank of a bush is the order of starting and of finishing alike). The harvest range is ignored (any bush in view can be harvested) and the
+    // crosshair must be within `toleranceDegrees` of the canopy's edge (0 = inside the canopy) instead of HarvestMaxAngle; the progress ring is
+    // shown only on the bush aimed at or harvested, the rank number replacing it once the bush is finished). scripts/replay.py and scripts/visibility.py mirror this rule.
+    public void SetAimMode(bool on, float toleranceDegrees)
+    {
+        _aimMode = on;
+        _aimTolerance = toleranceDegrees;
+    }
+
+    // Seconds per fruit: the session's, or the ranking break's quick harvest while it overrides it (SetFruitSeconds; below 0 clears it).
+    private float FruitSeconds => _fruitSecondsOverride > 0f ? _fruitSecondsOverride : sessionConfig.FruitHarvestDuration;
+
+    public void SetFruitSeconds(float seconds)
+    {
+        _fruitSecondsOverride = seconds;
+    }
+
+    private bool UseCrosshair => sessionConfig.CrosshairRadius > 0f;
+
+    // The camera's position and forward (from the view's yaw and pitch, + pitch = down, as scripts/replay.py rebuilds them from the log).
+    private void UpdateAimRay()
+    {
+        Camera cam = cameraController.PlayerCamera;
+        _eye = cam != null ? cam.transform.position : playerController.transform.position;
+        float yaw = cameraController.Yaw * Mathf.Deg2Rad;
+        float pitch = cameraController.Pitch * Mathf.Deg2Rad;
+        _forward = new Vector3(Mathf.Sin(yaw) * Mathf.Cos(pitch), -Mathf.Sin(pitch), Mathf.Cos(yaw) * Mathf.Cos(pitch));
+    }
+
+    // True when the view ray passes within `radiusDegrees` of the bush's canopy: the ray meets the canopy's ellipsoid (horizontal radius, half the height vertically, centred on
+    // the ground) grown by distance x tan(radius), the width of the circle at the bush. scripts/replay.py mirrors this.
+    private bool Aimed(Tree tree, float radiusDegrees)
+    {
+        Vector3 centre = tree.GetWorldCenter();
+        float grow = (_eye - centre).magnitude * Mathf.Tan(radiusDegrees * Mathf.Deg2Rad);
+        var radii = new Vector3(tree.CanopyRadius + grow, tree.CanopyHalfHeight + grow, tree.CanopyRadius + grow);
+        Vector3 p = Vector3.Scale(_eye - centre, new Vector3(1f / radii.x, 1f / radii.y, 1f / radii.z));
+        Vector3 q = Vector3.Scale(_forward, new Vector3(1f / radii.x, 1f / radii.y, 1f / radii.z));
+        float a = Vector3.Dot(q, q);
+        float b = Vector3.Dot(p, q);
+        float c = Vector3.Dot(p, p) - 1f;
+        float discriminant = b * b - a * c;
+        return discriminant >= 0f && (-b + Mathf.Sqrt(discriminant)) / a > 0f;
+    }
+
+    private float HarvestAngle => _aimMode ? _aimTolerance : sessionConfig.HarvestMaxAngle;
 
     public void CancelBout()
     {

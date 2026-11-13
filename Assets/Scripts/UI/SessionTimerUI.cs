@@ -25,6 +25,9 @@ public class SessionTimerUI : MonoBehaviour
     private bool _sessionEndHandled;
     private bool _leaveRequested;
     private ScoreScreen _score;
+    private UnityEngine.UI.Image _timerPlate;
+    private Color _plateIdle;
+    private Color _textIdle;
 
     private void Awake()
     {
@@ -43,6 +46,26 @@ public class SessionTimerUI : MonoBehaviour
 
         // upper left, a pill 64 from the corner (the serialized position, size and colour are the old rectangle's and no longer used)
         UiStyle.HudPlate(timerText, new Vector2(64f + 110f, -(44f + 34f)), new Vector2(220f, 68f), 46f, new Color(0.06f, 0.067f, 0.09f, 0.55f), "TimerPlate");
+        Transform plate = timerText.transform.parent.Find("TimerPlate");
+        _timerPlate = plate != null ? plate.GetComponent<UnityEngine.UI.Image>() : null;
+        _plateIdle = _timerPlate != null ? _timerPlate.color : Color.clear;
+        _textIdle = timerText.color;
+    }
+
+    // The session clock is held (a ranking break): the plate and digits dim; false puts them back.
+    public void SetPaused(bool paused)
+    {
+        if (timerText == null)
+        {
+            return;
+        }
+
+        if (_timerPlate != null)
+        {
+            _timerPlate.color = paused ? new Color(_plateIdle.r, _plateIdle.g, _plateIdle.b, _plateIdle.a * 0.5f) : _plateIdle;
+        }
+
+        timerText.color = paused ? new Color(0.72f, 0.72f, 0.72f, 0.6f) : _textIdle;
     }
 
     private void OnEnable()
@@ -151,7 +174,7 @@ public class SessionTimerUI : MonoBehaviour
 
         // An Interlude's points appear only on its end screen, never trial by trial (the practice Interlude shows what it would have paid, and never which
         // choices were right). The totals are on the experiment's completion screen, after the last of these.
-        float points = isInterlude ? (interludeManager != null ? interludeManager.Points : 0f) : _lastTotalScore;
+        float points = isInterlude ? (interludeManager != null ? interludeManager.Points : 0f) : _lastTotalScore + RankingBreak.Points;       // (a ranking break's hidden bonus shows only here)
         _score = ScoreScreen.Show(GameManager.PartLabel, points, "Press [Enter] to continue", FindFirstObjectByType<CameraController>());
         Music.PlayScore();
     }

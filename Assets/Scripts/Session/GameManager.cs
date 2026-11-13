@@ -148,7 +148,7 @@ public class GameManager : MonoBehaviour
         }
 
         WorldData world = WorldData.Load(activeConfig);
-        if (world != null)
+        if (world != null && !activeConfig.IsRanking)       // the stage world is shared by every ranking Interlude, so no asset's terrain fields describe it
         {
             foreach (string name in world.FindMismatches(activeConfig))
             {
@@ -216,6 +216,9 @@ public class GameManager : MonoBehaviour
             interludeManager.harvestUI = harvestUI;
             interludeManager.dataLogger = dataLogger;
         }
+
+        AimCrosshair.Build(harvestUI != null ? harvestUI.GetComponent<Canvas>() : null, harvestManager, activeConfig);
+        RankingBreak.Create(activeConfig, world, treeGenerator, playerController, cameraController, harvestManager, sunController, harvestUI, dataLogger, sessionTimerUI);     // none unless the session has breaks
 
         FruitMaterialManager.SetSessionConfig(activeConfig);
         Music.Volume = activeConfig.MusicVolume;

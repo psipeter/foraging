@@ -89,6 +89,11 @@ public class ExperimentConfig : ScriptableObject
             files.Add(WorldData.InterludePathFor(session));
         }
 
+        if (session.RankingBreakEvery > 0)
+        {
+            files.Add(WorldData.RankingPoolPathFor(session));
+        }
+
         if (!string.IsNullOrEmpty(session.InstructionsFile))
         {
             files.Add(session.InstructionsFile);

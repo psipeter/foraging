@@ -23,48 +23,52 @@ public class TreeGenerator : MonoBehaviour
         int placed = 0;
         for (int s = 0; s < world.TreeCount; s++)
         {
-            float px = world.TreePos[2 * s];
-            float pz = world.TreePos[2 * s + 1];
-            float elevation = terrainManager.SampleElevation(px, pz);
-            Vector3 pos = new Vector3(px, elevation, pz);
-            GameObject instance = Instantiate(treePrefab, pos, Quaternion.identity, transform);
-            var treeComp = instance.GetComponent<Tree>();
-            if (treeComp == null)
-            {
-                Destroy(instance);
-                continue;
-            }
-
-            int treeIndex = placed;
-            treeComp.treeId = treeIndex;
-            treeComp.sessionConfig = sessionConfig;
-            treeComp.rimMaterial = rimMaterial;
-            treeComp.ringMaterial = ringMaterial;
-            treeComp.fruitCount = world.FruitCount;
-            treeComp.fruitRewards = new int[world.FruitCount];
-            System.Array.Copy(world.FruitRewards, s * world.FruitCount, treeComp.fruitRewards, 0, world.FruitCount);
-            treeComp.fruitRadius = sessionConfig.FruitRadius;
-            treeComp.fruitSeed = sessionConfig.WorldSeed + treeIndex * 7;
-
-            TreeAttributes attributes = new TreeAttributes
+            var rewards = new int[world.FruitCount];
+            System.Array.Copy(world.FruitRewards, s * world.FruitCount, rewards, 0, world.FruitCount);
+            var attributes = new TreeAttributes
             {
                 shape = world.Shape[s],
                 color = world.Color[s],
                 moisture = world.Moisture[s]
             };
-            treeComp.attributes = attributes;
-
-            treeComp.SetTerrainManager(terrainManager);
-            treeComp.ApplyAttributes();
-
-            int treeLayer = LayerMask.NameToLayer("Tree");
-            if (treeLayer >= 0)
+            if (CreateTree(placed, world.TreePos[2 * s], world.TreePos[2 * s + 1], attributes, rewards) != null)
             {
-                SetLayerRecursively(instance, treeLayer);
+                placed++;
             }
-
-            placed++;
         }
+    }
+
+    // One bush standing on the terrain at (x, z): the world's bushes at the start, and the ranking break's bushes later (their ids follow the world's).
+    public Tree CreateTree(int treeId, float x, float z, TreeAttributes attributes, int[] fruitRewards)
+    {
+        float elevation = terrainManager.SampleElevation(x, z);
+        GameObject instance = Instantiate(treePrefab, new Vector3(x, elevation, z), Quaternion.identity, transform);
+        var treeComp = instance.GetComponent<Tree>();
+        if (treeComp == null)
+        {
+            Destroy(instance);
+            return null;
+        }
+
+        treeComp.treeId = treeId;
+        treeComp.sessionConfig = sessionConfig;
+        treeComp.rimMaterial = rimMaterial;
+        treeComp.ringMaterial = ringMaterial;
+        treeComp.fruitCount = fruitRewards.Length;
+        treeComp.fruitRewards = fruitRewards;
+        treeComp.fruitRadius = sessionConfig.FruitRadius;
+        treeComp.fruitSeed = sessionConfig.WorldSeed + treeId * 7;
+        treeComp.attributes = attributes;
+        treeComp.SetTerrainManager(terrainManager);
+        treeComp.ApplyAttributes();
+
+        int treeLayer = LayerMask.NameToLayer("Tree");
+        if (treeLayer >= 0)
+        {
+            SetLayerRecursively(instance, treeLayer);
+        }
+
+        return treeComp;
     }
 
     private static void SetLayerRecursively(GameObject obj, int layer)

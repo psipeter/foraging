@@ -111,7 +111,7 @@ public class HarvestUI : MonoBehaviour
     private void HandleFruitCollected(float amount, Vector3 worldPos)
     {
         // An Interlude never shows outcomes: no +X popup.
-        if (canvas == null || floatingTextPrefab == null || (sessionConfig != null && sessionConfig.IsInterlude))
+        if (canvas == null || floatingTextPrefab == null || (sessionConfig != null && sessionConfig.IsInterlude) || RankingBreak.Active)
         {
             return;
         }
@@ -185,9 +185,9 @@ public class HarvestUI : MonoBehaviour
 
     private void HandleScoreChanged(float runningTotal)
     {
-        if (sessionConfig != null && sessionConfig.IsInterlude)
+        if ((sessionConfig != null && sessionConfig.IsInterlude) || RankingBreak.Active)
         {
-            return;     // the score slot shows trial progress instead
+            return;     // the score slot shows trial progress instead (and a ranking break moves no score)
         }
 
         _scoreTarget = runningTotal;

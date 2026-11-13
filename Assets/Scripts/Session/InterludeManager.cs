@@ -29,6 +29,8 @@ public class InterludeManager : MonoBehaviour
         public float color;
         public float moisture;
         public float value;
+        public int slot;            // ranking: position in the arc, left to right
+        public float bearing;       // ranking: degrees from the heading, + to the right
     }
 
     [Serializable]
@@ -43,6 +45,8 @@ public class InterludeManager : MonoBehaviour
         public float deltaValue;
         public Bush left;
         public Bush right;
+        public Bush[] bushes;       // ranking: the set's bushes, by slot
+        public int[] trueOrder;     // ranking: their ids, best first (never shown)
     }
 
     [Serializable]
@@ -52,6 +56,8 @@ public class InterludeManager : MonoBehaviour
         public string interludeFor;
         public int seed;
         public int n;
+        public string format;       // "ranking", or absent for a file of pairs
+        public float tieTolerance;
         public Trial[] trials;
     }
 
@@ -93,6 +99,14 @@ public class InterludeManager : MonoBehaviour
     private float _firstHarvestTime = -1f;
     private int _firstHarvestSide = -1;
     private Image _fade;
+    private float _tieTolerance = 0.05f;
+
+    // Ranking Interlude (SessionConfig.IsRanking): k bushes in view, harvested best to worst without walking. A bush's rank is the order in which it was
+    // finished (all its fruits taken); the set ends when every bush is ranked or the time runs out.
+    private bool _ranking;
+    private readonly List<int> _picks = new List<int>();            // tree ids in the order finished
+    private readonly List<float> _pickTimes = new List<float>();    // set clock when each was finished
+    private readonly Dictionary<int, float> _firstStart = new Dictionary<int, float>();    // set clock when each bush was first started
 
     // True once the trials are loaded and running; SessionTimerUI then shows the trial's time left instead of the session clock.
     public bool Active => _order != null && _state != State.Finished;
@@ -121,12 +135,31 @@ public class InterludeManager : MonoBehaviour
             return;
         }
 
+        _ranking = sessionConfig.IsRanking;
         TrialFile file = LoadTrials();
         if (file == null || file.trials == null || file.trials.Length == 0)
         {
-            Debug.LogError("InterludeManager: no trials loaded; generate them with scripts/interlude.py.");
+            Debug.LogError("InterludeManager: no trials loaded; generate them with scripts/interlude.py (pairs) or scripts/ranking.py (ranking).");
             enabled = false;
             return;
+        }
+
+        if (_ranking != (file.format == "ranking"))
+        {
+            Debug.LogError($"InterludeManager: {sessionConfig.name} is a {sessionConfig.InterludeFormat} Interlude but its file is not; regenerate it.");
+            enabled = false;
+            return;
+        }
+
+        if (file.tieTolerance > 0f)
+        {
+            _tieTolerance = file.tieTolerance;
+        }
+
+        if (_ranking)
+        {
+            harvestManager.SetAimMode(true, sessionConfig.InterludeAimTolerance);
+            player.SetStationary(true);
         }
 
         // Every participant sees the trials in the file's order (scripts/interlude.py chose it to avoid order effects). A participant
@@ -236,6 +269,11 @@ public class InterludeManager : MonoBehaviour
     {
         _position = position;
         _trial = _order[position];
+        if (_ranking)
+        {
+            BeginSet();
+            return;
+        }
 
         foreach (Tree tree in _treesById)
         {
@@ -268,6 +306,81 @@ public class InterludeManager : MonoBehaviour
         {
             harvestUI.SetProgressText($"{position + 1}/{_order.Length}");
         }
+    }
+
+    // Ranking: only this set's bushes exist, in view from the stage's centre; the player faces the arc's middle.
+    private void BeginSet()
+    {
+        var ids = new List<string>();
+        foreach (Tree tree in _treesById)
+        {
+            if (tree != null)
+            {
+                bool inSet = Array.Exists(_trial.bushes, b => b.id == tree.treeId);
+                tree.gameObject.SetActive(inSet);
+                tree.SetRank(0);
+            }
+        }
+
+        foreach (Bush b in _trial.bushes)
+        {
+            ids.Add(b.id.ToString());
+        }
+
+        harvestManager.RefreshTrees();
+        player.TeleportTo(_trial.start[0], _trial.start[1]);
+        float pitch = PitchTowardsSet();
+        cameraController.SetView(_trial.yaw, pitch);
+        if (dataLogger != null)
+        {
+            dataLogger.LogEvent("teleport", payload: Json.Obj(("x", _trial.start[0]), ("z", _trial.start[1]), ("yaw", _trial.yaw), ("pitch", pitch)));
+            dataLogger.LogEvent("trial_start", payload: Json.Obj(("order", _position), ("trial", _trial.index), ("bushes", new Json.Raw("[" + string.Join(",", ids) + "]"))));
+        }
+
+        _picks.Clear();
+        _pickTimes.Clear();
+        _firstStart.Clear();
+        _completed = false;
+        _firstHarvestTime = -1f;
+        _clock = 0f;
+        _pausedSeconds = 0f;
+        if (harvestUI != null)
+        {
+            harvestUI.SetProgressText($"{_position + 1}/{_order.Length}");
+        }
+    }
+
+    // Pitch (degrees, + = looking down) that puts the middle of the set's visible canopies on the view's horizontal centre line.
+    private float PitchTowardsSet()
+    {
+        Camera cam = cameraController.PlayerCamera;
+        if (cam == null)
+        {
+            return 0f;
+        }
+
+        Vector3 eye = cam.transform.position;
+        Vector3 sum = Vector3.zero;
+        int count = 0;
+        foreach (Bush b in _trial.bushes)
+        {
+            Tree tree = b.id >= 0 && b.id < _treesById.Length ? _treesById[b.id] : null;
+            if (tree != null)
+            {
+                sum += tree.GetVisibleCenter();
+                count++;
+            }
+        }
+
+        if (count == 0)
+        {
+            return 0f;
+        }
+
+        Vector3 mid = sum / count;
+        float horizontal = Mathf.Sqrt((mid.x - eye.x) * (mid.x - eye.x) + (mid.z - eye.z) * (mid.z - eye.z));
+        float pitch = Mathf.Atan2(eye.y - mid.y, Mathf.Max(horizontal, 0.01f)) * Mathf.Rad2Deg;
+        return Mathf.Clamp(pitch, -sessionConfig.LookPitchLimit, sessionConfig.LookPitchLimit);
     }
 
     // Pitch (degrees, + = looking down) that puts the middle of the two bushes' visible canopies on the view's horizontal
@@ -313,7 +426,7 @@ public class InterludeManager : MonoBehaviour
                 if (_firstHarvestTime < 0f && harvestManager.IsHarvesting)
                 {
                     _firstHarvestTime = _clock;
-                    _firstHarvestSide = harvestManager.FocusTreeId == _trial.left.id ? 0 : 1;
+                    _firstHarvestSide = _ranking ? -1 : (harvestManager.FocusTreeId == _trial.left.id ? 0 : 1);
                 }
 
                 if (_completed)
@@ -334,6 +447,16 @@ public class InterludeManager : MonoBehaviour
     // Commitment: starting to harvest a bush chooses it (unless the policy is Allow) and takes the other bush away.
     private void HandleBoutStarted(Tree tree)
     {
+        if (_ranking)
+        {
+            if (_state == State.Running && tree != null && _trial != null && !_firstStart.ContainsKey(tree.treeId) && Array.Exists(_trial.bushes, b => b.id == tree.treeId))
+            {
+                _firstStart[tree.treeId] = _clock;
+            }
+
+            return;
+        }
+
         InterludeSwitchPolicy policy = sessionConfig != null ? sessionConfig.InterludeSwitchPolicy : InterludeSwitchPolicy.Allow;
         if (policy == InterludeSwitchPolicy.Allow || _state != State.Running || tree == null || _trial == null || _choice >= 0)
         {
@@ -381,6 +504,12 @@ public class InterludeManager : MonoBehaviour
             return;
         }
 
+        if (_ranking)
+        {
+            HandleSetFruit(tree);
+            return;
+        }
+
         int side = tree.treeId == _trial.left.id ? 0 : (tree.treeId == _trial.right.id ? 1 : -1);
         if (side < 0)
         {
@@ -399,8 +528,99 @@ public class InterludeManager : MonoBehaviour
         }
     }
 
+    // A fruit of a set's bush; the bush finished (every fruit taken, so it has gone spent) takes the next rank, which is shown above it.
+    private void HandleSetFruit(Tree tree)
+    {
+        if (!Array.Exists(_trial.bushes, b => b.id == tree.treeId) || _picks.Contains(tree.treeId))
+        {
+            return;
+        }
+
+        if (tree.FruitsRemaining > 0)
+        {
+            return;
+        }
+
+        _picks.Add(tree.treeId);
+        _pickTimes.Add(_clock);
+        tree.SetRank(_picks.Count);
+        if (dataLogger != null)
+        {
+            dataLogger.LogEvent("pick", tree.treeId, payload: Json.Obj(("rank", _picks.Count), ("set_time", _clock)));
+        }
+
+        if (_picks.Count == _trial.bushes.Length)
+        {
+            _completed = true;
+            _choiceTime = _clock;
+        }
+    }
+
+    // The end of a set: score its implied pairs (hidden), log it, move on.
+    private void FinishSet(bool timedOut)
+    {
+        var values = new Dictionary<int, float>();
+        var setIds = new List<int>();
+        foreach (Bush b in _trial.bushes)
+        {
+            values[b.id] = b.value;
+            setIds.Add(b.id);
+        }
+
+        RankingSets.ScorePairs(setIds, values, _picks, _tieTolerance, out int correct, out int total);
+        float worth = correct * sessionConfig.InterludeBonusPerPair;
+        float bonus = sessionConfig.IsPractice ? 0f : worth;
+        Points += worth;
+        if (dataLogger != null)
+        {
+            var times = new List<string>();
+            foreach (float t in _pickTimes)
+            {
+                times.Add(F(t));
+            }
+
+            dataLogger.LogEvent("trial_end", payload: Json.Obj(("picked", new Json.Raw("[" + string.Join(",", _picks) + "]")), ("pick_times", new Json.Raw("[" + string.Join(",", times) + "]")),
+                ("correct_pairs", correct), ("total_pairs", total), ("first_harvest_time", _firstHarvestTime < 0f ? null : (object)_firstHarvestTime), ("timed_out", timedOut ? 1 : 0),
+                ("paused_seconds", _pausedSeconds), ("bonus", bonus)));
+        }
+
+        WriteSetRow(timedOut, correct, total, bonus);
+        harvestManager.SetBlocked(true);
+        _state = State.Transition;
+        StartCoroutine(_position + 1 < _order.Length ? TransitionTo(_position + 1) : Complete());
+    }
+
+    // One interlude_trials row for the set, in TrialRow.Columns order: the pair columns are empty; `bushes` holds one object per bush, in slot order, with its
+    // rank (null when it was not finished), the set clock when it was first started and when it was finished, and the fruits taken from it.
+    private void WriteSetRow(bool timedOut, int correct, int total, float bonus)
+    {
+        if (dataLogger == null)
+        {
+            return;
+        }
+
+        var objects = new List<string>();
+        foreach (Bush b in _trial.bushes)
+        {
+            int index = _picks.IndexOf(b.id);
+            Tree tree = b.id >= 0 && b.id < _treesById.Length ? _treesById[b.id] : null;
+            objects.Add(RankingSets.BushObject(b.id, b.slot, b.shape, b.color, b.moisture, b.value, index + 1,
+                _firstStart.TryGetValue(b.id, out float started) ? started : -1f, index >= 0 ? _pickTimes[index] : -1f, tree != null ? tree.FruitCount - tree.FruitsRemaining : 0));
+        }
+
+        float response = timedOut ? sessionConfig.InterludeTrialSeconds : _choiceTime;
+        dataLogger.LogTrial(RankingSets.RowCells(_position, _trial.index, _trial.start[0], _trial.start[1], timedOut, response, _firstHarvestTime, bonus, _pausedSeconds,
+            _trial.bushes.Length, correct, total, objects));
+    }
+
     private void Finish(bool timedOut)
     {
+        if (_ranking)
+        {
+            FinishSet(timedOut);
+            return;
+        }
+
         // A committed choice counts even when the clock runs out before the bush is finished.
         bool correct = _choice >= 0 && (_trial.correct == "either"
                                         || (_choice == 0 && _trial.correct == "left")
