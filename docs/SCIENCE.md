@@ -11,6 +11,52 @@ silently harden into assumptions.
 
 ---
 
+## Current design: FOR, foraging in tiles with ranking breaks (2026-11-13)
+
+**Direction.** After PI discussions the five planned experiments (FN, RW, FI, PL, PA; `docs/EXPERIMENTS.md`) are replaced by **one experiment, FOR**, in which the reward function (number, form and sparsity of
+features) and the spatial arrangement (tile value, distance, heterogeneity) vary from session to session, and a **ranking** of a few bushes is asked for periodically *inside* the session. Harvesting earns the
+main points; the rankings add a bonus per correct pair. The old tutorials, sessions and Interludes (TUT, FN, RW, FI, the P to S7 ladder) and the sections below that describe them are slated for removal; where
+they disagree with this section, this section is current. DECISIONS ("FOR ...", "The crosshair harvest rule", "Ranking breaks inside the session") hold the reasoning and the rejected alternatives.
+
+**Questions it can answer** (two families, one design): how people learn which features pay and how well they know it (the rankings read the learned value function out, without the confound of the
+harvesting itself, and the same sessions give harvesting efficiency in real time), and how they forage in patches (when they leave a tile, how far they walk, how that depends on how different the tiles are).
+
+**The world.** A valley of hexagonal tiles (`scripts/tiles.py`; tile circumradius 45, ramp between plateaus 14, four plateau heights chosen so neighbouring tiles differ, maximum elevation 9). Each tile has a
+tight cluster of 9 bushes in its middle (radius 15, minimum spacing 10), so reaching a cluster means a walk of about 48 units from the edge of the last one. The ground (colour and height) is the moisture channel
+and pays nothing. **The start (0, 0), the exact middle of the world, is the corner where three tiles meet** (their clusters are 45 units away, the same in every world). Worlds are generated in Python from one seed
+(`world.py` with `tiles.py`); the lattice has a seeded rotation.
+
+**Which bush has what.** Two composing layers, each with a no-pattern setting: BETWEEN (where the tiles' centres sit in the shape-colour plane: `none`, `random`, `graded`, `bimodal`) and WITHIN (how the bushes of a
+tile spread round that centre: `pool`, `scatter`, `gradient`), optional checks that redraw (`tileCoverageMin`: a neighbourhood spans the plane; `tileStartSpreadMin`: the three start tiles differ). **Default
+`none` + `pool`**: every tile is about equally valuable and holds bushes of widely varying value (a stratified draw of the plane dealt at random), so the decision is *which bushes of a tile to take*, not
+which tile. The reward is the unchanged bush rule (a linear shape and colour reward in the prototype, weights 2 and 2, per-fruit noise 0.6, fruit count 10, never normalised).
+
+**Is leaving a tile early the right policy?** `scripts/tile_calibration.py` (an oracle forager through the simulator on tile worlds; 8 seeds, 180 s): the incentive to leave comes from the within-tile decline
+relative to the differences between tiles. At tile radius 45 with 9 bushes the best partial policy takes the bushes at or above the 60th percentile of the world's values, about 4 to 6 bushes per visit,
+**+9 to +11% over exhausting every tile**; larger radii (55 to 90) favour taking most of the tile (6 to 7 bushes), bimodal worlds favour exhausting. The optimum is flat (top-6 to top-9 differ by a few percent)
+and the forager is an oracle, so these are provisional; radius 45 and 9 bushes are the tentative choice (DECISIONS, "FOR: tentative tile radius and bushes per tile").
+
+**Harvesting.** A bush can be harvested while it is within the range (7 plus its canopy radius from the canopy's edge) **and a hidden circle around the crosshair touches its canopy**: `crosshairRadius` Z
+(degrees of view angle; default 7, about five times the drawn crosshair's radius) against the canopy's real 3D shape, so looking above or below a bush does not count; a harvest in progress releases at 2 Z. A thin
+grey crosshair is always drawn (`crosshairAlpha`, default 0.25) and brightens on a bush that can be harvested. Z = 0 restores the old 35 degree cone of yaw. Per fruit 0.2 s.
+
+**Ranking breaks.** After a patch switch (the nearest tile changes; `rankingBreakEvery` of them, default 1; settle depth 0, a cooldown of 10 s, none before the first bush is harvested or in the last 10 s) the world's
+bushes fade to grayscale (0.25 s) and cannot be aimed at, a set of 5 ranking bushes grows on an arc of 84 degrees at 16 units in front of the player on the terrain they stand on, and the player, standing still,
+harvests them from most to least points (any bush in view, a started harvest is finished, 0.05 s a fruit, no outcomes shown). The session clock is held (the main clock goes grey) and a second clock counts
+the set's 20 s down; the player is free to walk again the moment the last bush is done. `rankingBreakSets` sets per break (default 1). Sets come in order from a pool of 12 per session (`ranking.py pool`), chosen
+jointly so the true values form a ladder (no ties) and the bushes spread over the feature plane. Each set scores its implied pairs (the order against the true values) at `interludeBonusPerPair` (2, provisional) per
+correct non-tied pair, shown only on the session's end screen. **TODO(PI):** the bonus rule, a schedule of which transitions ask (for example the 1st, 2nd, 4th and 8th), the size and number of sets, the
+instructions for the first break.
+
+**Recording.** The log's `t` runs through a break; `rank_break_start` / `rank_break_end` events bound it and each set is one `interlude_trials` row of the foraging session plus `rank_set`, `rank_go`, `trial_start`,
+`pick`, `trial_end` events (`docs/ONLINE_DATA_PLAN.md`, "Ranking breaks"). `replay.py` re-derives the harvests of break windows and of the crosshair rule from the trajectory.
+
+**Built and not.** Built: the tiles world and assignment modes, the calibration, the crosshair rule, ranking breaks (trigger, arc, clocks, fade, scoring, logging, replay, resume, pool), the single prototype session
+`FOR_S1` (`scripts/design/FOR.py`). Not built: the parameter specification and samplers that swap reward and spatial settings from session to session (phase 3 of the plan), simulated agents on the break schedule,
+the tutorial, a difficulty score, instructions text for the rankings. Not play-tested yet: all of the Unity side.
+
+---
+
 ## Scientific rationale
 
 ### Overarching goal
@@ -239,6 +285,8 @@ that fixed cycle; a slot is busy until its popup fades, so it holds for any per-
 is deterministic and independent of the reward and the bush, so position is not an information channel.
 
 ### Interlude (between-session forced choice)
+
+> **Ranking format, in development (2026-11-12).** The forced-choice pair below is to be replaced by a ranking: sets of 4 to 6 bushes in view at once, harvested from best to worst without walking, about 3 sets, on a flat stage with one moisture (only shape and colour can vary or pay). A pair is the k = 2 case. So far only the Python side exists (`scripts/ranking.py`, the simulator's `evaluate_ranking`, and a pairs-against-rankings comparison in `scripts/ranking_design.py`: 3 sets of 6 recovered a learned value function better than 20 pairs at matched harvests); the game, the data tables and the experiments' set designs are not built. The rationale, geometry and scores are in `docs/DECISIONS.md` ("The ranking Interlude replaces the forced-choice pair"); this section still describes what the shipped Interludes do.
 
 > **Generator changes, 2026-11-09 (Phase 0 of building the planned experiments).** The Designed mode (contrast, graded and extrapolation trials) and everything
 > built for it were removed from `scripts/interlude.py`: the stimulus types, the moisture placement relations (*same*, *one level apart*, *two or more levels apart*,

@@ -5,6 +5,8 @@ Nothing here is built**; the game still plays `TUT` and `CF` (`docs/SCIENCE.md`,
 experiments") has the summary; the reasoning and the rejected alternatives are in `docs/DECISIONS.md` ("Experiments split by question
 (2026-11-06)"). Entries marked **TODO** are decisions still open.
 
+> **2026-11-12: superseded in direction.** The plan below (five experiments) is being replaced by one experiment, `FOR`, in a world of hexagonal tiles that varies the reward function and the spatial arrangement together, with ranking Interludes injected periodically and both harvesting and the rankings paying; FN, RW and FI remain as generators. The prototype (phases 1 and 2: the tiles terrain, layout and assignment, two instances) is `scripts/tiles.py`, `scripts/design/FOR.py`; the reasoning is in `docs/DECISIONS.md` ("FOR: one experiment in a world of tiles"). The sections below are kept as the record of the single-variable designs.
+
 ## Why the experiments are separate
 
 The `CF` ladder (S1 to S7) changes three things at once: the number of rewarded features, the nonlinearity of the mapping, and the

@@ -273,3 +273,19 @@ participant's row; no Prolific IDs); a stored yes/no per run (new column or tabl
 release (the frozen pilot build), among all finished runs with only opted-in rows listed (so ranks are true); the completion code and the Prolific
 return must not wait on it; consent/IRB text must cover showing a score to others; mention of the scoreboard in the instructions may change motivation.
 About a day of work plus a browser test.
+
+
+## Ranking breaks (2026-11-13)
+
+A foraging session can contain ranking breaks (`RankingBreak`, DECISIONS "Ranking breaks inside the session"). Nothing about the tables changes except what is stored in them:
+- **Events** (free-text `type`, JSON `payload`): `rank_break_start` (`break`, `switches`, `tile`, `pool_index`, `sets`), `rank_set` (`break`, `set`, `fruits`, `bushes`: id, x, z, radius, shape of each bush of the arc: they
+  are not in the world file), `rank_go` (the end of the harvest block of a set), `trial_start` / `pick` / `trial_end` as in a ranking Interlude plus a `break` number, `rank_break_end`. The ranking bushes have tree ids
+  `world bush count + pool id` and pay 0 (their `fruit` events carry reward 0, so the running total does not move).
+- **Sets** are rows of `interlude_trials` of the foraging session (`type` ranking, `presented_order` = sets played so far in the session, `bushes` JSON, bonus), as for a ranking Interlude.
+- **Time.** `t` is unpaused session seconds and keeps running through a break; the foraging clock is `t` minus the break windows (`rank_break_start` to `rank_break_end`).
+- **Resume.** `server.resume_state` also returns `held_seconds` (the sum of the windows, a break the data stops inside counted to the last thing heard), `breaks`, `sets_played` and `break_bonus`; the game continues
+  the foraging clock from `clock - held_seconds`, the break numbering, the pool position, the set rows and the end screen's bonus. An unfinished break is not resumed.
+- **Points.** `server.run_points` counts the bonus of a completed, non-practice session's sets whether or not the session is an Interlude.
+- **Migrations to apply before any data is collected** (after `db_backup.py`): `20261112000000_ranking_sets.sql` (the set columns) and `20261113000000_ranking_breaks_resume.sql` (resume fields and run points).
+  Neither is applied to the Supabase project. `scripts/test_resume_breaks.py` checks the second on a real PostgreSQL; `test_server.py` (Deno) has not been run against either.
+- **Replay.** `replay.py` appends each set's bushes (from `rank_set`) to the world's table and replays break windows with the aimed, quick rule; `visibility.py` keeps the real bushes and adds the current set's.
