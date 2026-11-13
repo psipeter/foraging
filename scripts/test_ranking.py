@@ -8,7 +8,7 @@ import synthetic
 from ranking import angular_radius, check_arc, generate_pool, horizontal_fov, kendall_tau, first_pick_regret, pair_accuracy, pair_scores, rank_gain, slot_bearings
 from world import bush_value
 
-SESSION = "FIX_S0"
+SESSION = "FIX_T0"
 TWO_FEATURES = synthetic.overrides(visible=("shape", "color"), weights={"shape": 0.5, "color": 0.5})
 COLOR_ONLY = synthetic.overrides(visible=("shape", "color"), weights={"color": 1.0})
 SHAPE_ONLY_VISIBLE = synthetic.overrides(visible=("shape",), weights={"shape": 1.0})

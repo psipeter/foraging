@@ -24,10 +24,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SESSION_CONFIGS = "Assets/ScriptableObjects/Experiments/"       # <code>/<code>_S1.asset, <code>.asset
+FIXTURE_SESSIONS = "scripts/fixtures/sessions/"
 
 
 def _is_session_asset(path):
-    return path.startswith(SESSION_CONFIGS) and re.search(r"_S\d+\.asset$", path) is not None
+    # a live session, or the frozen environment of the engine tests (scripts/fixtures/sessions/FIX_T0.asset)
+    return (path.startswith(SESSION_CONFIGS) and re.search(r"_S\d+\.asset$", path) is not None) or (path.startswith(FIXTURE_SESSIONS) and path.endswith(".asset"))
 
 
 def _is_world_file(path):
@@ -46,6 +48,11 @@ def _is_server_file(path):
 EXTRA = {
     "scripts/test_world.py": ({"Assets/Scripts/World/WorldData.cs"}, [_is_session_asset, _is_world_file]),   # (the C# check names are mirrored)
     "scripts/test_sim.py": (set(), [_is_session_asset]),
+    "scripts/test_feature_flags.py": (set(), [_is_session_asset]),        # (these build their worlds on FIX_T0 through synthetic.py)
+    "scripts/test_realization.py": (set(), [_is_session_asset]),
+    "scripts/test_ranking.py": (set(), [_is_session_asset]),
+    "scripts/test_tiles.py": (set(), [_is_session_asset]),
+    "scripts/test_tile_calibration.py": (set(), [_is_session_asset]),
     "scripts/test_agents.py": (set(), [_is_session_asset]),
     "scripts/test_specs.py": (set(), [_is_session_asset]),
     "scripts/test_fingerprint.py": (set(), [_is_session_asset]),

@@ -279,11 +279,11 @@ def _archive(tmp_path, name, content):
 
 
 def _session(tmp_path, monkeypatch, **row):
-    """An S1 session folder of the online layout, its world archived under tmp_path/_worlds."""
-    wfile = tmp_path / "S1_seed1.world"
-    world_mod.export_unity(world_mod.make_world("S1", 1), wfile)
+    """A FIX_T0 session folder of the online layout, its world archived under tmp_path/_worlds."""
+    wfile = tmp_path / "FIX_T0_seed1.world"
+    world_mod.export_unity(world_mod.make_world("FIX_T0", 1), wfile)
     monkeypatch.setattr("replay.DATA_DIR", tmp_path)
-    row = {"name": "S1", "config": CFG, "world_file": "S1_seed1.world", "world_sha256": _archive(tmp_path, "S1_seed1.world", wfile.read_bytes()), **row}
+    row = {"name": "FIX_T0", "config": CFG, "world_file": "FIX_T0_seed1.world", "world_sha256": _archive(tmp_path, "FIX_T0_seed1.world", wfile.read_bytes()), **row}
     traj = np.array([[0.01, 0.0, 0.0, 0.0, 0.0, 0], [0.02, 0.0, 0.0, 0.0, 0.0, 0]])
     return rundata.write_session(tmp_path, "run", 0, row, traj, [{"t": 0.01, "real": 0.1, "type": "session_start"}])
 

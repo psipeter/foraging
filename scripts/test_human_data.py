@@ -11,7 +11,6 @@ import human_data as hd
 import rundata
 import trajectory_codec as codec
 
-pytestmark = pytest.mark.frozen_sessions        # the old session aliases resolve to frozen copies (conftest.py)
 
 RUN_A, RUN_B, RUN_C = ("%08d-0000-4000-8000-000000000000" % i for i in (1, 2, 3))
 

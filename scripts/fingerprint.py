@@ -34,20 +34,18 @@ from world import load_session
 SCRIPTS = Path(__file__).resolve().parent
 ROOT = SCRIPTS.parent
 
-ENGINE_FILES = ("sim.py", "costs.py", "perception.py", "world.py", "ranking.py", "spatial.py", "tiles.py")
+ENGINE_FILES = ("sim.py", "costs.py", "perception.py", "world.py", "ranking.py", "tiles.py")
 AGENT_FILES = ("agents.py", "specs.py")
 
-TILE_FIELDS = (*tiles.TILE_PARAMS, "tile_arrangement", "tile_value_mode", "tile_within_mode")      # hashed only for the tiles layout (a session of another layout does not read them, and its hash stays as it was)
+TILE_FIELDS = (*tiles.TILE_PARAMS, "tile_arrangement", "tile_value_mode", "tile_within_mode")
 
 
 SIM_FIELDS = (
     "camera_field_of_view", "canopy_height_range", "canopy_width_range", "color_varies", "color_when_fixed", "eye_height", "fruit_count", "fruit_harvest_duration", "harvest_max_angle",
-    "harvest_range_gap_base", "harvest_range_gap_per_radius", "layout", "assignment", "reward_stage", "moisture_varies", "moisture_when_fixed", "moisture_terrace_levels",
-    "moisture_terrace_residual", "moisture_terrace_unevenness", "feature_balance", "feature_coverage", "feature_balance_target", "feature_balance_scales", "moisture_terrace_mode", "terrace_mean_width", "terrace_width_spread", "terrace_max_band", "terrace_min_step", "terrace_phase_shift", "terrace_phase_frequency", "terrace_strength", "terrace_diffusion_iterations", "terrace_diffusion_edge", "moisture_terrace_sharpness", "mountain_band_width", "mountain_block_threshold",
-    "mountain_boundary_jitter", "mountain_height", "mountain_noise_scale", "placement_jitter", "player_move_speed",
-    "random_bush_value_range", "reward_function", "reward_std", "session_duration", "shape_range", "shape_varies", "shape_when_fixed", "spatial_balance", "snow_line_fraction",
-    "start_clearing_radius", "terrain_max_elevation", "terrain_mesh_resolution", "terrain_noise_frequency",
-    "terrain_noise_octaves", "tree_edge_margin", "tree_spacing", "world_half_extent",
+    "harvest_range_gap_base", "harvest_range_gap_per_radius", "layout", "assignment", "reward_stage", "moisture_varies", "moisture_when_fixed",
+    "mountain_band_width", "mountain_block_threshold", "mountain_boundary_jitter", "mountain_height", "mountain_noise_scale", "player_move_speed",
+    "random_bush_value_range", "reward_function", "reward_std", "session_duration", "shape_range", "shape_varies", "shape_when_fixed", "snow_line_fraction",
+    "terrain_max_elevation", "terrain_mesh_resolution", "tree_edge_margin", "world_half_extent",
     *TILE_FIELDS,
 )
 
@@ -77,9 +75,6 @@ def params_hash(name, overrides=None):
     params = load_session(name, **(overrides or {}))
     fields = {f: getattr(params, f, None) for f in SIM_FIELDS}      # (None: a field an older asset file does not have yet)
     fields["reward_function"] = _reward_without_new_defaults(fields["reward_function"])
-    if fields["layout"] != "tiles":
-        for f in TILE_FIELDS:
-            del fields[f]
     return _digest(fields)
 
 

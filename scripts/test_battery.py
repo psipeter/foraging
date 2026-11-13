@@ -7,15 +7,16 @@ from agents import REGISTRY
 from battery import Battery, run_battery, session_readout
 
 
-TINY = Battery("tiny", {"P": 20, "S1": 30}, seeds=(0, 1))
+TINY = Battery("tiny", {"T1": 20, "T2": 30}, seeds=(0, 1))
 
 
-def test_the_standard_battery_is_the_four_sessions_and_the_long_one_has_longer_sessions():
+def test_the_batteries_are_four_labels_of_the_frozen_tiles_session_and_the_long_one_has_longer_sessions():
     standard, long = battery.BATTERIES["standard"], battery.BATTERIES["long"]
-    assert standard.sessions == {"S1": 90, "S2": 120, "S3": 120, "S4": 150}
-    assert long.sessions == {"S1": 120, "S2": 120, "S3": 180, "S4": 180}
-    assert standard.overrides("S3") == {"session_duration": 120} and long.overrides("S3") == {"session_duration": 180}
-    assert len(standard.seeds) == len(long.seeds) == 10
+    assert standard.sessions == {"T1": 45, "T2": 60, "T3": 60, "T4": 90}
+    assert long.sessions == {"T1": 60, "T2": 90, "T3": 120, "T4": 120}
+    assert standard.overrides("T3") == {"session_duration": 60} and long.overrides("T3") == {"session_duration": 120}
+    assert standard.session == long.session == "FIX_T0" and len(standard.seeds) == len(long.seeds) == 10
+    assert long.world_seeds("T1", [0, 1]) == [0, 1] and long.world_seeds("T3", [0, 1]) == [200, 201]        # each label has worlds of its own
 
 
 def test_every_population_builds_round_trips_and_fits_a_figure():
@@ -71,13 +72,14 @@ def test_a_battery_run_records_every_session_and_reuses_them(tmp_path):
     agents = battery.resolve(["nearest", "learner"], "main")
     with results.Store(tmp_path / "r.sqlite") as store:
         reports = run_battery(agents, TINY, "t", store=store, progress=None)
-        assert list(reports) == ["P", "S1"] and all(len(r) == 2 and r[0].n_computed == 2 for r in reports.values())
-        sel = analysis.select(store, tag="t/S1")
-        assert sel.env["session"] == "S1" and sel.env["overrides"] == {"session_duration": 30} and sel.env["n_samples"] is None
+        assert list(reports) == ["T1", "T2"] and all(len(r) == 2 and r[0].n_computed == 2 for r in reports.values())
+        sel = analysis.select(store, tag="t/T2")
+        assert sel.env["session"] == "FIX_T0" and sel.env["overrides"] == {"session_duration": 30} and sel.env["n_samples"] is None
+        assert sel.seeds(list(sel.agents)[0]) == [100, 101]
         again = run_battery(agents, TINY, "t2", store=store, progress=None)
         assert all(r.n_computed == 0 and r.n_reused == 2 for rs in again.values() for r in rs)
-        text = session_readout(store, "t", TINY, {r.agent_id: "nearest-alias" for r in reports["S1"][:1]})
-        assert "P: total reward" in text and "S1: total reward" in text and "nearest-alias" in text
+        text = session_readout(store, "t", TINY, {r.agent_id: "nearest-alias" for r in reports["T2"][:1]})
+        assert "T1: total reward" in text and "T2: total reward" in text and "nearest-alias" in text
 
 
 def test_the_command_line_lists_and_runs(tmp_path, capsys, monkeypatch):
@@ -88,7 +90,7 @@ def test_the_command_line_lists_and_runs(tmp_path, capsys, monkeypatch):
     monkeypatch.setitem(battery.BATTERIES, battery.DEFAULT_BATTERY, TINY)
     battery.main(["run", "--agents", "nearest,learner", "--tag", "cli", "--seeds", "0-1", "--db", str(tmp_path / "r.sqlite")])
     out = capsys.readouterr().out
-    assert "P: total reward" in out and "S1: total reward" in out and "learner" in out
+    assert "T1: total reward" in out and "T2: total reward" in out and "learner" in out
 
 
 @pytest.mark.slow
@@ -119,4 +121,4 @@ def test_scores_summarize_each_agent_in_each_session(tmp_path):
             assert r["lead"] == 0.0 and r["quality"] == 0.0 and r["efficiency"] == 0.0
         assert "gap" not in r
     text = battery.format_scores(rows)
-    assert "P:" in text and "S1:" in text and "learner" in text and "quality" in text
+    assert "T1:" in text and "T2:" in text and "learner" in text and "quality" in text

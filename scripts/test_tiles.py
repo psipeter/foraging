@@ -238,28 +238,18 @@ def test_a_flat_ground_option_keeps_the_tiles_clusters_and_removes_the_levels():
     assert np.ptp(w.moisture) == 0.0 and w.n == tile_world().n
 
 
-def test_the_world_file_records_the_tile_parameters_only_for_a_tiles_layout():
+def test_the_world_file_records_the_tile_parameters():
     keys = world.check_values(tile_params())
     assert keys["tileRadius"] == 70.0 and keys["tileBushes"] == 9.0
-    assert "tileRadius" not in world.check_values(synthetic.session(visible=("shape", "color")))
 
 
-def test_a_lattice_world_is_not_changed_by_the_new_streams():
-    plain = synthetic.session(visible=("shape", "color"))
-    w = world.generate_world(plain, 3)
-    assert w.terrain.tiles is None and w.n > 400
-
-
-def test_a_tiles_world_file_carries_the_tile_centres_and_another_layout_does_not(tmp_path):
+def test_a_tiles_world_file_carries_the_tile_centres(tmp_path):
     w = tile_world()
     world.export_unity(w, tmp_path / "t.world")
     header, _ = world.read_unity_world(tmp_path / "t.world")
     centres = np.asarray(header["tileCentres"]).reshape(-1, 2)
     expected = np.asarray([c for _, _, c in w.terrain.tiles.tile_centres()])
     assert np.allclose(centres, expected) and header["tileRadius"] == w.terrain.tiles.radius
-    flat = world.generate_world(synthetic.session(visible=("shape", "color"), weights={"shape": 0.5, "color": 0.5}), 1)
-    world.export_unity(flat, tmp_path / "f.world")
-    assert "tileCentres" not in world.read_unity_world(tmp_path / "f.world")[0]
 
 
 @pytest.mark.parametrize("seed", [1, 2, 3, 7])

@@ -22,7 +22,7 @@ def add(store, agent, totals, tag="t", seeds=None, overrides=None, code=None):
     """Put a run with these totals (one per seed) straight into the database."""
     spec = agent.spec() if hasattr(agent, "spec") else agent
     agent_id = store.record_agent(spec)
-    env_id = store.record_environment(fingerprint.environment("P", overrides or {"session_duration": 20}))
+    env_id = store.record_environment(fingerprint.environment("FIX_T0", overrides or {"session_duration": 20}))
     code_id = store.record_code(code or fingerprint.code_version())
     seeds = list(range(len(totals))) if seeds is None else seeds
     with store.conn:
@@ -46,7 +46,7 @@ def test_a_selection_is_one_environment_and_the_current_engine_by_default(store)
     old = {**fingerprint.code_version(), "engine_hash": "0" * 12}
     add(store, delta(0.2), [1, 2, 3, 4], code=old)                                    # recorded on other engine code
     sel = analysis.select(store, tag="t")
-    assert list(sel.agents) == [a] and sel.env["session"] == "P" and sel.seeds(a) == [0, 1, 2, 3]
+    assert list(sel.agents) == [a] and sel.env["session"] == "FIX_T0" and sel.seeds(a) == [0, 1, 2, 3]
     anyone = analysis.select(store, tag="t", engine="any")
     assert len(anyone.agents) == 2 and any("stale" in n for n in anyone.notes)
     only_old = analysis.select(store, engine="0" * 12)
@@ -166,7 +166,7 @@ def test_a_recorded_run_flows_through_to_a_table_and_the_command_line(tmp_path, 
     path = tmp_path / "r.sqlite"
     with Store(path) as s:
         for name in ("nearest", "greedy_rate_10"):
-            record_run(name, "P", [0, 1, 2], "real", overrides={"session_duration": 20}, store=s)
+            record_run(name, "FIX_T0", [0, 1, 2], "real", overrides={"session_duration": 20}, store=s)
     with Store(path, readonly=True) as s:
         sel = analysis.select(s, tag="real")
         rows = analysis.table(sel, baseline="nearest")
@@ -191,7 +191,7 @@ def test_the_effect_command_reports_a_factor(tmp_path, capsys):
 
 def test_fruit_events_come_back_as_arrays_for_one_agent_and_seed(tmp_path):
     with Store(tmp_path / "r.sqlite") as s:
-        record_run("greedy_rate_10", "P", [0, 1], "f", overrides={"session_duration": 20}, store=s)
+        record_run("greedy_rate_10", "FIX_T0", [0, 1], "f", overrides={"session_duration": 20}, store=s)
         sel = analysis.select(s, tag="f")
         ev = analysis.fruit_events(s, sel, "greedy_rate_10", 1)
         row = next(iter(sel.rows.values()))[1]
@@ -207,7 +207,7 @@ def test_fruit_events_come_back_as_arrays_for_one_agent_and_seed(tmp_path):
 def recorded(tmp_path, agents=("nearest", "greedy_rate_10"), seeds=(0, 1, 2, 3), duration=30):
     s = Store(tmp_path / "r.sqlite")
     for name in agents:
-        record_run(name, "P", list(seeds), "c", overrides={"session_duration": duration}, store=s)
+        record_run(name, "FIX_T0", list(seeds), "c", overrides={"session_duration": duration}, store=s)
     return s, analysis.select(s, tag="c")
 
 

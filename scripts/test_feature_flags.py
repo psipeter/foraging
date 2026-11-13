@@ -5,12 +5,12 @@ import numpy as np
 
 import synthetic
 import world
-from world import generate_world, moisture_matters
+from world import generate_world
 from world import load_session as _load_session
 
 
 def load_session(name=synthetic.TEMPLATE, **overrides):
-    """A session of a stated plain configuration (shape and colour pay, moisture decoration, no random reward, independent attributes, continuous terrain) on the
+    """A session of a stated plain configuration (shape and colour pay, moisture decoration, no random reward) on the
     template asset, unless overridden; the tests are about the flags, not about a shipped session."""
     return _load_session(name, **{**synthetic.overrides(synthetic.FEATURES, {"shape": 0.6, "color": 0.4}, {"color": 1}, moisture_is_feature=False), **overrides})
 
@@ -58,11 +58,6 @@ def test_check_values_carry_the_new_fields_only_when_they_differ_from_the_defaul
     v = world.check_values(load_session(shape_varies=False, random_bush_value_range=(1.0, 3.0)))
     assert v["shapeVaries"] == 0.0 and "colorVaries" not in v
     assert v["randomBushValueRange.min"] == 1.0 and v["randomBushValueRange.max"] == 3.0
-
-
-def test_moisture_matters_follows_the_reward_weight():
-    decoration, pays = load_session(reward_function=moisture_weight(0.0)), load_session(reward_function=moisture_weight(1.5))
-    assert not moisture_matters(decoration) and moisture_matters(pays)
 
 
 def test_session_features_declare_what_is_visible_and_what_pays():

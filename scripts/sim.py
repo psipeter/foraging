@@ -29,11 +29,11 @@ so every agent faces identical rewards on a given seed, and comparisons between 
 
 Usage as a library:
     from sim import run_n, compare, get_worlds
-    summary = run_n(lambda: MyAgent(), "S1", seeds=range(100))
-    table = compare({"a": lambda: A(), "b": lambda: B()}, "S1", seeds=range(100), baseline="a")
+    summary = run_n(lambda: MyAgent(), "FIX_T0", seeds=range(100))
+    table = compare({"a": lambda: A(), "b": lambda: B()}, "FIX_T0", seeds=range(100), baseline="a")
 
 Command line (agents are looked up in agents.REGISTRY):
-    python scripts/sim.py S1 --seeds 0-99 --agents nearest,greedy_rate --set tree_spacing=30
+    python scripts/sim.py FIX_T0 --seeds 0-99 --agents nearest,greedy_rate --set tree_spacing=30
 """
 
 import argparse
@@ -321,7 +321,7 @@ class Summary:
         return f"Summary(mean={self.mean:.2f}, std={self.std:.2f}, se={self.se:.2f}, n={len(self.totals)})"
 
 
-def run_n(agent_factory, session="S1", seeds=range(100), worlds=None, percept=None, **overrides):
+def run_n(agent_factory, session="FIX_T0", seeds=range(100), worlds=None, percept=None, **overrides):
     """Run `agent_factory()` (a fresh agent per seed) on one world per seed; the variance is across seeds
     (world layout, attributes and fruit noise all derive from the one seed). Pass `worlds` to reuse a list and `percept` to
     replace the sensor for the whole run (see perception.py)."""
@@ -331,7 +331,7 @@ def run_n(agent_factory, session="S1", seeds=range(100), worlds=None, percept=No
     return Summary(np.array([r.total for r in results], dtype=float), results)
 
 
-def compare(factories, session="S1", seeds=range(100), baseline=None, percept=None, **overrides):
+def compare(factories, session="FIX_T0", seeds=range(100), baseline=None, percept=None, **overrides):
     """Run several agents on the same worlds (and the same sensor). Returns {name: Summary} and, if `baseline` is given, prints
     paired differences (mean, standard error) against it."""
     worlds = get_worlds(session, seeds, **overrides)

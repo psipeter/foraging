@@ -18,49 +18,49 @@ from test_agents import Script
 # --- the session parameters that count ------------------------------------------------------------------------------
 
 def test_params_hash_is_stable_and_follows_simulation_parameters_only():
-    base = params_hash("S1")
-    assert base == params_hash("S1") and re.fullmatch(r"[0-9a-f]{12}", base)
-    assert params_hash("S1", {"session_duration": 45}) != base
-    assert params_hash("S1", {"tree_spacing": 30.0}) != base
-    assert params_hash("S1", {"player_move_speed": 8.0}) != base
+    base = params_hash("FIX_T0")
+    assert base == params_hash("FIX_T0") and re.fullmatch(r"[0-9a-f]{12}", base)
+    assert params_hash("FIX_T0", {"session_duration": 45}) != base
+    assert params_hash("FIX_T0", {"tile_cluster_radius": 18.0}) != base
+    assert params_hash("FIX_T0", {"player_move_speed": 8.0}) != base
     # audio, visuals, UI text and the per-episode world seed are not part of what an agent plays in
-    assert params_hash("S1", {"sfx_volume": 0.123}) == base
-    assert params_hash("S1", {"sun_latitude": 12.0}) == base
-    assert params_hash("S1", {"world_seed": 12345}) == base
-    assert params_hash("S1") != params_hash("S3")
+    assert params_hash("FIX_T0", {"sfx_volume": 0.123}) == base
+    assert params_hash("FIX_T0", {"sun_latitude": 12.0}) == base
+    assert params_hash("FIX_T0", {"world_seed": 12345}) == base
+    assert params_hash("FIX_T0") != params_hash("FIX_T0", {"tile_radius": 60.0})
 
 
 def test_a_changed_reward_function_changes_the_hash():
-    rf = world.load_session("S1").reward_function
+    rf = world.load_session("FIX_T0").reward_function
     other = {**rf, "colorComponent": {**rf["colorComponent"], "weight": rf["colorComponent"]["weight"] + 1.0}}
-    assert params_hash("S1", {"reward_function": other}) != params_hash("S1")
+    assert params_hash("FIX_T0", {"reward_function": other}) != params_hash("FIX_T0")
 
 
 # --- the environment ------------------------------------------------------------------------------------------------
 
 def test_environment_records_what_was_run_and_hashes_every_part():
-    env = environment("S1", {"session_duration": 90})
-    assert env["session"] == "S1" and env["overrides"] == {"session_duration": 90} and env["kind"] == "session"
+    env = environment("FIX_T0", {"session_duration": 90})
+    assert env["session"] == "FIX_T0" and env["overrides"] == {"session_duration": 90} and env["kind"] == "session"
     assert env["percept"] is None and env["n_samples"] is None
     assert env["costs"]["TURN_RATE"] == costs.TURN_RATE
-    base = environment_hash("S1", {"session_duration": 90})
-    assert base == environment_hash("S1", {"session_duration": 90.0})                 # numbers by value
-    assert environment_hash("S1", {"session_duration": 120}) != base
-    assert environment_hash("S1", {"session_duration": 90}, percept=ConePercept(60, 50)) != base
-    assert environment_hash("S1", {"session_duration": 90}, percept=ConePercept(60, 50)) != \
-        environment_hash("S1", {"session_duration": 90}, percept=ConePercept(60, 60))
-    assert environment_hash("S2", {"session_duration": 90}) != base
+    base = environment_hash("FIX_T0", {"session_duration": 90})
+    assert base == environment_hash("FIX_T0", {"session_duration": 90.0})                 # numbers by value
+    assert environment_hash("FIX_T0", {"session_duration": 120}) != base
+    assert environment_hash("FIX_T0", {"session_duration": 90}, percept=ConePercept(60, 50)) != base
+    assert environment_hash("FIX_T0", {"session_duration": 90}, percept=ConePercept(60, 50)) != \
+        environment_hash("FIX_T0", {"session_duration": 90}, percept=ConePercept(60, 60))
+    assert environment_hash("FIX_T0", {"session_duration": 90, "tile_radius": 60.0}) != base
 
 
 def test_the_motor_costs_are_part_of_the_environment(monkeypatch):
-    before = environment_hash("S1")
+    before = environment_hash("FIX_T0")
     monkeypatch.setattr(costs, "WALK_PRESS_TIME", costs.WALK_PRESS_TIME + 0.1)
-    assert environment_hash("S1") != before
+    assert environment_hash("FIX_T0") != before
 
 
 def test_an_unknown_override_is_refused():
     with pytest.raises(KeyError):
-        params_hash("S1", {"no_such_parameter": 1})
+        params_hash("FIX_T0", {"no_such_parameter": 1})
 
 
 # --- the code -------------------------------------------------------------------------------------------------------
@@ -134,23 +134,22 @@ def test_sim_fields_cover_every_session_parameter_the_simulator_reads(monkeypatc
 
     original = world.load_session
 
-    def traced(name="S1", **overrides):
+    def traced(name="FIX_T0", **overrides):
         return Recording(**vars(original(name, **overrides)))
 
     for module in (world, sim):
         monkeypatch.setattr(module, "load_session", traced)
     from agents import REGISTRY
-    for session in ("P", "S1", "S3", "S4"):
-        worlds = sim.get_worlds(session, range(2))
-        for name in ("nearest", "delta_rate_10"):
-            for w in worlds:
-                sim.run_episode(REGISTRY[name](), w)
-        sim.run_episode(ComposedAgent(Script(Explore(0.0, 40.0)), OracleCritic(), FullMemory()), worlds[0])   # walks: reads the mountain block
+    worlds = sim.get_worlds("FIX_T0", range(2))
+    for name in ("nearest", "delta_rate_10"):
+        for w in worlds:
+            sim.run_episode(REGISTRY[name](), w)
+    sim.run_episode(ComposedAgent(Script(Explore(0.0, 40.0)), OracleCritic(), FullMemory()), worlds[0])   # walks: reads the mountain block
     tiles = dict(layout="tiles", assignment="tiles")                                # the modes that read their own fields
     for extra in (dict(tile_value_mode="bimodal", tile_within_mode="scatter"), dict(tile_value_mode="graded", tile_within_mode="gradient"), dict(tile_within_mode="pool"),
-                  dict(moisture_terrace_mode=1), dict(moisture_terrace_mode=2), dict(feature_balance=1, spatial_balance=0), dict(moisture_varies=False), dict(color_varies=False), dict(shape_varies=False)):
-        world.generate_world(traced("S1", **({**tiles, **extra} if any(k.startswith("tile_") for k in extra) else extra)), 0)
-    world.generate_world(traced("S1", **tiles), 0)
+                  dict(moisture_varies=False), dict(color_varies=False), dict(shape_varies=False)):
+        world.generate_world(traced("FIX_T0", **({**tiles, **extra} if any(k.startswith("tile_") for k in extra) else extra)), 0)
+    world.generate_world(traced("FIX_T0", **tiles), 0)
     worlds[0].terrain.grids()                                                       # the terrain's own mesh fields (the occluded sensor reads them)
     sim.run_episode(REGISTRY["nearest"](), worlds[0], percept=OccludedConePercept(60, 50))   # ... and the eye height
     missing = accessed - set(SIM_FIELDS) - {"world_seed"}

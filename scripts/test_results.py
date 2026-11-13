@@ -24,7 +24,7 @@ def store(tmp_path):
 
 def run(store, agent="nearest", seeds=SEEDS, tag="t", **kw):
     kw.setdefault("overrides", OVERRIDES)
-    return record_run(agent, "P", seeds, tag, store=store, **kw)
+    return record_run(agent, "FIX_T0", seeds, tag, store=store, **kw)
 
 
 # --- schema --------------------------------------------------------------------------------------------------------
@@ -103,7 +103,7 @@ def test_parameters_can_be_queried_across_agents(store):
 
 
 def test_environments_and_code_versions_are_recorded_and_deduplicated(store):
-    env = fingerprint.environment("P", OVERRIDES)
+    env = fingerprint.environment("FIX_T0", OVERRIDES)
     assert store.record_environment(env) == store.record_environment(env)
     assert store.select("SELECT COUNT(*) AS n FROM environments")[0]["n"] == 1
     code = {"engine_hash": "e1", "agents_hash": "a1", "commit": "abc1234", "dirty": True, "python": "3", "numpy": "2"}
@@ -133,7 +133,7 @@ def test_a_run_is_computed_once_and_then_looked_up(store):
 
 def test_recorded_episodes_equal_what_the_engine_gives(store):
     report = run(store, "greedy_rate_10")
-    direct = sim.run_n(REGISTRY["greedy_rate_10"], "P", SEEDS, **OVERRIDES)
+    direct = sim.run_n(REGISTRY["greedy_rate_10"], "FIX_T0", SEEDS, **OVERRIDES)
     assert np.allclose(report.totals, direct.totals)
     row = report.rows[0]
     assert row["n_visits"] == direct.results[0].n_visits and row["walk_time"] == pytest.approx(direct.results[0].walk_time)
@@ -222,7 +222,7 @@ def cli(monkeypatch, capsys, *args):
 
 def test_sim_record_stores_the_runs_reuses_them_and_prints_the_table(monkeypatch, capsys, tmp_path):
     db = str(tmp_path / "r.sqlite")
-    args = ("P", "--seeds", "0-2", "--agents", "nearest,greedy_rate_10", "--set", "session_duration=20", "--record", "--tag", "cli",
+    args = ("FIX_T0", "--seeds", "0-2", "--agents", "nearest,greedy_rate_10", "--set", "session_duration=20", "--record", "--tag", "cli",
             "--db", db)
     out = cli(monkeypatch, capsys, *args)
     assert "computed 3, reused 0" in out and "diff vs nearest" in out and "tag cli" in out
@@ -235,10 +235,10 @@ def test_sim_record_stores_the_runs_reuses_them_and_prints_the_table(monkeypatch
 
 def test_sim_record_needs_a_tag_and_the_flags_need_record(monkeypatch, capsys, tmp_path):
     with pytest.raises(SystemExit):
-        cli(monkeypatch, capsys, "P", "--agents", "nearest", "--record", "--db", str(tmp_path / "r.sqlite"))
+        cli(monkeypatch, capsys, "FIX_T0", "--agents", "nearest", "--record", "--db", str(tmp_path / "r.sqlite"))
     with pytest.raises(SystemExit):
-        cli(monkeypatch, capsys, "P", "--agents", "nearest", "--tag", "x")
-    out = cli(monkeypatch, capsys, "P", "--seeds", "0-1", "--agents", "nearest,greedy_rate_10", "--set", "session_duration=20")
+        cli(monkeypatch, capsys, "FIX_T0", "--agents", "nearest", "--tag", "x")
+    out = cli(monkeypatch, capsys, "FIX_T0", "--seeds", "0-1", "--agents", "nearest,greedy_rate_10", "--set", "session_duration=20")
     assert "agent" in out and not (tmp_path / "r.sqlite").exists()
 
 
@@ -246,7 +246,7 @@ def test_sim_record_needs_a_tag_and_the_flags_need_record(monkeypatch, capsys, t
 
 def test_every_fruit_taken_is_stored_in_order_and_matches_the_engine(store):
     report = run(store, "greedy_rate_10", seeds=[0, 1])
-    world = sim.get_worlds("P", [0], **OVERRIDES)[0]
+    world = sim.get_worlds("FIX_T0", [0], **OVERRIDES)[0]
     direct = sim.run_episode(REGISTRY["greedy_rate_10"](), world)
     row = report.rows[0]
     fruits = store.fruits(row["episode_id"])

@@ -198,16 +198,16 @@ docs/        SCIENCE.md, DECISIONS.md, EXPERIMENTS.md (history: the planned expe
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
              world.py (reads SessionConfig .asset YAML; generates worlds from one seed, mirrors the C# placement/attribute/reward rules; exports the Unity .world and .npz), tiles.py (the tiles world of FOR: hexagonal plateaus as the terrain, a cluster of bushes in the middle of each tile,
              features generated tile by tile in two composing layers, `BETWEEN_MODES` and `WITHIN_MODES`, redraw checks, `stats`; tests in test_tiles.py), tiles_preview.py (a PNG of a tiles world), tile_calibration.py (is leaving a tile early the right policy: oracle top-k-per-tile policies,
-             the greedy rate actor and the beam planner on tile worlds, a `--sweep` over layout parameters; tests in test_tile_calibration.py), spatial.py / spatial_report.py (spatial evenness of the reward, switched by `spatialBalance`),
+             the greedy rate actor and the beam planner on tile worlds, a `--sweep` over layout parameters; tests in test_tile_calibration.py),
              ranking.py (the ranking pool: the arc geometry of k bushes, `generate_pool` / `ranking.py pool <session>` writes `<session>_seed<N>.ranking.json` with sets chosen jointly, positions relative to the player; the scores of a ranking from its raw picks; tests in test_ranking.py),
              design/ (one module per experiment: its instances and texts, see design/__init__.py; `design/FOR.py` is the only one, `design/common.py` the seeded play order, world-seed search and instruction page) and build_experiment.py (an experiment's assets through the Editor, texts, worlds and ranking pools from its design module),
              replay.py (loads a logged session of the online layout, replays its harvests including the ranking-break windows and the crosshair rule, resamples for agents), visibility.py (which bushes were in view per step, with egocentric coordinates), rundata.py (the online data layout: local mirror of the database tables, reader and writer),
              trajectory_codec.py (compact chunk format; see docs/ONLINE_DATA_PLAN.md), fruit_ramp.py (how the fruit colour ramp was chosen; `--stops` regenerates the SessionConfig stops),
              sim.py (fast session engine: actions, cone percept; run_n / compare), perception.py (the sensor model: what the simulated observer sees; `ConePercept` is the default, `OccludedConePercept` adds terrain and bush occlusion), costs.py (turning and key-press time costs and the `approach` arithmetic),
-             agents.py (agent components memory / critic / actor, ComposedAgent, registry), specs.py (agent specs: `Component` base, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), battery.py (the assessment battery: reward and advantage of populations of agents on S1-S4 fixtures, a serial runner and command line),
+             agents.py (agent components memory / critic / actor, ComposedAgent, registry), specs.py (agent specs: `Component` base, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), battery.py (the assessment battery: reward and advantage of populations of agents on the labels T1-T4 of the frozen tiles session FIX_T0, a serial runner and command line),
              results.py (the results database: schema v4, `Store`, `record_run`, `lookup`, `delete_run`), analysis.py (queries over the results database), plots.py (matplotlib/seaborn figures into `results/`: cumulative reward and advantage, colour-blind-safe `glasbey` colours plus a linestyle per agent),
              fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag),
-             synthetic.py (sessions built from a stated configuration, for the tests), legacy_sessions.py (the old S3-S5 as overrides for generator tests), fixtures/ (frozen session assets FIX_S0-FIX_S7, the aliases P and S1-S7 of the engine tests, and legacy_S3-S5),
+             synthetic.py (tiles sessions built from a stated configuration on FIX_T0, for the tests), fixtures/sessions/FIX_T0.asset (the one frozen tiles session of the engine tests, a copy of FOR_S1 with a 60 s duration and no ranking; never regenerated from a design),
              human_data.py (`download` the participants' data through the Supabase CLI into `ForagingData/<run>/` plus the tidy `ForagingData/humans.sqlite`: participants, sessions, events, ranking_sets; `load(exclude=("peter",))` returns DataFrames),
              server_admin.py (`publish --build <dir> [--note reason]` registers the catalog's experiments, the build's files and the release; the single register commands, list runs, pull a run into the local layout; connection string from FORAGING_DB_URL or ~/.config/foraging/db_url),
              server_client.py (reference client of the online server's protocol), server_smoke.py (one throwaway run through the deployed endpoints), load_test.py (N simulated participants uploading at the game's cadence), db_backup.py (a local JSONL copy of every database table before a migration),
@@ -242,8 +242,8 @@ Keep this tree in sync when files are added, moved, or retired.
 - **Worlds are generated in Python, not Unity.** `scripts/world.py` is the source
   of truth for placement, attributes, terrain fields and per-fruit rewards, all from
   one seed; Unity loads the result (`WorldData`) and only renders/plays it. After
-  changing any world-shaping SessionConfig value (spacing, jitter, clearing, terrain,
-  moisture terracing, mountains, canopy width/shape ranges, reward weights/std, fruit count) re-run
+  changing any world-shaping SessionConfig value (tile fields, terrain,
+  mountains, canopy width/shape ranges, reward weights/std, fruit count) re-run
   `./venv/bin/python scripts/world.py FOR_S1 --unity`; `GameManager` warns at
   startup when a file is stale. Never hand-edit `.world` files. Fruits are
   runtime-instantiated, never prefab children (their on-bush layout is still seeded
@@ -272,7 +272,7 @@ Keep this tree in sync when files are added, moved, or retired.
 
 ### Reward system (do not "fix")
 `R_bush = w1·f1(shape) + w2·f2(color) + w3·f3(moisture)` (+ the sum of the session's Gaussian bumps over (shape, color), each with its own spread per axis (`width` along shape, `widthColor` along color, 0 = the same), used by S7; + the sum of its product terms (`RewardProduct`: one feature linear times a Gaussian of the other), used by S6; + the sum of its two-factor terms (`RewardFactors`: a sigmoid or Gaussian per feature, multiplied or averaged; unused now), and a bump's `angle` turns it (FI's rotated Gaussian); + a random per-bush value from `randomBushValueRange`, used by the practice session), **no
-normalization**. Moisture pays in no session of the ladder (its weight is 0: decoration). `spatialBalance` (Off, Tiles, TilesAndSwaps; the old ladder set TilesAndSwaps) only changes which bush has which (shape, color, random value) record, to even the reward over the map (`scripts/spatial.py`); it makes the rewarded feature conspicuously regular and so leaks which feature pays: **the experiments use `featureBalance` instead** (each visible feature balanced on its own, the same way for each, independent of the reward and of moisture; DECISIONS "Reward balancing leaks which feature pays"). Per-fruit reward = `max(0, round(Gaussian(R_bush,
+normalization**. Moisture pays in no session of the ladder (its weight is 0: decoration). The old `spatialBalance` and `featureBalance` (which dealt records over the lattice to even the reward) are gone from the Python generator (2026-11-13): in a tiles world the features are dealt tile by tile (`scripts/tiles.py`). Per-fruit reward = `max(0, round(Gaussian(R_bush,
 rewardStd)))`, sampled independently per fruit and pre-drawn in the world file
 (the k-th fruit taken from a bush pays `fruit_reward[bush][k]`); harvest total is the sum.
 Basis functions: Linear, InvertedLinear, GaussianPeak, InvertedGaussian,
@@ -353,15 +353,15 @@ starting a large Claude task so the diff is reviewable.
 
 ### What to regenerate after a change
 The generated files are manual steps (nothing runs them at build time):
-- **Session world** (terrain, seed, spacing, jitter, mountains, canopy width/shape ranges,
-  reward weights/std, fruit count, moisture terracing, featureBalance, featureCoverage): `./venv/bin/python scripts/world.py <sessions> --unity`.
+- **Session world** (terrain, seed, tile fields, mountains, canopy width/shape ranges,
+  reward weights/std, fruit count): `./venv/bin/python scripts/world.py <sessions> --unity`.
   Unity warns at startup when a session world is stale.
-- **An experiment's sessions** (a session's reward function, which features vary, terrain, duration, instruction file, `spatialBalance`, hints): edit the design table in `scripts/design/<code>.py`, then
+- **An experiment's sessions** (a session's reward function, which features vary, terrain, duration, instruction file, hints): edit the design table in `scripts/design/<code>.py`, then
   `./venv/bin/python scripts/build_experiment.py <code>` (an open Editor; it makes or updates the assets, writes the instruction texts and regenerates the worlds and ranking pools; `--no-generate` skips those,
-  `--remove-stale` deletes assets the design no longer lists). The old aliases P and S1-S7 are accepted by the engine tests: they are the frozen copies in `scripts/fixtures/sessions/`. (The ABAB design is archived in `archive/abab/`, the CF ladder script in `archive/cf_ladder/`; the old experiments TUT, FN, RW and FI are in git at tag `pre-cleanup`.)
+  `--remove-stale` deletes assets the design no longer lists). The engine tests use the frozen `FIX_T0` in `scripts/fixtures/sessions/` (a session name starting FIX_ is read from there). (The ABAB design is archived in `archive/abab/`, the CF ladder script in `archive/cf_ladder/`; the old experiments TUT, FN, RW and FI are in git at tag `pre-cleanup`.)
 - **Ranking pool** (`rankingEvery`, `rankingPoolSets`, `rankingSetSize`, `rankingArcSpan`, `rankingDistance`, `rankingTieGap` or the reward function of a session that has rankings): `./venv/bin/python scripts/ranking.py pool <session>` (`build_experiment.py` does it for a session with `rankingEvery` > 0). A tiles world file also carries `tileCentres`, `tileRadius`, `tileRamp` in its header (regenerate the world).
 - **Tiles world** (`layout`/`assignment` `tiles`, `tileRadius`, `tileRampWidth`, `tileMoistureLevels`, `tileBushes`, `tileClusterRadius`, `tileClusterSpacing`, `tileSpread`, `tileArrangement`, `tileValueMode`, `tileWithinMode`, `tileGoodFraction`, `tileSmoothness`, `tileGradient`, `tileGradientAngle`, `tileCoverageMin`, `tileStartSpreadMin`): regenerate the world as for a session world; Unity warns when a tiles file is stale (the numeric tile fields).
-- **Spatial evenness of the reward** (`spatialBalance`, or `spatial.py`'s scales and target): regenerate the worlds as for a session world; `scripts/spatial_report.py <sessions>` shows what it does.
+- **Fields only the removed generator read** (`spatialBalance`, `featureBalance*`, `featureCoverage`, `treeSpacing`, `placementJitter`, `startClearingRadius`, `terrainNoise*`, `moistureTerrace*`, `terrace*`): no Python generator or the simulator reads them now (a world file's header still echoes the terrace and `CHECK_KEYS` ones, which the game compares); changing them regenerates nothing and moves no environment hash.
 - **No regeneration needed:** `targetFrameRate`, `sessionDuration`, `fruitHarvestDuration`, `playerMoveSpeed`,
   `rankingSeconds`, `rankingBonusPerPair`,
   audio volumes, instruction text.
@@ -375,15 +375,14 @@ results table as its last output, which is the completion marker. This went wron
 
 ### Testing
 During a long change (several milestones), run `run_tests.py --fast` and leave the full run (`--all`, about 13 minutes: world and ranking pool freshness, the fingerprint field check, the simulator, agent, battery and
-results runs) for the end of the work (PI, 2026-11-05); the slow checks to confirm then are listed in DECISIONS ("Test policy during the new-ladder milestones"). The generator tests that need the old moisture-paying,
-terraced or bump sessions use `scripts/legacy_sessions.py` and `scripts/fixtures/` instead of the shipped assets.
+results runs) for the end of the work (PI, 2026-11-05); the slow checks to confirm then are listed in DECISIONS ("Test policy during the new-ladder milestones"). Tests of the old-ladder generators (lattice placement,
+terraces, spatial balance, feature balance) were deleted with them (2026-11-13); git history keeps them.
 **Tests state their configuration; they do not name a shipped session** (PI, 2026-11-09). Generator tests build sessions with `scripts/synthetic.py`
-(which features are visible, what each pays and in which direction, the noise) on the frozen `FIX_S0` asset; `scripts/test_realization.py` checks that
+(which features are visible, what each pays and in which direction, the noise) on the frozen tiles session `FIX_T0` (tile fields stated in `synthetic.TILES`); `scripts/test_realization.py` checks that
 what a configuration intends is what the generators produce (visible features vary, hidden ones do not, the value slopes equal the weights and
-directions, the noise is the stated size), and applies the same
-check to every built design whose `design` dicts carry `visible`, `weights` and `direction` (`design/__init__.py`). The engine-level test modules
-(simulator, agents, battery, results, analysis, fingerprint, replay) use the old aliases `P`, `S1` to `S7` as an arbitrary environment; which resolve
-to frozen copies in `scripts/fixtures/sessions/` (`world.LEGACY_NAMES`), so changing or deleting a live experiment cannot move them. Only tests of the live files (freshness and the design tests) read the real assets.
+directions, the noise is the stated size, the session declares its features). The engine-level test modules
+(simulator, agents, battery, results, analysis, fingerprint, replay, rundata) use `FIX_T0` as an arbitrary environment (several worlds through the world seed),
+so changing or deleting a live experiment cannot move them. Only tests of the live files (freshness and the design tests) read the real assets.
 **Slow tests (`slow` marker, `--all`) run only when the PI approves, after a major change and before a commit.**
 `./venv/bin/python scripts/run_tests.py` runs only the Python test files the changed
 files can affect (`--all` before committing; `--dry-run` shows the decision). `--fast`
@@ -417,7 +416,7 @@ database. Design rationale and rejected alternatives: `docs/DECISIONS.md` ("Resu
   (`fingerprint.SIM_FIELDS`; audio, visuals and the world seed are excluded, so a temporary 15 s duration is visible and an
   Inspector tweak of a volume is not), overrides,
   percept, kind (always `session` since the cleanup of 2026-11-14), motor-cost constants. `code_versions`: a hash of the engine files
-  (`sim.py`, `costs.py`, `perception.py`, `world.py`, `ranking.py`, `spatial.py`, `tiles.py`), a separate hash of `agents.py`, git commit and dirty flag.
+  (`sim.py`, `costs.py`, `perception.py`, `world.py`, `ranking.py`, `tiles.py`), a separate hash of `agents.py`, git commit and dirty flag.
 - Schema v4 (2026-11-14) only adds a `schema_notes` table: the Interlude's `episode_checkpoints` table and the Interlude columns of `episodes` stay in old files, unused (a migration never drops data; the old file is copied to `.bak-v<old>` first). Every environment and engine hash changed with the cleanup, so results recorded before it are stale.
 - `episode_fruits` (schema v2): one row per fruit taken in the session (`t` in session seconds, `bush`, `k`, `reward`, `running_total`),
   the agent's counterpart of the human `fruit` events in `events.csv`; read with `Store.fruits(episode_id)` or
@@ -428,7 +427,7 @@ database. Design rationale and rejected alternatives: `docs/DECISIONS.md` ("Resu
 
 **Using it**
 ```bash
-./venv/bin/python scripts/sim.py S1 --seeds 0-99 --agents nearest,delta_rate_10 --record --tag my-experiment [--note "..."] [--set session_duration=90] [--db PATH]
+./venv/bin/python scripts/sim.py FIX_T0 --seeds 0-99 --agents nearest,delta_rate_10 --record --tag my-experiment [--note "..."] [--set session_duration=90] [--db PATH]
 ```
 `record_run(agent, session, seeds, tag, kind=, percept=, overrides=, n_samples=, store=)` in `scripts/results.py` does the same from
 Python (`agent` = factory, registry name or spec dict). It looks every seed up by (agent, environment, code version) and
@@ -458,7 +457,7 @@ random stream comes from the world seed, so a result is reproducible from its ke
   the paired difference to the baseline's cumulative reward in the same worlds (the baseline is left out): flat at zero until an agent
   starts beating it, then rising. (A reward-rate curve with binning or low-pass smoothing was built and removed: too hard to read, flat and
   wiggly with the world's layout; see DECISIONS.)
-- **Figures are grids of panels, one per session** (2 x 2 for S1-S4): `plots.plot_cumulative_reward(panels, path, names=, order=)`
+- **Figures are grids of panels, one per session** (2 x 2 for the battery's T1-T4): `plots.plot_cumulative_reward(panels, path, names=, order=)`
   `plots.plot_learning_curve(...)` take `{session: curves}` (or one curves object) and draw each agent with `seaborn.lineplot` from the per-seed
   curves (`plots.long_form`): mean and 95% bootstrap interval across seeds, `hue` = agent name, the same colour for the same agent in every
   panel, one shared legend, one linestyle per agent as well as one colour (`plots.SERIES`, `plots.STYLES`), at most 8 agents per figure (the palette) and a warning above 5 (`plots.MAX_DISTINCT`). The advantage figure uses the **lowest-performing agent of each session**
@@ -476,8 +475,8 @@ random stream comes from the world seed, so a result is reproducible from its ke
   colour-blindness (deuteranopia, protanopia, tritanopia) before relying on it, and do not change the palette without re-measuring the worst pair.
 
 **The assessment battery** (`scripts/battery.py`; "battery" because "test suite" already means pytest). One definition of how agents are compared:
-S1 to S4 at the durations of the default `long` battery (120, 120, 180, 180 s, passed as `session_duration` overrides because the assets carry the participants' shorter durations; `--battery standard` is the shorter 90, 120, 120, 150 s one that older records used),; reward only since the cleanup of 2026-11-14 (the
-Interlude half and the checkpoint scores are gone, and no ranking evaluation exists yet; the sessions are still the frozen non-tiles fixtures); 10 seeds by default; each agent starts fresh in every session.
+the labels T1 to T4 of the one frozen tiles session `FIX_T0`, at the durations of the default `long` battery (60, 90, 120, 120 s, passed as `session_duration` overrides; `--battery standard` is the shorter 45, 60, 60, 90 s one), each label on its own worlds (world seeds shifted by 100 per label); reward only since the cleanup of 2026-11-14 (the
+Interlude half and the checkpoint scores are gone, and no ranking evaluation exists yet; the environment is a frozen tiles session); 10 seeds by default; each agent starts fresh in every session.
 ```bash
 ./venv/bin/python scripts/battery.py list
 ./venv/bin/python scripts/battery.py run --population main --tag <name> [--agents a,b,...] [--seeds 0-9] [--db PATH]   # records <name>/<session> runs
@@ -506,7 +505,7 @@ normalised score (no share of a floor-to-ceiling gap): see DECISIONS, "What a sc
   invalidating by hand.
 - *The simulator starts reading another SessionConfig field:* add it to `fingerprint.SIM_FIELDS` (every environment hash then changes).
   `test_sim_fields_cover_every_session_parameter_the_simulator_reads` traces a run and fails until you do.
-- *Code hashes* are of file bytes (`ENGINE_FILES`: sim, costs, perception, world, ranking, spatial, tiles; `AGENT_FILES`: agents, specs), so even a
+- *Code hashes* are of file bytes (`ENGINE_FILES`: sim, costs, perception, world, ranking, tiles; `AGENT_FILES`: agents, specs), so even a
   comment edit moves them (a false alarm is the safe error); `dirty` means a hashed file differs from HEAD or is untracked.
 
 **Querying**

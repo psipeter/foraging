@@ -7,13 +7,13 @@
     ./venv/bin/python scripts/battery.py scores --tag first-battery --population main
     ./venv/bin/python scripts/battery.py plot --tag first-battery --population main [--kinds reward,advantage]
 
-For each session the battery plays the agent for the session's design duration (passed as an override: the assets may carry a temporary
-shorter one). Everything is an ordinary `results.record_run` under the tag `<tag>/<session>`, so reuse of what is already recorded, the
+For each label the battery plays the agent for the label's duration (passed as an override). Everything is an ordinary `results.record_run` under the tag `<tag>/<session>`, so reuse of what is already recorded, the
 environment and code fingerprints, and every query in analysis.py work unchanged. Each agent starts fresh in every session (no carry-over).
 Scores and plots are not part of the battery: they are computed later from the database (scripts/analysis.py).
 
-The battery's sessions are still the frozen S1 to S4 fixtures (scripts/fixtures/sessions/), not tiles worlds: the ranking evaluation that once
-followed each session is gone and has not been rebuilt, so the battery measures reward only.
+The battery's sessions are labels T1 to T4 of one frozen tiles environment, `FIX_T0` (scripts/fixtures/sessions/), at different session lengths, each label on
+its own set of worlds (the world seeds are shifted by 100 per label). The ranking evaluation that once followed each session is gone and has not been rebuilt, so
+the battery measures reward only.
 """
 
 import argparse
@@ -32,17 +32,22 @@ from world import _parse_seeds
 @dataclass(frozen=True)
 class Battery:
     name: str
-    sessions: dict               # session name -> duration in seconds (the design duration; the assets may carry a temporary one)
+    sessions: dict               # label -> duration in seconds, passed as an override of the one environment `session`
     seeds: tuple = tuple(range(10))
+    session: str = "FIX_T0"      # the frozen tiles session every label plays
+    seed_stride: int = 100       # the world seeds of the n-th label are shifted by n * seed_stride, so each label has worlds of its own
 
-    def overrides(self, session):
-        return {"session_duration": self.sessions[session]}
+    def overrides(self, label):
+        return {"session_duration": self.sessions[label]}
+
+    def world_seeds(self, label, seeds):
+        return [int(s) + self.seed_stride * list(self.sessions).index(label) for s in seeds]
 
 
 BATTERIES = {
-    "standard": Battery("standard", {"S1": 90, "S2": 120, "S3": 120, "S4": 150}),
+    "standard": Battery("standard", {"T1": 45, "T2": 60, "T3": 60, "T4": 90}),
     # the same battery with longer sessions (PI): more time to exploit what has been learned
-    "long": Battery("long", {"S1": 120, "S2": 120, "S3": 180, "S4": 180}),
+    "long": Battery("long", {"T1": 60, "T2": 90, "T3": 120, "T4": 120}),
 }
 DEFAULT_BATTERY = "long"      # the battery every command uses unless `--battery` names another; `standard` stays for the records made with it
 
@@ -182,7 +187,7 @@ def run_battery(agents, battery, tag, seeds=None, store=None, progress=print):
     for session in battery.sessions:
         reports[session] = []
         for label, factory in agents.items():
-            report = results.record_run(factory, session, seeds, f"{tag}/{session}", overrides=battery.overrides(session), store=store,
+            report = results.record_run(factory, battery.session, battery.world_seeds(session, seeds), f"{tag}/{session}", overrides=battery.overrides(session), store=store,
                                         note=f"battery {battery.name}; agent {label}")
             reports[session].append(report)
             if progress:

@@ -2215,3 +2215,11 @@ the old concept alive in every query. Keeping `RankingBreak` as `RankingPhase`: 
 **Migration.** `supabase/migrations/20261114000000_ranking_rename.sql` (with the two before it, 20261112 and 20261113) renames and drops as above; apply after `scripts/db_backup.py`. The database held
 only development runs (48 runs when backed up, `ForagingData/_db_backup_precleanup_*`); an old `humans.sqlite` is rebuilt by the next `human_data.py download`.
 
+
+**Addendum (2026-11-13): tiles is the only world, one frozen fixture.** The fixtures `FIX_S0`-`FIX_S7`, `legacy_S3-S5`, the aliases `P` and `S1`-`S7` (`world.LEGACY_NAMES`) and `legacy_sessions.py` are
+replaced by one frozen tiles session, `scripts/fixtures/sessions/FIX_T0.asset` (a copy of `FOR_S1` with a 60 s duration, `rankingEvery` 0 and no `designJson`; never regenerated from a design). The
+engine tests get several worlds through the world seed; the battery's S1-S4 became the labels T1-T4 of `FIX_T0` at four durations, on world seeds shifted by 100 per label. The non-tiles generator (jittered
+lattice placement, the terrace modes, `spatialBalance`, `featureBalance`, `featureCoverage` and `scripts/spatial.py`, `spatial_report.py`, `test_spatial.py`) was deleted, with the tests of the old-ladder
+features (terraced moisture, bump and product sessions via the legacy fixtures, lattice rules). `FOR_S1`'s world and ranking pool regenerate byte for byte as before. The terrace fields are still echoed into
+a world file's header because the game compares them. `test_realization.py` keeps its first three checks and the declared-features check, now on tiles worlds (`synthetic.TILES` states the tile fields); its
+balancing test and the every-built-design check were deleted (the design check returns when `design/FOR.py` states `visible`, `weights` and `direction`).

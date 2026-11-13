@@ -86,11 +86,11 @@ def test_session_clock_cuts_off_mid_fruit_and_mid_walk():
 
 @pytest.mark.slow
 def test_real_world_runs_and_is_paired_reproducible():
-    a = run_n(NearestAgent, "S1", seeds=range(5))
-    b = run_n(NearestAgent, "S1", seeds=range(5))
+    a = run_n(NearestAgent, "FIX_T0", seeds=range(5))
+    b = run_n(NearestAgent, "FIX_T0", seeds=range(5))
     assert np.array_equal(a.totals, b.totals) and a.mean > 0
     r = a.results[0]
-    assert r.walk_time + r.harvest_time + r.idle_time == pytest.approx(load_session("S1").session_duration)
+    assert r.walk_time + r.harvest_time + r.idle_time == pytest.approx(load_session("FIX_T0").session_duration)
 
 
 def test_nearest_agent_visits_by_walking_time_and_exhausts():
@@ -178,7 +178,7 @@ def test_planner_beam_is_close_and_never_beats_exact():
 
 def test_planner_not_worse_than_greedy_on_real_world():
     from sim import get_worlds
-    w = get_worlds("S1", [0])[0]
+    w = get_worlds("FIX_T0", [0])[0]
     plan = PlannerAgent("beam", beam_width=100)
     run_episode(plan, w)
     greedy_trace = run_episode(GreedyAgent(15, "rate", whole_map=True), w).trace
@@ -465,7 +465,7 @@ def test_occluded_percept_loses_a_bush_behind_a_ridge():
 
 def test_occluded_percept_never_sees_more_than_the_cone_in_a_real_world():
     from perception import ConePercept, OccludedConePercept
-    w = sim.get_worlds("S3", [3])[0]
+    w = sim.get_worlds("FIX_T0", [3])[0]
     cone = sim.percept_for(w)
     occ = OccludedConePercept(cone.angle, cone.distance)
     dep = np.zeros(w.n, dtype=bool)
