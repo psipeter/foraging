@@ -166,10 +166,10 @@ def download(out=DATA_DIR, everything=False, log=print):
     con = sqlite3.connect(out / DB_NAME)
     if con.execute("select 1 from sqlite_master where name = 'interlude_trials'").fetchone():       # made before the Interlude was removed: download everything again
         for old in ("view interlude_picks", "table interlude_trials", "table sessions", "table participants"):
-            con.execute(f"drop {old}")
+            con.execute(f"drop {old.split()[0]} if exists {old.split()[1]}")
     if "final_score" in [r[1] for r in con.execute("pragma table_info(sessions)")]:         # made before foraging_points / ranking_points: download everything again
         for old in ("view ranking_picks", "table ranking_sets", "table sessions", "table participants"):
-            con.execute(f"drop {old}")
+            con.execute(f"drop {old.split()[0]} if exists {old.split()[1]}")
     con.executescript(SCHEMA)
     runs = query(RUNS_SQL)
     have = {r[0]: r[1:] for r in con.execute("select run_id, status, finished_at, last_event, n_sessions from participants")}
@@ -238,7 +238,7 @@ def load(root=DATA_DIR, exclude=(), status=None):
         keep &= people["status"] == status
     people = people[keep].reset_index(drop=True)
     for column in ("started_at", "finished_at"):
-        people[column] = pd.to_datetime(people[column], utc=True)
+        people[column] = pd.to_datetime(people[column], utc=True, format="ISO8601")
     ids = list(people["run_id"])
 
     def table(name):
@@ -247,7 +247,7 @@ def load(root=DATA_DIR, exclude=(), status=None):
 
     sessions = table("sessions")
     for column in ("started_at", "ended_at"):
-        sessions[column] = pd.to_datetime(sessions[column], utc=True)
+        sessions[column] = pd.to_datetime(sessions[column], utc=True, format="ISO8601")
     out = Humans(people, sessions, table("events"), table("fruits"), table("ranking_sets"), root)
     con.close()
     return out
