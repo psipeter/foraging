@@ -60,6 +60,12 @@ public class MenuScreen : MonoBehaviour
         return RunModes.Active ? ExperimentConfig.MinutesOf(played, RunModes.Short) : config.EstimatedMinutes;
     }
 
+    // "~3 min left" from the seconds a run still needs (to the nearest minute), "under a minute left" at the end.
+    private static string TimeLeftText(float seconds)
+    {
+        return seconds < 45f ? "under a minute left" : $"~{Mathf.Max(1f, Mathf.Round(seconds / 60f)):F0} min left";
+    }
+
     // "21 sessions · ~65 min", or without the time when the experiment is not in this build.
     private static string LengthText(ExperimentConfig config, int sessions)
     {
@@ -93,7 +99,7 @@ public class MenuScreen : MonoBehaviour
                     if (played != null)
                     {
                         row.Progress = played.Count > 0 ? Mathf.Clamp01((s.sessions_done + s.session_progress) / played.Count) : 0f;       // the sessions done and the time in the current one
-                        row.Detail = $"{CountSessions(played, s.sessions_done)} of {sessions} · ~{MinutesOf(config, played) * (1f - row.Progress):F0} min left";
+                        row.Detail = $"{CountSessions(played, s.sessions_done)} of {sessions} · {TimeLeftText(ExperimentConfig.SecondsLeft(played, s.sessions_done, s.session_progress, RunModes.Active ? RunModes.Short : 1f))}";
                     }
                     else
                     {

@@ -58,6 +58,45 @@ public class ExperimentConfig : ScriptableObject
         return Mathf.Max(RoundMinutesTo, Mathf.Round(seconds / 60f / RoundMinutesTo) * RoundMinutesTo);
     }
 
+    // The ranking sets of a session at their longest: every ranking on the schedule (SessionConfig.rankingLeavings; a session on the every-N rule counts none, since how many
+    // leavings there will be is not known), each set its full countdown. The breaks hold the session clock, so they come on top of the session's length.
+    public static float RankingSecondsAtMost(SessionConfig session)
+    {
+        if (session == null || session.RankingEvery <= 0)
+        {
+            return 0f;
+        }
+
+        return session.RankingLeavings.Length * session.RankingSets * session.RankingSeconds;
+    }
+
+    // The seconds a run still needs, for the menu's "time left": for every session not finished, its instruction page, its length and its rankings at their longest, less what the
+    // current one has already taken (its page, once begun, and the share `sessionProgress`, 0 to 1, from the server: the foraging clock over the session's length, taken to be the
+    // share of the rankings as well). `shortFactor` is RunModes.Short.
+    public static float SecondsLeft(IList<SessionConfig> list, int sessionsDone, float sessionProgress, float shortFactor)
+    {
+        float seconds = 0f;
+        for (int i = Mathf.Max(sessionsDone, 0); i < list.Count; i++)
+        {
+            SessionConfig session = list[i];
+            if (session == null)
+            {
+                continue;
+            }
+
+            float body = RunModes.SessionSeconds(session, shortFactor) + RankingSecondsAtMost(session);          // its foraging time and its rankings (they come through the session)
+            float total = InstructionSecondsPerPart + body;
+            if (i == sessionsDone && sessionProgress > 0f)
+            {
+                total -= InstructionSecondsPerPart + body * Mathf.Clamp01(sessionProgress);                     // the page is read and `sessionProgress` of the session is done
+            }
+
+            seconds += Mathf.Max(total, 0f);
+        }
+
+        return seconds;
+    }
+
     // The StreamingAssets files a session reads: its world, its ranking pool and its instruction text.
     public static List<string> FilesOf(SessionConfig session)
     {
