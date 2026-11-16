@@ -44,12 +44,9 @@ DEFAULT_QUANTILES = tuple(range(10, 100, 10))
 CONFIDENCE = 2.0               # the paired gain over exhaust must exceed this many standard errors
 
 
-class TileTopK(Actor):
-    """Knows every bush's true value and its tile (`bind`). Visits the tiles one by one: in each it harvests the `k` best bushes by value, best rate first, and leaves; the next tile is the unvisited
-    one whose k best bushes pay the most per second (their reward over the first walk, the harvesting and the moves between them). When every tile is visited it takes what is left, best rate first."""
-
-    def __init__(self, k):
-        self.k = int(k)
+class TilePolicy(Actor):
+    """Knows every bush's true value and its tile (`bind`). Visits the tiles one by one: in each it harvests the bushes `pick` chooses, best rate first, and leaves; the next tile is the unvisited
+    one whose chosen bushes pay the most per second (their reward over the first walk, the harvesting and the moves between them). When no tile has a chosen bush it takes what is left, best rate first."""
 
     def bind(self, tile_of):
         self.tile_of = np.asarray(tile_of, dtype=int)
@@ -77,54 +74,7 @@ class TileTopK(Actor):
             if len(members) == 0:
                 self.tiles_left.discard(t)
                 continue
-            top = members[np.argsort(-mean[members])[:self.k]]
-            pos = view.memory.pos[top]
-            gap = float(np.mean(np.hypot(*(pos[:, None, :] - pos[None, :, :]).transpose(2, 0, 1)))) / speed if len(top) > 1 else 0.0
-            duration = float(t_first[top].min()) + float(left[top].sum()) * fd + (len(top) - 1) * gap
-            r = float((mean[top] * left[top]).sum()) / duration
-            if r > best_rate:
-                best, best_rate = top, r
-        if best is None:                                         # every tile has been visited: what is left, best rate first
-            return Harvest(int(np.argmax(np.where(cand, rate, -np.inf)))) if cand.any() else None
-        self.tiles_left.discard(int(self.tile_of[best[0]]))
-        self.chosen[best] = True
-        return Harvest(int(best[np.argmax(rate[best])]))
-
-
-class TileThreshold(Actor):
-    """Knows every bush's true value and its tile (`bind`). In each tile it visits it harvests the bushes worth at least `theta` per fruit (best rate first) and leaves when none is left; the next
-    tile is the unvisited one whose qualifying bushes pay the most per second. When no tile has a qualifying bush it takes what is left, best rate first."""
-
-    def __init__(self, theta):
-        self.theta = float(theta)
-
-    def bind(self, tile_of):
-        self.tile_of = np.asarray(tile_of, dtype=int)
-        return self
-
-    def begin(self, task, rng):
-        super().begin(task, rng)
-        self.tiles_left = set(np.unique(self.tile_of).tolist())
-        self.chosen = np.zeros(len(self.tile_of), dtype=bool)
-
-    def act(self, view):
-        mean, _ = view.values()
-        cand = view.candidates()
-        rate = rate_of(view, mean)
-        here = self.chosen & cand
-        if here.any():
-            return Harvest(int(np.argmax(np.where(here, rate, -np.inf))))
-        self.chosen[:] = False
-        t_first = view.travel_times()
-        left = view.memory.fruits_left()
-        speed, fd = self.task.speed, self.task.fruit_duration
-        best, best_rate = None, -np.inf
-        for t in sorted(self.tiles_left):
-            members = np.flatnonzero((self.tile_of == t) & cand)
-            if len(members) == 0:
-                self.tiles_left.discard(t)
-                continue
-            top = members[mean[members] >= self.theta]
+            top = self.pick(members, mean)
             if len(top) == 0:
                 continue
             pos = view.memory.pos[top]
@@ -133,11 +83,31 @@ class TileThreshold(Actor):
             r = float((mean[top] * left[top]).sum()) / duration
             if r > best_rate:
                 best, best_rate = top, r
-        if best is None:
+        if best is None:                                         # no tile has a chosen bush left: what is left, best rate first
             return Harvest(int(np.argmax(np.where(cand, rate, -np.inf)))) if cand.any() else None
         self.tiles_left.discard(int(self.tile_of[best[0]]))
         self.chosen[best] = True
         return Harvest(int(best[np.argmax(rate[best])]))
+
+
+class TileTopK(TilePolicy):
+    """In each tile, the `k` best bushes by value."""
+
+    def __init__(self, k):
+        self.k = int(k)
+
+    def pick(self, members, mean):
+        return members[np.argsort(-mean[members])[:self.k]]
+
+
+class TileThreshold(TilePolicy):
+    """In each tile, the bushes worth at least `theta` per fruit; a tile with none is skipped."""
+
+    def __init__(self, theta):
+        self.theta = float(theta)
+
+    def pick(self, members, mean):
+        return members[mean[members] >= self.theta]
 
 
 def tile_of_world(w):

@@ -54,30 +54,6 @@ def test_a_newer_file_is_refused_and_a_missing_one_is_not_created_read_only(tmp_
         Store(tmp_path / "none.sqlite", readonly=True)
 
 
-def test_an_older_file_is_copied_before_it_is_migrated(tmp_path, monkeypatch):
-    path = tmp_path / "r.sqlite"
-    Store(path).close()
-    monkeypatch.setattr(results, "SCHEMA_VERSION", results.SCHEMA_VERSION + 1)
-    monkeypatch.setitem(results.MIGRATIONS, results.SCHEMA_VERSION - 1, "CREATE TABLE extra (x INTEGER);")
-    with Store(path) as s:
-        assert s.version == results.SCHEMA_VERSION and s.select("SELECT name FROM sqlite_master WHERE name = 'extra'")
-    assert (tmp_path / f"r.sqlite.bak-v{results.SCHEMA_VERSION - 1}").exists()
-
-
-def test_a_version_1_file_gains_the_fruit_table_and_keeps_its_rows(tmp_path):
-    path = tmp_path / "r.sqlite"
-    conn = sqlite3.connect(path)
-    conn.executescript(results.SCHEMA_V1 + "PRAGMA user_version = 1;")
-    conn.execute("INSERT INTO agents (agent_id, spec_json) VALUES ('abc', '{}')")
-    conn.commit()
-    conn.close()
-    with Store(path) as s:
-        assert s.version == results.SCHEMA_VERSION
-        assert s.select("SELECT agent_id FROM agents") == [{"agent_id": "abc"}]
-        assert s.select("SELECT COUNT(*) AS n FROM episode_fruits")[0]["n"] == 0
-    assert (tmp_path / "r.sqlite.bak-v1").exists()
-
-
 # --- agents, environments, code ------------------------------------------------------------------------------------
 
 def test_an_agent_is_stored_once_with_its_components_and_parameters(store):
@@ -271,9 +247,6 @@ def test_reused_episodes_keep_their_fruits_and_deleting_a_run_removes_them(store
     assert store.select("SELECT COUNT(*) AS n FROM episode_fruits")[0]["n"] == 0
 
 
-# --- checkpoints ---------------------------------------------------------------------------------------------------
-
-
 # --- the migration that retired the forced-choice evaluation (schema 4) ---------------------------------------------
 
 def _old_file(path, version):
@@ -293,8 +266,8 @@ def _old_file(path, version):
     conn.close()
 
 
-@pytest.mark.parametrize("version", [2, 3])
-def test_an_older_file_keeps_its_retired_interlude_rows_and_is_backed_up(tmp_path, version):
+@pytest.mark.parametrize("version", [1, 2, 3])
+def test_an_older_file_is_backed_up_migrated_and_keeps_its_rows(tmp_path, version):
     path = tmp_path / "r.sqlite"
     _old_file(path, version)
     with Store(path) as s:
@@ -303,6 +276,7 @@ def test_an_older_file_keeps_its_retired_interlude_rows_and_is_backed_up(tmp_pat
         assert row["interlude_accuracy"] == 0.75 and row["total"] == 12.0
         assert s.select("SELECT COUNT(*) AS n FROM episode_types")[0]["n"] == 1
         assert s.select("SELECT version FROM schema_notes")[0]["version"] == 4
+        assert s.select("SELECT COUNT(*) AS n FROM episode_fruits")[0]["n"] == 0
     assert (tmp_path / f"r.sqlite.bak-v{version}").exists()
 
 

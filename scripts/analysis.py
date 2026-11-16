@@ -1,5 +1,5 @@
-"""Queries over the results database (scripts/results.py): paired comparisons, tables, the gap an agent closes, and the effect of one
-component. Everything here only reads; open the file with `results.Store(path, readonly=True)`.
+"""Queries over the results database (scripts/results.py): paired comparisons, tables, cumulative-reward curves, and the effect of
+one component. Everything here only reads; open the file with `results.Store(path, readonly=True)`.
 
     sel = analysis.select(store, tag="alpha-sweep-1")           # one environment, one code version, every agent in the tag
     rows = analysis.table(sel, baseline="nearest")               # mean, std, se and the paired difference to the baseline
@@ -67,17 +67,21 @@ def metric_function(metric):
     return lambda row: row.get(metric)
 
 
-def resolve_agent(store, agent):
-    """An agent id from an id, a registry name (`nearest`) or a spec dict."""
+def _agent_id(agent):
+    """The id of an agent given as an agent, a spec dict or a registry name; anything else is taken to be an id already."""
     if hasattr(agent, "spec"):
         agent = agent.spec()
     if isinstance(agent, dict):
         return specs.spec_hash(agent)
-    if agent in REGISTRY:
-        return REGISTRY[agent]().spec_hash()
-    if store.select("SELECT 1 FROM agents WHERE agent_id = ?", (agent,)):
-        return agent
-    raise KeyError(f"no agent '{agent}' (not a registry name, a spec, or a recorded agent id)")
+    return REGISTRY[agent]().spec_hash() if agent in REGISTRY else agent
+
+
+def resolve_agent(store, agent):
+    """An agent id from an id, a registry name (`nearest`) or a spec dict."""
+    agent_id = _agent_id(agent)
+    if agent_id == agent and not store.select("SELECT 1 FROM agents WHERE agent_id = ?", (agent,)):
+        raise KeyError(f"no agent '{agent}' (not a registry name, a spec, or a recorded agent id)")
+    return agent_id
 
 
 def select(store, *, tag=None, session=None, env_id=None, overrides=None, agents=None, engine="current"):
@@ -91,8 +95,8 @@ def select(store, *, tag=None, session=None, env_id=None, overrides=None, agents
 
     Raises SelectionError when more than one environment remains, or an agent has two episodes for one seed from different code."""
     where, params = ["1 = 1"], []
-    if tag is not None:
-        tags = [tag] if isinstance(tag, str) else list(tag)
+    tags = [] if tag is None else [tag] if isinstance(tag, str) else list(tag)
+    if tags:
         where.append(f"e.episode_id IN (SELECT episode_id FROM run_episodes JOIN runs USING (run_id) WHERE tag IN ({','.join('?' * len(tags))}))")
         params += tags
     if session is not None:
@@ -150,9 +154,6 @@ def select(store, *, tag=None, session=None, env_id=None, overrides=None, agents
                      "an agent's behavior under an unchanged spec may differ")
     if dirty:
         notes.append("some results were computed on a dirty tree (uncommitted changes in the hashed files)")
-    tags = []
-    if tag is not None:
-        tags = [tag] if isinstance(tag, str) else list(tag)
     return Selection(json.loads(rows[0]["env_json"]), envs[0], code, specs_by, by_agent, tags, notes)
 
 
@@ -186,16 +187,7 @@ def paired(sel, agent_id, baseline_id, metric="total"):
 
 def resolve_agent_in(sel, agent):
     """An agent id of this selection from an id, a registry name or a spec."""
-    if hasattr(agent, "spec"):
-        agent = agent.spec()
-    if isinstance(agent, dict):
-        agent_id = specs.spec_hash(agent)
-    elif agent in sel.agents:
-        return agent
-    elif agent in REGISTRY:
-        agent_id = REGISTRY[agent]().spec_hash()
-    else:
-        raise KeyError(f"agent '{agent}' is not in this selection")
+    agent_id = _agent_id(agent)
     if agent_id not in sel.agents:
         raise KeyError(f"agent '{agent}' ({agent_id}) is not in this selection")
     return agent_id

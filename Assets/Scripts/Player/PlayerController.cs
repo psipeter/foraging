@@ -70,6 +70,8 @@ public class PlayerController : MonoBehaviour
             if (playerRigidbody != null)
             {
                 playerRigidbody.linearVelocity = Vector3.zero;
+                // The last step of a walk moved the body after its height was set, so a player who stops would stay at the height of the step before; replay and visibility assume the terrain's height under the player.
+                SnapToGround(playerRigidbody.position);
             }
 
             return;
@@ -111,7 +113,12 @@ public class PlayerController : MonoBehaviour
         v.z = desiredVelocity.z;
         playerRigidbody.linearVelocity = v;
 
-        float targetY = GroundTargetY(currentPos);
+        SnapToGround(currentPos);
+    }
+
+    private void SnapToGround(Vector3 at)
+    {
+        float targetY = GroundTargetY(at);
 
         float yDiff = Mathf.Abs(playerRigidbody.position.y - targetY);
         // Tight threshold: the camera sits at eye level, so larger height steps would read as jitter.
@@ -121,7 +128,7 @@ public class PlayerController : MonoBehaviour
             pos.y = targetY;
             playerRigidbody.position = pos;
 
-            v = playerRigidbody.linearVelocity;
+            Vector3 v = playerRigidbody.linearVelocity;
             v.y = 0f;
             playerRigidbody.linearVelocity = v;
         }

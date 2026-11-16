@@ -6,28 +6,21 @@ using UnityEngine.InputSystem;
 // each starting with a trigger line:
 //
 //     # a comment line
-//     @fruit 1                   the trigger and, where it counts, which occurrence (default 1)
+//     @bout 1                    the trigger and which occurrence (default 1)
 //     Title line                 the first line is the title, a last "Press [Enter] to ..." line the prompt, the rest the text ([Key] becomes a key chip)
 //     You earned {points} points.
 //
 //     Press [Enter] to continue
 //
-// A hint is shown once, as a pause popup (the game holds still until Enter, as for the first-harvest message); hints that fire together are queued. Triggers:
-//   harvest_available   the nth time a bush comes into harvest range and under the crosshair (the "hold Space" hint appears)
-//   harvest_paused      the nth time a harvest in progress is paused (looked away)
-//   fruit               the nth fruit taken (`{points}` = its reward)
+// A hint is shown once, as a pause popup (the game holds still until Enter); hints that fire together are queued. Triggers (an unknown one is logged as an error and never fires):
 //   bout                the nth harvest that took fruit, when it ends (`{points}` = what it earned)
-//   exhausted           the nth bush picked empty
 //   patch_switch        the nth patch leaving, as RankingBreak counts it (a settled move into another tile that qualifies: a bush harvested, not in the cooldown after a ranking, not in the last
 //                       seconds); needs a session with rankings
 //   ranking_start       the nth ranking break, a quarter second after the bushes of its first set have grown (the hint pauses the set's countdown)
 //   ranking_end         the nth ranking break, as it ends
-//   seconds             this many foraging seconds into the session (n = seconds); like `after`, it waits for a harvest under way to end
-//   idle                after this many seconds standing still without harvesting (n = seconds)
-//   after               `@after <trigger>:<n> <seconds>`: that many foraging seconds (the session clock, which a ranking break holds) after the hint with that id was shown,
-//                       for example `@after ranking_start:1 30`; never fires if that hint is never shown
-// Foraging triggers are ignored while a ranking break is running (the ranking bushes pay nothing and show no outcome). Each shown and dismissed hint is logged
-// (`hint_shown`, `hint_dismissed`: id, trigger, n). A resumed session starts its hints again.
+// Foraging triggers (`bout`, `patch_switch`) are ignored while a ranking break is running. A foraging hint waiting in the queue holds back a ranking hint behind it (the queue is in order).
+// Each shown and dismissed hint is logged (`hint_shown`, `hint_dismissed`: id `trigger:n`, trigger, n). A resumed session skips the hints already shown (the server's `hints_shown`), and a trigger's
+// count carries on from the highest hint of it that was shown.
 public class TutorialHints : MonoBehaviour
 {
     private const float RankingHintDelay = 0.25f;      // seconds after the first set's bushes have grown before the ranking hint appears (the set's countdown runs meanwhile; the hint then pauses it)
@@ -38,27 +31,20 @@ public class TutorialHints : MonoBehaviour
         public int n = 1;
         public string text;
         public bool shown;
-        public string afterId;           // for an `after` hint: the id of the hint it follows
-        public float afterSeconds;
-        public float shownAt = -1f;       // foraging seconds into the session when it was shown
 
-        public string Id => trigger == "after" ? $"after:{afterId}:{afterSeconds:0}" : $"{trigger}:{n}";
+        public string Id => $"{trigger}:{n}";
     }
 
     private readonly List<Hint> _hints = new List<Hint>();
     private readonly Queue<Hint> _queue = new Queue<Hint>();
     private readonly Dictionary<string, int> _counts = new Dictionary<string, int>();
     private SessionConfig _config;
-    private PlayerController _player;
-    private SunController _sun;
     private DataLogger _log;
     private InstructionsScreen _screen;
     private Hint _current;
     private string _placeholder = "";
-    private float _idleSeconds;
-    private Vector3 _lastPosition;
 
-    public static TutorialHints Create(SessionConfig config, PlayerController player, SunController sun, DataLogger log)
+    public static TutorialHints Create(SessionConfig config, DataLogger log)
     {
         if (config == null || string.IsNullOrEmpty(config.HintsFile))
         {
@@ -74,8 +60,6 @@ public class TutorialHints : MonoBehaviour
         var go = new GameObject("TutorialHints");
         var hints = go.AddComponent<TutorialHints>();
         hints._config = config;
-        hints._player = player;
-        hints._sun = sun;
         hints._log = log;
         hints.Parse(StreamingData.ReadText(config.HintsFile));
         hints.SkipShown();
@@ -92,12 +76,6 @@ public class TutorialHints : MonoBehaviour
             return;
         }
 
-        if (ResumeInfo.Pending.leavings > 0)
-        {
-            _counts["patch_switch"] = ResumeInfo.Pending.leavings;                          // the patch leavings so far, as the rankings count them
-        }
-
-        float foraged = (float)(ResumeInfo.Pending.clock - ResumeInfo.Pending.held_seconds);
         foreach (string id in ResumeInfo.Pending.hints_shown)
         {
             foreach (Hint hint in _hints)
@@ -105,17 +83,13 @@ public class TutorialHints : MonoBehaviour
                 if (!hint.shown && hint.Id == id)
                 {
                     hint.shown = true;
-                    hint.shownAt = foraged;
-                    if (hint.trigger != "after" && hint.trigger != "seconds" && hint.trigger != "idle")
-                    {
-                        _counts[hint.trigger] = Mathf.Max(_counts.TryGetValue(hint.trigger, out int c) ? c : 0, hint.n);
-                    }
+                    _counts[hint.trigger] = Mathf.Max(_counts.TryGetValue(hint.trigger, out int c) ? c : 0, hint.n);
                 }
             }
         }
     }
 
-    // The blocks of a hints file, in order. A block with an unknown trigger is reported once and kept (it never fires), so a typo shows in the console.
+    // The blocks of a hints file, in order. A block with an unknown trigger is reported once as an error and kept (it never fires), so a typo shows in the console.
     private void Parse(string text)
     {
         Hint block = null;
@@ -144,19 +118,14 @@ public class TutorialHints : MonoBehaviour
                 Close();
                 string[] parts = line.Substring(1).Trim().Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
                 block = new Hint { trigger = parts.Length > 0 ? parts[0].ToLowerInvariant() : "" };
-                if (block.trigger == "after" && parts.Length > 2)
-                {
-                    block.afterId = parts[1].Contains(":") ? parts[1] : parts[1] + ":1";
-                    float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out block.afterSeconds);
-                }
-                else if (parts.Length > 1 && int.TryParse(parts[1], out int n))
+                if (parts.Length > 1 && int.TryParse(parts[1], out int n))
                 {
                     block.n = Mathf.Max(1, n);
                 }
 
                 if (System.Array.IndexOf(Triggers, block.trigger) < 0)
                 {
-                    Debug.LogWarning($"TutorialHints: unknown trigger '{block.trigger}' in {_config.HintsFile}.");
+                    Debug.LogError($"TutorialHints: unknown trigger '{block.trigger}' in {_config.HintsFile}.");
                 }
 
                 continue;
@@ -173,15 +142,12 @@ public class TutorialHints : MonoBehaviour
 
     private static readonly string[] Triggers =
     {
-        "harvest_available", "harvest_paused", "fruit", "bout", "exhausted", "patch_switch", "ranking_start", "ranking_end", "seconds", "idle", "after",
+        "bout", "patch_switch", "ranking_start", "ranking_end",
     };
 
     private void OnEnable()
     {
-        HarvestManager.OnHintChanged += HandleHint;
-        HarvestManager.OnFruitCollected += HandleFruit;
         HarvestManager.OnHarvestBoutEnded += HandleBout;
-        HarvestManager.OnBushExhausted += HandleExhausted;
         RankingBreak.OnSetReady += HandleSetReady;
         RankingBreak.OnLeaving += HandleLeaving;
         RankingBreak.OnBreakEnded += HandleBreakEnded;
@@ -189,39 +155,10 @@ public class TutorialHints : MonoBehaviour
 
     private void OnDisable()
     {
-        HarvestManager.OnHintChanged -= HandleHint;
-        HarvestManager.OnFruitCollected -= HandleFruit;
         HarvestManager.OnHarvestBoutEnded -= HandleBout;
-        HarvestManager.OnBushExhausted -= HandleExhausted;
         RankingBreak.OnSetReady -= HandleSetReady;
         RankingBreak.OnLeaving -= HandleLeaving;
         RankingBreak.OnBreakEnded -= HandleBreakEnded;
-    }
-
-    private void HandleHint(HarvestHint hint)
-    {
-        if (RankingBreak.Active)
-        {
-            return;
-        }
-
-        if (hint == HarvestHint.Available)
-        {
-            Fire("harvest_available");
-        }
-        else if (hint == HarvestHint.Paused)
-        {
-            Fire("harvest_paused");
-        }
-    }
-
-    private void HandleFruit(float amount, Vector3 worldPos)
-    {
-        if (!RankingBreak.Active)
-        {
-            _placeholder = amount.ToString("0");
-            Fire("fruit");
-        }
     }
 
     private void HandleBout(HarvestBout bout)
@@ -233,16 +170,9 @@ public class TutorialHints : MonoBehaviour
         }
     }
 
-    private void HandleExhausted()
-    {
-        if (!RankingBreak.Active)
-        {
-            Fire("exhausted");
-        }
-    }
-
     private void HandleLeaving(int number)
     {
+        _counts["patch_switch"] = number - 1;          // RankingBreak's own count (it continues across a resume), so Fire makes it `number`
         Fire("patch_switch");
     }
 
@@ -303,72 +233,15 @@ public class TutorialHints : MonoBehaviour
             return;
         }
 
-        PollClockAndPlace();
         if (_queue.Count > 0 && (!RankingBreak.Active || _queue.Peek().trigger.StartsWith("ranking")))       // only the ranking popups may appear during a ranking break
         {
             Show(_queue.Dequeue());
         }
     }
 
-    // The triggers that are read from the clock and the player rather than announced: foraging seconds, `after`, and standing idle.
-    private void PollClockAndPlace()
-    {
-        if (RankingBreak.Active || _player == null)
-        {
-            return;
-        }
-
-        if (_sun != null && !HarvestHeld())          // a clock-timed hint waits until the harvest under way has ended
-        {
-            float elapsed = _config.SessionDuration - _sun.SessionTimeRemaining;
-            foreach (Hint hint in _hints)
-            {
-                if (!hint.shown && hint.trigger == "seconds" && elapsed >= hint.n)
-                {
-                    Queue(hint);
-                }
-                else if (!hint.shown && hint.trigger == "after" && FollowedHintShownAt(hint.afterId) is float at && elapsed - at >= hint.afterSeconds)
-                {
-                    Queue(hint);
-                }
-            }
-        }
-
-        Vector3 position = _player.transform.position;
-        _idleSeconds = (position - _lastPosition).sqrMagnitude > 0.0004f || HarvestHeld() ? 0f : _idleSeconds + Time.deltaTime;
-        _lastPosition = position;
-        foreach (Hint hint in _hints)
-        {
-            if (!hint.shown && hint.trigger == "idle" && _idleSeconds >= hint.n)
-            {
-                Queue(hint);
-            }
-        }
-    }
-
-    // When (foraging seconds) the hint with this id was shown, or null if it has not been.
-    private float? FollowedHintShownAt(string id)
-    {
-        foreach (Hint hint in _hints)
-        {
-            if (hint.Id == id && hint.shownAt >= 0f)
-            {
-                return hint.shownAt;
-            }
-        }
-
-        return null;
-    }
-
-    private bool HarvestHeld()
-    {
-        return _player != null && _player.HarvestHeld;
-    }
-
     private void Show(Hint hint)
     {
         _current = hint;
-        hint.shownAt = _sun != null ? _config.SessionDuration - _sun.SessionTimeRemaining : 0f;
         string[] lines = hint.text.Trim().Split('\n');
         string title = System.Text.RegularExpressions.Regex.Replace(lines[0], "<[^>]+>", "").Trim().Replace(" // ", "\n");
         int last = lines.Length - 1;

@@ -34,7 +34,7 @@ from world import load_session
 SCRIPTS = Path(__file__).resolve().parent
 ROOT = SCRIPTS.parent
 
-ENGINE_FILES = ("sim.py", "costs.py", "perception.py", "world.py", "ranking.py", "tiles.py")
+ENGINE_FILES = ("sim.py", "costs.py", "perception.py", "world.py", "tiles.py")
 AGENT_FILES = ("agents.py", "specs.py")
 
 TILE_FIELDS = (*tiles.TILE_PARAMS, "tile_arrangement", "tile_value_mode", "tile_within_mode")

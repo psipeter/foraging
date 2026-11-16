@@ -90,7 +90,7 @@ public class RankingBreak : MonoBehaviour
     private bool[] _realHarvested;                // whether each was spent (not aimable) before it
     private bool _prepared;
 
-    // Stage mode (SessionConfig.rankingStage): the set stands on a disc drawn over the world by a second camera (an unnamed layer: ProjectSettings is not touched).
+    // The set stands on a disc drawn over the world by a second camera (an unnamed layer: ProjectSettings is not touched).
     public const int StageLayer = 20;
     private GameObject _stageCamera;
     private int _mainCullingMask;
@@ -385,30 +385,22 @@ public class RankingBreak : MonoBehaviour
         _setSize = set.bushes.Length;
         var created = new List<Tree>();
         var scales = new List<Vector3>();
-        float discY = 0f;
-        _disc = null;
-        if (_config.RankingStage)
-        {
-            discY = _treeGenerator.Terrain.SampleElevation(origin.x, origin.z) - _config.RankingStageDrop;
-            _disc = BuildDisc(set, origin, turn, discY);
-        }
+        float discY = _treeGenerator.Terrain.SampleElevation(origin.x, origin.z) - _config.RankingStageDrop;
+        _disc = BuildDisc(set, origin, turn, discY);
 
         foreach (PoolBush b in set.bushes)
         {
             float local_x = _pool.treePos[2 * b.id], local_z = _pool.treePos[2 * b.id + 1];
             Vector3 offset = turn * new Vector3(local_x, 0f, local_z);
             var attributes = new TreeAttributes { shape = b.shape, color = b.color, moisture = b.moisture };
-            float ground = _disc != null ? discY + _disc.HeightAt(local_x, local_z) : float.NaN;
+            float ground = discY + _disc.HeightAt(local_x, local_z);
             Tree tree = _treeGenerator.CreateTree(_world.TreeCount + b.id, origin.x + offset.x, origin.z + offset.z, attributes, new int[Mathf.Max(_pool.fruitCount, 1)], ground);
             if (tree == null)
             {
                 continue;
             }
 
-            if (_disc != null)
-            {
-                TreeGenerator.SetLayerRecursively(tree.gameObject, StageLayer);
-            }
+            TreeGenerator.SetLayerRecursively(tree.gameObject, StageLayer);
 
             tree.isHarvested = true;           // not aimable (no highlight, no ring) until the set has finished growing
             _setTrees[b.id] = tree;
@@ -431,19 +423,17 @@ public class RankingBreak : MonoBehaviour
                 if (_setTrees.TryGetValue(b.id, out Tree placed))
                 {
                     Vector3 at = placed.transform.position;
-                    // `y` (the ground height under the bush) only for a stage: replay.py and visibility.py read the terrain's height where it is missing
-                    table.Add(_disc != null
-                        ? Json.Obj(("id", _world.TreeCount + b.id), ("x", (double)at.x), ("z", (double)at.z), ("radius", (double)placed.CanopyRadius), ("shape", (double)b.shape), ("y", (double)at.y))
-                        : Json.Obj(("id", _world.TreeCount + b.id), ("x", (double)at.x), ("z", (double)at.z), ("radius", (double)placed.CanopyRadius), ("shape", (double)b.shape)));
+                    // `y` is the ground height under the bush (on the disc)
+                    table.Add(Json.Obj(("id", _world.TreeCount + b.id), ("x", (double)at.x), ("z", (double)at.z), ("radius", (double)placed.CanopyRadius), ("shape", (double)b.shape), ("y", (double)at.y)));
                 }
             }
 
             _log.LogEvent("rank_set", payload: Json.Obj(("break", _breakNumber), ("set", set.index), ("fruits", Mathf.Max(_pool.fruitCount, 1)), ("bushes", new Json.Raw("[" + string.Join(",", table) + "]")),
-                ("stage", _disc != null), ("disc_texture", _disc != null ? _disc.TextureIndex : -1)));
+                ("stage", true), ("disc_texture", _disc.TextureIndex)));
         }
 
         ShowHud();
-        yield return Scale(created.ToArray(), scales.ToArray(), 0f, 1f, _disc != null ? _disc.Object.transform : null);
+        yield return Scale(created.ToArray(), scales.ToArray(), 0f, 1f, _disc.Object.transform);
         foreach (Tree tree in created)
         {
             tree.isHarvested = false;
@@ -532,11 +522,8 @@ public class RankingBreak : MonoBehaviour
     // The set's bushes shrink away and are destroyed.
     private IEnumerator RemoveSet(List<Tree> created, List<Vector3> scales, RankingDisc disc)
     {
-        yield return Scale(created.ToArray(), scales.ToArray(), 1f, 0f, disc != null ? disc.Object.transform : null);
-        if (disc != null)
-        {
-            Destroy(disc.Object);
-        }
+        yield return Scale(created.ToArray(), scales.ToArray(), 1f, 0f, disc.Object.transform);
+        Destroy(disc.Object);
 
         foreach (Tree tree in created)
         {
@@ -671,7 +658,7 @@ public class RankingBreak : MonoBehaviour
         GrayTerrain(to);
     }
 
-    // Stage mode: a disc of terrain just bigger than the set's arc, below the player's ground, in the set's frame (the player at the origin, z ahead).
+    // A disc of terrain just bigger than the set's arc, below the player's ground, in the set's frame (the player at the origin, z ahead).
     private RankingDisc BuildDisc(PoolSet set, Vector3 origin, Quaternion turn, float discY)
     {
         float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
@@ -684,11 +671,6 @@ public class RankingBreak : MonoBehaviour
             maxZ = Mathf.Max(maxZ, z + r);
         }
 
-        if (_treeGenerator.Terrain == null || _treeGenerator.Terrain.MaterialInstance == null)
-        {
-            return null;                    // no terrain material to copy: the set stands on the real terrain
-        }
-
         var centre = new Vector2((minX + maxX) / 2f, (minZ + maxZ) / 2f);
         float margin = _config.RankingStageMargin;
         Vector3 position = origin + turn * new Vector3(centre.x, 0f, centre.y);
@@ -697,12 +679,12 @@ public class RankingBreak : MonoBehaviour
         return RankingDisc.Create(_treeGenerator.Terrain.MaterialInstance, position, turn, centre, (maxX - minX) / 2f + margin, (maxZ - minZ) / 2f + margin, _config.WorldHalfExtent, seed, StageLayer);
     }
 
-    // Stage mode: a second (overlay) camera draws the stage layer over the world after clearing depth, so the real terrain cannot hide the disc below it; the main camera never
+    // A second (overlay) camera draws the stage layer over the world after clearing depth, so the real terrain cannot hide the disc below it; the main camera never
     // draws that layer. The camera is made once, in the session's first frames, and stays in the stack: adding it for a break and removing it afterwards made the browser show a black
     // frame or two when a ranking ended (the logs show no hitch and no pause overlay then), and a stack that never changes cannot.
     private void EnsureStageCamera()
     {
-        Camera main = _config.RankingStage && _camera != null ? _camera.PlayerCamera : null;
+        Camera main = _camera != null ? _camera.PlayerCamera : null;
         if (main == null || _stageCamera != null)
         {
             return;
@@ -740,17 +722,17 @@ public class RankingBreak : MonoBehaviour
         _stageCamera = null;
     }
 
-    // Stage mode: the terrain behind the stage fades part of the way to grey with the world's bushes (the amount is rankingStageWorldGray).
+    // The terrain behind the stage fades part of the way to grey with the world's bushes (the amount is rankingStageWorldGray).
     private void GrayTerrain(float amount)
     {
-        if (_config.RankingStage && _treeGenerator != null && _treeGenerator.Terrain != null)
+        if (_treeGenerator != null && _treeGenerator.Terrain != null)
         {
             _treeGenerator.Terrain.SetGray(amount * _config.RankingStageWorldGray);
         }
     }
 
     // The trees' scales move from `from` to `to` times their own over the fade (not exactly zero: a zero-scale collider logs warnings).
-    private IEnumerator Scale(Tree[] trees, Vector3[] full, float from, float to, Transform disc = null)
+    private IEnumerator Scale(Tree[] trees, Vector3[] full, float from, float to, Transform disc)
     {
         float seconds = Mathf.Max(_config.RankingFadeSeconds, 0.01f);
         float elapsed = 0f;
@@ -759,10 +741,7 @@ public class RankingBreak : MonoBehaviour
             elapsed += Time.deltaTime;
             float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / seconds));
             float factor = Mathf.Max(Mathf.Lerp(from, to, t), 0.001f);
-            if (disc != null)
-            {
-                disc.localScale = Vector3.one * factor;
-            }
+            disc.localScale = Vector3.one * factor;
 
             for (int i = 0; i < trees.Length; i++)
             {
@@ -775,10 +754,7 @@ public class RankingBreak : MonoBehaviour
             yield return null;
         }
 
-        if (disc != null)
-        {
-            disc.localScale = Vector3.one * Mathf.Max(to, 0.001f);
-        }
+        disc.localScale = Vector3.one * Mathf.Max(to, 0.001f);
 
         for (int i = 0; i < trees.Length; i++)
         {

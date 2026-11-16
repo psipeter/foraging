@@ -37,19 +37,13 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from perception import canopy_height_of, hidden_by_bushes, hidden_by_terrain, sample_grid, unit_directions
-from replay import break_windows, bush_ground, load_session_log, with_ranking_bushes
+from perception import hidden_by_bushes, hidden_by_terrain, sample_grid, unit_directions
+from replay import break_windows, bush_ground, canopy_height, load_session_log, with_ranking_bushes
 
 
 # --------------------------------------------------------------------------------------------------
 # Geometry
 # --------------------------------------------------------------------------------------------------
-
-def canopy_height(config, shape):
-    """Full canopy height (Tree.ApplyAttributes) from the logged config."""
-    return canopy_height_of(shape, (config["shapeRange"]["x"], config["shapeRange"]["y"]),
-                            (config["canopyHeightRange"]["x"], config["canopyHeightRange"]["y"]))
-
 
 def camera_axes(yaw_deg, pitch_deg):
     """(forward, right, up) unit vectors for Unity's Quaternion.Euler(pitch, yaw, 0) (pitch positive looks down)."""
@@ -141,7 +135,6 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
         candidates = np.arange(n_real)
         if any(lo < t <= hi for lo, hi in windows):
             candidates = np.concatenate([candidates, *[rs["slots"] for rs in rank_sets if rs["t"] - 1e-4 <= t < rs["end"]]]).astype(int)
-        exists = candidates                                               # the bushes that exist now (they can also hide each other)
         near_enough = np.hypot(*(b.pos[candidates] - eye[[0, 2]]).T) <= max_distance + rx[candidates]
         candidates = candidates[near_enough]
 
@@ -162,8 +155,7 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
         # Other bushes' canopies, for the points that are still in view.
         mi, pi = np.nonzero(ok)
         if bush_occlusion and len(mi):
-            occluders = exists[np.hypot(*(b.pos[exists] - eye[[0, 2]]).T) <= max_distance + rx[exists]]
-            behind = hidden_by_bushes(eye, pts[candidates[mi], pi], candidates[mi], occluders, b.pos, ground, rx, ry)
+            behind = hidden_by_bushes(eye, pts[candidates[mi], pi], candidates[mi], candidates, b.pos, ground, rx, ry)        # only bushes that exist now (and are near enough) hide others
             ok[mi[behind], pi[behind]] = False
 
         frac_visible = ok.mean(axis=1)

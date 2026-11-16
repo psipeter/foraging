@@ -24,10 +24,6 @@ import numpy as np
 from world import REWARDS, load_session, session_features, stage_names, unity_world_path
 
 TIE_TOLERANCE = 0.05        # a pair whose true values differ by less than this is a tie: it is not scored
-SET_SIZE = 5                # bushes per set
-POOL_SETS = 12              # sets in a session's pool (the breaks play them in order)
-BUSH_DISTANCE = 16.0        # player to the nearest point of each canopy (world units); five canopies of radius 3 need at least about 14
-ARC_SPAN = 84.0             # degrees from the leftmost to the rightmost bush centre
 MIN_ASPECT = 4.0 / 3.0      # the narrowest window the arc must fit in (the camera's vertical field of view is fixed)
 FOV_MARGIN = 1.0            # degrees between the outermost bush's centre and the edge of the view at MIN_ASPECT: at least half of each bush is on screen without turning
 ANGLE_MARGIN = 2.0          # degrees between neighbouring canopies at the widest radius
@@ -46,12 +42,6 @@ def canopy_radius(params, shape):
     t = np.clip((np.asarray(shape) - lo) / max(hi - lo, 1e-9), 0.0, 1.0)
     w_lo, w_hi = params.canopy_width_range
     return (w_hi + (w_lo - w_hi) * t) * 0.5
-
-
-def option(params, name, default):
-    """A generator option: the SessionConfig field of that name if the asset has it, else the default (the fields are added with the game's side)."""
-    value = getattr(params, name, None)
-    return default if value is None else value
 
 
 # --------------------------------------------------------------------------------------------------
@@ -120,21 +110,18 @@ def value_ladder(values, set_count, set_size):
     return levels.reshape(set_size, set_count).T, step
 
 
-def choose_sets(params, pool, set_count, set_size, min_gap, rng, taken=None, steps=SEARCH_STEPS):
+def choose_sets(params, pool, set_count, set_size, min_gap, rng, steps=SEARCH_STEPS):
     """Indices into the pool of the bushes of each set, shape (set_count, set_size), the rows ordered from the lowest true value to the highest.
 
     The loss is the squared distance of each bush's value from its ladder level (in ladder steps), a large penalty for each neighbouring pair of a set closer
-    than `min_gap`, and a repulsion in the (shape, colour) plane (stronger within a set) that spreads the bushes over it; `taken` are (shape, colour) points
-    of other sets, which the new bushes also keep away from. The search replaces one bush at a time by a candidate near its level."""
+    than `min_gap`, and a repulsion in the (shape, colour) plane (stronger within a set) that spreads the bushes over it. The search replaces one bush at a time by a candidate near its level."""
     targets, step = value_ladder(pool["value"], set_count, set_size)
     if step * set_count < min_gap:
         raise ValueError(f"the values of the candidates span too little for {set_count} sets of {set_size}: neighbouring bushes of a set would differ by "
                          f"{step * set_count:.3f} < the tie gap {min_gap} (lower the gap, lower the set size or count, or widen the reward)")
     axes = [a for a in FEATURE_AXES if bool(getattr(params, f"{a}_varies"))] or list(FEATURE_AXES)
     plane = np.column_stack([pool[a] for a in axes])
-    others = np.zeros((0, plane.shape[1])) if taken is None or len(taken) == 0 else np.asarray(taken, dtype=float).reshape(len(taken), -1)[:, [FEATURE_AXES.index(a) for a in axes]]
     values = pool["value"]
-    n = len(values)
     near = [np.flatnonzero(np.abs(values - t) <= step) for t in targets.reshape(-1)]
     near = [c if len(c) else np.array([int(np.argmin(np.abs(values - t)))]) for c, t in zip(near, targets.reshape(-1))]
     flat_targets = targets.reshape(-1)
@@ -143,14 +130,11 @@ def choose_sets(params, pool, set_count, set_size, min_gap, rng, taken=None, ste
     sigma2 = REPULSION ** 2
 
     def repulsion_of(index, cand):
-        """Repulsion felt by bush `cand` placed at flat position `index` from every other chosen bush and the taken points."""
+        """Repulsion felt by bush `cand` placed at flat position `index` from every other chosen bush."""
         d2 = ((plane[chosen] - plane[cand]) ** 2).sum(axis=1)
         weight = np.where(owner == owner[index], SAME_SET_REPULSION, 1.0)
         mask = np.arange(len(chosen)) != index
-        total = float((weight * np.exp(-d2 / (2.0 * sigma2)))[mask].sum())
-        if len(others):
-            total += float(np.exp(-((others - plane[cand]) ** 2).sum(axis=1) / (2.0 * sigma2)).sum())
-        return total
+        return float((weight * np.exp(-d2 / (2.0 * sigma2)))[mask].sum())
 
     def gap_penalty(s):
         row = np.sort(values[chosen[s * set_size:(s + 1) * set_size]])
@@ -192,19 +176,23 @@ def arrange_slots(count, set_size, rng):
 # The file
 # --------------------------------------------------------------------------------------------------
 
-def _significant(reward_function):
-    """The reward function without its empty lists (an asset Unity saved after the RewardFunction gained a list field carries the field, an older one does not)."""
-    return {k: v for k, v in reward_function.items() if v not in ([], None)}
-
-
-def _build_sets(params, set_size, set_count, arc_span, distance, gap, moisture, taken, pool_size, steps, head):
-    """The sidecar dict of `set_count` sets for the session `params` (its reward function, features and fruit rewards), the keys of `head` first."""
+def generate_pool(name, pool_size=POOL_SIZE, steps=SEARCH_STEPS, **overrides):
+    """The pool of the ranking sets a session plays in place after its patch switches: `rankingPoolSets` sets of `rankingSetSize` bushes of the session's own
+    reward function, chosen jointly, used in order by the game, on an arc of `rankingArcSpan` degrees at `rankingDistance`, the tie gap `rankingTieGap`.
+    Positions (`treePos`) are relative to the player standing at the origin and facing +z; the game turns and moves them to the player's pose and puts the
+    bush on the ground there, so `moisture` is only used to evaluate the values. Returns (sidecar, params)."""
+    params = load_session(name, **overrides)
+    if session_features(params)["moisture"]["rewarded"]:
+        raise ValueError(f"{name}: moisture pays, but a ranking set has no moisture feature; reward shape and colour only")
+    set_size, set_count = int(params.ranking_set_size), int(params.ranking_pool_sets)
+    arc_span, distance, gap = float(params.ranking_arc_span), float(params.ranking_distance), float(params.ranking_tie_gap)
+    moisture = float(params.moisture_when_fixed)
     margins = check_arc(params, set_size, arc_span, distance)
 
     seed = int(params.world_seed)
     rng_pool, rng_sets, rng_slots, rng_fruit = (np.random.default_rng(c) for c in np.random.SeedSequence([seed, 914]).spawn(4))
     pool = candidate_pool(params, rng_pool, pool_size, moisture)
-    chosen = choose_sets(params, pool, set_count, set_size, gap, rng_sets, taken=taken, steps=steps)
+    chosen = choose_sets(params, pool, set_count, set_size, gap, rng_sets, steps=steps)
     bearings = slot_bearings(set_size, arc_span)
     perms = arrange_slots(set_count, set_size, rng_slots)
 
@@ -232,29 +220,12 @@ def _build_sets(params, set_size, set_count, arc_span, distance, gap, moisture, 
     noise = rng_fruit.standard_normal((n, fruit_count)) * float(params.reward_std)
     fruit_reward = np.maximum(0, np.rint(value[:, None] + noise)).astype(np.int32)
     sidecar = {
-        **head, "seed": seed, "n": set_count, "setSize": set_size,
+        "format": "ranking-pool", "session": params.session_name, "seed": seed, "n": set_count, "setSize": set_size,
         "arcSpan": arc_span, "bushDistance": distance, "groundMoisture": moisture, "tieTolerance": TIE_TOLERANCE, "minGap": gap, "margins": margins,
         "fruitCount": fruit_count, "treePos": pos.reshape(-1).tolist(), "shape": shape.tolist(), "color": color.tolist(), "moisture": mois.tolist(),
         "canopyRadius": radius.tolist(), "value": value.tolist(), "fruitRewards": fruit_reward.reshape(-1).astype(int).tolist(), "sets": sets,
     }
-    return sidecar
-
-
-def generate_pool(name, set_size=None, set_count=None, arc_span=None, distance=None, min_gap=None, pool_size=POOL_SIZE, steps=SEARCH_STEPS, **overrides):
-    """The pool of the ranking sets a session plays in place after its patch switches (`SessionConfig.ranking*`): `set_count` sets (default `rankingPoolSets`) of the
-    session's own reward function, chosen jointly, used in order by the game. The arc is `ranking_set_size`, `ranking_arc_span`, `ranking_distance`, the tie gap
-    `ranking_tie_gap`. Positions (`treePos`, the first set's slots) are relative to the player standing at the origin and facing +z; the game turns and moves them
-    to the player's pose and puts the bush on the ground there, so `moisture` is only used to evaluate the values."""
-    params = load_session(name, **overrides)
-    if session_features(params)["moisture"]["rewarded"]:
-        raise ValueError(f"{name}: moisture pays, but a ranking set has no moisture feature; reward shape and colour only")
-    set_size = int(option(params, "ranking_set_size", SET_SIZE) if set_size is None else set_size)
-    set_count = int(option(params, "ranking_pool_sets", POOL_SETS) if set_count is None else set_count)
-    arc_span = float(option(params, "ranking_arc_span", ARC_SPAN) if arc_span is None else arc_span)
-    distance = float(option(params, "ranking_distance", BUSH_DISTANCE) if distance is None else distance)
-    gap = float(option(params, "ranking_tie_gap", 0.25) if min_gap is None else min_gap)
-    moisture = float(params.moisture_when_fixed)
-    return _build_sets(params, set_size, set_count, arc_span, distance, gap, moisture, None, pool_size, steps, {"format": "ranking-pool", "session": params.session_name}), params
+    return sidecar, params
 
 
 def pool_path(name, seed, out_dir=None):

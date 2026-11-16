@@ -7,7 +7,7 @@ An agent is three components plus a sensor, composed by `ComposedAgent` and run 
             taken), and the critic may only learn from `memory.experiences()` (attributes and reward, one per fruit).
             FullKnowledge is preloaded with the whole map; FullMemory accumulates everything it sees and receives.
     Critic  the value representation and its learning rule: value(attributes) -> (mean reward per fruit, uncertainty),
-            fit from memory, freezable. OracleCritic is "full knowledge": the true reward function.
+            fit from memory. OracleCritic is "full knowledge": the true reward function.
     Actor   the policy: what to do next (Harvest a known bush, Explore, Look, Stop) and whether to leave a bush after a
             fruit. Its choices go through a ChoiceRule (hard-max or softmax) and any value it uses (value, rate) is
             derived from the critic, never read from the world.
@@ -16,8 +16,8 @@ An agent is three components plus a sensor, composed by `ComposedAgent` and run 
             same way; an agent may carry its own `percept` as an override. Walking, exploring and looking are actions of the
             actor, not part of the percept.
 
-`nearest`, `greedy_*` and `plan_*` are actors with the oracle critic and full-knowledge memory. A learning agent swaps
-the critic and memory; the actor code is the same. Agents are built by zero-argument factories in
+`nearest`, `oracle` and `greedy_*` are actors with the oracle critic (the map from the view cone, or with `whole_map` preloaded, as
+for `greedy_*` and `plan_*`). A learning agent swaps the critic; the actor code is the same. Agents are built by zero-argument factories in
 REGISTRY (a fresh agent per world).
 
 What an agent may know is explicit. Components learn about the task through `begin(task)` (rules and speeds, no bush
@@ -125,8 +125,7 @@ class Memory(Component):
 
     Readers: `known`, `pos` (n, 2), `radius`, `attrs` (n, 3: shape, color, moisture), `depleted` (seen spent or emptied
     by the agent), `taken` (fruits the agent took from each bush), `rewards[j]` (list, one per fruit taken from bush j),
-    `experiences()`. `map_version` increases whenever a bush is added to the map; `experience_version` whenever a reward
-    is recorded (a critic refits when it changes).
+    `experiences()`. `map_version` increases whenever a bush is added to the map.
     """
     omniscient = False    # True for memories that are granted the world's own knowledge (see grant)
 
@@ -143,7 +142,6 @@ class Memory(Component):
         self.taken = np.zeros(n, dtype=int)
         self.rewards = [[] for _ in range(n)]
         self.map_version = 0
-        self.experience_version = 0
 
     def observe(self, obs):
         """Take in an Observation (perception.Observation): the bushes in view this moment, with their attributes and whether each
@@ -163,7 +161,6 @@ class Memory(Component):
     def record_reward(self, bush, reward):
         self.rewards[bush].append(float(reward))
         self.taken[bush] += 1
-        self.experience_version += 1
 
     def mark_depleted(self, bush):
         self.depleted[bush] = True
@@ -579,38 +576,31 @@ class ChoiceRule(Component):
     """Maps a utility vector (-inf = not a candidate) to a pick. `probs` is the distribution the rule samples from, so
     likelihoods of observed choices can be computed later."""
 
-    def probs(self, utilities, random_ties=False):
+    def probs(self, utilities):
         raise NotImplementedError
 
-    def pick(self, utilities, rng, random_ties=False):
+    def pick(self, utilities, rng):
         """Index of the pick, or None when nothing is a candidate."""
         u = np.asarray(utilities, dtype=float)
         if not np.isfinite(u).any():
             return None
-        return self._pick(u, rng, random_ties)
+        return self._pick(u, rng)
 
-    def _pick(self, u, rng, random_ties):
-        return int(rng.choice(len(u), p=self.probs(u, random_ties)))
+    def _pick(self, u, rng):
+        return int(rng.choice(len(u), p=self.probs(u)))
 
 
 class Argmax(ChoiceRule):
-    """Hard-max. Ties go to the lowest index (as the original agents did) unless `random_ties`."""
+    """Hard-max. Ties go to the lowest index (as the original agents did)."""
 
-    def probs(self, utilities, random_ties=False):
+    def probs(self, utilities):
         u = np.asarray(utilities, dtype=float)
         p = np.zeros(len(u))
-        if not np.isfinite(u).any():
-            return p
-        if random_ties:
-            top = np.flatnonzero(u >= u.max() - 1e-12)
-            p[top] = 1.0 / len(top)
-        else:
+        if np.isfinite(u).any():
             p[int(np.argmax(u))] = 1.0
         return p
 
-    def _pick(self, u, rng, random_ties):
-        if random_ties:
-            return int(rng.choice(np.flatnonzero(u >= u.max() - 1e-12)))
+    def _pick(self, u, rng):
         return int(np.argmax(u))
 
 
@@ -622,7 +612,7 @@ class Softmax(ChoiceRule):
             raise ValueError("softmax temperature must be positive")
         self.temperature = temperature
 
-    def probs(self, utilities, random_ties=False):
+    def probs(self, utilities):
         u = np.asarray(utilities, dtype=float)
         p = np.zeros(len(u))
         ok = np.isfinite(u)
@@ -640,11 +630,11 @@ class RelativeSoftmax(Softmax):
     the utilities are used as they are (the scale then changes when the best crosses zero). With no bush inside the walking window the actor passes
     `-t` (minus the travel time), the best of which is negative, so the choice is then the quickest bush whatever the temperature."""
 
-    def probs(self, utilities, random_ties=False):
+    def probs(self, utilities):
         u = np.asarray(utilities, dtype=float)
         ok = np.isfinite(u)
         top = u[ok].max() if ok.any() else 0.0
-        return super().probs(u / top if top > 0.0 else u, random_ties)
+        return super().probs(u / top if top > 0.0 else u)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -749,7 +739,6 @@ class Actor(Component):
     every fruit but the last. The default leaves a bush only when it is empty."""
 
     choice = Argmax()
-    deadline_dependent = False    # True for an actor whose choices depend on how much of the session is left (it plans for the end)
 
     def begin(self, task, rng):
         self.task = task
@@ -846,13 +835,12 @@ class SoftmaxActor(UtilityActor):
     """The standard rate actor with a softmax choice (random exploration): `RelativeSoftmax` at `temperature` on the utilities relative to
     the best one. With `horizon` the temperature shrinks with the fraction of the session left (`temperature * time left / session`), so
     choices are loose early and nearly greedy at the end, as people explore more with a longer horizon (Wilson et al. 2014); such an
-    actor depends on the session's length (`deadline_dependent`)."""
+    actor depends on the session's length."""
 
     def __init__(self, temperature=0.05, horizon=False, max_walk_time=15.0):
         super().__init__("rate", max_walk_time, RelativeSoftmax(temperature))
         self.temperature = float(temperature)
         self.horizon = bool(horizon)
-        self.deadline_dependent = self.horizon
 
     def act(self, view):
         if self.horizon:
@@ -968,8 +956,6 @@ class PlannerActor(Actor):
     After planning: `plan` (bush ids in visiting order), `plan_value` (expected reward), `exact` (proven optimal),
     `nodes` (search nodes expanded, summed over plans).
     """
-
-    deadline_dependent = True      # the plan is made for the whole session, so a session cut short at t is not the first t seconds of it
 
     def __init__(self, method="exact", beam_width=300, max_nodes=2_000_000, incumbent_width=150):
         if method not in ("exact", "beam"):
@@ -1184,16 +1170,13 @@ class ComposedAgent:
     def spec_hash(self):
         return spec_hash(self.spec())
 
-    def _start(self, memory, task, knowledge):
-        memory.begin(task)
-        self.critic.begin(task)
-        for component in (memory, self.critic):
-            if getattr(component, "omniscient", False):
-                component.grant(knowledge)
-
     def begin_session(self, world, rng):
         self.task = Task(world)
-        self._start(self.memory, self.task, WorldKnowledge.from_world(world))
+        self.memory.begin(self.task)
+        self.critic.begin(self.task)
+        for component in (self.memory, self.critic):
+            if getattr(component, "omniscient", False):
+                component.grant(WorldKnowledge.from_world(world))
         self.actor.begin(self.task, rng)
         self.critic.update(self.memory)
 

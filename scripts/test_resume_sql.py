@@ -124,3 +124,23 @@ def test_the_correct_pairs_of_the_sets_come_back_whatever_was_paid(db):
     s = state(db, run)
     assert s["ranking_pairs"] == 10 and s["ranking_points"] == 0
     assert state(db, make_run(db, [(1, "fruit", None)]))["ranking_pairs"] == 0
+
+
+def test_a_second_reload_before_the_break_is_played_again_keeps_it_open(db):
+    s = state(db, make_run(db, [(10, "rank_break_start", {"break": 1, "leaving": 2}), (11, "session_resume", {}), (11, "rank_break_end", {"break": 1, "aborted": True}),
+                                (20, "session_resume", {})]))
+    assert (s["open_break"], s["open_break_leaving"], s["open_break_sets_done"], s["open_break_end_logged"], s["breaks"]) == (1, 2, 0, True, 1)
+    assert s["held_seconds"] == pytest.approx(1.0)
+
+
+def test_sets_scored_before_two_reloads_inside_one_break_are_all_counted(db):
+    s = state(db, make_run(db, [(10, "rank_break_start", {"break": 1, "leaving": 1}), (14, "rank_set_end", {}), (15, "session_resume", {}), (15, "rank_break_end", {"break": 1, "aborted": True}),
+                                (16, "rank_break_start", {"break": 1, "leaving": 1, "resumed": True}), (20, "rank_set_end", {}), (21, "session_resume", {}),
+                                (21, "rank_break_end", {"break": 1, "aborted": True})]))
+    assert (s["open_break"], s["open_break_sets_done"], s["open_break_end_logged"]) == (1, 2, True)
+
+
+def test_a_break_ended_normally_after_a_resume_is_not_open(db):
+    s = state(db, make_run(db, [(10, "rank_break_start", {"break": 1}), (11, "rank_break_end", {"break": 1, "aborted": True}), (12, "rank_break_start", {"break": 1, "resumed": True}),
+                                (16, "rank_break_end", {"break": 1})]))
+    assert (s["open_break"], s["open_break_end_logged"]) == (0, False)

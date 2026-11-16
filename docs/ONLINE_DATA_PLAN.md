@@ -166,7 +166,7 @@ and reloads the scene for the session to continue: the next one when the latest 
 carries `resumed_run`), the same one otherwise. In the same session the logger continues the sequence numbers and the clock, logs a
 `session_resume` event (payload: `gap_s`, `stale_s`, `open_bout_tree`, `frames_held`, `has_pose`) before anything else, and two frames
 later puts the player at the last pose and view, takes the fruits already taken off their bushes (which ones is not recorded: the
-first n; a bush left with none turns spent), sets the score and sets the sun's clock; the ranking pool continues from `sets_played`,
+first n; a bush left with none turns spent), sets the score and sets the sun's clock; the ranking pool continues from `sets_next`,
 restarts at its first unfinished trial and counts the finished trials again. The participant sees "Welcome back"
 (`StreamingAssets/instructions_resume.txt`) and presses Enter. If every session is already complete the pipeline calls `run-finish`
 and shows a notice. After the last session's end screen, Enter calls `run-finish` once everything is stored (`TryFinish`).
@@ -284,7 +284,7 @@ A foraging session can contain ranking breaks (`RankingBreak`, DECISIONS "Rankin
 - **Tutorial hints** (a session with a hints file): `hint_shown` and `hint_dismissed` events (`id`, `trigger`, `n`). A hint is a pause popup, so it also appears as the usual pause/resume events; one that opens during a ranking set stops that set's clock like any other pause (`paused_seconds` of the `ranking_sets` row).
 - **Time.** `t` is unpaused session seconds and keeps running through a break; the foraging clock is `t` minus the break windows (`rank_break_start` to `rank_break_end`).
 - **Resume.** `server.resume_state` also returns `held_seconds` (the sum of the windows, a break the data stops inside counted to the last thing heard), `breaks`, `sets_played` and `ranking_points`; the game continues
-  the foraging clock from `clock - held_seconds`, the break numbering, the pool position, the set rows and the end screen's ranking points. An unfinished break is not resumed.
+  the foraging clock from `clock - held_seconds`, the break numbering, the pool position, the set rows and the end screen's ranking points. A break the data stops inside is closed at the resume with an `aborted` `rank_break_end` and played again from its first unscored set (`open_break*`; migrations 20261116000000 and 20261116000400: a second reload before the break is played again still finds it open, `open_break_end_logged`).
 - **Points.** `server.run_points` is the sum of `foraging_points + ranking_points` over the run's completed, non-practice sessions. The `session_end` event's payload carries both too.
 - **Migrations to apply before any data is collected** (after `db_backup.py`): `20261112000000_ranking_sets.sql` (the set columns) and `20261113000000_ranking_breaks_resume.sql` (resume fields and run points).
   Neither is applied to the Supabase project. `scripts/test_resume_breaks.py` checks the second on a real PostgreSQL; `test_server.py` (Deno) has not been run against either.

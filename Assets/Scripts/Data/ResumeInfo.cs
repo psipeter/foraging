@@ -38,6 +38,7 @@ public class ResumeReply
     public int open_break;                  // the number of the break the data stops inside, 0 when none (docs/ONLINE_DATA_PLAN.md, "Ranking breaks")
     public int open_break_leaving;          // the patch leaving it came at
     public int open_break_sets_done;        // how many of its sets were scored
+    public bool open_break_end_logged;      // the break's aborted end is already in the log (a second reload before it was played again): do not log another
     public int leavings;                    // the patch leavings counted so far (rank_leaving events): the ranking schedule continues from it
     public bool leaving_due;                // the last leaving made a ranking due that had not begun
     public string[] hints_shown;            // the ids of the tutorial hints already shown in the session (not shown again)

@@ -84,7 +84,8 @@ DEPENDENCIES = {}
 for _test in sorted(ROOT.glob("scripts/test_*.py")):
     _test = f"scripts/{_test.name}"
     _paths, _match = EXTRA.get(_test, (set(), []))
-    DEPENDENCIES[_test] = {"paths": _paths | {"scripts/conftest.py"} | {f"scripts/{m}.py" for m in imports(Path(_test).stem)}, "match": _match}
+    _design = {f"scripts/design/{p.name}" for p in ROOT.glob("scripts/design/*.py")} if re.search(r"^\s*(import|from) design\b", (ROOT / _test).read_text(), re.M) else set()
+    DEPENDENCIES[_test] = {"paths": _paths | _design | {"scripts/conftest.py"} | {f"scripts/{m}.py" for m in imports(Path(_test).stem)}, "match": _match}
 
 
 def changed_files(since):

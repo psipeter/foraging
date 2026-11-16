@@ -14,12 +14,6 @@ def make(seed=1, **extra):
     return generate_world(synthetic.session(**{**DEFAULT, **extra}), seed)
 
 
-def test_deterministic_and_seed_dependent():
-    a, b, c = make(3), make(3), make(4)
-    assert np.array_equal(a.pos, b.pos) and np.array_equal(a.fruit_reward, b.fruit_reward)
-    assert not (a.n == c.n and np.array_equal(a.pos, c.pos))
-
-
 def test_bush_ids_are_not_spatially_ordered():
     w = make(0)
     consecutive = np.hypot(*(w.pos[1:] - w.pos[:-1]).T).mean()
@@ -93,20 +87,6 @@ def test_save_load_roundtrip(tmp_path):
     assert r.params.reward_function == w.params.reward_function
 
 
-def test_unity_export_roundtrip(tmp_path):
-    from world import export_unity, read_unity_world
-    w = make(1)
-    export_unity(w, tmp_path / "w.world")
-    h, g = read_unity_world(tmp_path / "w.world")
-    res = int(w.params.terrain_mesh_resolution)
-    assert h["treeCount"] == w.n and h["res"] == res and set(g) == {"moisture", "elevation", "rock", "snow", "ramp"}
-    assert np.allclose(np.array(h["treePos"]).reshape(-1, 2), w.pos)
-    assert np.array_equal(np.array(h["fruitRewards"]).reshape(w.n, -1), w.fruit_reward)
-    assert dict(zip(h["checkNames"], h["checkValues"]))["terrainMaxElevation"] == float(w.params.terrain_max_elevation)
-    for a in g.values():
-        assert a.shape == (res, res) and np.isfinite(a).all()
-
-
 def test_terrain_grids_match_rules():
     w = make(1)
     g = w.terrain.grids()
@@ -155,6 +135,9 @@ def test_exported_grids_hold_the_terrains_values_under_their_names(tmp_path):
     h, g = read_unity_world(tmp_path / "w.world")
     expected = w.terrain.grids()
     from world import GRID_BITS
+    assert h["treeCount"] == w.n and np.allclose(np.array(h["treePos"]).reshape(-1, 2), w.pos) and set(g) == set(expected)
+    assert np.array_equal(np.array(h["fruitRewards"]).reshape(w.n, -1), w.fruit_reward)
+    assert dict(zip(h["checkNames"], h["checkValues"]))["terrainMaxElevation"] == float(w.params.terrain_max_elevation)
     for name in expected:                                             # right values under the right name, not just shapes, to within the file's quantization step
         step = np.ptp(expected[name]) / ((1 << GRID_BITS[name]) - 1)
         assert np.abs(g[name] - expected[name]).max() <= 0.5 * step * 1.001 + 2e-5, name           # plus float32 rounding of the decoded values

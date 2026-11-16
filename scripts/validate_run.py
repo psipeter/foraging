@@ -4,7 +4,7 @@
     ./venv/bin/python scripts/validate_run.py --all [--json]       # every run under ForagingData/ (not _worlds, _db_backup*, other non-run folders)
 
 Read-only. One table per session folder (ForagingData/<run>/<NN>/) of checks, each PASS / WARN / FAIL / SKIP with the numbers that disagree, a summary
-line, and exit code 1 if any check FAILs. FAIL means the data or the scoring is wrong; WARN is a case the logs cannot decide (an old format, a world file
+line, and exit code 1 if any check FAILs. FAIL means the data or the scoring is wrong; WARN is a case the logs cannot decide (a world file
 that cannot be found, a reduced run). Three groups (docs/VALIDATION_PLAN.md, Layer 1):
 
   scoring    foraging_points = the last running_total = the sum of the fruit rewards, each fruit pays the world's pre-drawn reward; each ranking set's
@@ -27,6 +27,7 @@ import numpy as np
 import ranking
 import replay
 import rundata
+from replay import _payload
 from world import read_unity_world
 
 PASS, WARN, FAIL, SKIP = "PASS", "WARN", "FAIL", "SKIP"
@@ -67,7 +68,7 @@ class Ctx:
 
     @property
     def foraging_points(self):
-        return self.row.get("foraging_points", self.row.get("final_score"))        # the old spelling of a log from before 2026-11-14
+        return self.row.get("foraging_points")
 
     @property
     def ranking_every(self):
@@ -87,18 +88,19 @@ class Ctx:
         return bool(self.sets) or any(e["type"] in ("rank_set", "rank_set_start", "rank_set_end") for e in self.events)
 
     @property
-    def old_interlude(self):
-        """A session of the old format: an Interlude (its ranking_sets rows are an Interlude's trials, not a break's)."""
-        return bool(self.config.get("isInterlude")) or (bool(self.sets) and not self.has_ranking)
+    def unsupported(self):
+        """Why this log is of a format no longer validated (git history at b7e1895 has the code that handled them), else None."""
+        if self.config.get("isInterlude") or (bool(self.sets) and not self.has_ranking):
+            return "an Interlude session (trial rows, no ranking breaks)"
+        if "foraging_points" not in self.row and "final_score" in self.row:
+            return "the old final_score column (before 2026-11-14)"
+        if any(e["type"] == "rank_break_start" for e in self.events) and not self.sets and not _of(self, "rank_set_start"):
+            return "ranking breaks of the early prototype (no rank_set_start events, no ranking_sets rows)"
+        return None
 
     @property
     def completed(self):
         return bool(self.row["completed"]) if "completed" in self.row else any(e["type"] == "session_end" for e in self.events)
-
-    @property
-    def old_breaks(self):
-        """Ranking breaks logged by a build from before the sets had their own events and rows (no rank_set_start, no ranking_sets.csv)."""
-        return any(e["type"] == "rank_break_start" for e in self.events) and not self.sets and not _of(self, "rank_set_start")
 
     @property
     def set_ids(self):
@@ -117,10 +119,6 @@ def _of(ctx, kind):
     return [e for e in ctx.events if e["type"] == kind]
 
 
-def _payload(e):
-    return e.get("payload") or {}
-
-
 def _skip_no_ranking(name):
     return [Result(name, SKIP, "the session has no ranking (rankingEvery 0)")]
 
@@ -132,8 +130,6 @@ def _skip_no_ranking(name):
 def check_foraging_points(ctx):
     fruits = _of(ctx, "fruit")
     points = ctx.foraging_points
-    if ctx.config.get("isInterlude"):
-        return [Result("foraging_points", SKIP, "an old Interlude: its trials restart the running total")]
     if points is None:
         return [Result("foraging_points", WARN, "not recorded in session.json")]
     out = []
@@ -156,8 +152,6 @@ def check_foraging_points(ctx):
 
 def check_fruit_rewards(ctx):
     name = "fruit rewards = world's pre-drawn rewards"
-    if ctx.config.get("isInterlude"):
-        return [Result(name, SKIP, "an Interlude plays on its own bush table (the .interlude.json), not the world file's")]
     if ctx.fruit_reward is None:
         return [Result(name, WARN, f"world file not available: {ctx.world_note}")]
     set_ids, n, k_max = ctx.set_ids, len(ctx.fruit_reward), ctx.fruit_reward.shape[1]
@@ -190,7 +184,7 @@ def check_ranking_sets(ctx):
     if not ctx.ranking_played:
         return [Result(n, SKIP, "no ranking set was played") for n in names]
     if not ctx.sets:
-        return [Result(n, WARN if ctx.old_breaks else FAIL, "no ranking_sets rows") for n in names]
+        return [Result(n, FAIL, "no ranking_sets rows") for n in names]
     bonus, practice = ctx.config.get("rankingBonusPerPair"), bool(ctx.config.get("isPractice"))
     pairs, points = [], []
     for i, row in enumerate(ctx.sets):
@@ -383,6 +377,9 @@ def check_break_rules(ctx):
     every, cooldown = max(ctx.ranking_every, 1), cfg.get("rankingCooldown")
     sched = ctx.schedule
     start_payload = {e["t"]: _payload(e) for e in _of(ctx, "rank_break_start")}
+
+    def number(k, s):                   # a break's number: the logged one (a break played again after a resume keeps it), else its position
+        return start_payload.get(s, {}).get("break") or k + 1
     duration, last = cfg.get("sessionDuration"), cfg.get("rankingLastSeconds")
     resumed = bool(_of(ctx, "session_resume"))
 
@@ -394,9 +391,9 @@ def check_break_rules(ctx):
     else:
         tile = _tiles(ctx.tile_centres, tr[:, 1:3])
         problems, notes, ref_time = [], [], tr[0, 0]
-        start_event = start_payload
         for k, (s, e) in enumerate(breaks):
-            if start_event.get(s, {}).get("resumed"):          # a break played again straight after the resume that cut it short: no walking in between
+            logged = start_payload.get(s, {})
+            if logged.get("resumed"):          # a break played again straight after the resume that cut it short: no walking in between
                 ref_time = e
                 continue
             lo, hi = np.searchsorted(tr[:, 0], ref_time, "left"), np.searchsorted(tr[:, 0], s + TIME_EPS, "right")
@@ -404,11 +401,10 @@ def check_break_rules(ctx):
             changes = int((seg[1:] != seg[:-1]).sum()) if len(seg) else 0
             if len(seg) == 0 or (seg == seg[0]).all():
                 problems.append(f"break {k + 1} at t={s:.3f}: the player stayed in tile {seg[0] if len(seg) else '?'} since t={ref_time:.3f}")
-            number = start_event.get(s, {}).get("break") or k + 1
-            need = (sched[number - 1] - (sched[number - 2] if number > 1 else 0)) if number <= len(sched) else every          # leavings since the last break: the schedule's step, or rankingEvery
+            nb = number(k, s)
+            need = (sched[nb - 1] - (sched[nb - 2] if nb > 1 else 0)) if nb <= len(sched) else every          # leavings since the last break: the schedule's step, or rankingEvery
             if len(seg) and not (seg == seg[0]).all() and changes < need:
                 (notes if cfg.get("rankingSettleDepth") or resumed else problems).append(f"break {k + 1}: {changes} tile changes since t={ref_time:.3f}, {need} leavings due")
-            logged = start_event.get(s, {})
             if not sched and logged.get("switches") is not None and logged["switches"] < every:
                 problems.append(f"break {k + 1}: logged switches {logged['switches']} < rankingEvery {every}")
             if logged.get("tile") is not None and len(seg) and int(seg[-1]) != logged["tile"]:
@@ -419,19 +415,17 @@ def check_break_rules(ctx):
     # the scheduled leavings (rankingLeavings): each break comes at the next number of the schedule, and the qualifying leavings are numbered 1, 2, 3, ... (a resume restarts the count)
     if sched:
         problems, leaving_events = [], [_payload(e) for e in _of(ctx, "rank_leaving")]
-        starts_logged = {e["t"]: _payload(e) for e in _of(ctx, "rank_break_start")}
         if not resumed:
             numbers = [p.get("n") for p in leaving_events]
             if numbers != list(range(1, len(numbers) + 1)):
                 problems.append(f"the rank_leaving numbers are {numbers[:12]}, not 1, 2, 3, ...")
-            numbers_seen = {starts_logged.get(s, {}).get("break") or k + 1 for k, (s, _) in enumerate(breaks)}          # a break played again after a resume keeps its number
+            numbers_seen = {number(k, s) for k, (s, _) in enumerate(breaks)}
             if len(numbers_seen) > len(sched):
                 problems.append(f"{len(numbers_seen)} breaks for a schedule of {len(sched)}")
             for k, (s, _) in enumerate(breaks):
-                number = starts_logged.get(s, {}).get("break") or k + 1
-                logged = starts_logged.get(s, {}).get("leaving")
-                if number <= len(sched) and logged is not None and logged != sched[number - 1]:
-                    problems.append(f"break {number} came at leaving {logged}, the schedule says {sched[number - 1]}")
+                nb, logged = number(k, s), start_payload.get(s, {}).get("leaving")
+                if nb <= len(sched) and logged is not None and logged != sched[nb - 1]:
+                    problems.append(f"break {nb} came at leaving {logged}, the schedule says {sched[nb - 1]}")
             for p in leaving_events:
                 if p.get("due") and p.get("n") not in sched and not any(q.get("due") for q in leaving_events if q.get("n", 0) < p.get("n", 0)):
                     problems.append(f"leaving {p.get('n')} was flagged due but is not in the schedule {sched}")
@@ -522,7 +516,6 @@ def check_break_rules(ctx):
 # Loading and running
 # --------------------------------------------------------------------------------------------------
 
-SCORING = ("foraging_points = running_total", "foraging_points = sum of fruit rewards", "fruit rewards = world's pre-drawn rewards")      # stay FAIL in any format
 CHECKS = (check_foraging_points, check_fruit_rewards, check_ranking_sets, check_session_totals,
           check_event_sequence, check_start_end, check_trajectory_count, check_break_events, check_set_events, check_world,
           check_break_rules)
@@ -559,25 +552,23 @@ def load_ctx(folder):
 
 
 def run_checks(ctx):
+    if ctx.unsupported:
+        return [Result("format", FAIL, "unsupported log format: " + ctx.unsupported)]
     out = []
-    if ctx.old_interlude:
-        out.append(Result("format", WARN, "old format: an Interlude session (trial rows, no ranking breaks); the ranking checks are skipped"))
     for check in CHECKS:
         out.extend(check(ctx))
-    if ctx.old_breaks:        # an early prototype of the breaks: its rules and logging were different, so a disagreement is no evidence of a fault
-        out = [Result(r.name, WARN, "old format (breaks logged before rank_set_start and ranking_sets): " + r.detail) if r.status == FAIL and r.name not in SCORING else r for r in out]
     if ctx.truncated:
         out.append(Result("files complete", WARN, f"{', '.join(ctx.truncated)} ended mid-line; the last line was dropped"))
     return out
 
 
 def validate_session(folder):
-    """The Results of one session folder; a folder that cannot be read is one FAIL (an old column layout, one WARN)."""
+    """The Results of one session folder; a folder that cannot be read is one FAIL (an old column layout says so)."""
     try:
         ctx = load_ctx(folder)
     except ValueError as err:
         old = "header" in str(err)
-        return [Result("load", WARN if old else FAIL, ("old format: " if old else "unreadable: ") + str(err)[:300])]
+        return [Result("load", FAIL, ("unsupported log format: " if old else "unreadable: ") + str(err)[:300])]
     except (OSError, KeyError, TypeError) as err:
         return [Result("load", FAIL, f"unreadable: {type(err).__name__}: {err}"[:300])]
     return run_checks(ctx)

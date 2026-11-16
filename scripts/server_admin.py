@@ -156,12 +156,12 @@ def build_plan(build_dir=None, commit=None, repo=PROJECT_ROOT):
     return {"commit": commit, "experiments": experiments, "sessions": sessions, "worlds": root, "notes": notes, "development": development}
 
 
-def build_description(build_dir, reason=None, repo=PROJECT_ROOT, now=None):
+def build_description(build_dir, reason=None, repo=PROJECT_ROOT, now=None, commit=None):
     """(subject, body) describing a WebGL build, for the deploy commit in the Pages repository (`deploy_webgl.sh`) and for the release's note (`publish`): its kind,
     the commit of this repository it was made from (and whether the tree was dirty), its size and what it holds. The Pages repository keeps only its latest commit, so
     the registered release is where the record of each deploy lives. `reason` is a free line: what this deploy is for."""
     build_dir = Path(build_dir)
-    plan = build_plan(build_dir, repo=repo)
+    plan = build_plan(build_dir, commit, repo=repo)
     info = json.loads((build_dir / "StreamingAssets" / "build_info.json").read_text())
     size = sum(f.stat().st_size for f in build_dir.rglob("*") if f.is_file()) / 1e6
     kind = "Development" if plan["development"] else "Release"
@@ -309,7 +309,7 @@ def main():
     conn = psycopg.connect(url, row_factory=psycopg.rows.dict_row, autocommit=True, prepare_threshold=None)      # (no server-side prepared statements: the pooler hands queries to different server connections)
     if args.command == "publish":
         codes = dict(item.split("=", 1) for item in args.completion_code)
-        note = release_note(build_description(args.build)[0], args.note) if args.build else args.note
+        note = release_note(build_description(args.build, commit=args.commit)[0], args.note) if args.build else args.note
         for line in publish(conn, plan, codes, note):
             print("registered", line)
         return

@@ -41,6 +41,8 @@ class Battery:
         return {"session_duration": self.sessions[label]}
 
     def world_seeds(self, label, seeds):
+        if any(int(s) >= self.seed_stride for s in seeds):
+            raise ValueError(f"seeds must be below {self.seed_stride}: from there the labels' worlds overlap and results are shared between labels")
         return [int(s) + self.seed_stride * list(self.sessions).index(label) for s in seeds]
 
 
@@ -263,7 +265,7 @@ def session_readout(store, tag, battery, aliases=None):
     lines = []
     for session in battery.sessions:
         sel = analysis.select(store, tag=f"{tag}/{session}")
-        baseline = "nearest" if _has(sel, "nearest") else None
+        baseline = "nearest" if REGISTRY["nearest"]().spec_hash() in sel.agents else None
         rows = analysis.table(sel, "total", baseline)
         for row in rows:
             row["label"] = (aliases or {}).get(row["agent_id"], row["label"])
@@ -272,14 +274,6 @@ def session_readout(store, tag, battery, aliases=None):
         lines.append(analysis.format_table(rows))
         lines.append("")
     return "\n".join(lines)
-
-
-def _has(sel, name):
-    try:
-        analysis.resolve_agent_in(sel, name)
-        return True
-    except KeyError:
-        return False
 
 
 def main(argv=None):

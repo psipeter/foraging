@@ -99,12 +99,6 @@ def test_the_same_seed_gives_the_same_world_and_another_seed_another():
     assert a.n != c.n or not np.array_equal(a.pos, c.pos)
 
 
-def test_the_terrain_rebuilt_from_the_seed_is_the_terrain_the_world_was_made_on():
-    w = tile_world(6)
-    rebuilt = world.Terrain.from_seed(w.params, 6)
-    assert np.allclose(rebuilt.moisture(w.pos[:, 0], w.pos[:, 1]), w.moisture)
-
-
 def test_features_scatter_around_the_tiles_centre_by_the_stated_spread_and_stay_in_range():
     within, means = [], []
     for seed in SEEDS:

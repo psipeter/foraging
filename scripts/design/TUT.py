@@ -33,15 +33,15 @@ Press [Enter] to begin
 # The hints: none yet. The file keeps the format and the list of triggers as comments; add blocks here (or in the design) when they are chosen.
 HINTS = """# Tutorial hints. A block is a trigger line, then the popup: title, text, and a "Press [Enter] to ..." prompt. Each block is shown once.
 #
-#     @fruit 1
-#     Your first fruit
+#     @bout 1
+#     Your first harvest
 #     You earned {points} points.
 #
 #     Press [Enter] to continue
 #
-# Triggers (Assets/Scripts/UI/TutorialHints.cs): harvest_available, harvest_paused, fruit n, bout n, exhausted n, patch_switch n (the nth qualifying patch leaving, as the rankings count them), ranking_start n, ranking_end n,
-# seconds n (foraging seconds into the session), idle n (seconds standing still without harvesting), after <trigger>:<n> <seconds> (that many foraging seconds after that hint was shown).
-# {points} is the fruit or harvest that fired it.
+# Triggers (Assets/Scripts/UI/TutorialHints.cs; an unknown one is an error): bout n (a harvest that took fruit ends), patch_switch n (the nth qualifying patch leaving, as the rankings count them),
+# ranking_start n, ranking_end n. A waiting foraging hint holds back a ranking hint behind it; after a resume, counts carry on from the highest hint of a trigger already shown.
+# {points} is what the harvest that fired it earned.
 
 @bout 1
 Harvesting
@@ -89,10 +89,6 @@ Press [Enter] to continue
 """
 
 
-def hints_text():
-    return HINTS
-
-
 def instances():
     weights = (("shape", TUTORIAL_REWARD["shape"]), ("color", TUTORIAL_REWARD["color"]), ("moisture", 0.0))
     fields = _fields(TUTORIAL_BETWEEN, TUTORIAL_WITHIN, TUTORIAL_TILES, WORLD_SEED, weights)
@@ -107,4 +103,4 @@ def instances():
 
 
 def texts():
-    return {"instructions_S1.txt": INSTRUCTIONS, "hints_S1.txt": hints_text()}
+    return {"instructions_S1.txt": INSTRUCTIONS, "hints_S1.txt": HINTS}

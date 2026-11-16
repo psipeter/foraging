@@ -148,7 +148,7 @@ public class DataLogger : MonoBehaviour
             Payload = Json.Obj(("gap_s", r.gap_seconds), ("stale_s", r.clock - r.pose.t), ("open_bout_tree", r.open_bout_tree),
                 ("frames_held", r.trajectory_next), ("has_pose", r.has_pose)),
         });
-        if (r.open_break > 0)
+        if (r.open_break > 0 && !r.open_break_end_logged)
         {
             // The break the data stopped inside is closed here, so the starts and ends stay paired (the server's held-clock sum pairs them in order); RankingBreak plays it again.
             _events.Insert(1, new EventRow

@@ -33,7 +33,7 @@ Usage as a library:
     table = compare({"a": lambda: A(), "b": lambda: B()}, "FIX_T0", seeds=range(100), baseline="a")
 
 Command line (agents are looked up in agents.REGISTRY):
-    python scripts/sim.py FIX_T0 --seeds 0-99 --agents nearest,greedy_rate --set tree_spacing=30
+    python scripts/sim.py FIX_T0 --seeds 0-99 --agents nearest,greedy_rate --set session_duration=90
 """
 
 import argparse
@@ -44,7 +44,7 @@ import numpy as np
 
 import costs
 from agents import Body, Explore, Harvest, Look, Stop
-from perception import ConePercept, NullPercept, Observation, percept_for  # noqa: F401  (re-exported)
+from perception import ConePercept, NullPercept, percept_for  # noqa: F401  (percept_for re-exported)
 from world import generate_world, load_session, _parse_seeds
 
 AGENT_STREAM = 99  # SeedSequence child key for agent randomness, kept apart from the world's streams
@@ -372,7 +372,7 @@ def main():
                     help="replace the sensor with a view cone of this total angle (degrees) and distance, or 'none' to see "
                          "nothing (default: the world's own, as wide as the session camera)")
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE",
-                    help="session parameter overrides in snake_case, e.g. tree_spacing=30")
+                    help="session parameter overrides in snake_case, e.g. session_duration=90")
     ap.add_argument("--record", action="store_true",
                     help="record the runs in the results database (results/results.sqlite) and reuse any already recorded for "
                          "this agent, environment and code; needs --tag")

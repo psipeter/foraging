@@ -450,7 +450,6 @@ CHECK_KEYS = ["worldHalfExtent", "terrainMeshResolution", "terrainMaxElevation",
               "mountainBandWidth", "mountainBoundaryJitter", "mountainHeight",
               "mountainNoiseScale", "snowLineFraction",
               "treeEdgeMargin", "fruitCount", "rewardStd"]
-REWARD_PARTS = ["shape", "color", "moisture"]
 WORLD_MAGIC = b"FWLD"
 WORLD_VERSION = 2
 GRID_NAMES = ["moisture", "elevation", "rock", "snow", "ramp"]
@@ -477,7 +476,7 @@ def check_values(params):
             out[name] = value
     for name in tiles.TILE_PARAMS:                                 # the numbers the tiles layout reads
         out[_camel(name)] = float(getattr(params, name))
-    for part in REWARD_PARTS:
+    for part in FEATURES:
         comp = params.reward_function[part + "Component"]
         for field in ("basisFunctionType", "weight", "peak", "width"):
             out[f"reward.{part}.{field}"] = float(comp[field])
@@ -555,11 +554,10 @@ def export_unity(world, path):
         "checkNames": list(checks),
         "checkValues": list(checks.values()),
     }
-    tiles_grid = getattr(world.terrain, "tiles", None)
-    if tiles_grid is not None:                      # a tiles layout: where the tiles are, for the game's patch switches (the tile of a point is its nearest centre)
-        header["tileRadius"] = float(tiles_grid.radius)
-        header["tileRamp"] = float(tiles_grid.ramp)
-        header["tileCentres"] = [float(v) for _, _, c in tiles_grid.tile_centres() for v in c]
+    grid = world.terrain.tiles                     # where the tiles are, for the game's patch switches (the tile of a point is its nearest centre)
+    header["tileRadius"] = float(grid.radius)
+    header["tileRamp"] = float(grid.ramp)
+    header["tileCentres"] = [float(v) for _, _, c in grid.tile_centres() for v in c]
     blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
     block = b"".join(np.ascontiguousarray(coded[n][0]).tobytes() for n in GRID_NAMES)
     with open(path, "wb") as f:
@@ -597,26 +595,16 @@ def read_unity_world(path):
 # numbered per use (see the module docstring), not per stage, so a world is the same whichever way the code is organised.
 # --------------------------------------------------------------------------------------------------
 
-def assign_independent(params, pos, terrain, rngs, reward):
-    """Shape and colour drawn independently of position (stream 3), plus the practice session's per-bush value (stream 9)."""
-    n = len(pos)
-    shape = rngs[3].uniform(0.0, 1.0, n)
-    color = rngs[3].uniform(0.0, 1.0, n)
-    if not params.shape_varies:                     # "shapes identical": the draws above are still made, so the other streams do not move
-        shape = np.full(n, float(params.shape_when_fixed))
-    if not params.color_varies:
-        color = np.full(n, float(params.color_when_fixed))
-    lo, hi = params.random_bush_value_range
-    extra = rngs[9].uniform(lo, hi, n) if hi > lo else np.zeros(n)             # the practice session's reward: a value per bush that no attribute predicts
-    return shape, color, extra
-
-
 def assign_tiles(params, pos, terrain, rngs, reward):
-    """(shape, colour) dealt tile by tile (tiles.py `deal_features`, stream 19): each tile's bushes lie around a centre of the tile in the feature plane. The independent draw is still made
-    (the other streams do not move) and gives the practice session's random value; a feature that does not vary is the same value everywhere."""
-    shape, color, extra = assign_independent(params, pos, terrain, rngs, reward)
+    """(shape, colour) dealt tile by tile (tiles.py `deal_features`, stream 19): each tile's bushes lie around a centre of the tile in the feature plane; a feature that does not vary
+    is `*_when_fixed` everywhere. Stream 9 gives the per-bush random value (`randomBushValueRange`, the practice session's reward that no attribute predicts)."""
+    n = len(pos)
     tile_shape, tile_color = tiles.deal_features(params, pos, terrain.tiles, rngs[19], reward)
-    return (tile_shape if params.shape_varies else shape), (tile_color if params.color_varies else color), extra
+    shape = tile_shape if params.shape_varies else np.full(n, float(params.shape_when_fixed))
+    color = tile_color if params.color_varies else np.full(n, float(params.color_when_fixed))
+    lo, hi = params.random_bush_value_range
+    extra = rngs[9].uniform(lo, hi, n) if hi > lo else np.zeros(n)
+    return shape, color, extra
 
 
 LAYOUTS = {"tiles": tiles.layout_tiles}
@@ -646,7 +634,7 @@ def generate_world(params, seed):
     layout_name, assignment_name, reward_name = stage_names(params)
     reward = REWARDS[reward_name]
     rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(20)]          # (spawn(20) gives the same first children as spawn(11) or spawn(16): the streams are numbered, so no world moves when one is added or dropped)
-    terrain = Terrain(params, Perlin(rngs[1]), Perlin(rngs[5]), Perlin(rngs[6]), Perlin(rngs[7]), rngs[17])
+    terrain = Terrain.from_seed(params, seed)
 
     pos = LAYOUTS[layout_name](params, terrain, rngs)
     n = len(pos)

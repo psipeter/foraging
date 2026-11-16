@@ -92,7 +92,7 @@ def test_every_set_is_a_ladder_with_no_tie_and_the_sets_are_disjoint():
 
 
 def test_the_sets_together_fill_the_value_range_and_each_spans_it():
-    sidecar, _ = built(set_count=4)
+    sidecar, _ = built(ranking_pool_sets=4)
     spans = [t["valueSpan"] for t in sidecar["sets"]]
     allv = np.asarray(sidecar["value"])
     assert min(spans) > 0.8 * np.ptp(allv)                                 # each set covers about the whole range
@@ -123,7 +123,7 @@ def test_a_reward_on_moisture_is_refused():
 
 def test_a_range_too_narrow_for_the_tie_gap_is_refused():
     with pytest.raises(ValueError, match="span too little"):
-        generate_pool(SESSION, **TWO_FEATURES, min_gap=1.5, steps=100)
+        generate_pool(SESSION, **TWO_FEATURES, ranking_tie_gap=1.5, steps=100)
 
 
 
@@ -165,24 +165,13 @@ def test_a_random_ranking_scores_one_half():
 # ---- the pool of sets a session plays in place (ranking breaks) ---------------------------------------
 
 def test_a_pool_holds_the_stated_number_of_sets_of_the_stated_size():
-    p = built(set_count=7, set_size=5)[0]
+    p = built(ranking_pool_sets=7, ranking_set_size=5)[0]
     assert p["format"] == "ranking-pool" and p["n"] == 7 and p["setSize"] == 5 and len(p["sets"]) == 7
     assert all(len(t["bushes"]) == 5 for t in p["sets"])
 
 
-def test_the_pool_default_is_the_session_field_or_twelve_sets():
-    assert ranking.POOL_SETS == 12
-    assert built()[0]["n"] == 12
-
-
-def test_a_pool_set_is_a_value_ladder_with_every_gap_at_least_the_tie_gap():
-    p = built(set_count=4, set_size=5, min_gap=0.25)[0]
-    for t in p["sets"]:
-        assert t["minGap"] >= 0.25 - 1e-9
-
-
 def test_a_pair_is_a_set_of_two():
-    sidecar, _ = built(set_size=2, set_count=5, arc_span=60.0, steps=3000)
+    sidecar, _ = built(ranking_set_size=2, ranking_pool_sets=5, ranking_arc_span=60.0, steps=3000)
     assert sidecar["setSize"] == 2 and sidecar["n"] == 5
     for s in sidecar["sets"]:
         left, right = s["bushes"]

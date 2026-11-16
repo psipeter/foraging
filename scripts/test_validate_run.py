@@ -1,5 +1,5 @@
 """validate_run.py: a golden session passes every check and each injected fault fails exactly the check that is meant to see it; the real browser runs of 2026-11-13
-(scripts/fixtures/runs/) pass; a run folder, JSON output and the old formats do not crash."""
+(scripts/fixtures/runs/) pass; a run folder, JSON output and old formats fail with a message, not a traceback."""
 
 import copy
 import json
@@ -135,14 +135,24 @@ def test_a_session_without_ranking_skips_the_ranking_checks():
     assert not [r for r in results.values() if r.status in (FAIL, WARN)]
 
 
-def test_an_old_interlude_session_is_noted_not_failed():
+def test_an_old_interlude_session_fails_as_unsupported():
     ctx = golden()
     ctx.row["config"].update(isInterlude=True, rankingEvery=0)
     ctx.events = [e for e in ctx.events if not e["type"].startswith("rank_")]
     ctx.sets = [set_row(0, [(3, 1), (4, 2), (5, 3)], 3, 0)]            # an Interlude's trial row
     reseq(ctx.events)
     results = v.run_checks(ctx)
-    assert [r.status for r in results if r.name == "format"] == [WARN] and not [r for r in results if r.status == FAIL]
+    assert [(r.name, r.status) for r in results] == [("format", FAIL)] and "unsupported log format" in results[0].detail
+
+
+def test_early_prototype_breaks_and_the_final_score_column_fail_as_unsupported():
+    ctx = golden()
+    ctx.sets = None
+    ctx.events = [e for e in ctx.events if e["type"] not in ("rank_set_start", "rank_set_end")]
+    assert [r.status for r in v.run_checks(ctx)] == [FAIL] and "early prototype" in v.run_checks(ctx)[0].detail
+    ctx = golden()
+    ctx.row["final_score"] = ctx.row.pop("foraging_points")
+    assert [r.status for r in v.run_checks(ctx)] == [FAIL] and "final_score" in v.run_checks(ctx)[0].detail
 
 
 # --- one injected fault, one failing check ------------------------------------------------------------------------------------------------
@@ -398,13 +408,14 @@ def test_a_written_session_loads_and_validates(tmp_path, monkeypatch, capsys):
     assert json.loads(capsys.readouterr().out)["summary"]["FAIL"] == 0
 
 
-def test_an_unreadable_session_is_one_fail_and_an_old_header_a_warn(tmp_path):
+def test_an_unreadable_session_is_one_fail_an_old_header_says_unsupported(tmp_path):
     folder = tmp_path / "run" / "00"
     folder.mkdir(parents=True)
     (folder / "session.json").write_text(json.dumps({"config": {}, "world_file": "x.world", "world_sha256": "0" * 64}))
     (folder / "events.csv").write_text("a,b\n0,0.0\n")
     (folder / "trajectory.csv").write_text("seq,t,x,z,yaw,pitch,keys\n")
-    assert [r.status for r in v.validate_session(folder)] == [WARN]
+    results = v.validate_session(folder)
+    assert [r.status for r in results] == [FAIL] and "unsupported log format" in results[0].detail
 
 
 # --- the real browser runs of 2026-11-13 --------------------------------------------------------------------------------------------------

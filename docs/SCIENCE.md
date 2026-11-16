@@ -73,7 +73,7 @@ fades in and out; every one carries a small blue "Tutorial" label. The popups, i
 
 A controls bar ("[Mouse] look, [W / S] walk, [Space] hold to harvest", `design/TUT.py` `CONTROLS_REMINDER`, `SessionConfig.controlsReminder`) stays at the bottom of the screen for the whole tutorial; FOR sets none. The ranking's own helper text (on screen during a set) is "Rank these bushes from most to least valuable". **End screen** ("Tutorial complete"): the total in the middle, the foraging points (green title) and the ranking points (orange
 title) on either side with the captions "points earned from harvesting bushes" and "points earned from ranking bushes", and centred under the total the note "**Payment** is based on total points earned"; the three numbers count up
-together from zero. The ranking set's outcome is sealed during play (a centred, larger "+???" and a chime, `DECISIONS`, "Ranking feedback sealed"). **Not built:** hints that survive a resume (a resumed tutorial shows them again),
+together from zero. The ranking set's outcome is sealed during play (a centred, larger "+???" and a chime, `DECISIONS`, "Ranking feedback sealed"). **Not built:** hint triggers other than the four above (`bout`, `patch_switch`, `ranking_start`, `ranking_end`; the rest were removed, DECISIONS 2026-11-16; a resumed tutorial skips the hints already shown),
 non-modal hints, any guarantee that a participant sees a ranking (it comes at a patch switch); the wording is the PI's and still open to change. See DECISIONS ("The tutorial" and its addenda) for the reasoning.
 
 ---

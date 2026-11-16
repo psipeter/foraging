@@ -302,13 +302,13 @@ def _factory(agent):
     return agent
 
 
-def record_run(agent, session, seeds, tag, *, note=None, percept=None, overrides=None, store=None, progress=None):
+def record_run(agent, session, seeds, tag, *, note=None, percept=None, overrides=None, store=None):
     """Run `agent` (a factory, a registry name or a spec dict) on one world per seed and record it, computing only the seeds that are
     not already recorded for this agent, environment and code version. `store` is a Store (default: the project database,
     opened and closed here). Returns a RunReport."""
     if store is None:
         with Store() as own:
-            return record_run(agent, session, seeds, tag, note=note, percept=percept, overrides=overrides, store=own, progress=progress)
+            return record_run(agent, session, seeds, tag, note=note, percept=percept, overrides=overrides, store=own)
     import sim
     seeds = [int(s) for s in seeds]
     if len(set(seeds)) != len(seeds):
@@ -353,8 +353,6 @@ def record_run(agent, session, seeds, tag, *, note=None, percept=None, overrides
                       "press_time": res.press_time}
             store.add_episode(agent_id, env_id, code_id, seed, run_id, values, res.fruits)
             done.append(seed)
-            if progress is not None:
-                progress(seed, res.total)
     except BaseException as exc:
         finalize(sorted(done), interrupted=type(exc).__name__)
         raise

@@ -19,7 +19,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from world import EXPERIMENTS_DIR, PROJECT_ROOT, STREAMING_EXPERIMENTS
+from world import STREAMING_EXPERIMENTS, experiment_of
 
 UNITY = [str(Path.home() / ".local/bin/unity"), "--no-banner", "--no-pager", "command"]
 ASSET_ROOT = "Assets/ScriptableObjects/Experiments"
@@ -44,10 +44,6 @@ def load_design(code):
     return module
 
 
-def asset_path(name, code):
-    return f"{ASSET_ROOT}/{code}/{name}.asset"
-
-
 def build_spec(module, remove_stale=False):
     """The spec the Editor builder reads: sessions in play order, each with its template and its fields as text."""
     code = module.CODE
@@ -55,7 +51,7 @@ def build_spec(module, remove_stale=False):
     for inst in module.instances():
         design = {**inst.design, "instance": inst.name}
         shared = {**inst.fields, "designJson": json.dumps(design, sort_keys=True)}
-        sessions.append({"name": inst.name, "template": f"{ASSET_ROOT}/{module.TEMPLATE_SESSION.split('_')[0]}/{module.TEMPLATE_SESSION}.asset",
+        sessions.append({"name": inst.name, "template": f"{ASSET_ROOT}/{experiment_of(module.TEMPLATE_SESSION)}/{module.TEMPLATE_SESSION}.asset",
                          "fields": _fields({**shared, **inst.session_fields})})
     return {"code": code, "title": module.TITLE, "requires": list(getattr(module, "REQUIRES", ())),
             "countsTowardTotal": bool(getattr(module, "COUNTS_TOWARD_TOTAL", True)), "removeStale": bool(remove_stale), "sessions": sessions}

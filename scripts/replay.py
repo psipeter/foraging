@@ -79,7 +79,7 @@ class SessionLog:
 
     @property
     def foraging_points(self):
-        return self.manifest.get("foraging_points", self.manifest.get("final_score"))      # the old spelling of a log made before the rename
+        return self.manifest.get("foraging_points")
 
 
 # --------------------------------------------------------------------------------------------------
@@ -110,12 +110,11 @@ def load_session_log(folder):
     row = data["session"]
     archive = folder.resolve().parent.parent / "_worlds"          # <out>/<run>/<session>
     header, grids = read_unity_world(find_world_file(row["world_file"], row["world_sha256"], archive))
-    table = header
-    n, fruits = len(table["canopyRadius"]), int(table["fruitCount"])
+    n, fruits = len(header["canopyRadius"]), int(header["fruitCount"])
     bushes = Bushes(
-        pos=np.asarray(table["treePos"], dtype=float).reshape(n, 2),
-        canopy_radius=np.asarray(table["canopyRadius"], dtype=float),
-        fruit_reward=np.asarray(table["fruitRewards"], dtype=int).reshape(n, fruits), shape=np.asarray(table["shape"], dtype=float))
+        pos=np.asarray(header["treePos"], dtype=float).reshape(n, 2),
+        canopy_radius=np.asarray(header["canopyRadius"], dtype=float),
+        fruit_reward=np.asarray(header["fruitRewards"], dtype=int).reshape(n, fruits), shape=np.asarray(header["shape"], dtype=float))
     return SessionLog(folder, row, data["traj"], data["events"], bushes, grids, float(header["halfExtent"]), data["truncated"])
 
 
@@ -163,6 +162,12 @@ def _last_frames_start(traj):
     honoured in these frames and events are not compared. (A median-frame-time window missed the release whenever the last
     frame was long.)"""
     return float(traj[-2, 0]) - 1e-6 if len(traj) > 1 else -np.inf
+
+
+def canopy_height(config, shape):
+    """Full canopy height (Tree.ApplyAttributes) from the logged config."""
+    return canopy_height_of(shape, (config["shapeRange"]["x"], config["shapeRange"]["y"]),
+                            (config["canopyHeightRange"]["x"], config["canopyHeightRange"]["y"]))
 
 
 def bush_ground(b, elevation, half):
@@ -229,7 +234,7 @@ def replay_harvests(log):
     if crosshair > 0.0:
         elevation, half, eye_height = log.grids["elevation"], log.half_extent, float(cfg["eyeHeight"])
         ground = bush_ground(b, elevation, half)
-        half_height = 0.5 * canopy_height_of(b.shape, (cfg["shapeRange"]["x"], cfg["shapeRange"]["y"]), (cfg["canopyHeightRange"]["x"], cfg["canopyHeightRange"]["y"]))
+        half_height = 0.5 * canopy_height(cfg, b.shape)
         centres = np.stack([b.pos[:, 0], ground, b.pos[:, 1]], axis=-1)
         release_radius = crosshair * max(float(cfg.get("crosshairReleaseScale") or 1.0), 1.0)
     # In a ranking break the hit circle is rankingCrosshairRadius (0 or a log without it: the crosshairRadius), small enough that neighbouring bushes of a set are not both touched.
@@ -284,7 +289,7 @@ def replay_harvests(log):
             taken[:] = 0
             total = 0.0
             for e in ev:
-                if e["type"] == "fruit" and e["t"] <= at + 1e-9:
+                if e["type"] == "fruit" and e["t"] <= at + 1e-9 and e["tree_id"] < n0:
                     taken[e["tree_id"]] += 1
                     total = e["running_total"] if not math.isnan(e["running_total"]) else total + e["reward"]
             exhausted = taken >= n_fruits
@@ -300,6 +305,8 @@ def replay_harvests(log):
             active[:] = False
             active[rank_sets[next_set]["slots"]] = True
             next_set += 1
+        if crosshair > 0.0:
+            eye, forward = np.array([x, float(sample_grid(elevation, half, x, z)) + eye_height, z]), _forward(yaw, pitch)
         held = bool(int(keys) & KEY_HARVEST)
         pressed = held and not held_prev
         held_prev = held
@@ -312,10 +319,9 @@ def replay_harvests(log):
             if len(idx):
                 edge, bearing = _measure(b, idx, x, z, yaw)
                 if crosshair > 0.0:
-                    eye = np.array([x, float(sample_grid(elevation, half, x, z)) + eye_height, z])
                     cand = np.flatnonzero((edge <= gaps[idx]) | aim_now)
                     if len(cand):
-                        cand = cand[_aimed(centres[idx[cand]], b.canopy_radius[idx[cand]], half_height[idx[cand]], eye, _forward(yaw, pitch), ranking_crosshair if in_break else crosshair)]
+                        cand = cand[_aimed(centres[idx[cand]], b.canopy_radius[idx[cand]], half_height[idx[cand]], eye, forward, ranking_crosshair if in_break else crosshair)]
                     if len(cand):
                         focus = int(idx[cand[np.argmin(edge[cand])]])
                 else:
@@ -333,8 +339,7 @@ def replay_harvests(log):
         if target >= 0:
             edge, bearing = _measure(b, np.array([target]), x, z, yaw)
             if crosshair > 0.0:
-                eye = np.array([x, float(sample_grid(elevation, half, x, z)) + eye_height, z])
-                inside = edge[0] <= gaps[target] and bool(_aimed(centres[[target]], b.canopy_radius[[target]], half_height[[target]], eye, _forward(yaw, pitch), release_radius)[0])
+                inside = edge[0] <= gaps[target] and bool(_aimed(centres[[target]], b.canopy_radius[[target]], half_height[[target]], eye, forward, release_radius)[0])
             else:
                 inside = edge[0] <= gaps[target] and bearing[0] <= angle_now
             now_in = bool(aim_now or inside)

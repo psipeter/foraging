@@ -1,6 +1,6 @@
 """Figures for the results database (matplotlib and seaborn, saved as PNG; nothing here queries the database).
 
-Every figure is a grid of panels, one per session (2 x 2 for S1 to S4; one panel for a single selection), with one line per agent drawn by
+Every figure is a grid of panels, one per session (2 x 2 for T1 to T4; one panel for a single selection), with one line per agent drawn by
 `seaborn.lineplot` from the per-seed curves: the mean over seeds and a 95% bootstrap interval, `hue` = the agent's name. An agent keeps the
 same colour in every panel and in every figure of the same agent group (a `glasbey` colour-blind-safe palette in a fixed order; at most
 8 agents per figure, with a warning above 5), each with its own linestyle, the legend is shared, and the footer states tag, engine hash and whether the tree was dirty.
@@ -114,13 +114,13 @@ def _figsize(cfg, rows, n_agents):
     return cfg["width"], cfg["panel_height"] * rows + cfg["extra_height"] + extra
 
 
-def _header(fig, heading, note, n_agents, **layout):
+def _header(fig, heading, note, n_agents):
     """Title and subtitle at the top left, and the panels laid out between the margins."""
     top, footer, bottom = _margins(n_agents)
     height = fig.get_figheight()
     fig.text(0.01, 1 - 0.08 / height, heading, ha="left", va="top", fontsize=plt.rcParams["axes.titlesize"], fontweight="bold")   # not suptitle: tight_layout would reserve room for it
     fig.text(0.01, 1 - (0.08 + plt.rcParams["axes.titlesize"] * 1.3 / 72) / height, note, va="top", fontsize=_small(), color=INK_MUTED)
-    fig.tight_layout(rect=(0, bottom / height, 1, 1 - top / height), **layout)
+    fig.tight_layout(rect=(0, bottom / height, 1, 1 - top / height))
 
 
 def _grid(n):
@@ -130,7 +130,7 @@ def _grid(n):
     return int(np.ceil(n / cols)), cols
 
 
-def _finish(fig, axes, panels, seen, palette, footer_extra=""):
+def _finish(fig, axes, panels, seen, palette):
     for ax in axes.flat[len(panels):]:
         ax.set_visible(False)
     handles = [Line2D([0], [0], color=palette[n], lw=2, ls=ls) for n, ls in zip(seen, STYLES)]
@@ -142,8 +142,7 @@ def _finish(fig, axes, panels, seen, palette, footer_extra=""):
         code = first.sel.code
         tags = ", ".join(sorted({t.split("/")[0] for panel in panels.values() for t in panel.sel.tags})) or "any"
         foot.append(f"tag {tags}; engine {code['engine_hash']}{', dirty tree' if code['dirty'] else ''}")
-    foot += [f for f in dict.fromkeys(getattr(panel, "footer", None) for panel in panels.values()) if f]
-    foot = "; ".join(foot) + footer_extra
+    foot = "; ".join(foot)
     fig.text(0.01, 0.06 / fig.get_figheight(), foot, va="bottom", fontsize=_small() - 1, color=INK_MUTED)
 
 
@@ -152,12 +151,12 @@ def _axis_style(ax, title):
     sns.despine(ax=ax)
 
 
-def _lineplot(ax, df, seen, palette, **kw):
+def _lineplot(ax, df, seen, palette):
     """Each series as its mean and interval over seeds (a series of one seed, such as a participant, is a plain line)."""
     present = [n for n in seen if n in set(df["agent"])]
     dashes = {n: ("" if ls == "-" else ls[1]) for n, ls in zip(seen, STYLES)}   # seaborn spells solid "" and a dash pattern as its (on, off, ...)
     sns.lineplot(data=df, x="t", y="value", hue="agent", hue_order=present, palette=palette, style="agent", style_order=present, dashes=dashes,
-                 errorbar=ERRORBAR, n_boot=1000, seed=0, linewidth=2, legend=False, ax=ax, **kw)
+                 errorbar=ERRORBAR, n_boot=1000, seed=0, linewidth=2, legend=False, ax=ax)
 
 
 def figure_cumulative(panels, names=None, order=None, title=None, mode=DEFAULT_MODE):
@@ -185,8 +184,7 @@ def figure_cumulative(panels, names=None, order=None, title=None, mode=DEFAULT_M
         if i + cols >= len(panels):
             ax.set_xlabel("time in session (s)")
     heading = title or ("Lead over the lowest-performing agent in cumulative reward" if advantage else "Cumulative reward over the session")
-    note = getattr(next(iter(panels.values())), "note", None) or (
-        ("paired difference to the lowest-performing agent of each session; " if advantage else "") + "mean and 95% bootstrap interval across seeds")
+    note = (("paired difference to the lowest-performing agent of each session; " if advantage else "") + "mean and 95% bootstrap interval across seeds")
     _header(fig, heading, note, len(seen))
     _finish(fig, axes, panels, seen, palette)
     return fig

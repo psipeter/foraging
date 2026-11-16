@@ -1,6 +1,6 @@
 using UnityEngine;
 
-// The floating disc of a ranking stage (SessionConfig.rankingStage): a small bumpy oval of terrain, a little bigger than the arc of bushes, with a short underside. Its top uses the
+// The floating disc of a ranking stage: a small bumpy oval of terrain, a little bigger than the arc of bushes, with a short underside. Its top uses the
 // terrain's own shader and textures with a fixed moisture (0 arid, 0.5 grassland, 1 swamp: the three key textures), so it looks like the real ground. It is built in code for each set
 // in the set's own frame (x to the player's right, z ahead, the player at the origin), and `HeightAt` gives the surface height the bushes stand on.
 public class RankingDisc

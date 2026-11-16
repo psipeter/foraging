@@ -327,7 +327,6 @@ def test_argmax_and_softmax_probabilities():
     u = np.array([1.0, 3.0, 3.0, -np.inf])
     assert Argmax().pick(u, rng) == 1                                    # first of the ties
     assert np.allclose(Argmax().probs(u), [0, 1, 0, 0])
-    assert np.allclose(Argmax().probs(u, random_ties=True), [0, 0.5, 0.5, 0])
     assert Argmax().pick(np.array([-np.inf, -np.inf]), rng) is None
     sm = Softmax(1.0)
     p = sm.probs(u)
@@ -490,13 +489,6 @@ def test_observations_report_which_bushes_look_spent():
     w = world_with([[0, 20], [0, 30], [0, 40]])
     obs = ConePercept(90.0, 100.0).observe(w, np.zeros(2), 0.0, np.array([False, True, False]))
     assert list(obs.ids) == [0, 1, 2] and list(obs.depleted) == [False, True, False]
-
-
-def test_argmax_tie_window_is_tiny():
-    rng = np.random.default_rng(0)
-    assert all(Argmax().pick(np.array([1.0, 1.1]), rng, random_ties=True) == 1 for _ in range(50))
-    assert np.allclose(Argmax().probs(np.array([1.0, 1.1]), random_ties=True), [0, 1])
-    assert {Argmax().pick(np.array([1.0, 1.0 + 1e-14]), rng, random_ties=True) for _ in range(100)} == {0, 1}
 
 
 # --- the planner and the actors under the motor costs; the critic version --------------------
@@ -873,7 +865,6 @@ def test_softmax_actor_noise_shrinks_with_the_time_left_only_when_asked():
             share[horizon, left] = np.mean([agent.act(Body(np.zeros(2), 0.0, left, 0.0)).bush == 0 for _ in range(300)])
     assert share[True, 60.0] < 0.8 and share[True, 0.01] == 1.0       # loose at the start, greedy at the end
     assert share[False, 60.0] < 0.8 and share[False, 0.01] < 0.8      # without a horizon the temperature is constant
-    assert SoftmaxActor(horizon=True).deadline_dependent and not SoftmaxActor().deadline_dependent
 
 
 def test_curiosity_bonus_is_larger_for_unfamiliar_attributes_scales_with_the_mean_reward_and_is_off_at_zero():
