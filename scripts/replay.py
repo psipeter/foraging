@@ -221,6 +221,8 @@ def replay_harvests(log):
         half_height = 0.5 * canopy_height_of(b.shape, (cfg["shapeRange"]["x"], cfg["shapeRange"]["y"]), (cfg["canopyHeightRange"]["x"], cfg["canopyHeightRange"]["y"]))
         centres = np.stack([b.pos[:, 0], ground, b.pos[:, 1]], axis=-1)
         release_radius = crosshair * max(float(cfg.get("crosshairReleaseScale") or 1.0), 1.0)
+    # In a ranking break the hit circle is rankingCrosshairRadius (0 or a log without it: the crosshairRadius), small enough that neighbouring bushes of a set are not both touched.
+    ranking_crosshair = float(cfg.get("rankingCrosshairRadius") or 0.0) or crosshair
     # A ranking break (HarvestManager.SetAimMode): aimed (no harvest range; with the old cone, the ranking's tolerance) and quick (rankingFruitSeconds a fruit) from its start to its end.
     windows = break_windows(log.events)
     break_per_fruit, break_angle = cfg.get("rankingFruitSeconds", per_fruit), cfg.get("rankingAimTolerance", max_angle)
@@ -302,7 +304,7 @@ def replay_harvests(log):
                     eye = np.array([x, float(sample_grid(elevation, half, x, z)) + eye_height, z])
                     cand = np.flatnonzero((edge <= gaps[idx]) | aim_now)
                     if len(cand):
-                        cand = cand[_aimed(centres[idx[cand]], b.canopy_radius[idx[cand]], half_height[idx[cand]], eye, _forward(yaw, pitch), crosshair)]
+                        cand = cand[_aimed(centres[idx[cand]], b.canopy_radius[idx[cand]], half_height[idx[cand]], eye, _forward(yaw, pitch), ranking_crosshair if in_break else crosshair)]
                     if len(cand):
                         focus = int(idx[cand[np.argmin(edge[cand])]])
                 else:

@@ -21,7 +21,7 @@ TILE_FIELDS = {"tileRadius": 45.0, "tileRampWidth": 14.0, "tileMoistureLevels": 
 # of table entries (tiles.py BETWEEN_MODES, WITHIN_MODES); tried so far: random-scatter, bimodal-smooth, none-gradient.
 CROSSHAIR_RADIUS = 7.0              # the hidden hit circle of the crosshair (degrees; SessionConfig.crosshairRadius)
 # a ranking set in place after the patch leavings of `rankingLeavings` (1, 2, 4, 8; `SessionConfig.ranking*`; the arc fields: 5 bushes, 16 units, 84 degrees): 20 s a set, one set per break
-RANKING_FIELDS = {"rankingEvery": 1, "rankingLeavings.Array.size": 4, "rankingLeavings.Array.data[0]": 1, "rankingLeavings.Array.data[1]": 2, "rankingLeavings.Array.data[2]": 4, "rankingLeavings.Array.data[3]": 8, "rankingSets": 1, "rankingSeconds": 20.0, "rankingCooldown": 10.0, "rankingPoolSets": 12, "rankingMinBushes": 1, "rankingSettleDepth": 0.0, "rankingBonusPerPair": 4.0, "rankingText": "Rank these bushes from most to least valuable"}
+RANKING_FIELDS = {"rankingEvery": 1, "rankingLeavings.Array.size": 4, "rankingLeavings.Array.data[0]": 1, "rankingLeavings.Array.data[1]": 2, "rankingLeavings.Array.data[2]": 4, "rankingLeavings.Array.data[3]": 8, "rankingSets": 1, "rankingSeconds": 20.0, "rankingCooldown": 10.0, "rankingPoolSets": 12, "rankingMinBushes": 1, "rankingSettleDepth": 0.0, "rankingBonusPerPair": 4.0, "rankingCrosshairRadius": 1.0, "rankingText": "Rank these bushes from most to least valuable"}
 CELLS = (("default", "", "", {}),)
 
 

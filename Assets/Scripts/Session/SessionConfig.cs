@@ -61,6 +61,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float rankingBonusPerPair = 4f;
     [Tooltip("Degrees beyond a canopy's edge at which the crosshair still selects it in a ranking when crosshairRadius is 0 (0 = the crosshair must be inside the canopy).")]
     [SerializeField] private float rankingAimTolerance = 1.5f;
+    [Tooltip("The crosshair's hidden hit circle during a ranking (degrees), in place of crosshairRadius: the bushes of a set stand at least 2 degrees apart in the view, so a circle of up to 1 degree can touch only one of them. 0 = crosshairRadius. Read by scripts/replay.py from the log.")]
+    [SerializeField] private float rankingCrosshairRadius = 1f;
 
     [Header("Instructions")]
     [Tooltip("File in StreamingAssets shown before this session. '{part}' and '{total}' are replaced by this session's number and the count of sessions.")]
@@ -379,6 +381,7 @@ public class SessionConfig : ScriptableObject
     public float RankingRankScale => rankingRankScale;
     public float RankingBonusPerPair => rankingBonusPerPair;
     public float RankingAimTolerance => rankingAimTolerance;
+    public float RankingCrosshairRadius => rankingCrosshairRadius;
     public string HintsFile => hintsFile;
     public string SessionLabel => sessionLabel;
     public string ScoreCaptionForaging => scoreCaptionForaging;

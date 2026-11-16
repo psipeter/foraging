@@ -39,6 +39,7 @@ MonoBehaviour:
   rankingRankScale: 3
   rankingBonusPerPair: 4
   rankingAimTolerance: 1.5
+  rankingCrosshairRadius: 1
   instructionsFile: Experiments/FOR/instructions_S1.txt
   sessionLabel: 
   hintsFile: 

@@ -185,7 +185,7 @@ public class HarvestManager : MonoBehaviour
                 if (UseCrosshair)
                 {
                     // the crosshair's circle must touch the canopy; of the bushes it touches, the nearest is the target
-                    if (Aimed(tree, sessionConfig.CrosshairRadius) && edge < focusEdge)
+                    if (Aimed(tree, AimRadius) && edge < focusEdge)
                     {
                         focusIndex = i;
                         focusEdge = edge;
@@ -443,6 +443,9 @@ public class HarvestManager : MonoBehaviour
         float discriminant = b * b - a * c;
         return discriminant >= 0f && (-b + Mathf.Sqrt(discriminant)) / a > 0f;
     }
+
+    // The hit circle in degrees: the crosshair's, or in a ranking its own smaller one (SessionConfig.rankingCrosshairRadius; scripts/replay.py mirrors this).
+    private float AimRadius => _aimMode && sessionConfig.RankingCrosshairRadius > 0f ? sessionConfig.RankingCrosshairRadius : sessionConfig.CrosshairRadius;
 
     private float HarvestAngle => _aimMode ? _aimTolerance : sessionConfig.HarvestMaxAngle;
 

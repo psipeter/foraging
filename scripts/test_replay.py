@@ -542,6 +542,30 @@ def cross_log(rows, bushes=((0.0, 10.0, 1.0),), shape=0.0, cfg=None, n_fruits=3)
 def hold(x, z, yaw, pitch, seconds=0.3, keys=4):
     return [(x, z, yaw, pitch, keys)] * int(seconds * HZ)
 
+def ranking_cross(offset_deg, ranking_radius=None):
+    """A ranking set of one bush at (0, 16), the player at the origin pressing Space for 0.4 s after the set goes live, the view turned `offset_deg` of yaw off the bush's middle."""
+    cfg = dict(CROSS, rankingFruitSeconds=0.05, rankingAimTolerance=1.5)
+    if ranking_radius is not None:
+        cfg["rankingCrosshairRadius"] = ranking_radius
+    yaw, pitch = look(0.0, 0.0, 0.0, 16.0)
+    rows = hold(0.0, 0.0, yaw + offset_deg, pitch, 0.5, keys=0) + hold(0.0, 0.0, yaw + offset_deg, pitch, 0.4) + hold(0.0, 0.0, yaw + offset_deg, pitch, 0.3, keys=0)
+    log = cross_log(rows, bushes=((50.0, 50.0, 1.0),), cfg=cfg)
+    both = {"break": 1}
+    log.events = [_ev("rank_break_start", 0.1, **both),
+                  _ev("rank_set", 0.15, **{"break": 1, "set": 0, "fruits": 3, "bushes": [{"id": SET_ID, "x": 0.0, "z": 16.0, "radius": 1.0, "shape": 0.0}]}),
+                  _ev("rank_go", 0.3, **both), _ev("rank_set_end", 1.25, **both), _ev("rank_break_end", 1.3, **both)]
+    return log
+
+
+def test_a_ranking_uses_its_own_smaller_hit_circle():
+    # a view 1 degree past the canopy's edge (the bush is 1 unit in radius, 16 away: 3.6 degrees from its middle to its edge, so 4.6 off the middle): the crosshair circle of
+    # 1.5 degrees touches it, the ranking's 0.5 does not
+    miss_by_one = float(np.degrees(np.arctan(1.0 / 16.0)) + 1.0)
+    assert press_events(replay_harvests(ranking_cross(miss_by_one)))                          # no ranking radius in the log: the crosshair's
+    assert not press_events(replay_harvests(ranking_cross(miss_by_one, ranking_radius=0.5)))
+    assert press_events(replay_harvests(ranking_cross(0.0, ranking_radius=0.5)))              # on the bush: still picked
+
+
 
 def test_looking_above_or_below_the_bush_does_not_aim_at_it_but_looking_at_it_does():
     yaw, pitch = look(0.0, 7.0, 0.0, 10.0)                 # a bush 3 away, 2 from the canopy's edge: in range whatever the rule
