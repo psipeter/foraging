@@ -177,12 +177,13 @@ def break_windows(events):
 
 def with_ranking_bushes(log):
     """(bushes, sets, ids): the world's bush table with the bushes of every ranking set appended (the `rank_set` events carry them: tree id, x, z, canopy radius,
-    shape; they pay nothing), `sets` one dict per `rank_set` (t, end = the time of its `rank_set_end`, slots = their indices in the table) and `ids`, the logged tree id
+    shape; they pay nothing), `sets` one dict per `rank_set` (t, end = the time of its `rank_set_end`, or of its break's end for a try interrupted by a resume, slots = their indices in the table) and `ids`, the logged tree id
     of every row of the table (a pool wrap can give two sets the same ids, so a set's bushes are rows of their own)."""
     b = log.bushes
     n0, n_fruits = len(b.pos), b.fruit_reward.shape[1]
     pos, radius, shape, ids, sets = [b.pos], [b.canopy_radius], [b.shape if b.shape is not None else np.zeros(n0)], [np.arange(n0)], []
     ends = sorted(e["t"] for e in log.events if e["type"] == "rank_set_end")
+    break_ends = sorted(e["t"] for e in log.events if e["type"] == "rank_break_end")        # a set whose try was interrupted (a resume) stands until its break's aborted end
     total = n0
     for e in (e for e in log.events if e["type"] == "rank_set"):
         rows = _payload(e)["bushes"]
@@ -190,7 +191,7 @@ def with_ranking_bushes(log):
         radius.append(np.array([r["radius"] for r in rows], dtype=float))
         shape.append(np.array([r["shape"] for r in rows], dtype=float))
         ids.append(np.array([int(r["id"]) for r in rows]))
-        sets.append({"t": e["t"], "end": next((x for x in ends if x > e["t"] - 1e-9), np.inf), "slots": np.arange(total, total + len(rows))})
+        sets.append({"t": e["t"], "end": min(next((x for x in ends if x > e["t"] - 1e-9), np.inf), next((x for x in break_ends if x > e["t"] - 1e-9), np.inf)), "slots": np.arange(total, total + len(rows))})
         total += len(rows)
     if not sets:
         return b, sets, ids[0]

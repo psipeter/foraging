@@ -74,6 +74,11 @@ class Ctx:
         return self.config.get("rankingEvery") or 0
 
     @property
+    def schedule(self):
+        """The patch leavings after which a ranking is due (rankingLeavings), [] when the rule is 'every rankingEvery-th'."""
+        return [int(n) for n in (self.config.get("rankingLeavings") or [])]
+
+    @property
     def has_ranking(self):
         return self.ranking_every > 0 or any(e["type"] in ("rank_break_start", "rank_set") for e in self.events)
 
@@ -310,6 +315,12 @@ def check_break_events(ctx):
     return [Result("rank_break events balanced", FAIL if problems else PASS, "; ".join(problems) or f"{len(pairs)} breaks")]
 
 
+def _aborted_windows(ctx):
+    """[(start, end)] of the breaks a resume cut short (their end event says `aborted`): the game played such a break again, so its unscored try is not a set."""
+    aborted = {e["t"] for e in _of(ctx, "rank_break_end") if _payload(e).get("aborted")}
+    return [(s, e) for s, e in break_pairs(ctx.events)[0] if e is not None and e in aborted]
+
+
 def check_set_events(ctx):
     name = "ranking set events"
     if not ctx.has_ranking:
@@ -317,6 +328,10 @@ def check_set_events(ctx):
     if not ctx.ranking_played:
         return [Result(name, SKIP, "no ranking set was played")]
     counts = {k: len(_of(ctx, k)) for k in ("rank_set", "rank_set_start", "rank_set_end")}
+    for s, e in _aborted_windows(ctx):          # a try cut short by a resume has its rank_set (and maybe rank_set_start) but no rank_set_end
+        inside = {k: sum(s <= x["t"] <= e for x in _of(ctx, k)) for k in counts}
+        counts["rank_set"] -= max(inside["rank_set"] - inside["rank_set_end"], 0)
+        counts["rank_set_start"] -= max(inside["rank_set_start"] - inside["rank_set_end"], 0)
     problems = []
     if len(set(counts.values())) != 1:
         problems.append(f"rank_set / rank_set_start / rank_set_end events: {counts['rank_set']} / {counts['rank_set_start']} / {counts['rank_set_end']}")
@@ -366,6 +381,8 @@ def check_break_rules(ctx):
     ev, tr = ctx.events, ctx.traj
     starts = [s for s, _ in breaks]
     every, cooldown = max(ctx.ranking_every, 1), cfg.get("rankingCooldown")
+    sched = ctx.schedule
+    start_payload = {e["t"]: _payload(e) for e in _of(ctx, "rank_break_start")}
     duration, last = cfg.get("sessionDuration"), cfg.get("rankingLastSeconds")
     resumed = bool(_of(ctx, "session_resume"))
 
@@ -377,22 +394,48 @@ def check_break_rules(ctx):
     else:
         tile = _tiles(ctx.tile_centres, tr[:, 1:3])
         problems, notes, ref_time = [], [], tr[0, 0]
-        start_event = {e["t"]: _payload(e) for e in _of(ctx, "rank_break_start")}
+        start_event = start_payload
         for k, (s, e) in enumerate(breaks):
+            if start_event.get(s, {}).get("resumed"):          # a break played again straight after the resume that cut it short: no walking in between
+                ref_time = e
+                continue
             lo, hi = np.searchsorted(tr[:, 0], ref_time, "left"), np.searchsorted(tr[:, 0], s + TIME_EPS, "right")
             seg = tile[lo:hi]
             changes = int((seg[1:] != seg[:-1]).sum()) if len(seg) else 0
             if len(seg) == 0 or (seg == seg[0]).all():
                 problems.append(f"break {k + 1} at t={s:.3f}: the player stayed in tile {seg[0] if len(seg) else '?'} since t={ref_time:.3f}")
-            elif changes < every:
-                (notes if cfg.get("rankingSettleDepth") or resumed else problems).append(f"break {k + 1}: {changes} tile changes since t={ref_time:.3f}, rankingEvery {every}")
+            number = start_event.get(s, {}).get("break") or k + 1
+            need = (sched[number - 1] - (sched[number - 2] if number > 1 else 0)) if number <= len(sched) else every          # leavings since the last break: the schedule's step, or rankingEvery
+            if len(seg) and not (seg == seg[0]).all() and changes < need:
+                (notes if cfg.get("rankingSettleDepth") or resumed else problems).append(f"break {k + 1}: {changes} tile changes since t={ref_time:.3f}, {need} leavings due")
             logged = start_event.get(s, {})
-            if logged.get("switches") is not None and logged["switches"] < every:
+            if not sched and logged.get("switches") is not None and logged["switches"] < every:
                 problems.append(f"break {k + 1}: logged switches {logged['switches']} < rankingEvery {every}")
             if logged.get("tile") is not None and len(seg) and int(seg[-1]) != logged["tile"]:
                 notes.append(f"break {k + 1}: logged tile {logged['tile']}, nearest tile at the start {int(seg[-1])}")
             ref_time = e
         out.append(Result("break after a patch switch", FAIL if problems else (WARN if notes else PASS), "; ".join(problems + notes) or f"{len(breaks)} breaks, each after a tile change"))
+
+    # the scheduled leavings (rankingLeavings): each break comes at the next number of the schedule, and the qualifying leavings are numbered 1, 2, 3, ... (a resume restarts the count)
+    if sched:
+        problems, leaving_events = [], [_payload(e) for e in _of(ctx, "rank_leaving")]
+        starts_logged = {e["t"]: _payload(e) for e in _of(ctx, "rank_break_start")}
+        if not resumed:
+            numbers = [p.get("n") for p in leaving_events]
+            if numbers != list(range(1, len(numbers) + 1)):
+                problems.append(f"the rank_leaving numbers are {numbers[:12]}, not 1, 2, 3, ...")
+            numbers_seen = {starts_logged.get(s, {}).get("break") or k + 1 for k, (s, _) in enumerate(breaks)}          # a break played again after a resume keeps its number
+            if len(numbers_seen) > len(sched):
+                problems.append(f"{len(numbers_seen)} breaks for a schedule of {len(sched)}")
+            for k, (s, _) in enumerate(breaks):
+                number = starts_logged.get(s, {}).get("break") or k + 1
+                logged = starts_logged.get(s, {}).get("leaving")
+                if number <= len(sched) and logged is not None and logged != sched[number - 1]:
+                    problems.append(f"break {number} came at leaving {logged}, the schedule says {sched[number - 1]}")
+            for p in leaving_events:
+                if p.get("due") and p.get("n") not in sched and not any(q.get("due") for q in leaving_events if q.get("n", 0) < p.get("n", 0)):
+                    problems.append(f"leaving {p.get('n')} was flagged due but is not in the schedule {sched}")
+        out.append(Result("scheduled leavings", FAIL if problems else PASS, "; ".join(problems) or f"{len(leaving_events)} leavings, {len(breaks)} breaks, schedule {sched}"))
 
     # the cooldown
     if cooldown is None:
@@ -400,6 +443,8 @@ def check_break_rules(ctx):
     else:
         problems = []
         for k in range(1, len(breaks)):
+            if start_payload.get(breaks[k][0], {}).get("resumed"):
+                continue
             gap = _foraging_time(breaks[k][0], breaks) - _foraging_time(breaks[k - 1][1], breaks)
             if gap < cooldown - COOLDOWN_TOL:
                 problems.append(f"break {k + 1} started {gap:.2f} foraging seconds after break {k} ended (rankingCooldown {cooldown})")

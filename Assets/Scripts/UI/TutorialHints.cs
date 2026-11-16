@@ -18,7 +18,8 @@ using UnityEngine.InputSystem;
 //   fruit               the nth fruit taken (`{points}` = its reward)
 //   bout                the nth harvest that took fruit, when it ends (`{points}` = what it earned)
 //   exhausted           the nth bush picked empty
-//   patch_switch        the nth patch switch (the nearest tile changes and the player is a few units into the new one)
+//   patch_switch        the nth patch leaving, as RankingBreak counts it (a settled move into another tile that qualifies: a bush harvested, not in the cooldown after a ranking, not in the last
+//                       seconds); needs a session with rankings
 //   ranking_start       the nth ranking break, a quarter second after the bushes of its first set have grown (the hint pauses the set's countdown)
 //   ranking_end         the nth ranking break, as it ends
 //   seconds             this many foraging seconds into the session (n = seconds); like `after`, it waits for a harvest under way to end
@@ -30,7 +31,6 @@ using UnityEngine.InputSystem;
 public class TutorialHints : MonoBehaviour
 {
     private const float RankingHintDelay = 0.25f;      // seconds after the first set's bushes have grown before the ranking hint appears (the set's countdown runs meanwhile; the hint then pauses it)
-    private const float PatchSettleDepth = 3f;       // units into the new tile before a patch switch counts (the edge itself would flicker)
 
     private class Hint
     {
@@ -49,18 +49,16 @@ public class TutorialHints : MonoBehaviour
     private readonly Queue<Hint> _queue = new Queue<Hint>();
     private readonly Dictionary<string, int> _counts = new Dictionary<string, int>();
     private SessionConfig _config;
-    private WorldData _world;
     private PlayerController _player;
     private SunController _sun;
     private DataLogger _log;
     private InstructionsScreen _screen;
     private Hint _current;
     private string _placeholder = "";
-    private int _tile = -1;
     private float _idleSeconds;
     private Vector3 _lastPosition;
 
-    public static TutorialHints Create(SessionConfig config, WorldData world, PlayerController player, SunController sun, DataLogger log)
+    public static TutorialHints Create(SessionConfig config, PlayerController player, SunController sun, DataLogger log)
     {
         if (config == null || string.IsNullOrEmpty(config.HintsFile))
         {
@@ -76,7 +74,6 @@ public class TutorialHints : MonoBehaviour
         var go = new GameObject("TutorialHints");
         var hints = go.AddComponent<TutorialHints>();
         hints._config = config;
-        hints._world = world;
         hints._player = player;
         hints._sun = sun;
         hints._log = log;
@@ -153,6 +150,7 @@ public class TutorialHints : MonoBehaviour
         HarvestManager.OnHarvestBoutEnded += HandleBout;
         HarvestManager.OnBushExhausted += HandleExhausted;
         RankingBreak.OnSetReady += HandleSetReady;
+        RankingBreak.OnLeaving += HandleLeaving;
         RankingBreak.OnBreakEnded += HandleBreakEnded;
     }
 
@@ -163,6 +161,7 @@ public class TutorialHints : MonoBehaviour
         HarvestManager.OnHarvestBoutEnded -= HandleBout;
         HarvestManager.OnBushExhausted -= HandleExhausted;
         RankingBreak.OnSetReady -= HandleSetReady;
+        RankingBreak.OnLeaving -= HandleLeaving;
         RankingBreak.OnBreakEnded -= HandleBreakEnded;
     }
 
@@ -207,6 +206,11 @@ public class TutorialHints : MonoBehaviour
         {
             Fire("exhausted");
         }
+    }
+
+    private void HandleLeaving(int number)
+    {
+        Fire("patch_switch");
     }
 
     private void HandleSetReady(int indexInBreak)
@@ -267,13 +271,13 @@ public class TutorialHints : MonoBehaviour
         }
 
         PollClockAndPlace();
-        if (_queue.Count > 0)
+        if (_queue.Count > 0 && (!RankingBreak.Active || _queue.Peek().trigger.StartsWith("ranking")))       // only the ranking popups may appear during a ranking break
         {
             Show(_queue.Dequeue());
         }
     }
 
-    // The triggers that are read from the world rather than announced: foraging seconds, patch switches and standing idle.
+    // The triggers that are read from the clock and the player rather than announced: foraging seconds, `after`, and standing idle.
     private void PollClockAndPlace()
     {
         if (RankingBreak.Active || _player == null)
@@ -305,20 +309,6 @@ public class TutorialHints : MonoBehaviour
             if (!hint.shown && hint.trigger == "idle" && _idleSeconds >= hint.n)
             {
                 Queue(hint);
-            }
-        }
-
-        if (_world != null && _world.HasTiles)
-        {
-            int nearest = _world.NearestTile(position.x, position.z);
-            if (_tile < 0)
-            {
-                _tile = nearest;
-            }
-            else if (nearest != _tile && _world.DepthIntoTile(position.x, position.z, _tile, nearest) >= PatchSettleDepth)
-            {
-                _tile = nearest;
-                Fire("patch_switch");
             }
         }
     }

@@ -40,7 +40,7 @@ and the forager is an oracle, so these are provisional; radius 45 and 9 bushes a
 (degrees of view angle; default 7, about five times the drawn crosshair's radius) against the canopy's real 3D shape, so looking above or below a bush does not count; a harvest in progress releases at 2 Z. A thin
 grey crosshair is always drawn (`crosshairAlpha`, default 0.25) and brightens on a bush that can be harvested. Z = 0 restores the old 35 degree cone of yaw. Per fruit 0.2 s.
 
-**Ranking breaks.** After a patch switch (the nearest tile changes; `rankingEvery` of them, default 1; settle depth 0, a cooldown of 10 s, none before the first bush is harvested or in the last 10 s) the world's
+**Ranking breaks.** After a patch leaving on the schedule `rankingLeavings` (FOR and TUT: the 1st, 2nd, 4th and 8th; a leaving is a patch switch, the nearest tile changing, that qualifies: settle depth 0, none inside the 10 s cooldown after a ranking, none before the first bush is harvested or in the last 10 s; leavings are numbered from 1 through the whole session; with no schedule, every `rankingEvery`-th switch) the world's
 bushes fade to grayscale (0.25 s) and cannot be aimed at, a set of 5 ranking bushes grows on an arc of 84 degrees at 16 units in front of the player on the terrain they stand on, and the player, standing still,
 harvests them from most to least points (any bush in view, a started harvest is finished, 0.05 s a fruit, no outcomes shown). The session clock is held (the main clock goes grey) and a second clock counts
 the set's 20 s down; the player is free to walk again the moment the last bush is done. `rankingSets` sets per break (default 1). Sets come in order from a pool of 12 per session (`ranking.py pool`), chosen
@@ -57,7 +57,7 @@ a difficulty score, instructions text for the rankings. Not play-tested since th
 
 ### The tutorial (TUT, 2026-11-16)
 
-One practice session, `TUT_S1`, in its own experiment that must be finished before FOR unlocks (not paid, not in the menu's total). **World:** FOR's tile geometry in its own seed (6001), 240 s, ranking breaks on (one set per break).
+One practice session, `TUT_S1`, in its own experiment that must be finished before FOR unlocks (not paid, not in the menu's total). **World:** FOR's tile geometry in its own seed (6001), 180 s, ranking breaks on (one set per break).
 **Reward:** shape 3/4 **inverted** (a lower shape value pays more) plus colour 1/4 (higher pays more), where FOR_S1 pays both 1/2 and both increasing; so what is learned in the practice (heavy shape, low is good) is wrong in FOR,
 and the hints say only that "shape and/or color determine how many points you get". **Mechanism:** the Controls screen, then popups fired by what the participant does (`UI/TutorialHints.cs`, a hints text file), each a pause popup that
 fades in and out; every one carries a small blue "Tutorial" label. The popups, in order:
@@ -69,7 +69,7 @@ fades in and out; every one carries a small blue "Tutorial" label. The popups, i
 | the second harvest ends (`@bout 2`) | Features | Harvesting this bush earned {points} points. / A bush's **shape** and/or **color** determine how many points you get / Try harvesting a few more bushes, then move to a new area |
 | 0.25 s after the first ranking's bushes have grown (`@ranking_start 1`) | Ranking | **Rank** these imaginary bushes based on what you learned / Do this by harvesting bushes from most to least valuable |
 | the first ranking ends (`@ranking_end 1`) | Ranking | You earn **points** for ranking bushes correctly / These **hidden** points are added at session end |
-| 30 foraging seconds after the first Ranking popup, never in mid-harvest (`@after ranking_start:1 30`) | Scoring | You have a limited **time** in each session / Try to learn and harvest efficiently |
+| the third patch leaving (`@patch_switch 3`) | Scoring | You have a limited **time** in each session / Try to learn and harvest efficiently |
 
 The ranking's own helper text (on screen during a set) is "Rank these bushes from most to least valuable". **End screen** ("Tutorial complete"): the total in the middle, the foraging points (green title) and the ranking points (orange
 title) on either side with the captions "points earned from harvesting bushes" and "points earned from ranking bushes", and centred under the total the note "**Payment** is based on total points earned"; the three numbers count up

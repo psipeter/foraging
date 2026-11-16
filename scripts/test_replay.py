@@ -504,6 +504,18 @@ def test_two_sets_with_the_same_ids_are_separate_bushes():
     assert len(sets) == 2 and len(bushes.pos) == 3 and list(ids) == [0, SET_ID, SET_ID] and np.allclose(bushes.pos[2], [20.0, 27.0])
 
 
+def test_a_set_interrupted_by_a_resume_stands_only_until_its_break_ends():
+    # the first try of a set (the break is cut short by a reload and closed with an aborted end at 2.0) and the same set shown again later: the first try must not
+    # stand until the second try's rank_set_end
+    log = break_log(spans=((1.7, 2.6), (3.2, 3.9)), set_end=2.8, end=3.9)
+    again = [_ev("rank_break_end", 2.0, **{"break": 1, "aborted": True}), _ev("rank_break_start", 3.0, **{"break": 1, "resumed": True}),
+             _ev("rank_set", 3.1, **{"break": 1, "set": 1, "fruits": 10, "bushes": [{"id": SET_ID, "x": 0.0, "z": 25.0, "radius": 1.0, "shape": 0.5}]}),
+             _ev("rank_go", 3.2, **{"break": 1}), _ev("rank_set_end", 3.85, **{"break": 1})]
+    log.events = sorted([e for e in log.events if not (e["type"] == "rank_set_end")] + again, key=lambda e: e["t"])
+    _, sets, _ = replay.with_ranking_bushes(log)
+    assert len(sets) == 2 and sets[0]["end"] == pytest.approx(2.0) and sets[1]["end"] == pytest.approx(3.85)
+
+
 # --- the crosshair rule (crosshairRadius > 0: the view ray must touch the canopy, pitch included) ------------------
 
 CROSS = dict(CFG, harvestRangeGapBase=100.0, crosshairRadius=1.5, crosshairReleaseScale=2.0, eyeHeight=5.0,

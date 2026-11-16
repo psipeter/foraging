@@ -17,6 +17,7 @@ MonoBehaviour:
   isPractice: 0
   freezeSun: 0
   rankingEvery: 1
+  rankingLeavings: 01000000020000000400000008000000
   rankingSets: 1
   rankingSeconds: 20
   rankingCooldown: 10

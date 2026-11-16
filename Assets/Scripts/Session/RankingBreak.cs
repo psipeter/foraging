@@ -54,6 +54,7 @@ public class RankingBreak : MonoBehaviour
 
     // For the tutorial's hints: a set's bushes have grown (its index in the break), just before its countdown starts; a break ends.
     public static event System.Action<int> OnSetReady;
+    public static event System.Action<int> OnLeaving;            // a patch leaving that counts (its number from 1, never reset); the tutorial's patch_switch hints use it
     public static event System.Action OnBreakEnded;
 
     // The hidden bonus earned in this session's breaks so far (what the correct pairs would pay, also in a practice session); the session's end screen adds it to the points.
@@ -88,7 +89,10 @@ public class RankingBreak : MonoBehaviour
     private bool[] _realHarvested;                // whether each was spent (not aimable) before it
     private bool _prepared;
     private int _tile = -1;
-    private int _switches;
+    private int _switches;                  // qualifying leavings since the last break (the every-N rule)
+    private int _leavings;                  // qualifying leavings in the session so far (the scheduled rule, SessionConfig.rankingLeavings)
+    private bool _due;                      // a ranking is due at the next moment no harvest is under way
+    private int _rerunFrom = -1;            // a break played again after a resume starts at this set (-1: a break begun normally)
     private int _breakNumber;
     private int _poolIndex;
     private int _setCounter;                // sets played in the session so far: the row's position, one after another
@@ -147,10 +151,32 @@ public class RankingBreak : MonoBehaviour
         {
             Points = ResumeInfo.Pending.ranking_points;
             PaidPoints = ResumeInfo.Pending.ranking_points;
-            // Continuing an interrupted session: the numbering, the pool and the rows carry on (an unfinished break is not resumed; the patch switch count starts again).
-            rankingBreak._breakNumber = ResumeInfo.Pending.breaks;
-            rankingBreak._poolIndex = ResumeInfo.Pending.sets_played;
-            rankingBreak._setCounter = ResumeInfo.Pending.sets_next;
+            // Continuing an interrupted session: the numbering, the pool and the rows carry on. The pool continues from the sets that were scored (a set shown but not scored is
+            // shown again), and a break the data stopped inside is played again from its first unscored set (the participant's picks in the interrupted set are not kept).
+            ResumeReply r = ResumeInfo.Pending;
+            rankingBreak._breakNumber = r.breaks;
+            rankingBreak._poolIndex = r.sets_next;
+            rankingBreak._setCounter = r.sets_next;
+            int[] schedule = config.RankingLeavings;
+            if (r.open_break > 0)
+            {
+                rankingBreak._breakNumber = r.open_break - 1;                         // RunBreak numbers it again
+                rankingBreak._leavings = r.open_break_leaving;
+                if (r.open_break_sets_done < config.RankingSets)
+                {
+                    rankingBreak._rerunFrom = r.open_break_sets_done;
+                    rankingBreak._due = true;
+                }
+                else
+                {
+                    rankingBreak._breakNumber = r.open_break;                         // every set was scored: the break only had its end to come
+                }
+            }
+            else if (schedule.Length > 0 && r.breaks > 0)
+            {
+                rankingBreak._leavings = schedule[Mathf.Min(r.breaks, schedule.Length) - 1];       // the leavings made since the last break are not known: count on from it
+            }
+
             foreach (TreeCount taken in ResumeInfo.Pending.fruits_taken)
             {
                 if (taken.n > 0 && taken.tree < world.TreeCount)
@@ -230,13 +256,27 @@ public class RankingBreak : MonoBehaviour
             if (SwitchCounts())
             {
                 _switches++;
+                _leavings++;
+                _due = _due || BreakDue();
+                OnLeaving?.Invoke(_leavings);
+                if (_log != null)
+                {
+                    _log.LogEvent("rank_leaving", payload: Json.Obj(("n", _leavings), ("tile", tile), ("due", _due)));
+                }
             }
         }
 
-        if (_switches >= _config.RankingEvery && !_harvest.IsHarvesting)
+        if (_due && !_harvest.IsHarvesting)
         {
             StartCoroutine(RunBreak());
         }
+    }
+
+    // A ranking is due at this leaving: it is on the schedule, or, with no schedule, every `rankingEvery`-th since the last break.
+    private bool BreakDue()
+    {
+        int[] schedule = _config.RankingLeavings;
+        return schedule.Length > 0 ? System.Array.IndexOf(schedule, _leavings) >= 0 : _switches >= _config.RankingEvery;
     }
 
     private bool SwitchCounts()
@@ -253,13 +293,16 @@ public class RankingBreak : MonoBehaviour
         _sun.ClockHeld = true;
         _timer?.SetPaused(true);
         _breakNumber++;
+        bool again = _rerunFrom >= 0;                    // a break the data stopped inside, played again after a resume
+        int firstSet = Mathf.Max(_rerunFrom, 0);
+        _rerunFrom = -1;
         _player.SetStationary(true);
         _harvest.SetBlocked(true);
         _harvest.SetAimMode(true, _config.RankingAimTolerance);
         _harvest.SetFruitSeconds(_config.RankingFruitSeconds);
         if (_log != null)
         {
-            _log.LogEvent("rank_break_start", payload: Json.Obj(("break", _breakNumber), ("switches", _switches), ("tile", _tile), ("pool_index", _poolIndex), ("sets", _config.RankingSets)));
+            _log.LogEvent("rank_break_start", payload: Json.Obj(("break", _breakNumber), ("switches", _switches), ("tile", _tile), ("pool_index", _poolIndex), ("sets", _config.RankingSets), ("leaving", _leavings), ("resumed", again)));
         }
 
         // The world's bushes stay where they are but go grey, and none can be aimed at meanwhile.
@@ -273,7 +316,7 @@ public class RankingBreak : MonoBehaviour
 
         yield return GrayFade(1f);
 
-        for (int s = 0; s < _config.RankingSets; s++)
+        for (int s = firstSet; s < _config.RankingSets; s++)
         {
             PoolSet set = _pool.sets[_poolIndex % _pool.sets.Length];
             yield return RunSet(set, s, s == _config.RankingSets - 1);
@@ -311,6 +354,7 @@ public class RankingBreak : MonoBehaviour
         _timer?.SetPaused(false);
         _lastEnd = _config.SessionDuration - _sun.SessionTimeRemaining;
         _switches = 0;
+        _due = false;
         _running = false;
     }
 

@@ -373,7 +373,7 @@ public class DataPipeline : MonoBehaviour
         }
 
         PauseGate.Upload = text != null;
-        _overlay.SetActive(text != null);
+        OverlayFade.SetShown(_overlay, text != null);
 
         if (text != null)
         {

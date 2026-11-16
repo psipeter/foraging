@@ -34,8 +34,11 @@ public class ResumeReply
     public PoseReply pose;
     public double clock;                    // the session clock to continue from (later than every stored frame and event)
     public double held_seconds;             // of it, the seconds the session clock was held in ranking breaks (the foraging clock continues from clock - held_seconds)
-    public int breaks;                      // ranking breaks begun so far
-    public int sets_played;                 // ranking sets shown so far (the pool continues from here)
+    public int breaks;                      // the number of the last ranking break begun (a break played again after an interruption keeps its number)
+    public int open_break;                  // the number of the break the data stops inside, 0 when none (docs/ONLINE_DATA_PLAN.md, "Ranking breaks")
+    public int open_break_leaving;          // the patch leaving it came at
+    public int open_break_sets_done;        // how many of its sets were scored
+    public int sets_played;                 // ranking sets shown so far, counting the tries that were interrupted (the pool continues from sets_next, the scored ones)
     public float ranking_points;            // the points paid by the ranking sets so far (the end screen's total continues from it)
     public float running_total;
     public TreeCount[] fruits_taken;        // fruits already taken per bush

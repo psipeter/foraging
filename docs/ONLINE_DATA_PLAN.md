@@ -173,7 +173,7 @@ and shows a notice. After the last session's end screen, Enter calls `run-finish
 The local copy continues too: `FileSink.PrepareResume` cuts the local files back to the rows the server holds before appending.
 
 **What a resume does not restore:** an open harvest bout and the progress on the fruit being picked (they start over; the bout is
-named in the event), the view of a ranking in progress (an unfinished break is not resumed), which individual fruits were taken. The
+named in the event), which individual fruits were taken. **A ranking in progress is played again (2026-11-16, migration `20261116000000_open_break_resume`):** `resume_state` also returns `open_break` (the number of the break the data stops inside, 0 if none), `open_break_leaving` and `open_break_sets_done` (its sets already scored); `breaks` is now the number of the last break begun, and the pool continues from `sets_next` (the scored sets: a set shown but not scored is shown again). The resumed game logs `session_resume`, then a `rank_break_end` with `aborted` true (so the starts and ends stay paired, which the held-clock sum relies on), and starts that break again at once after the welcome screen from its first unscored set, at the stored pose: a `rank_break_start` with `resumed` true and the same `break` and `leaving` numbers, the arc where it first stood, a full countdown, the picks of the interrupted try not kept (they stay in the log; no `ranking_sets` row is written for the try). A break whose every set was scored is only closed. `replay.py` ends the set of an interrupted try at its break's aborted end; `validate_run.py` leaves an interrupted try out of the set-event counts and exempts a resumed break from the cooldown and the tile-change rules. The
 frame statistics of a resumed session count only its later frames. An abandoned session (Escape, or the Editor stopped) logs a
 `session_end` with `completed` false; if it is later resumed, its events continue after that `session_end`.
 
@@ -275,6 +275,7 @@ About a day of work plus a browser test.
 
 A foraging session can contain ranking breaks (`RankingBreak`, DECISIONS "Ranking breaks inside the session"). Nothing about the tables changes except what is stored in them:
 - **Events** (free-text `type`, JSON `payload`): `rank_break_start` (`break`, `switches`, `tile`, `pool_index`, `sets`), `rank_set` (`break`, `set`, `fruits`, `bushes`: id, x, z, radius, shape of each bush of the arc: they
+- **Scheduled leavings** (`SessionConfig.rankingLeavings`, 2026-11-16): `rank_leaving` (`n`: the qualifying patch leaving's number from 1 through the session, `tile`, `due`: a ranking is now due) is logged at every qualifying leaving, and `rank_break_start` carries `leaving` (its number) after `sets`. A resume counts on from the schedule number of the last break (the leavings made since are not known).
   are not in the world file), `rank_go` (the end of the harvest block of a set), `rank_set_start` / `rank_pick` / `rank_set_end` with a `break` number, `rank_break_end`. The ranking bushes have tree ids
   `world bush count + pool id` and pay 0 (their `fruit` events carry reward 0, so the running total does not move).
 - **Sets** are rows of `ranking_sets` of the foraging session (`set_index` = sets played so far in the session, `pool_index`, `bushes` JSON, points).

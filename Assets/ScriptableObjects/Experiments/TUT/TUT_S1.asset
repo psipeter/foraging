@@ -12,11 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: TUT_S1
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
-  sessionDuration: 240
+  sessionDuration: 180
   worldSeed: 6001
   isPractice: 1
   freezeSun: 0
   rankingEvery: 1
+  rankingLeavings: 01000000020000000400000008000000
   rankingSets: 1
   rankingSeconds: 20
   rankingCooldown: 10

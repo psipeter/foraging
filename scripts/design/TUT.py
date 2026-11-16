@@ -13,7 +13,7 @@ REQUIRES = ()
 COUNTS_TOWARD_TOTAL = False
 TEMPLATE_SESSION = "FOR_S1"             # copied only when the session has no asset yet (the lighting, camera and so on come from it)
 
-SECONDS = 240
+SECONDS = 180
 WORLD_SEED = 6001
 TUTORIAL_TILES = {}                     # tile fields that differ from FOR's (for example tileBushes, tileSpread)
 TUTORIAL_BETWEEN, TUTORIAL_WITHIN = "", ""      # the layers of tiles.py (default none + pool)
@@ -38,7 +38,7 @@ HINTS = """# Tutorial hints. A block is a trigger line, then the popup: title, t
 #
 #     Press [Enter] to continue
 #
-# Triggers (Assets/Scripts/UI/TutorialHints.cs): harvest_available, harvest_paused, fruit n, bout n, exhausted n, patch_switch n, ranking_start n, ranking_end n,
+# Triggers (Assets/Scripts/UI/TutorialHints.cs): harvest_available, harvest_paused, fruit n, bout n, exhausted n, patch_switch n (the nth qualifying patch leaving, as the rankings count them), ranking_start n, ranking_end n,
 # seconds n (foraging seconds into the session), idle n (seconds standing still without harvesting), after <trigger>:<n> <seconds> (that many foraging seconds after that hint was shown).
 # {points} is the fruit or harvest that fired it.
 
@@ -78,7 +78,7 @@ These **hidden** points are added at session end
 
 Press [Enter] to continue
 
-@after ranking_start:1 30
+@patch_switch 3
 Scoring
 
 You have a limited **time** in each session

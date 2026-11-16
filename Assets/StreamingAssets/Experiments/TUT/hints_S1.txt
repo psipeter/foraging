@@ -46,7 +46,7 @@ These **hidden** points are added at session end
 
 Press [Enter] to continue
 
-@after ranking_start:1 30
+@patch_switch 3
 Scoring
 
 You have a limited **time** in each session

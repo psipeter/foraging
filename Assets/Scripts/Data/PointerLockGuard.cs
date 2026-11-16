@@ -57,7 +57,7 @@ public class PointerLockGuard : MonoBehaviour
     {
         if (Suspended)
         {
-            _overlay.SetActive(false);
+            OverlayFade.SetShown(_overlay, false);
             PauseGate.Pointer = false;
             AudioListener.pause = false;
             Cursor.visible = true;
@@ -73,7 +73,7 @@ public class PointerLockGuard : MonoBehaviour
 
         _wasHeld = held;
         bool paused = !held && Time.unscaledTime > _graceUntil;
-        _overlay.SetActive(paused);
+        OverlayFade.SetShown(_overlay, paused);
         PauseGate.Pointer = paused;
         AudioListener.pause = paused;
         Cursor.visible = paused;

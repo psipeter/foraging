@@ -192,7 +192,7 @@ public class GameManager : MonoBehaviour
         AimCrosshair.Build(harvestUI != null ? harvestUI.GetComponent<Canvas>() : null, harvestManager, activeConfig);
         RankingBreak.Create(activeConfig, world, treeGenerator, playerController, cameraController, harvestManager, sunController, harvestUI, dataLogger, sessionTimerUI);     // none unless the session has breaks
 
-        TutorialHints.Create(activeConfig, world, playerController, sunController, dataLogger);     // none unless the session has a hints file
+        TutorialHints.Create(activeConfig, playerController, sunController, dataLogger);     // none unless the session has a hints file
 
         FruitMaterialManager.SetSessionConfig(activeConfig);
         Music.Volume = activeConfig.MusicVolume;

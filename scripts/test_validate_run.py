@@ -285,6 +285,67 @@ def test_the_foraging_time_must_be_the_session_duration_and_a_reduced_run_only_w
     assert results["foraging time = sessionDuration"].status == WARN
 
 
+def scheduled(schedule=(1, 2)):
+    """The golden session under a rankingLeavings schedule: a qualifying leaving at t = 2.5 (number 1) and at 9.5 (number 2), each due, and the leaving number in the break starts."""
+    ctx = golden()
+    ctx.row["config"]["rankingLeavings"] = list(schedule)
+    ctx.events += [event(2.5, "rank_leaving", payload={"n": 1, "tile": 1, "due": True}), event(9.5, "rank_leaving", payload={"n": 2, "tile": 0, "due": True})]
+    for n, e in enumerate([e for e in ctx.events if e["type"] == "rank_break_start"], start=1):
+        e["payload"]["leaving"] = n
+    ctx.events.sort(key=lambda e: e["t"])
+    reseq(ctx.events)
+    return ctx
+
+
+def test_a_session_on_a_leaving_schedule_passes():
+    results = by_name(v.run_checks(scheduled()))
+    assert results["scheduled leavings"].status == PASS
+    assert failing(scheduled()) == set()
+
+
+def test_a_break_at_the_wrong_leaving_fails_the_schedule_check():
+    ctx = scheduled((1, 4))
+    assert "scheduled leavings" in failing(ctx)            # (and the player left once since break 1, not the three the schedule asks for)
+
+
+def test_leaving_numbers_that_skip_fail_the_schedule_check():
+    ctx = scheduled()
+    find(ctx.events, "rank_leaving", 1)["payload"]["n"] = 3
+    assert "scheduled leavings" in failing(ctx)
+
+
+def test_more_breaks_than_the_schedule_fail():
+    assert "scheduled leavings" in failing(scheduled((1,)))
+
+
+def interrupted():
+    """The golden session whose second break was cut short by a reload and played again: the first try (start 13.0, its set shown, no scored set), the resume at 14.0 with the
+    break's aborted end, and the same break, marked resumed, from 14.0 to 16.0 as the golden second break."""
+    ctx = golden(second=(14.0, 15.5, 16.0))
+    again = next(i for i, e in enumerate(ctx.events) if e["type"] == "rank_break_start" and e["payload"]["break"] == 2)
+    ctx.events[again]["payload"]["resumed"] = True
+    first_try = [event(13.0, "rank_break_start", payload={"break": 2, "pool_index": 1, "sets": 1, "switches": 1, "tile": 0, "leaving": 2, "resumed": False}),
+                 event(13.3, "rank_set", payload={"break": 2, "bushes": SET_BUSHES}), event(13.6, "rank_set_start", payload={"break": 2, "set": 1}),
+                 event(14.0, "session_resume", payload={"gap_s": 30.0}), event(14.0, "rank_break_end", payload={"break": 2, "aborted": True})]
+    ctx.events[again:again] = first_try
+    reseq(ctx.events)
+    return ctx
+
+
+def test_a_break_cut_short_by_a_reload_and_played_again_passes():
+    ctx = interrupted()
+    results = by_name(v.run_checks(ctx))
+    assert [r for r in results.values() if r.status == FAIL] == []
+    assert results["ranking set events"].status == PASS and results["rank_break events balanced"].status == PASS
+
+
+def test_a_try_cut_short_without_the_aborted_end_fails_the_balance_check():
+    ctx = interrupted()
+    ctx.events.remove(next(e for e in ctx.events if e["type"] == "rank_break_end" and e["payload"].get("aborted")))
+    reseq(ctx.events)
+    assert "rank_break events balanced" in failing(ctx)
+
+
 def test_the_pool_must_be_played_in_order_wrapping_at_its_size():
     ctx = golden()
     ctx.sets[1]["pool_index"] = 5
