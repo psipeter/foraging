@@ -27,13 +27,13 @@ def db(tmp_path_factory):
     conn.close()
 
 
-def make_run(db, events):
+def make_run(db, events, config=None, completed=False, person=None):
     """A run with one session holding `events`, a list of (t, type, payload)."""
-    run, person = str(uuid.uuid4()), str(uuid.uuid4())
+    run, person = str(uuid.uuid4()), person or str(uuid.uuid4())
     db.execute("insert into public.experiments (code, title) values ('T', 'T') on conflict do nothing")
-    db.execute("insert into public.participants (participant_id) values (%s)", (person,))
+    db.execute("insert into public.participants (participant_id) values (%s) on conflict do nothing", (person,))
     db.execute("insert into public.runs (run_id, token_hash, participant_id, experiment) values (%s, 'x', %s, 'T')", (run, person))
-    db.execute("insert into public.sessions (run_id, session_index, name, config) values (%s, 0, 'S', '{}')", (run,))
+    db.execute("insert into public.sessions (run_id, session_index, name, config, completed) values (%s, 0, 'S', %s, %s)", (run, json.dumps(config or {}), completed))
     for seq, (t, kind, payload) in enumerate(events):
         db.execute("insert into public.events (run_id, session_index, seq, t, type, payload) values (%s, 0, %s, %s, %s, %s)",
                    (run, seq, t, kind, json.dumps(payload) if payload is not None else None))
@@ -76,3 +76,29 @@ def test_a_second_interruption_inside_the_replayed_break_is_open_again(db):
                         (12, "rank_break_start", {"break": 1, "leaving": 1, "resumed": True}), (12.5, "rank_set", {})])
     s = state(db, run)
     assert (s["open_break"], s["breaks"]) == (1, 1) and s["held_seconds"] == pytest.approx(1.0 + 0.5)
+
+
+def test_the_hints_shown_come_back_in_the_order_they_were_shown_without_repeats(db):
+    s = state(db, make_run(db, [(1, "hint_shown", {"id": "bout:1"}), (2, "hint_dismissed", {"id": "bout:1"}), (5, "hint_shown", {"id": "bout:2"}),
+                                (9, "session_resume", {}), (12, "hint_shown", {"id": "bout:2"}), (13, "hint_shown", {"id": "patch_switch:3"})]))
+    assert s["hints_shown"] == ["bout:1", "bout:2", "patch_switch:3"]
+    assert state(db, make_run(db, [(1, "fruit", None)]))["hints_shown"] == []
+
+
+def test_the_progress_through_a_session_is_the_foraging_clock_over_its_duration(db):
+    cfg = {"sessionDuration": 120.0}
+    run = make_run(db, [(0, "session_start", None), (10, "rank_break_start", {"break": 1}), (30, "rank_break_end", {"break": 1}), (70, "fruit", None)], config=cfg)
+    assert db.execute("select server.session_progress(%s)", (run,)).fetchone()[0] == pytest.approx((70 - 20) / 120.0)       # 70 s on the clock, 20 of them held in the ranking
+    over = make_run(db, [(0, "session_start", None), (130, "fruit", None)], config=cfg)
+    assert db.execute("select server.session_progress(%s)", (over,)).fetchone()[0] == pytest.approx(1.0)
+    done = make_run(db, [(0, "session_start", None), (100, "session_end", None)], config=cfg, completed=True)
+    assert db.execute("select server.session_progress(%s)", (done,)).fetchone()[0] == 0
+
+
+def test_the_menu_reports_the_progress_of_an_experiment_in_progress(db):
+    person = str(uuid.uuid4())
+    make_run(db, [(0, "session_start", None), (60, "fruit", None)], config={"sessionDuration": 120.0}, person=person)
+    db.execute("insert into public.releases (build_commit) values ('abc') on conflict do nothing")
+    db.execute("insert into public.release_experiments (build_commit, experiment, n_sessions) values ('abc', 'T', 2) on conflict do nothing")
+    entry = db.execute("select server.menu(%s, 'abc')", (person,)).fetchone()[0][0]
+    assert entry["code"] == "T" and entry["sessions_done"] == 0 and entry["session_progress"] == pytest.approx(0.5)

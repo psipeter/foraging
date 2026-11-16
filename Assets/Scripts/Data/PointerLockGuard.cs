@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 // In a browser the mouse is captured (pointer lock) only after a click, and the browser releases it whenever the participant
 // presses Escape or leaves the tab or window. While it is not held the game is paused behind "Paused: click to continue" (PauseGate:
@@ -15,7 +16,8 @@ public class PointerLockGuard : MonoBehaviour
     private static extern int IsPointerLocked();
 #endif
 
-    // The first capture request (the click in the Boot scene) is granted a few frames after the click; do not pause on that gap.
+    // A capture request (the click in the Boot scene, or a scene that asks for the capture as it starts) is granted a few frames later; do not pause on that gap. The window
+    // opens again whenever the guard stops being suspended (the click that begins an experiment) and whenever a scene loads.
     private const float GraceSeconds = 0.5f;
 
     // Chrome refuses a capture request made within about a second of the participant leaving the capture (Escape): the request
@@ -32,6 +34,7 @@ public class PointerLockGuard : MonoBehaviour
     private float _graceUntil;
     private float _unlockedAt = float.NegativeInfinity;
     private bool _wasHeld;
+    private bool _wasSuspended = true;
 
     private static bool Held()
     {
@@ -51,10 +54,27 @@ public class PointerLockGuard : MonoBehaviour
         text.text = "Paused\n\n<size=65%>The timer is stopped. Click to continue.</size>";
         _overlay.SetActive(false);
         _graceUntil = Time.unscaledTime + GraceSeconds;
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+    }
+
+    private void OnDestroy()
+    {
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+    }
+
+    private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        _graceUntil = Time.unscaledTime + GraceSeconds;
     }
 
     private void Update()
     {
+        if (_wasSuspended && !Suspended)
+        {
+            _graceUntil = Time.unscaledTime + GraceSeconds;          // the click that begins an experiment has just asked for the capture
+        }
+
+        _wasSuspended = Suspended;
         if (Suspended)
         {
             OverlayFade.SetShown(_overlay, false);

@@ -123,6 +123,8 @@ public class SessionConfig : ScriptableObject
     [Tooltip("Opacity of the thin grey crosshair drawn at the centre of the screen, always (0 = hidden, 1 = solid). It brightens on a bush that can be harvested.")]
     [Range(0f, 1f)]
     [SerializeField] private float crosshairAlpha = 0.25f;
+    [Tooltip("Apparent diameter, in degrees of the camera's view, of the harvest ring the crosshair becomes on a bush (UI/AimCrosshair). Not the hit circle (crosshairRadius).")]
+    [SerializeField] private float crosshairRingSizeDeg = 3.5f;
     [Tooltip("0 = off. 1 = while harvesting, mouse yaw slows to zero as you turn away from the bush between the full and fade angles (turning back is unaffected). Flat-screen only; changes effective sensitivity, so keep it off unless studying it.")]
     [Range(0f, 1f)]
     [SerializeField] private float harvestLookResistance = 0f;
@@ -135,7 +137,7 @@ public class SessionConfig : ScriptableObject
     [Tooltip("Rim light, selected bush only: thin crisp edge line, added on top of the soft glow.")]
     [SerializeField] private float rimSelectedIntensity = 2.5f;
     [SerializeField] private float rimSelectedPower = 8f;
-    [Tooltip("Apparent diameter of the harvest ring around the crosshair, in degrees of view of the camera (also the size reference of the ranking markers above bushes).")]
+    [Tooltip("Size reference, in degrees of view of the camera, of the rank numbers above the bushes of a ranking set (the crosshair's harvest ring has its own, crosshairRingSizeDeg).")]
     [SerializeField] private float harvestRingSizeDeg = 7f;
     [Tooltip("An exhausted bush stays as a landmark and obstacle, easing into its 'spent' look over this long.")]
     [SerializeField] private float spentTransitionDuration = 0.6f;
@@ -464,6 +466,7 @@ public class SessionConfig : ScriptableObject
     public float CrosshairRadius => crosshairRadius;
     public float CrosshairReleaseScale => crosshairReleaseScale;
     public float CrosshairAlpha => crosshairAlpha;
+    public float CrosshairRingSizeDeg => crosshairRingSizeDeg;
     public float HarvestLookResistance => harvestLookResistance;
     public Color RimColor => rimColor;
     public Color RimSelectedColor => rimSelectedColor;

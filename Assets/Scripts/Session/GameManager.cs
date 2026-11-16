@@ -187,6 +187,7 @@ public class GameManager : MonoBehaviour
         if (instructionsPanel != null)
         {
             instructionsPanel.sessionConfig = activeConfig;
+            instructionsPanel.dataLogger = dataLogger;
         }
 
         AimCrosshair.Build(harvestUI != null ? harvestUI.GetComponent<Canvas>() : null, harvestManager, activeConfig);

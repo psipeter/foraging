@@ -38,6 +38,7 @@ public class ResumeReply
     public int open_break;                  // the number of the break the data stops inside, 0 when none (docs/ONLINE_DATA_PLAN.md, "Ranking breaks")
     public int open_break_leaving;          // the patch leaving it came at
     public int open_break_sets_done;        // how many of its sets were scored
+    public string[] hints_shown;            // the ids of the tutorial hints already shown in the session (not shown again)
     public int sets_played;                 // ranking sets shown so far, counting the tries that were interrupted (the pool continues from sets_next, the scored ones)
     public float ranking_points;            // the points paid by the ranking sets so far (the end screen's total continues from it)
     public float running_total;

@@ -9,6 +9,15 @@ public class OverlayFade : MonoBehaviour
     private CanvasGroup _group;
     private bool _shown;
 
+    // An overlay that is on screen from now (at full opacity) and fades out when SetShown(false) is called: a cover over a scene that is not ready yet.
+    public static void Prepare(GameObject overlay)
+    {
+        OverlayFade fade = overlay.AddComponent<OverlayFade>();
+        fade._group = overlay.AddComponent<CanvasGroup>();
+        fade._group.alpha = 1f;
+        fade._shown = true;
+    }
+
     public static void SetShown(GameObject overlay, bool shown)
     {
         OverlayFade fade = overlay.GetComponent<OverlayFade>();

@@ -57,7 +57,7 @@ a difficulty score, instructions text for the rankings. Not play-tested since th
 
 ### The tutorial (TUT, 2026-11-16)
 
-One practice session, `TUT_S1`, in its own experiment that must be finished before FOR unlocks (not paid, not in the menu's total). **World:** FOR's tile geometry in its own seed (6001), 180 s, ranking breaks on (one set per break).
+One practice session, `TUT_S1`, in its own experiment that must be finished before FOR unlocks (not paid, not in the menu's total). **World:** FOR's tile geometry in its own seed (6001), 120 s, ranking breaks on (one set per break).
 **Reward:** shape 3/4 **inverted** (a lower shape value pays more) plus colour 1/4 (higher pays more), where FOR_S1 pays both 1/2 and both increasing; so what is learned in the practice (heavy shape, low is good) is wrong in FOR,
 and the hints say only that "shape and/or color determine how many points you get". **Mechanism:** the Controls screen, then popups fired by what the participant does (`UI/TutorialHints.cs`, a hints text file), each a pause popup that
 fades in and out; every one carries a small blue "Tutorial" label. The popups, in order:

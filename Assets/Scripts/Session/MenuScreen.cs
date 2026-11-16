@@ -92,12 +92,12 @@ public class MenuScreen : MonoBehaviour
                     row.Enabled = s.unlocked;
                     if (played != null)
                     {
-                        row.Progress = played.Count > 0 ? Mathf.Clamp01(s.sessions_done / (float)played.Count) : 0f;
+                        row.Progress = played.Count > 0 ? Mathf.Clamp01((s.sessions_done + s.session_progress) / played.Count) : 0f;       // the sessions done and the time in the current one
                         row.Detail = $"{CountSessions(played, s.sessions_done)} of {sessions} · ~{MinutesOf(config, played) * (1f - row.Progress):F0} min left";
                     }
                     else
                     {
-                        row.Progress = s.n_sessions > 0 ? Mathf.Clamp01(s.sessions_done / (float)s.n_sessions) : 0f;
+                        row.Progress = s.n_sessions > 0 ? Mathf.Clamp01((s.sessions_done + s.session_progress) / s.n_sessions) : 0f;
                         row.Detail = "In progress";
                     }
 

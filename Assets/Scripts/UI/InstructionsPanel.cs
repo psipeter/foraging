@@ -12,6 +12,7 @@ public class InstructionsPanel : MonoBehaviour
         "Press [Enter] to begin";
 
     public SessionConfig sessionConfig;
+    public DataLogger dataLogger;           // set by GameManager: the screens shown are logged (`instructions_shown` / `instructions_dismissed`)
 
     private InstructionsScreen _screen;
 
@@ -20,12 +21,18 @@ public class InstructionsPanel : MonoBehaviour
 
     private IEnumerator Start()
     {
+        bool resumed = ResumeInfo.MidSession(GameManager.CurrentSessionIndex);        // decided now: the resume state is cleared a couple of frames into the scene
         _screen = InstructionsScreen.Create();
         PauseGate.Instructions = true;
         CreateControlsReminder();
-        yield return new WaitForSecondsRealtime(FirstScreenDelay);
+        if (!resumed)
+        {
+            yield return new WaitForSecondsRealtime(FirstScreenDelay);          // a resumed session is covered until its pose is back (DataLogger), so its page comes at once
+        }
+
         bool tutorial = sessionConfig != null && !string.IsNullOrEmpty(sessionConfig.SessionLabel);        // a tutorial's first screen is formatted like its hint popups
-        ShowText(LoadInstructions(), tutorial, GameManager.PartLabel);
+        ShowText(LoadInstructions(resumed), tutorial, GameManager.PartLabel);
+        dataLogger?.LogEvent("instructions_shown", payload: Json.Obj(("kind", resumed ? "welcome_back" : "instructions"), ("file", resumed ? "instructions_resume.txt" : (sessionConfig != null ? sessionConfig.InstructionsFile : ""))));
     }
 
     // The file's first line is the central instruction (the title), the last "Press [Key] to ..." line the prompt, the rest the text; `eyebrow` is the small line above it
@@ -46,10 +53,10 @@ public class InstructionsPanel : MonoBehaviour
         _screen.Show(eyebrow, title, body, prompt, notice);
     }
 
-    private string LoadInstructions()
+    private string LoadInstructions(bool resumed)
     {
         string file = sessionConfig != null ? sessionConfig.InstructionsFile : "instructions.txt";
-        if (ResumeInfo.MidSession(GameManager.CurrentSessionIndex))
+        if (resumed)
         {
             file = "instructions_resume.txt";       // the participant is coming back to an interrupted session
         }
@@ -108,6 +115,7 @@ public class InstructionsPanel : MonoBehaviour
         {
             _screen.Hide();
             PauseGate.Instructions = false;
+            dataLogger?.LogEvent("instructions_dismissed");
         }
     }
 }

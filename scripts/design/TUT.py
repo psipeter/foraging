@@ -5,7 +5,7 @@ The instruction page and the hints are `instructions_S1.txt` and `hints_S1.txt`,
 """
 
 from design import Instance
-from design.FOR import CROSSHAIR_RADIUS, RANKING_FIELDS, _fields
+from design.FOR import CROSSHAIR_RADIUS, CROSSHAIR_RING_DEG, RANKING_FIELDS, _fields
 
 CODE = "TUT"
 TITLE = "Tutorial"
@@ -13,7 +13,7 @@ REQUIRES = ()
 COUNTS_TOWARD_TOTAL = False
 TEMPLATE_SESSION = "FOR_S1"             # copied only when the session has no asset yet (the lighting, camera and so on come from it)
 
-SECONDS = 180
+SECONDS = 120
 WORLD_SEED = 6001
 TUTORIAL_TILES = {}                     # tile fields that differ from FOR's (for example tileBushes, tileSpread)
 TUTORIAL_BETWEEN, TUTORIAL_WITHIN = "", ""      # the layers of tiles.py (default none + pool)
@@ -101,7 +101,7 @@ def instances():
                      {"sessionDuration": SECONDS, "instructionsFile": f"Experiments/{CODE}/instructions_S1.txt", "hintsFile": f"Experiments/{CODE}/hints_S1.txt", "sessionLabel": LABEL,
                       "scoreCaptionForaging": "points earned from harvesting bushes", "scoreCaptionRanking": "points earned from ranking bushes",
                       "scoreNote": "**Payment** is based on total points earned",
-                      "isPractice": True, "crosshairRadius": CROSSHAIR_RADIUS, **RANKING_FIELDS},
+                      "isPractice": True, "crosshairRadius": CROSSHAIR_RADIUS, "crosshairRingSizeDeg": CROSSHAIR_RING_DEG, **RANKING_FIELDS},
                      {"experiment": CODE, "index": 1, "cell": "tutorial", "tutorial": True})]
 
 

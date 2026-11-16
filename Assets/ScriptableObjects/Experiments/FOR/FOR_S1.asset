@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: FOR_S1
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
-  sessionDuration: 180
+  sessionDuration: 120
   worldSeed: 7101
   isPractice: 0
   freezeSun: 0
@@ -85,6 +85,7 @@ MonoBehaviour:
   crosshairRadius: 7
   crosshairReleaseScale: 2
   crosshairAlpha: 0.25
+  crosshairRingSizeDeg: 3.5
   harvestLookResistance: 0
   rimColor: {r: 1, g: 0.96, b: 0.82, a: 1}
   rimSelectedColor: {r: 1, g: 0.9, b: 0.6, a: 1}

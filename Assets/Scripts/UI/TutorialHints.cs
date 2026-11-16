@@ -78,8 +78,36 @@ public class TutorialHints : MonoBehaviour
         hints._sun = sun;
         hints._log = log;
         hints.Parse(StreamingData.ReadText(config.HintsFile));
+        hints.SkipShown();
         hints._screen = InstructionsScreen.Create();
         return hints;
+    }
+
+    // A resumed session does not show again what it showed: the hints the server logged as shown are marked shown, and the counts of their triggers carry on from them
+    // (a `bout 2` hint then waits for the second bout of the session, not of this visit).
+    private void SkipShown()
+    {
+        if (!ResumeInfo.MidSession(GameManager.CurrentSessionIndex) || ResumeInfo.Pending.hints_shown == null)
+        {
+            return;
+        }
+
+        float foraged = (float)(ResumeInfo.Pending.clock - ResumeInfo.Pending.held_seconds);
+        foreach (string id in ResumeInfo.Pending.hints_shown)
+        {
+            foreach (Hint hint in _hints)
+            {
+                if (!hint.shown && hint.Id == id)
+                {
+                    hint.shown = true;
+                    hint.shownAt = foraged;
+                    if (hint.trigger != "after" && hint.trigger != "seconds" && hint.trigger != "idle")
+                    {
+                        _counts[hint.trigger] = Mathf.Max(_counts.TryGetValue(hint.trigger, out int c) ? c : 0, hint.n);
+                    }
+                }
+            }
+        }
     }
 
     // The blocks of a hints file, in order. A block with an unknown trigger is reported once and kept (it never fires), so a typo shows in the console.

@@ -171,7 +171,7 @@ public class AimCrosshair : MonoBehaviour
         _ringFill.fillAmount = Mathf.Clamp01(_fillShown);
         _ringGroup.alpha = _blend;
         float height = ((RectTransform)transform.parent).rect.height;
-        float diameter = _config.HarvestRingSizeDeg / Mathf.Max(_config.CameraFieldOfView, 1f) * height;
+        float diameter = _config.CrosshairRingSizeDeg / Mathf.Max(_config.CameraFieldOfView, 1f) * height;
         _ring.sizeDelta = Vector2.one * diameter;
         _ring.localScale = Vector3.one * Mathf.Lerp(0.85f, 1f, _blend);
     }

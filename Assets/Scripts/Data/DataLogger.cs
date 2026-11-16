@@ -157,10 +157,15 @@ public class DataLogger : MonoBehaviour
                 Payload = Json.Obj(("break", r.open_break), ("aborted", true)),
             });
         }
+        // The world is covered until the pose is back (the first frames show the start of the world, and the player would see it jump): the cover fades out in ApplyResume.
+        _resumeCover = UiStyle.MessageScreen("ResumeCover", transform, 3900, true).canvas.gameObject;
+        OverlayFade.Prepare(_resumeCover);
         StartCoroutine(ApplyResume());
     }
 
     // Puts the player, the bushes' fruit, the score and the sun back where the server's data says they were.
+    private GameObject _resumeCover;
+
     private IEnumerator ApplyResume()
     {
         yield return null;
@@ -179,6 +184,11 @@ public class DataLogger : MonoBehaviour
         }
 
         ResumeInfo.Pending = null;
+        yield return null;                                          // one frame drawn at the restored pose before the cover goes
+        if (_resumeCover != null)
+        {
+            OverlayFade.SetShown(_resumeCover, false);
+        }
     }
 
     private string PosePayload()
