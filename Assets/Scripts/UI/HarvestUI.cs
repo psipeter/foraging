@@ -9,7 +9,6 @@ public class HarvestUI : MonoBehaviour
     [SerializeField] private Canvas canvas;
     [SerializeField] private RectTransform floatingTextPrefab;
     [SerializeField] private TextMeshProUGUI totalScoreText;
-    [SerializeField] private TextMeshProUGUI hintText;
 
     [SerializeField] private float fruitTextDuration = 0.8f;
     [SerializeField] private float fruitTextRise = 80f;
@@ -23,7 +22,6 @@ public class HarvestUI : MonoBehaviour
     [SerializeField] private float scorePunchDuration = 0.2f;
 
     [Header("Score display")]
-    [SerializeField] private float scoreFontSize = 36f;
     [SerializeField] private Vector2 scorePosition = new Vector2(-150f, -44f);
     [SerializeField] private Vector2 scorePlateSize = new Vector2(250f, 60f);
     [SerializeField] private Color plateColor = new Color(0f, 0f, 0f, 0.38f);
@@ -60,10 +58,9 @@ public class HarvestUI : MonoBehaviour
 
     private void Start()
     {
-        if (hintText != null)
+        if (canvas != null)
         {
-            hintText.gameObject.SetActive(false);                           // the scene's loose hint text is not used: the hint is a pill (UI/HintPill.cs)
-            _hint = HintPill.Create(hintText.transform.parent, "HintPill", 140f);
+            _hint = HintPill.Create(canvas.transform, "HintPill", 140f);         // the hint is a pill (UI/HintPill.cs)
         }
 
         if (totalScoreText != null)

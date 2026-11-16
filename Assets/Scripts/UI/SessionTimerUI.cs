@@ -8,14 +8,8 @@ public class SessionTimerUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI timerText;
     [SerializeField] private SunController sunController;
     public SessionConfig sessionConfig;
-    // The scene's own end-of-part panel and texts are not used any more (the score screen is built in code, UI/ScoreScreen.cs) and stay hidden.
-    [SerializeField] private GameObject sessionEndPanel;
-    [SerializeField] private TextMeshProUGUI finalScoreText;
-    [SerializeField] private TextMeshProUGUI sessionCompleteText;
-    [SerializeField] private TextMeshProUGUI nextSessionPromptText;
 
     [Header("Timer display")]
-    [SerializeField] private float timerFontSize = 32f;
     [SerializeField] private Vector2 timerPosition = new Vector2(150f, -44f);
     [SerializeField] private Vector2 timerPlateSize = new Vector2(230f, 60f);
     [SerializeField] private Color plateColor = new Color(0f, 0f, 0f, 0.38f);
@@ -27,14 +21,6 @@ public class SessionTimerUI : MonoBehaviour
     private UnityEngine.UI.Image _timerPlate;
     private Color _plateIdle;
     private Color _textIdle;
-
-    private void Awake()
-    {
-        if (sessionEndPanel != null)
-        {
-            sessionEndPanel.SetActive(false);
-        }
-    }
 
     private void Start()
     {

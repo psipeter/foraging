@@ -6,7 +6,7 @@
 #
 #     Press [Enter] to continue
 #
-# Triggers (Assets/Scripts/UI/TutorialHints.cs): harvest_available, harvest_paused, fruit n, bout n, exhausted n, patch_switch n, ranking_start n, ranking_end n,
+# Triggers (Assets/Scripts/UI/TutorialHints.cs): harvest_available, harvest_paused, fruit n, bout n, exhausted n, patch_switch n (the nth qualifying patch leaving, as the rankings count them), ranking_start n, ranking_end n,
 # seconds n (foraging seconds into the session), idle n (seconds standing still without harvesting), after <trigger>:<n> <seconds> (that many foraging seconds after that hint was shown).
 # {points} is the fruit or harvest that fired it.
 

@@ -75,9 +75,6 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private string scoreNote = "";
     [Tooltip("Optional text kept on screen during the session (empty = none).")]
     [SerializeField] private string controlsReminder = "";
-    [Tooltip("Optional message shown once, after the first harvest of the session ('{points}' = points earned in that harvest). The game pauses until Enter. Empty = none.")]
-    [TextArea(2, 5)]
-    [SerializeField] private string firstHarvestMessage = "";
     [Tooltip("Opacity (0-1) of the controls reminder.")]
     [SerializeField] [Range(0f, 1f)] private float controlsReminderOpacity = 0.35f;
 
@@ -399,7 +396,6 @@ public class SessionConfig : ScriptableObject
     }
     public string InstructionsFile => instructionsFile;
     public string ControlsReminder => controlsReminder;
-    public string FirstHarvestMessage => firstHarvestMessage;
     public float ControlsReminderOpacity => controlsReminderOpacity;
     public float RewardFeedbackMax => rewardFeedbackMax;
     public float RewardSizeScaling => rewardSizeScaling;

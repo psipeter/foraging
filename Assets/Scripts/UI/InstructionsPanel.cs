@@ -1,6 +1,5 @@
 using System.Collections;
 using System.IO;
-using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -12,57 +11,15 @@ public class InstructionsPanel : MonoBehaviour
         "Walk next to a bush and hold [Space] to harvest.\n\n" +
         "Press [Enter] to begin";
 
-    // The scene's own panel and text are not used any more (the screen is built in code, UI/InstructionsScreen.cs) and stay hidden.
-    [SerializeField] private GameObject panel;
-    [SerializeField] private TextMeshProUGUI bodyText;
-
     public SessionConfig sessionConfig;
 
-    private bool _firstHarvestShown;
-    private bool _sessionEnded;
     private InstructionsScreen _screen;
 
-    private void OnEnable()
-    {
-        HarvestManager.OnHarvestBoutEnded += HandleHarvestBoutEnded;
-        SunController.OnSessionEnd += HandleSessionEnd;
-    }
-
-    private void OnDisable()
-    {
-        HarvestManager.OnHarvestBoutEnded -= HandleHarvestBoutEnded;
-        SunController.OnSessionEnd -= HandleSessionEnd;
-    }
-
-    private void HandleSessionEnd()
-    {
-        _sessionEnded = true;
-    }
-
-    // One-time message after the first harvest that actually collected fruit (e.g. in practice).
-    private void HandleHarvestBoutEnded(HarvestBout bout)
-    {
-        if (_firstHarvestShown || _sessionEnded || bout.endedBySession || sessionConfig == null || RankingBreak.Active ||
-            string.IsNullOrEmpty(sessionConfig.FirstHarvestMessage) ||
-            bout.fruitRewards.Count == 0 || _screen == null)
-        {
-            return;
-        }
-
-        _firstHarvestShown = true;
-        ShowText(sessionConfig.FirstHarvestMessage.Replace("{points}", bout.boutTotal.ToString("0")) + "\n\nPress [Enter] to continue", true, null);
-        PauseGate.Instructions = true;
-    }
-
+    private const int ReminderSortingOrder = 50;             // above the HUD, below every popup
     private const float FirstScreenDelay = 1f;          // seconds the world is shown, the game held, before a session's instruction screen appears
 
     private IEnumerator Start()
     {
-        if (panel != null)
-        {
-            panel.SetActive(false);
-        }
-
         _screen = InstructionsScreen.Create();
         PauseGate.Instructions = true;
         CreateControlsReminder();
@@ -117,12 +74,12 @@ public class InstructionsPanel : MonoBehaviour
     // The controls hint kept on screen for the whole session (sessions that set one in their config), on a pill at the bottom: "[Mouse] look  [W / S] walk ...".
     private void CreateControlsReminder()
     {
-        if (sessionConfig == null || string.IsNullOrEmpty(sessionConfig.ControlsReminder) || panel == null)
+        if (sessionConfig == null || string.IsNullOrEmpty(sessionConfig.ControlsReminder))
         {
             return;
         }
 
-        HintPill.Create(panel.transform.parent, "ControlsReminder", 44f, 0.5f).Show(FormatControls(sessionConfig.ControlsReminder));
+        HintPill.Create(UiStyle.Canvas("ControlsReminder", null, ReminderSortingOrder).transform, "ControlsReminder", 44f, 0.5f).Show(FormatControls(sessionConfig.ControlsReminder));
     }
 
     // "Mouse: look. W / S: walk." -> "[Mouse] look      [W / S] walk": each "Key: action" pair with the key as a chip, pairs spaced apart.

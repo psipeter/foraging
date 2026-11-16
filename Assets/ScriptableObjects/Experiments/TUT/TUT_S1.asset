@@ -46,7 +46,6 @@ MonoBehaviour:
   scoreCaptionRanking: points earned from ranking bushes
   scoreNote: '**Payment** is based on total points earned'
   controlsReminder: 
-  firstHarvestMessage: 
   controlsReminderOpacity: 0.35
   rewardFunction:
     shapeComponent:
