@@ -125,6 +125,7 @@ public class TerrainManager : MonoBehaviour
         {
             // Instance the material so per-session mountain settings do not modify the shared asset.
             Material material = meshRenderer.material;
+            MaterialInstance = material;
             material.SetColor("_RockColor", sessionConfig.MountainRockColor);
             material.SetColor("_SnowColor", sessionConfig.MountainSnowColor);
             material.SetFloat("_MountainFogStrength", sessionConfig.MountainFogStrength);
@@ -144,6 +145,18 @@ public class TerrainManager : MonoBehaviour
 
     // Terrain fields are bilinear samples of the world file's mesh grids (the mesh interpolates the same way).
     // Valley elevation (coupled to moisture) plus the mountain term, which is exactly 0 inside the valley.
+    // The terrain's own material instance (the textures and settings of this session; the ranking stage's disc copies it).
+    public Material MaterialInstance { get; private set; }
+
+    // How far the terrain is greyed, 0 to 1 (a ranking stage greys the world behind it).
+    public void SetGray(float amount)
+    {
+        if (MaterialInstance != null)
+        {
+            MaterialInstance.SetFloat("_GrayAmount", Mathf.Clamp01(amount));
+        }
+    }
+
     public float SampleElevation(float worldX, float worldZ)
     {
         return world != null ? world.Sample(world.ElevationGrid, worldX, worldZ) : 0f;

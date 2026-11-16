@@ -19,11 +19,12 @@ TUTORIAL_TILES = {}                     # tile fields that differ from FOR's (fo
 TUTORIAL_BETWEEN, TUTORIAL_WITHIN = "", ""      # the layers of tiles.py (default none + pool)
 TUTORIAL_REWARD = {"shape": 0.75, "color": 0.25}  # each feature's share of the reward scale: both pay (the hints say so), in a different mix from FOR's equal one
 TUTORIAL_INVERTED = ("shape",)          # features that pay more when LOWER (InvertedLinear); FOR pays both more when higher, so the practice does not teach its direction
+CONTROLS_REMINDER = "Mouse: look. W / S: walk. Space: hold to harvest"      # the bar at the bottom of the screen for the whole tutorial ("Key: action" pairs, `InstructionsPanel.FormatControls`)
 LABEL = "Tutorial"                      # the small blue line over every instruction screen and popup, and on the end screen
 
 INSTRUCTIONS = """Controls
 
-In this study, you gather **points** by harvesting fruit from bushes.
+In this study, you gather **points** by harvesting fruit from bushes
 Walk up to a bush and hold [Space] to harvest it
 
 Press [Enter] to begin
@@ -45,7 +46,7 @@ HINTS = """# Tutorial hints. A block is a trigger line, then the popup: title, t
 @bout 1
 Harvesting
 
-Harvesting this bush earned {points} points.
+Harvesting this bush earned {points} points
 You can **stop** harvesting a bush anytime, or **return** to a bush later
 
 Try harvesting a different bush
@@ -55,7 +56,7 @@ Press [Enter] to continue
 @bout 2
 Features
 
-Harvesting this bush earned {points} points.
+Harvesting this bush earned {points} points
 A bush's **shape** and/or **color** determine how many points you get
 
 Try harvesting a few more bushes, then move to a new area
@@ -66,7 +67,7 @@ Press [Enter] to continue
 Ranking
 
 **Rank** these imaginary bushes based on what you learned
-Do this by harvesting bushes from most to least valuable
+Do this by harvesting bushes from **most** to **least** valuable
 
 Press [Enter] to continue
 
@@ -98,7 +99,7 @@ def instances():
     for feature in TUTORIAL_INVERTED:
         fields[f"rewardFunction.{feature}Component.basisFunctionType"] = 1
     return [Instance(f"{CODE}_S1", fields,
-                     {"sessionDuration": SECONDS, "instructionsFile": f"Experiments/{CODE}/instructions_S1.txt", "hintsFile": f"Experiments/{CODE}/hints_S1.txt", "sessionLabel": LABEL,
+                     {"sessionDuration": SECONDS, "instructionsFile": f"Experiments/{CODE}/instructions_S1.txt", "hintsFile": f"Experiments/{CODE}/hints_S1.txt", "sessionLabel": LABEL, "controlsReminder": CONTROLS_REMINDER,
                       "scoreCaptionForaging": "points earned from harvesting bushes", "scoreCaptionRanking": "points earned from ranking bushes",
                       "scoreNote": "**Payment** is based on total points earned",
                       "isPractice": True, "crosshairRadius": CROSSHAIR_RADIUS, "crosshairRingSizeDeg": CROSSHAIR_RING_DEG, **RANKING_FIELDS},

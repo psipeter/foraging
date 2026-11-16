@@ -24,7 +24,6 @@ def find_world(number, first_world_seed, max_attempts, build, label):
     raise RuntimeError(f"{label} (session {number}): no world seed in {max_attempts} passed its checks")
 
 
-def instruction_page(hint_text):
-    """The instruction text of a session: the hint (one or more lines; none when it is empty) between the fixed lines."""
-    hint = f"{hint_text}\n" if hint_text else ""
-    return f"Find the best fruit\n\nThis is a new area.\n{hint}Collect as many points as you can.\n\nPress [Enter] to begin"
+def instruction_page():
+    """The instruction text of a session of the foraging task (centred like every popup; one-line sentences end without a period)."""
+    return "Foraging task\n\nHarvest bushes to collect **points**\n**Rank** bushes when prompted\nNote: this is a **new** area with new **rules**\n\nPress [Enter] to begin"

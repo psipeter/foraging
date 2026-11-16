@@ -37,9 +37,9 @@ public class TreeGenerator : MonoBehaviour
     }
 
     // One bush standing on the terrain at (x, z): the world's bushes at the start, and the ranking break's bushes later (their ids follow the world's).
-    public Tree CreateTree(int treeId, float x, float z, TreeAttributes attributes, int[] fruitRewards)
+    public Tree CreateTree(int treeId, float x, float z, TreeAttributes attributes, int[] fruitRewards, float groundY = float.NaN)
     {
-        float elevation = terrainManager.SampleElevation(x, z);
+        float elevation = float.IsNaN(groundY) ? terrainManager.SampleElevation(x, z) : groundY;
         GameObject instance = Instantiate(treePrefab, new Vector3(x, elevation, z), Quaternion.identity, transform);
         var treeComp = instance.GetComponent<Tree>();
         if (treeComp == null)
@@ -56,6 +56,7 @@ public class TreeGenerator : MonoBehaviour
         treeComp.fruitRadius = sessionConfig.FruitRadius;
         treeComp.fruitSeed = sessionConfig.WorldSeed + treeId * 7;
         treeComp.attributes = attributes;
+        treeComp.groundYOverride = groundY;
         treeComp.SetTerrainManager(terrainManager);
         treeComp.ApplyAttributes();
 
@@ -68,7 +69,9 @@ public class TreeGenerator : MonoBehaviour
         return treeComp;
     }
 
-    private static void SetLayerRecursively(GameObject obj, int layer)
+    public TerrainManager Terrain => terrainManager;
+
+    public static void SetLayerRecursively(GameObject obj, int layer)
     {
         obj.layer = layer;
         foreach (Transform child in obj.transform)

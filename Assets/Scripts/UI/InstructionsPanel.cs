@@ -6,9 +6,9 @@ using UnityEngine.InputSystem;
 public class InstructionsPanel : MonoBehaviour
 {
     private const string FallbackInstructions =
-        "Find the best fruit\n\n" +
-        "Collect as many points as you can before time runs out.\n" +
-        "Walk next to a bush and hold [Space] to harvest.\n\n" +
+        "Foraging task\n\n" +
+        "Harvest bushes to collect **points**\n" +
+        "Walk next to a bush and hold [Space] to harvest\n\n" +
         "Press [Enter] to begin";
 
     public SessionConfig sessionConfig;

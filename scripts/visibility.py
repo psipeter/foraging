@@ -38,7 +38,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from perception import canopy_height_of, hidden_by_bushes, hidden_by_terrain, sample_grid, unit_directions
-from replay import break_windows, load_session_log, with_ranking_bushes
+from replay import break_windows, bush_ground, load_session_log, with_ranking_bushes
 
 
 # --------------------------------------------------------------------------------------------------
@@ -113,7 +113,7 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
     n = len(b.pos)
     rx = b.canopy_radius
     ry = canopy_height(cfg, b.shape) * 0.5
-    ground = sample_grid(elevation, half, b.pos[:, 0], b.pos[:, 1])
+    ground = bush_ground(b, elevation, half)          # a ranking stage's bushes stand on their disc (the logged y)
     dirs = unit_directions()
     # Sample points (n, P, 3) in world coordinates and their outward normals.
     pts = np.empty((n, len(dirs), 3))

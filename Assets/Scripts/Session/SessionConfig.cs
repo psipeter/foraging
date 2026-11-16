@@ -63,6 +63,15 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float rankingAimTolerance = 1.5f;
     [Tooltip("The crosshair's hidden hit circle during a ranking (degrees), in place of crosshairRadius: the bushes of a set stand at least 2 degrees apart in the view, so a circle of up to 1 degree can touch only one of them. 0 = crosshairRadius. Read by scripts/replay.py from the log.")]
     [SerializeField] private float rankingCrosshairRadius = 1f;
+    [Tooltip("Prototype: play the rankings on a small floating disc of terrain drawn over the (greyed) world by a second camera, instead of on the real terrain under the player. The disc and its bushes ignore the real ground, so the real terrain never hides them.")]
+    [SerializeField] private bool rankingStage = false;
+    [Tooltip("Stage mode: how far below the player's ground the disc's surface lies (units), so the player looks down onto the bushes. The camera is never moved.")]
+    [SerializeField] private float rankingStageDrop = 3f;
+    [Tooltip("Stage mode: how far the disc's edge lies beyond the outermost bushes of the set (units).")]
+    [SerializeField] private float rankingStageMargin = 4f;
+    [Tooltip("Stage mode: how far the real terrain (and the sky's mountains) fade towards grey while a ranking runs, 0 to 1. The world's bushes always fade fully.")]
+    [Range(0f, 1f)]
+    [SerializeField] private float rankingStageWorldGray = 0.6f;
 
     [Header("Instructions")]
     [Tooltip("File in StreamingAssets shown before this session. '{part}' and '{total}' are replaced by this session's number and the count of sessions.")]
@@ -384,6 +393,10 @@ public class SessionConfig : ScriptableObject
     public float RankingBonusPerPair => rankingBonusPerPair;
     public float RankingAimTolerance => rankingAimTolerance;
     public float RankingCrosshairRadius => rankingCrosshairRadius;
+    public bool RankingStage => rankingStage;
+    public float RankingStageDrop => rankingStageDrop;
+    public float RankingStageMargin => rankingStageMargin;
+    public float RankingStageWorldGray => rankingStageWorldGray;
     public string HintsFile => hintsFile;
     public string SessionLabel => sessionLabel;
     public string ScoreCaptionForaging => scoreCaptionForaging;

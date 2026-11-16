@@ -33,7 +33,7 @@ def test_publish_registers_experiments_files_and_release_and_can_be_repeated_wit
     first = server_admin.publish(db, plan, {"FOR": "KEEP-ME"})
     assert any("release" in line for line in first) and any(line.startswith("1 world") for line in first)
     row = db.execute("select title, requires, sort_order, completion_code from public.experiments where code = 'FOR'").fetchone()
-    assert row["title"] == "Foraging in Tiles" and row["requires"] == ["TUT"] and row["completion_code"] == "KEEP-ME"
+    assert row["title"] == next(e["title"] for e in plan["experiments"] if e["code"] == "FOR") and row["requires"] == ["TUT"] and row["completion_code"] == "KEEP-ME"
     server_admin.publish(db, plan)                                                        # again, no code given: the registered one stays
     assert db.execute("select completion_code from public.experiments where code = 'FOR'").fetchone()["completion_code"] == "KEEP-ME"
     offered = {r["experiment"]: r["n_sessions"] for r in db.execute("select experiment, n_sessions from public.release_experiments where build_commit = %s", (plan["commit"],))}

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: FOR
   m_EditorClassIdentifier: Assembly-CSharp::ExperimentConfig
   code: FOR
-  title: Foraging in Tiles
+  title: Foraging task
   requires:
   - TUT
   sessions:

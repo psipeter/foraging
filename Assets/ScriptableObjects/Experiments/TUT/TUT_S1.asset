@@ -40,13 +40,17 @@ MonoBehaviour:
   rankingBonusPerPair: 4
   rankingAimTolerance: 1.5
   rankingCrosshairRadius: 1
+  rankingStage: 1
+  rankingStageDrop: 3
+  rankingStageMargin: 4
+  rankingStageWorldGray: 0.6
   instructionsFile: Experiments/TUT/instructions_S1.txt
   sessionLabel: Tutorial
   hintsFile: Experiments/TUT/hints_S1.txt
   scoreCaptionForaging: points earned from harvesting bushes
   scoreCaptionRanking: points earned from ranking bushes
   scoreNote: '**Payment** is based on total points earned'
-  controlsReminder: 
+  controlsReminder: 'Mouse: look. W / S: walk. Space: hold to harvest'
   controlsReminderOpacity: 0.35
   rewardFunction:
     shapeComponent:

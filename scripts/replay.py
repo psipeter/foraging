@@ -51,6 +51,7 @@ class Bushes:
     canopy_radius: np.ndarray   # (n,)
     fruit_reward: np.ndarray    # (n, fruit_count) reward of the k-th fruit taken from each bush
     shape: np.ndarray = None    # (n,) shape attribute (sets the canopy height; see visibility.py)
+    ground: np.ndarray = None   # (n,) the ground height under a bush where it is not the terrain's (a ranking stage's disc; nan elsewhere); None: the terrain everywhere
 
 
 @dataclass
@@ -164,6 +165,14 @@ def _last_frames_start(traj):
     return float(traj[-2, 0]) - 1e-6 if len(traj) > 1 else -np.inf
 
 
+def bush_ground(b, elevation, half):
+    """The ground height at each bush: the terrain's, except for the bushes of a ranking stage, which stand on their disc (the logged `y`, Bushes.ground)."""
+    ground = sample_grid(elevation, half, b.pos[:, 0], b.pos[:, 1])
+    if b.ground is not None:
+        ground = np.where(np.isnan(b.ground), ground, b.ground)
+    return ground
+
+
 def _payload(e):
     return e.get("payload") or {}
 
@@ -182,6 +191,7 @@ def with_ranking_bushes(log):
     b = log.bushes
     n0, n_fruits = len(b.pos), b.fruit_reward.shape[1]
     pos, radius, shape, ids, sets = [b.pos], [b.canopy_radius], [b.shape if b.shape is not None else np.zeros(n0)], [np.arange(n0)], []
+    ground = [np.full(n0, np.nan)]
     ends = sorted(e["t"] for e in log.events if e["type"] == "rank_set_end")
     break_ends = sorted(e["t"] for e in log.events if e["type"] == "rank_break_end")        # a set whose try was interrupted (a resume) stands until its break's aborted end
     total = n0
@@ -190,13 +200,14 @@ def with_ranking_bushes(log):
         pos.append(np.array([[r["x"], r["z"]] for r in rows], dtype=float).reshape(-1, 2))
         radius.append(np.array([r["radius"] for r in rows], dtype=float))
         shape.append(np.array([r["shape"] for r in rows], dtype=float))
+        ground.append(np.array([r.get("y", np.nan) for r in rows], dtype=float))
         ids.append(np.array([int(r["id"]) for r in rows]))
         sets.append({"t": e["t"], "end": min(next((x for x in ends if x > e["t"] - 1e-9), np.inf), next((x for x in break_ends if x > e["t"] - 1e-9), np.inf)), "slots": np.arange(total, total + len(rows))})
         total += len(rows)
     if not sets:
         return b, sets, ids[0]
     extended = Bushes(pos=np.concatenate(pos), canopy_radius=np.concatenate(radius), fruit_reward=np.concatenate([b.fruit_reward, np.zeros((total - n0, n_fruits), dtype=int)]),
-                      shape=np.concatenate(shape))
+                      shape=np.concatenate(shape), ground=np.concatenate(ground))
     return extended, sets, np.concatenate(ids)
 
 
@@ -217,7 +228,7 @@ def replay_harvests(log):
     crosshair = float(cfg.get("crosshairRadius") or 0.0)
     if crosshair > 0.0:
         elevation, half, eye_height = log.grids["elevation"], log.half_extent, float(cfg["eyeHeight"])
-        ground = sample_grid(elevation, half, b.pos[:, 0], b.pos[:, 1])
+        ground = bush_ground(b, elevation, half)
         half_height = 0.5 * canopy_height_of(b.shape, (cfg["shapeRange"]["x"], cfg["shapeRange"]["y"]), (cfg["canopyHeightRange"]["x"], cfg["canopyHeightRange"]["y"]))
         centres = np.stack([b.pos[:, 0], ground, b.pos[:, 1]], axis=-1)
         release_radius = crosshair * max(float(cfg.get("crosshairReleaseScale") or 1.0), 1.0)

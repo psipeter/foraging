@@ -13,7 +13,7 @@
 @bout 1
 Harvesting
 
-Harvesting this bush earned {points} points.
+Harvesting this bush earned {points} points
 You can **stop** harvesting a bush anytime, or **return** to a bush later
 
 Try harvesting a different bush
@@ -23,7 +23,7 @@ Press [Enter] to continue
 @bout 2
 Features
 
-Harvesting this bush earned {points} points.
+Harvesting this bush earned {points} points
 A bush's **shape** and/or **color** determine how many points you get
 
 Try harvesting a few more bushes, then move to a new area
@@ -34,7 +34,7 @@ Press [Enter] to continue
 Ranking
 
 **Rank** these imaginary bushes based on what you learned
-Do this by harvesting bushes from most to least valuable
+Do this by harvesting bushes from **most** to **least** valuable
 
 Press [Enter] to continue
 

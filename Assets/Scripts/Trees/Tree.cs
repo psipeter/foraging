@@ -23,6 +23,7 @@ public class Tree : MonoBehaviour
     public int treeId;
     public SessionConfig sessionConfig;
     public Material rimMaterial;
+    public float groundYOverride = float.NaN;          // a bush of a ranking stage stands on its disc, not on the terrain: the ground height there
 
     [SerializeField] private TerrainManager terrainManager;
 
@@ -296,9 +297,9 @@ public class Tree : MonoBehaviour
             float z = Mathf.Sin(theta) * Mathf.Sin(phi) * 0.5f;
 
             Vector3 worldFruitPos = canopy.transform.TransformPoint(new Vector3(x, y, z));
-            float terrainY = terrainManager != null
-                ? terrainManager.SampleElevation(worldFruitPos.x, worldFruitPos.z)
-                : 0f;
+            float terrainY = !float.IsNaN(groundYOverride)
+                ? groundYOverride
+                : (terrainManager != null ? terrainManager.SampleElevation(worldFruitPos.x, worldFruitPos.z) : 0f);
 
             if (worldFruitPos.y <= terrainY)
             {
@@ -441,6 +442,7 @@ public class Tree : MonoBehaviour
         if (_rankLabel == null)
         {
             var go = new GameObject("RankLabel");
+            go.layer = gameObject.layer;
             go.transform.SetParent(transform, false);
             _rankLabel = go.AddComponent<TextMeshPro>();
             _rankLabel.font = UiStyle.DisplayFont;
@@ -626,6 +628,7 @@ public class Tree : MonoBehaviour
         for (int i = 0; i < count; i++)
         {
             var piece = new GameObject("FruitBurst");
+            piece.layer = gameObject.layer;
             piece.transform.position = origin;
             piece.transform.localScale = Vector3.one * size;
             piece.AddComponent<MeshFilter>().sharedMesh = _sphereMesh;

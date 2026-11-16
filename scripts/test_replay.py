@@ -557,6 +557,17 @@ def ranking_cross(offset_deg, ranking_radius=None):
     return log
 
 
+def test_a_stage_bush_stands_where_the_log_says_not_on_the_terrain():
+    # the same set, looked at on the middle of the canopy; on the terrain (no `y`) the view hits, with the bush logged 30 units lower (a ranking stage's disc) it misses
+    log = ranking_cross(0.0, ranking_radius=0.5)
+    assert press_events(replay_harvests(log))
+    low = ranking_cross(0.0, ranking_radius=0.5)
+    for e in low.events:
+        if e["type"] == "rank_set":
+            e["payload"]["bushes"][0]["y"] = -30.0
+    assert not press_events(replay_harvests(low))
+
+
 def test_a_ranking_uses_its_own_smaller_hit_circle():
     # a view 1 degree past the canopy's edge (the bush is 1 unit in radius, 16 away: 3.6 degrees from its middle to its edge, so 4.6 off the middle): the crosshair circle of
     # 1.5 degrees touches it, the ranking's 0.5 does not

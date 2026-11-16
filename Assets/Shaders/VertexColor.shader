@@ -13,6 +13,7 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
         _RockColor ("Mountain Rock Color", Color) = (0.42, 0.40, 0.38, 1)
         _SnowColor ("Mountain Snow Color", Color) = (0.93, 0.95, 0.98, 1)
         _MountainFogStrength ("Fog multiplier on mountains", Range(0, 1)) = 0.3
+        _GrayAmount ("Grey amount (a ranking stage greys the world)", Range(0, 1)) = 0
     }
 
     SubShader
@@ -59,6 +60,7 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
                 float4 _RockColor;
                 float4 _SnowColor;
                 float _MountainFogStrength;
+                float _GrayAmount;
             CBUFFER_END
 
             struct Attributes
@@ -154,6 +156,7 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
                 // Distant mountains are fogged less than the valley so they stay visible as landmarks.
                 half fogAmount = lerp(1.0h, _MountainFogStrength, i.mountain.x);
                 color.rgb = lerp(color.rgb, MixFog(color.rgb, i.fogCoord), fogAmount);
+                color.rgb = lerp(color.rgb, dot(color.rgb, half3(0.299h, 0.587h, 0.114h)).xxx, _GrayAmount);
                 return color;
             }
             ENDHLSL

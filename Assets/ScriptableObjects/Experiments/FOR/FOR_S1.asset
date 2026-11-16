@@ -40,6 +40,10 @@ MonoBehaviour:
   rankingBonusPerPair: 4
   rankingAimTolerance: 1.5
   rankingCrosshairRadius: 1
+  rankingStage: 1
+  rankingStageDrop: 3
+  rankingStageMargin: 4
+  rankingStageWorldGray: 0.6
   instructionsFile: Experiments/FOR/instructions_S1.txt
   sessionLabel: 
   hintsFile: 

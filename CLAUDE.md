@@ -175,7 +175,7 @@ Assets/
                PauseGate (the only writer of Time.timeScale), StreamingData (reads StreamingAssets; in a browser from memory, filled by the Boot scene), PointerLockGuard (browser: hold the game while the mouse capture is released), OnlineSettings (StreamingAssets/online.json + command line), DataRows, Json;
                see "Data logging"
   ScriptableObjects/Experiments/<code>/   one folder per experiment: `<code>.asset` (ExperimentConfig: code, title, prerequisites, the ordered session list) and its sessions `<code>_S<n>.asset`.
-                                     FOR (Foraging in Tiles: FOR_S1, made by `scripts/build_experiment.py` from `scripts/design/FOR.py`; FOR_PREVIEW is a preview-only asset). The old experiments FN, RW and FI and the old tutorial were removed 2026-11-14 (git tag `pre-cleanup`); the new tutorial `TUT` (TUT_S1, from `scripts/design/TUT.py`) sits beside FOR; the old Complex Features experiment CF was removed 2026-11-09, its ladder script is in `archive/cf_ladder/` and its sessions live on as the frozen aliases S1-S7 in `scripts/fixtures/sessions/`. The code is the asset prefix
+                                     FOR (Foraging task: FOR_S1, made by `scripts/build_experiment.py` from `scripts/design/FOR.py`; FOR_PREVIEW is a preview-only asset). The old experiments FN, RW and FI and the old tutorial were removed 2026-11-14 (git tag `pre-cleanup`); the new tutorial `TUT` (TUT_S1, from `scripts/design/TUT.py`) sits beside FOR; the old Complex Features experiment CF was removed 2026-11-09, its ladder script is in `archive/cf_ladder/` and its sessions live on as the frozen aliases S1-S7 in `scripts/fixtures/sessions/`. The code is the asset prefix
                                      and the database key, the title is data (renaming a code means renaming the assets and generated files by hand and updating the database; see DECISIONS "Experiments").
   Audio/Ambient/                     CC0 recordings: Footsteps/ (Kenney Impact Sounds grass steps), Cicadas/ (BigSoundBank
                                      loop); each folder has licence/source notes
@@ -249,7 +249,7 @@ Keep this tree in sync when files are added, moved, or retired.
   runtime-instantiated, never prefab children (their on-bush layout is still seeded
   in C# from `fruitSeed`; it is visual only).
 - **A ranking break is part of a foraging session, not a session kind.** `RankingBreak` is created at runtime by `GameManager` (no scene wiring) when `rankingEvery` > 0, the world has tiles
-  and the pool file exists; every parameter is a `SessionConfig.ranking*` field. A break never sets the camera, writes no shared
+  and the pool file exists; every parameter is a `SessionConfig.ranking*` field. With `rankingStage` (prototype) the set stands on a floating disc drawn by an overlay camera (`RankingDisc`, `docs/DECISIONS.md` "The ranking stage") and its bushes log a ground height `y` that replay and visibility use. A break never sets the camera, writes no shared
   material, moves no score (its bushes pay 0) and holds the session clock through `SunController.ClockHeld`. Outcomes are hidden through `RankingBreak.Active`. **Change `RankingBreak`'s timing, blocks and events
   together with `replay.py` and `visibility.py`.**
 - **The harvest rule** is the range plus the crosshair's hidden circle (see "Data logging"); `HarvestManager.Aimed` and `replay.py`'s `_aimed` are one rule in two languages.
