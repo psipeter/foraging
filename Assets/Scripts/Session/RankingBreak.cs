@@ -172,9 +172,14 @@ public class RankingBreak : MonoBehaviour
                     rankingBreak._breakNumber = r.open_break;                         // every set was scored: the break only had its end to come
                 }
             }
+            else if (r.leavings > 0)
+            {
+                rankingBreak._leavings = r.leavings;                                   // the schedule continues where it was: a reload does not start the count again
+                rankingBreak._due = r.leaving_due;                                     // (a ranking that was due and had not begun still comes)
+            }
             else if (schedule.Length > 0 && r.breaks > 0)
             {
-                rankingBreak._leavings = schedule[Mathf.Min(r.breaks, schedule.Length) - 1];       // the leavings made since the last break are not known: count on from it
+                rankingBreak._leavings = schedule[Mathf.Min(r.breaks, schedule.Length) - 1];       // a server that does not count the leavings: count on from the last break's number
             }
 
             foreach (TreeCount taken in ResumeInfo.Pending.fruits_taken)

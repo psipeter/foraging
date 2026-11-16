@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
-// The instruction screen of a part (and the "welcome back" screen): a wide panel centred on the screen (its text left-aligned) with the part number, the central instruction as a title, the
+// The instruction screen of a part (and the "welcome back" screen): a wide panel centred on the screen (all its text centred) with the part number, the instruction as a title, the
 // text, and under a rule the prompt ("Press Enter to begin") as the last line of the text, over the world. Built at runtime; [Key] in
 // the text becomes a key chip.
 public class InstructionsScreen : MonoBehaviour
@@ -36,8 +36,8 @@ public class InstructionsScreen : MonoBehaviour
         return screen;
     }
 
-    // `notice`: a short message instead of a part's instructions (a hint popup): centred text, a smaller title.
-    public void Show(string eyebrow, string title, string body, string prompt, bool notice = false)
+    // Every instruction page, hint and notice is centred (PI, 2026-11-16): the label, the title in the display font, the text and the prompt.
+    public void Show(string eyebrow, string title, string body, string prompt)
     {
         if (_animation != null)
         {
@@ -57,10 +57,10 @@ public class InstructionsScreen : MonoBehaviour
 
         const float pad = 56f;
         float textWidth = PanelWidth - 2f * pad;
-        TextAlignmentOptions align = notice ? TextAlignmentOptions.Center : TextAlignmentOptions.Left;
-        TextAlignmentOptions bodyAlign = notice ? TextAlignmentOptions.Top : TextAlignmentOptions.TopLeft;
-        float titleSize = notice ? UiStyle.Heading : UiStyle.Title;
-        float titleHeight = notice ? 64f : 90f;
+        const TextAlignmentOptions align = TextAlignmentOptions.Center;
+        const TextAlignmentOptions bodyAlign = TextAlignmentOptions.Top;
+        float titleSize = UiStyle.Heading;
+        float titleHeight = 64f;
         TextMeshProUGUI titleMeasure = UiStyle.Text(_root.transform, "TitleMeasure", title, titleSize, align, 0f, 0f, textWidth, 100f);
         titleMeasure.textWrappingMode = TextWrappingModes.Normal;
         titleHeight = Mathf.Max(titleHeight, titleMeasure.GetPreferredValues(title, textWidth, 0f).y + 14f);       // a title of two or more lines gets the room
@@ -84,12 +84,12 @@ public class InstructionsScreen : MonoBehaviour
         float y = height / 2f - pad;
         if (!string.IsNullOrEmpty(eyebrow))
         {
-            Part(UiStyle.Eyebrow(panel, eyebrow, 0f, y - 18f, textWidth, notice ? TextAlignmentOptions.Center : TextAlignmentOptions.Left), 0f);
+            Part(UiStyle.Eyebrow(panel, eyebrow, 0f, y - 18f, textWidth, TextAlignmentOptions.Center), 0f);
         }
 
         y -= eyebrowHeight;
         TextMeshProUGUI titleText = UiStyle.Text(panel, "Title", title, titleSize, align, 0f, y - titleHeight / 2f, textWidth, titleHeight);
-        if (notice) titleText.font = UiStyle.DisplayFont;
+        titleText.font = UiStyle.DisplayFont;
         Part(titleText, 0f);
         y -= titleHeight + 20f;
         TextMeshProUGUI text = UiStyle.Text(panel, "Body", body, BodySize, bodyAlign, 0f, y - bodyHeight / 2f, textWidth, bodyHeight, UiStyle.Ink);
@@ -100,7 +100,7 @@ public class InstructionsScreen : MonoBehaviour
         y -= bodyHeight + 28f;
         Part(UiStyle.Rounded(panel, "Rule", new Color(1f, 1f, 1f, 0.16f), 0f, y, textWidth, 2f, 1f), 2f * Stagger);
         y -= 2f + 28f;
-        TextMeshProUGUI promptText = UiStyle.Text(panel, "Prompt", UiStyle.Chips(prompt), 34f, notice ? TextAlignmentOptions.Midline : TextAlignmentOptions.MidlineLeft, 0f, y - 24f, textWidth, 48f, UiStyle.Ink);
+        TextMeshProUGUI promptText = UiStyle.Text(panel, "Prompt", UiStyle.Chips(prompt), 34f, TextAlignmentOptions.Midline, 0f, y - 24f, textWidth, 48f, UiStyle.Ink);
         promptText.richText = true;
         Part(promptText, 2f * Stagger);
         _animation = StartCoroutine(Appear());

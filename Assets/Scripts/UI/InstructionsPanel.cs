@@ -30,14 +30,13 @@ public class InstructionsPanel : MonoBehaviour
             yield return new WaitForSecondsRealtime(FirstScreenDelay);          // a resumed session is covered until its pose is back (DataLogger), so its page comes at once
         }
 
-        bool tutorial = sessionConfig != null && !string.IsNullOrEmpty(sessionConfig.SessionLabel);        // a tutorial's first screen is formatted like its hint popups
-        ShowText(LoadInstructions(resumed), tutorial, GameManager.PartLabel);
+        ShowText(LoadInstructions(resumed), GameManager.PartLabel);
         dataLogger?.LogEvent("instructions_shown", payload: Json.Obj(("kind", resumed ? "welcome_back" : "instructions"), ("file", resumed ? "instructions_resume.txt" : (sessionConfig != null ? sessionConfig.InstructionsFile : ""))));
     }
 
     // The file's first line is the central instruction (the title), the last "Press [Key] to ..." line the prompt, the rest the text; `eyebrow` is the small line above it
-    // ("Session n of m", "Tutorial", or none for a notice), and [Key] in the text becomes a key chip. " // " in the title is a line break.
-    private void ShowText(string text, bool notice, string eyebrow)
+    // ("Session n of m", "Tutorial"), and [Key] in the text becomes a key chip. " // " in the title is a line break.
+    private void ShowText(string text, string eyebrow)
     {
         string[] lines = text.Replace("\r", "").Trim().Split('\n');
         string title = System.Text.RegularExpressions.Regex.Replace(lines[0], "<[^>]+>", "").Trim().Replace(" // ", "\n");      // " // " is a line break in the title, to choose where it wraps
@@ -50,7 +49,7 @@ public class InstructionsPanel : MonoBehaviour
         }
 
         string body = string.Join("\n", lines, 1, Mathf.Max(0, last)).Trim();
-        _screen.Show(eyebrow, title, body, prompt, notice);
+        _screen.Show(eyebrow, title, body, prompt);
     }
 
     private string LoadInstructions(bool resumed)

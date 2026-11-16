@@ -102,3 +102,15 @@ def test_the_menu_reports_the_progress_of_an_experiment_in_progress(db):
     db.execute("insert into public.release_experiments (build_commit, experiment, n_sessions) values ('abc', 'T', 2) on conflict do nothing")
     entry = db.execute("select server.menu(%s, 'abc')", (person,)).fetchone()[0][0]
     assert entry["code"] == "T" and entry["sessions_done"] == 0 and entry["session_progress"] == pytest.approx(0.5)
+
+
+def test_the_leaving_count_and_a_due_ranking_that_has_not_begun_come_back(db):
+    s = state(db, make_run(db, [(5, "rank_leaving", {"n": 1, "tile": 1, "due": True}), (6, "rank_break_start", {"break": 1, "leaving": 1}), (9, "rank_break_end", {"break": 1}),
+                                (20, "rank_leaving", {"n": 2, "tile": 0, "due": True}), (21, "rank_break_start", {"break": 2, "leaving": 2}), (24, "rank_break_end", {"break": 2}),
+                                (40, "rank_leaving", {"n": 3, "tile": 1, "due": False})]))
+    assert s["leavings"] == 3 and s["leaving_due"] is False                              # leaving 3 was not on the schedule
+    s = state(db, make_run(db, [(5, "rank_leaving", {"n": 1, "tile": 1, "due": True}), (6, "rank_break_start", {"break": 1, "leaving": 1}), (9, "rank_break_end", {"break": 1}),
+                                (20, "rank_leaving", {"n": 2, "tile": 0, "due": True})]))        # stopped while a harvest delayed the break of leaving 2
+    assert s["leavings"] == 2 and s["leaving_due"] is True
+    s = state(db, make_run(db, [(1, "fruit", None)]))
+    assert s["leavings"] == 0 and s["leaving_due"] is False
