@@ -114,3 +114,13 @@ def test_the_leaving_count_and_a_due_ranking_that_has_not_begun_come_back(db):
     assert s["leavings"] == 2 and s["leaving_due"] is True
     s = state(db, make_run(db, [(1, "fruit", None)]))
     assert s["leavings"] == 0 and s["leaving_due"] is False
+
+
+def test_the_correct_pairs_of_the_sets_come_back_whatever_was_paid(db):
+    run = make_run(db, [(1, "rank_break_start", {"break": 1}), (9, "rank_break_end", {"break": 1})])
+    for seq, (pairs, points) in enumerate([(6, 0.0), (4, 0.0)]):                # a practice session: the pairs count, nothing is paid
+        db.execute("insert into public.ranking_sets (run_id, session_index, seq, set_index, pool_index, correct_pairs, total_pairs, points) values (%s, 0, %s, %s, %s, %s, 10, %s)",
+                   (run, seq, seq, seq, pairs, points))
+    s = state(db, run)
+    assert s["ranking_pairs"] == 10 and s["ranking_points"] == 0
+    assert state(db, make_run(db, [(1, "fruit", None)]))["ranking_pairs"] == 0

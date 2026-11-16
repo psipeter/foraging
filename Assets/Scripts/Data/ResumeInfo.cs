@@ -42,7 +42,8 @@ public class ResumeReply
     public bool leaving_due;                // the last leaving made a ranking due that had not begun
     public string[] hints_shown;            // the ids of the tutorial hints already shown in the session (not shown again)
     public int sets_played;                 // ranking sets shown so far, counting the tries that were interrupted (the pool continues from sets_next, the scored ones)
-    public float ranking_points;            // the points paid by the ranking sets so far (the end screen's total continues from it)
+    public float ranking_points;            // the points paid by the ranking sets so far (0 in a practice session)
+    public int ranking_pairs;               // the correct pairs of the ranking sets so far: with the bonus per pair, what they were worth, which the end screen shows
     public float running_total;
     public TreeCount[] fruits_taken;        // fruits already taken per bush
     public int open_bout_tree;              // the bush being harvested when the data stops, or -1

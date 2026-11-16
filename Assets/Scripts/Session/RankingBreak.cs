@@ -156,7 +156,8 @@ public class RankingBreak : MonoBehaviour
         rankingBreak._pool = pool;
         if (ResumeInfo.MidSession(GameManager.CurrentSessionIndex))
         {
-            Points = ResumeInfo.Pending.ranking_points;
+            // What the sets were worth (the end screen shows it) is the correct pairs times the bonus: the paid points are 0 in a practice session, so they would restart the screen at 0.
+            Points = Mathf.Max(ResumeInfo.Pending.ranking_points, ResumeInfo.Pending.ranking_pairs * config.RankingBonusPerPair);
             PaidPoints = ResumeInfo.Pending.ranking_points;
             // Continuing an interrupted session: the numbering, the pool and the rows carry on. The pool continues from the sets that were scored (a set shown but not scored is
             // shown again), and a break the data stopped inside is played again from its first unscored set (the participant's picks in the interrupted set are not kept).
@@ -215,7 +216,7 @@ public class RankingBreak : MonoBehaviour
 
     private void OnDestroy()
     {
-        EndStage();
+        TearDownStage();
         Active = false;
         if (_sun != null)
         {
@@ -251,6 +252,8 @@ public class RankingBreak : MonoBehaviour
             {
                 trees[0].PrepareGray();                // makes the desaturated canopy textures now, not in the first break
             }
+
+            EnsureStageCamera();
         }
 
         Vector3 p = _player.transform.position;
@@ -327,7 +330,6 @@ public class RankingBreak : MonoBehaviour
             _real[i].isHarvested = true;
         }
 
-        BeginStage();
         yield return GrayFade(1f);
 
         for (int s = firstSet; s < _config.RankingSets; s++)
@@ -341,8 +343,6 @@ public class RankingBreak : MonoBehaviour
         {
             yield return null;
         }
-
-        EndStage();
 
         for (int i = 0; i < _real.Length; i++)
         {
@@ -697,8 +697,10 @@ public class RankingBreak : MonoBehaviour
         return RankingDisc.Create(_treeGenerator.Terrain.MaterialInstance, position, turn, centre, (maxX - minX) / 2f + margin, (maxZ - minZ) / 2f + margin, _config.WorldHalfExtent, seed, StageLayer);
     }
 
-    // Stage mode: a second (overlay) camera draws the stage layer over the world after clearing depth, so the real terrain cannot hide the disc below it; the main camera skips that layer.
-    private void BeginStage()
+    // Stage mode: a second (overlay) camera draws the stage layer over the world after clearing depth, so the real terrain cannot hide the disc below it; the main camera never
+    // draws that layer. The camera is made once, in the session's first frames, and stays in the stack: adding it for a break and removing it afterwards made the browser show a black
+    // frame or two when a ranking ended (the logs show no hitch and no pause overlay then), and a stack that never changes cannot.
+    private void EnsureStageCamera()
     {
         Camera main = _config.RankingStage && _camera != null ? _camera.PlayerCamera : null;
         if (main == null || _stageCamera != null)
@@ -720,7 +722,7 @@ public class RankingBreak : MonoBehaviour
         main.GetUniversalAdditionalCameraData().cameraStack.Add(overlay);
     }
 
-    private void EndStage()
+    private void TearDownStage()
     {
         if (_stageCamera == null)
         {
