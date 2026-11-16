@@ -38,7 +38,6 @@ public class HarvestManager : MonoBehaviour
 
     private Tree[] _trees;
     private float[] _levels;
-    private bool[] _inRange;
     private bool _aimMode;
     private float _aimTolerance;
 
@@ -97,6 +96,7 @@ public class HarvestManager : MonoBehaviour
         _blocked = blocked;
     }
     public int FocusTreeId { get; private set; } = -1;
+    public float FocusFill { get; private set; } = -1f;          // the fraction left of the focused bush (1 untouched, 0 empty), -1 when none
 
     private void OnEnable()
     {
@@ -124,6 +124,7 @@ public class HarvestManager : MonoBehaviour
 
             ClearHighlights();
             FocusTreeId = -1;
+            FocusFill = -1f;
             SetHint(HarvestHint.None);
             return;
         }
@@ -141,7 +142,6 @@ public class HarvestManager : MonoBehaviour
             // Trees are generated in TreeGenerator.Start, so they exist by the first Update.
             _trees = FindObjectsByType<Tree>(FindObjectsSortMode.None);
             _levels = new float[_trees.Length];
-            _inRange = new bool[_trees.Length];
         }
 
         _highlightsCleared = false;
@@ -160,7 +160,6 @@ public class HarvestManager : MonoBehaviour
         {
             Tree tree = _trees[i];
             _levels[i] = 0f;
-            _inRange[i] = false;
             if (tree == null || tree.isHarvested)
             {
                 continue;
@@ -186,19 +185,14 @@ public class HarvestManager : MonoBehaviour
                 if (UseCrosshair)
                 {
                     // the crosshair's circle must touch the canopy; of the bushes it touches, the nearest is the target
-                    if (Aimed(tree, sessionConfig.CrosshairRadius))
+                    if (Aimed(tree, sessionConfig.CrosshairRadius) && edge < focusEdge)
                     {
-                        _inRange[i] = true;
-                        if (edge < focusEdge)
-                        {
-                            focusIndex = i;
-                            focusEdge = edge;
-                        }
+                        focusIndex = i;
+                        focusEdge = edge;
                     }
                 }
                 else if (bearing <= HarvestAngle)
                 {
-                    _inRange[i] = true;
                     if (bearing < focusBearing || (Mathf.Approximately(bearing, focusBearing) && edge < focusEdge))
                     {
                         focusIndex = i;
@@ -246,19 +240,18 @@ public class HarvestManager : MonoBehaviour
 
             bool pulsing = _harvesting ? (i == targetIndex && _targetInCone) : (i == focusIndex);
             tree.SetHighlight(pulsing ? 1f : _levels[i], pulsing, _aimMode);
+        }
 
-            // Progress ring on every bush in harvest range (and the one being harvested): remaining fraction,
-            // counting the fruit in progress so it ticks down smoothly.
-            bool showRing = !tree.isHarvested && (_aimMode ? (i == focusIndex || i == targetIndex) : (_inRange[i] || i == targetIndex));
-            float fill = 0f;
-            if (showRing)
-            {
-                float partial = i == targetIndex ? _fruitTimer : tree.PartialProgress;
-                float perFruit = Mathf.Max(FruitSeconds, 0.0001f);
-                fill = (tree.FruitsRemaining - Mathf.Clamp01(partial / perFruit)) / Mathf.Max(1, tree.FruitCount);
-            }
-
-            tree.SetRing(showRing, fill, cameraController.PlayerCamera != null ? cameraController.PlayerCamera.transform : null, _aimMode ? sessionConfig.RankingMarkerLift : 0f);
+        // The fraction of the focused bush that is left (the crosshair's ring, UI/AimCrosshair), counting the fruit in progress so it ticks down smoothly; an interrupted harvest keeps
+        // its fill through the bush's PartialProgress. -1 when no bush is in focus.
+        FocusFill = -1f;
+        int fillIndex = _harvesting ? targetIndex : focusIndex;
+        if (fillIndex >= 0 && !_trees[fillIndex].isHarvested)
+        {
+            Tree focus = _trees[fillIndex];
+            float partial = fillIndex == targetIndex ? _fruitTimer : focus.PartialProgress;
+            float perFruit = Mathf.Max(FruitSeconds, 0.0001f);
+            FocusFill = (focus.FruitsRemaining - Mathf.Clamp01(partial / perFruit)) / Mathf.Max(1, focus.FruitCount);
         }
 
         if (_harvesting)

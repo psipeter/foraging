@@ -25,7 +25,6 @@ Features
 
 Harvesting this bush earned {points} points.
 A bush's **shape** and/or **color** determine how many points you get
-Your goal is to learn this pattern
 
 Try harvesting a few more bushes, then move to a new area
 
@@ -34,9 +33,16 @@ Press [Enter] to continue
 @ranking_start 1
 Ranking
 
-You will sometimes be asked to rank imaginary bushes based on what you learned
-Harvest these bushes from most to least valuable
-You will earn hidden points for correct rankings
+**Rank** these imaginary bushes based on what you learned
+Do this by harvesting bushes from most to least valuable
+
+Press [Enter] to continue
+
+@ranking_end 1
+Ranking
+
+You earn **points** for ranking bushes correctly
+These **hidden** points are added at session end
 
 Press [Enter] to continue
 
@@ -44,8 +50,6 @@ Press [Enter] to continue
 Scoring
 
 You have a limited **time** in each session
-Your goal is to collect as many points as you can
-**Payment** is based on total points earned
 Try to learn and harvest efficiently
 
 Press [Enter] to continue

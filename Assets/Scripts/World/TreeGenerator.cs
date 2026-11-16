@@ -9,8 +9,6 @@ public class TreeGenerator : MonoBehaviour
     [SerializeField] private GameObject treePrefab;
     [Tooltip("Material for the rim-light highlight overlay (Foraging/CanopyRim). Referenced here so its shader is included in builds.")]
     [SerializeField] private Material rimMaterial;
-    [Tooltip("Material for the harvest progress ring (Foraging/HarvestRing).")]
-    [SerializeField] private Material ringMaterial;
 
     private void Start()
     {
@@ -53,7 +51,6 @@ public class TreeGenerator : MonoBehaviour
         treeComp.treeId = treeId;
         treeComp.sessionConfig = sessionConfig;
         treeComp.rimMaterial = rimMaterial;
-        treeComp.ringMaterial = ringMaterial;
         treeComp.fruitCount = fruitRewards.Length;
         treeComp.fruitRewards = fruitRewards;
         treeComp.fruitRadius = sessionConfig.FruitRadius;

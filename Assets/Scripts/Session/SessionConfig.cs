@@ -38,7 +38,7 @@ public class SessionConfig : ScriptableObject
     [Tooltip("A patch switch counts toward a ranking only once the participant has harvested (taken a fruit from) at least this many different bushes in the session, so no ranking comes before they have seen what a bush pays.")]
     [SerializeField] private int rankingMinBushes = 1;
     [Tooltip("The line shown at the top of the screen during a ranking.")]
-    [SerializeField] private string rankingText = "Rank these bushes: harvest them from most to least points";
+    [SerializeField] private string rankingText = "Rank these bushes from most to least valuable";
     [Tooltip("Bushes per set. Read by scripts/ranking.py.")]
     [SerializeField] private int rankingSetSize = 5;
     [Tooltip("Degrees from the leftmost to the rightmost bush centre (the arc is symmetric about the heading). The outermost centres must stay inside the view of a 4:3 window, so at least half of each bush is on screen without turning: scripts/ranking.py checks. Read by scripts/ranking.py.")]
@@ -67,6 +67,10 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private string sessionLabel = "";
     [Tooltip("Optional file in StreamingAssets of popup hints that appear as the participant acts (the first line of a block is its trigger: see UI/TutorialHints.cs). Empty = no hints.")]
     [SerializeField] private string hintsFile = "";
+    [Tooltip("Small texts on the end screen of a session that has rankings: under the foraging points, under the ranking points, and centred under the total. Empty = none. **bold** works.")]
+    [SerializeField] private string scoreCaptionForaging = "";
+    [SerializeField] private string scoreCaptionRanking = "";
+    [SerializeField] private string scoreNote = "";
     [Tooltip("Optional text kept on screen during the session (empty = none).")]
     [SerializeField] private string controlsReminder = "";
     [Tooltip("Optional message shown once, after the first harvest of the session ('{points}' = points earned in that harvest). The game pauses until Enter. Empty = none.")]
@@ -130,7 +134,7 @@ public class SessionConfig : ScriptableObject
     [Tooltip("Rim light, selected bush only: thin crisp edge line, added on top of the soft glow.")]
     [SerializeField] private float rimSelectedIntensity = 2.5f;
     [SerializeField] private float rimSelectedPower = 8f;
-    [Tooltip("Apparent size of the harvest progress ring above a bush, in degrees of view (constant regardless of distance).")]
+    [Tooltip("Apparent diameter of the harvest ring around the crosshair, in degrees of view of the camera (also the size reference of the ranking markers above bushes).")]
     [SerializeField] private float harvestRingSizeDeg = 7f;
     [Tooltip("An exhausted bush stays as a landmark and obstacle, easing into its 'spent' look over this long.")]
     [SerializeField] private float spentTransitionDuration = 0.6f;
@@ -377,6 +381,9 @@ public class SessionConfig : ScriptableObject
     public float RankingAimTolerance => rankingAimTolerance;
     public string HintsFile => hintsFile;
     public string SessionLabel => sessionLabel;
+    public string ScoreCaptionForaging => scoreCaptionForaging;
+    public string ScoreCaptionRanking => scoreCaptionRanking;
+    public string ScoreNote => scoreNote;
 
     // A copy for a reduced run (RunModes.Short; never the asset itself, which would be saved into the file): a session lasts `factor` of its length.
     // The copy keeps the asset's name, which names the world file.

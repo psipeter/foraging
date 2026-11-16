@@ -1,6 +1,6 @@
 """TUT, the tutorial: its own experiment of one practice session that must be finished before FOR unlocks (FOR.REQUIRES). The world is the tiles world of FOR in its own seed, played for practice
-(`isPractice`: not paid, not counted in the menu's total), with popup hints fired by what the participant does (`SessionConfig.hintsFile`, `UI/TutorialHints.cs`). Shape and colour both pay, in a different mix (1:3)
-from FOR's equal one, so the practice does not teach FOR's rule exactly. TUTORIAL_TILES / TUTORIAL_BETWEEN / TUTORIAL_WITHIN / TUTORIAL_REWARD are the knobs for what the bushes of a cluster look like and pay.
+(`isPractice`: not paid, not counted in the menu's total), with popup hints fired by what the participant does (`SessionConfig.hintsFile`, `UI/TutorialHints.cs`). Shape and colour both pay, in a different mix (3:1) and shape pays more when LOWER (`TUTORIAL_INVERTED`)
+from FOR's equal, both-increasing rule, so the practice does not teach FOR's rule. TUTORIAL_TILES / TUTORIAL_BETWEEN / TUTORIAL_WITHIN / TUTORIAL_REWARD are the knobs for what the bushes of a cluster look like and pay.
 The instruction page and the hints are `instructions_S1.txt` and `hints_S1.txt`, written here; edit the text in this file and rebuild (`build_experiment.py TUT`).
 """
 
@@ -17,7 +17,8 @@ SECONDS = 240
 WORLD_SEED = 6001
 TUTORIAL_TILES = {}                     # tile fields that differ from FOR's (for example tileBushes, tileSpread)
 TUTORIAL_BETWEEN, TUTORIAL_WITHIN = "", ""      # the layers of tiles.py (default none + pool)
-TUTORIAL_REWARD = {"shape": 0.25, "color": 0.75}  # each feature's share of the reward scale: both pay (the hints say so), in a different mix from FOR's equal one
+TUTORIAL_REWARD = {"shape": 0.75, "color": 0.25}  # each feature's share of the reward scale: both pay (the hints say so), in a different mix from FOR's equal one
+TUTORIAL_INVERTED = ("shape",)          # features that pay more when LOWER (InvertedLinear); FOR pays both more when higher, so the practice does not teach its direction
 LABEL = "Tutorial"                      # the small blue line over every instruction screen and popup, and on the end screen
 
 INSTRUCTIONS = """Controls
@@ -56,7 +57,6 @@ Features
 
 Harvesting this bush earned {points} points.
 A bush's **shape** and/or **color** determine how many points you get
-Your goal is to learn this pattern
 
 Try harvesting a few more bushes, then move to a new area
 
@@ -65,9 +65,16 @@ Press [Enter] to continue
 @ranking_start 1
 Ranking
 
-You will sometimes be asked to rank imaginary bushes based on what you learned
-Harvest these bushes from most to least valuable
-You will earn hidden points for correct rankings
+**Rank** these imaginary bushes based on what you learned
+Do this by harvesting bushes from most to least valuable
+
+Press [Enter] to continue
+
+@ranking_end 1
+Ranking
+
+You earn **points** for ranking bushes correctly
+These **hidden** points are added at session end
 
 Press [Enter] to continue
 
@@ -75,8 +82,6 @@ Press [Enter] to continue
 Scoring
 
 You have a limited **time** in each session
-Your goal is to collect as many points as you can
-**Payment** is based on total points earned
 Try to learn and harvest efficiently
 
 Press [Enter] to continue
@@ -89,8 +94,13 @@ def hints_text():
 
 def instances():
     weights = (("shape", TUTORIAL_REWARD["shape"]), ("color", TUTORIAL_REWARD["color"]), ("moisture", 0.0))
-    return [Instance(f"{CODE}_S1", _fields(TUTORIAL_BETWEEN, TUTORIAL_WITHIN, TUTORIAL_TILES, WORLD_SEED, weights),
+    fields = _fields(TUTORIAL_BETWEEN, TUTORIAL_WITHIN, TUTORIAL_TILES, WORLD_SEED, weights)
+    for feature in TUTORIAL_INVERTED:
+        fields[f"rewardFunction.{feature}Component.basisFunctionType"] = 1
+    return [Instance(f"{CODE}_S1", fields,
                      {"sessionDuration": SECONDS, "instructionsFile": f"Experiments/{CODE}/instructions_S1.txt", "hintsFile": f"Experiments/{CODE}/hints_S1.txt", "sessionLabel": LABEL,
+                      "scoreCaptionForaging": "points earned from harvesting bushes", "scoreCaptionRanking": "points earned from ranking bushes",
+                      "scoreNote": "**Payment** is based on total points earned",
                       "isPractice": True, "crosshairRadius": CROSSHAIR_RADIUS, **RANKING_FIELDS},
                      {"experiment": CODE, "index": 1, "cell": "tutorial", "tutorial": True})]
 

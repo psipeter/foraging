@@ -23,7 +23,6 @@ public class Tree : MonoBehaviour
     public int treeId;
     public SessionConfig sessionConfig;
     public Material rimMaterial;
-    public Material ringMaterial;
 
     [SerializeField] private TerrainManager terrainManager;
 
@@ -56,11 +55,8 @@ public class Tree : MonoBehaviour
     private int _grayLevel;
     private MaterialPropertyBlock _grayBlock;
     private Renderer[] _fruitRenderers;
-    private GameObject _ringObject;
     private TextMeshPro _rankLabel;
     private Transform _rankCamera;
-    private Material _ringInstance;
-    private static Mesh _quadMesh;
     private bool[] _collected;
 
     private List<GameObject> _fruits = new List<GameObject>();
@@ -492,64 +488,6 @@ public class Tree : MonoBehaviour
         label.localScale = Vector3.one * (size / Mathf.Max(transform.lossyScale.x, 0.0001f) * 0.25f * sessionConfig.RankingRankScale);
     }
 
-    // Clock-style harvest progress ring above the crown, facing the camera at a constant apparent size.
-    // fill = remaining fraction of the bush (1 untouched, 0 empty).
-    public void SetRing(bool visible, float fill, Transform cameraTransform, float lift = 0f)
-    {
-        if (!visible || ringMaterial == null || canopy == null || cameraTransform == null || sessionConfig == null)
-        {
-            if (_ringObject != null && _ringObject.activeSelf)
-            {
-                _ringObject.SetActive(false);
-            }
-
-            return;
-        }
-
-        if (_ringObject == null)
-        {
-            BuildRing();
-        }
-
-        if (!_ringObject.activeSelf)
-        {
-            _ringObject.SetActive(true);
-        }
-
-        Vector3 crown = GetWorldCenter() + Vector3.up * (canopy.transform.lossyScale.y * 0.5f);
-        float dist = Vector3.Distance(cameraTransform.position, crown);
-        float size = 2f * dist * Mathf.Tan(sessionConfig.HarvestRingSizeDeg * 0.5f * Mathf.Deg2Rad);
-
-        Transform ring = _ringObject.transform;
-        ring.position = crown + Vector3.up * (0.4f + size * (0.5f + lift));
-        ring.rotation = cameraTransform.rotation;
-        ring.localScale = Vector3.one * (size / Mathf.Max(transform.lossyScale.x, 0.0001f));
-
-        _ringInstance.SetFloat("_Fill", Mathf.Clamp01(fill));
-        _ringInstance.SetColor("_Color", sessionConfig.RimSelectedColor);
-    }
-
-    private void BuildRing()
-    {
-        if (_quadMesh == null)
-        {
-            GameObject primitive = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            _quadMesh = primitive.GetComponent<MeshFilter>().sharedMesh;
-            Discard(primitive);
-        }
-
-        _ringObject = new GameObject("HarvestRing");
-        _ringObject.transform.SetParent(transform, false);
-        _ringObject.AddComponent<MeshFilter>().sharedMesh = _quadMesh;
-
-        MeshRenderer ringRenderer = _ringObject.AddComponent<MeshRenderer>();
-        _ringInstance = new Material(ringMaterial);
-        ringRenderer.sharedMaterial = _ringInstance;
-        ringRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        ringRenderer.receiveShadows = false;
-        _ringObject.SetActive(false);
-    }
-
     // Exhausted bush: stays as a landmark and obstacle, easing into a spent look (uniformly shrunk, drab tint).
     // The blocking collider is resized to match the smaller canopy.
     public void MarkSpent()
@@ -561,7 +499,6 @@ public class Tree : MonoBehaviour
 
         _spent = true;
         isHarvested = true;
-        SetRing(false, 0f, null);
         StartCoroutine(EaseToSpent());
     }
 
@@ -604,7 +541,6 @@ public class Tree : MonoBehaviour
     public void ShrinkAwayAndHide(float duration)
     {
         isHarvested = true;
-        SetRing(false, 0f, null);
         StartCoroutine(ShrinkAway(Mathf.Max(duration, 0.0001f)));
     }
 

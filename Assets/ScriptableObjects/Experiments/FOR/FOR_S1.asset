@@ -27,7 +27,7 @@ MonoBehaviour:
   rankingFruitSeconds: 0.05
   rankingLastSeconds: 10
   rankingMinBushes: 1
-  rankingText: 'Rank these bushes: harvest them from most to least points'
+  rankingText: Rank these bushes from most to least valuable
   rankingSetSize: 5
   rankingArcSpan: 84
   rankingDistance: 16
@@ -41,6 +41,9 @@ MonoBehaviour:
   instructionsFile: Experiments/FOR/instructions_S1.txt
   sessionLabel: 
   hintsFile: 
+  scoreCaptionForaging: 
+  scoreCaptionRanking: 
+  scoreNote: 
   controlsReminder: 
   firstHarvestMessage: 
   controlsReminderOpacity: 0.35

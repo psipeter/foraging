@@ -278,6 +278,7 @@ A foraging session can contain ranking breaks (`RankingBreak`, DECISIONS "Rankin
   are not in the world file), `rank_go` (the end of the harvest block of a set), `rank_set_start` / `rank_pick` / `rank_set_end` with a `break` number, `rank_break_end`. The ranking bushes have tree ids
   `world bush count + pool id` and pay 0 (their `fruit` events carry reward 0, so the running total does not move).
 - **Sets** are rows of `ranking_sets` of the foraging session (`set_index` = sets played so far in the session, `pool_index`, `bushes` JSON, points).
+- **Tutorial hints** (a session with a hints file): `hint_shown` and `hint_dismissed` events (`id`, `trigger`, `n`). A hint is a pause popup, so it also appears as the usual pause/resume events; one that opens during a ranking set stops that set's clock like any other pause (`paused_seconds` of the `ranking_sets` row).
 - **Time.** `t` is unpaused session seconds and keeps running through a break; the foraging clock is `t` minus the break windows (`rank_break_start` to `rank_break_end`).
 - **Resume.** `server.resume_state` also returns `held_seconds` (the sum of the windows, a break the data stops inside counted to the last thing heard), `breaks`, `sets_played` and `ranking_points`; the game continues
   the foraging clock from `clock - held_seconds`, the break numbering, the pool position, the set rows and the end screen's ranking points. An unfinished break is not resumed.

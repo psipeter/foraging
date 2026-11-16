@@ -25,6 +25,8 @@ public static class UiStyle
     public static readonly Color Glass = new Color(0.078f, 0.086f, 0.118f, 0.80f);        // a panel over the backdrop
     public static readonly Color FieldGlass = new Color(1f, 1f, 1f, 0.07f);
     public static readonly Color Good = new Color(0.47f, 0.84f, 0.63f);                 // only for "Completed"
+    public static readonly Color ForagingTint = Good;                                   // the score screen's "foraging" title
+    public static readonly Color RankingTint = new Color(0.96f, 0.68f, 0.40f);          // its "ranking" title: a soft orange of the same lightness
     public static readonly Color Disabled = new Color(1f, 1f, 1f, 0.10f);
 
     // A key or mouse name on a highlighted chip (TextMeshPro rich text).

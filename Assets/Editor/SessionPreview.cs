@@ -274,7 +274,6 @@ public static class SessionPreview
         var source = new SerializedObject(scene);
         var prefab = (GameObject)source.FindProperty("treePrefab").objectReferenceValue;
         var rim = (Material)source.FindProperty("rimMaterial").objectReferenceValue;
-        var ring = (Material)source.FindProperty("ringMaterial").objectReferenceValue;
         int treeLayer = LayerMask.NameToLayer("Tree");
         MethodInfo awake = typeof(Tree).GetMethod("Awake", Private);
 
@@ -288,7 +287,6 @@ public static class SessionPreview
             tree.treeId = s;
             tree.sessionConfig = config;
             tree.rimMaterial = rim;
-            tree.ringMaterial = ring;
             tree.fruitCount = world.FruitCount;
             tree.fruitRewards = new int[world.FruitCount];
             System.Array.Copy(world.FruitRewards, s * world.FruitCount, tree.fruitRewards, 0, world.FruitCount);

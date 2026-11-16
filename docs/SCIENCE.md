@@ -15,7 +15,7 @@ silently harden into assumptions.
 
 **Direction.** After PI discussions the five planned experiments (FN, RW, FI, PL, PA; `docs/EXPERIMENTS.md`) are replaced by **one experiment, FOR**, in which the reward function (number, form and sparsity of
 features) and the spatial arrangement (tile value, distance, heterogeneity) vary from session to session, and a **ranking** of a few bushes is asked for periodically *inside* the session. Harvesting earns the
-main points; the rankings add a bonus per correct pair. The old tutorials, sessions and Interludes (TUT, FN, RW, FI, the P to S7 ladder) were removed in the cleanup of 2026-11-14 (DECISIONS, "Cleanup: everything is FOR");
+main points; the rankings add a bonus per correct pair. The old tutorials, sessions and Interludes (the old TUT, FN, RW, FI, the P to S7 ladder) were removed in the cleanup of 2026-11-14 (the tutorial was then rebuilt as the present `TUT`, below) (DECISIONS, "Cleanup: everything is FOR");
 the sections below that describe them are history, kept for the reasoning, and where they disagree with this section, this section is current. DECISIONS ("FOR ...", "The crosshair harvest rule", "Ranking breaks inside the session") hold the reasoning and the rejected alternatives.
 
 **Questions it can answer** (two families, one design): how people learn which features pay and how well they know it (the rankings read the learned value function out, without the confound of the
@@ -51,8 +51,30 @@ instructions for the first break.
 `rank_pick`, `rank_set_end` events (`docs/ONLINE_DATA_PLAN.md`, "Ranking breaks"). `replay.py` re-derives the harvests of break windows and of the crosshair rule from the trajectory.
 
 **Built and not.** Built: the tiles world and assignment modes, the calibration, the crosshair rule, ranking breaks (trigger, arc, clocks, fade, scoring, logging, replay, resume, pool), the single prototype session
-`FOR_S1` (`scripts/design/FOR.py`). Not built: the tutorial or any practice session (FOR_S1 is the only session), the parameter specification and samplers that swap reward and spatial settings from session to session (phase 3 of the plan), simulated agents on the break schedule,
+`FOR_S1` (`scripts/design/FOR.py`). Built since: the tutorial `TUT` (below). Not built: any further session (FOR_S1 is the only FOR session), the parameter specification and samplers that swap reward and spatial settings from session to session (phase 3 of the plan), simulated agents on the break schedule,
 a difficulty score, instructions text for the rankings. Not play-tested since the cleanup: the Unity side (it compiles; the Editor did not advance frames when driven from the CLI).
+
+
+### The tutorial (TUT, 2026-11-16)
+
+One practice session, `TUT_S1`, in its own experiment that must be finished before FOR unlocks (not paid, not in the menu's total). **World:** FOR's tile geometry in its own seed (6001), 240 s, ranking breaks on (one set per break).
+**Reward:** shape 3/4 **inverted** (a lower shape value pays more) plus colour 1/4 (higher pays more), where FOR_S1 pays both 1/2 and both increasing; so what is learned in the practice (heavy shape, low is good) is wrong in FOR,
+and the hints say only that "shape and/or color determine how many points you get". **Mechanism:** the Controls screen, then popups fired by what the participant does (`UI/TutorialHints.cs`, a hints text file), each a pause popup that
+fades in and out; every one carries a small blue "Tutorial" label. The popups, in order:
+
+| When | Title | Text |
+|---|---|---|
+| 1 s after the session starts (the game held) | Controls | In this study, you gather **points** by harvesting fruit from bushes. / Walk up to a bush and hold [Space] to harvest it |
+| the first harvest ends (`@bout 1`) | Harvesting | Harvesting this bush earned {points} points. / You can **stop** harvesting a bush anytime, or **return** to a bush later / Try harvesting a different bush |
+| the second harvest ends (`@bout 2`) | Features | Harvesting this bush earned {points} points. / A bush's **shape** and/or **color** determine how many points you get / Try harvesting a few more bushes, then move to a new area |
+| 0.25 s after the first ranking's bushes have grown (`@ranking_start 1`) | Ranking | **Rank** these imaginary bushes based on what you learned / Do this by harvesting bushes from most to least valuable |
+| the first ranking ends (`@ranking_end 1`) | Ranking | You earn **points** for ranking bushes correctly / These **hidden** points are added at session end |
+| 30 foraging seconds after the first Ranking popup, never in mid-harvest (`@after ranking_start:1 30`) | Scoring | You have a limited **time** in each session / Try to learn and harvest efficiently |
+
+The ranking's own helper text (on screen during a set) is "Rank these bushes from most to least valuable". **End screen** ("Tutorial complete"): the total in the middle, the foraging points (green title) and the ranking points (orange
+title) on either side with the captions "points earned from harvesting bushes" and "points earned from ranking bushes", and centred under the total the note "**Payment** is based on total points earned"; the three numbers count up
+together from zero. The ranking set's outcome is sealed during play (a centred, larger "+???" and a chime, `DECISIONS`, "Ranking feedback sealed"). **Not built:** hints that survive a resume (a resumed tutorial shows them again),
+non-modal hints, any guarantee that a participant sees a ranking (it comes at a patch switch); the wording is the PI's and still open to change. See DECISIONS ("The tutorial" and its addenda) for the reasoning.
 
 ---
 

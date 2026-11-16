@@ -10,7 +10,8 @@ public class FeedbackAudio : MonoBehaviour
         FruitPick,
         BushExhausted,
         RankingPick,
-        RankingDone
+        RankingDone,
+        PopupOpen
     }
 
     public SessionConfig sessionConfig;
@@ -41,6 +42,7 @@ public class FeedbackAudio : MonoBehaviour
         HarvestManager.OnFruitCollected += HandleFruitCollected;
         HarvestManager.OnBushExhausted += HandleBushExhausted;
         RankingBreak.OnSetScored += HandleSetScored;
+        InstructionsScreen.OnOpened += HandlePopupOpened;
     }
 
     private void OnDisable()
@@ -48,12 +50,19 @@ public class FeedbackAudio : MonoBehaviour
         HarvestManager.OnFruitCollected -= HandleFruitCollected;
         HarvestManager.OnBushExhausted -= HandleBushExhausted;
         RankingBreak.OnSetScored -= HandleSetScored;
+        InstructionsScreen.OnOpened -= HandlePopupOpened;
     }
 
     // The ranking set was scored: one chime, always the same (it says the set is done, not how it went).
     private void HandleSetScored()
     {
         Play(Cue.RankingDone, 1f);
+    }
+
+    // An instruction popup opens: one quiet pip, the same for every popup.
+    private void HandlePopupOpened()
+    {
+        Play(Cue.PopupOpen, 1f, 0.45f);
     }
 
     private void HandleFruitCollected(float amount, Vector3 worldPos)
@@ -78,7 +87,7 @@ public class FeedbackAudio : MonoBehaviour
         Play(Cue.BushExhausted, 1f);
     }
 
-    private void Play(Cue cue, float pitch)
+    private void Play(Cue cue, float pitch, float gain = 1f)
     {
         if (!_clips.TryGetValue(cue, out AudioClip clip))
         {
@@ -88,7 +97,7 @@ public class FeedbackAudio : MonoBehaviour
         AudioSource voice = _voices[_nextVoice];
         _nextVoice = (_nextVoice + 1) % VoiceCount;
         voice.pitch = pitch;
-        voice.volume = sessionConfig != null ? sessionConfig.SfxVolume : 0.5f;
+        voice.volume = (sessionConfig != null ? sessionConfig.SfxVolume : 0.5f) * gain;
         voice.clip = clip;
         voice.Play();
     }
@@ -128,6 +137,10 @@ public class FeedbackAudio : MonoBehaviour
 
             return 0.55f * sum;
         });
+
+        // Popup open: a single soft, low pip (a sine and a quiet fifth above, fast decay): short, quiet and unlike the reward cues.
+        _clips[Cue.PopupOpen] = Synthesize("PopupOpen", 0.14f, (t) =>
+            (Mathf.Sin(2f * Mathf.PI * 440f * t) + 0.2f * Mathf.Sin(2f * Mathf.PI * 660f * t)) * Mathf.Exp(-t * 30f));
 
         // Exhausted: two soft rising chime notes.
         _clips[Cue.BushExhausted] = Synthesize("BushExhausted", 0.55f, (t) =>

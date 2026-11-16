@@ -120,3 +120,7 @@ Assets/ScriptableObjects/Experiments/*/*_PREVIEW.asset*
 Assets/StreamingAssets/Experiments/*/*_PREVIEW_seed*
 # pictures saved by Foraging > Capture Scene view
 /Captures/
+
+# Unity test runner leftovers
+/Assets/Resources/PerformanceTestRun*.json
+/Assets/Resources/PerformanceTestRun*.json.meta

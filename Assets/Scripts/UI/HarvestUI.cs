@@ -54,6 +54,8 @@ public class HarvestUI : MonoBehaviour
         HarvestManager.OnHintChanged -= HandleHintChanged;
     }
 
+    private const float SealedPopupScale = 1.6f;      // the "+???" after a ranking set, larger than a harvest popup
+
     private HintPill _hint;
 
     private void Start()
@@ -137,7 +139,7 @@ public class HarvestUI : MonoBehaviour
             tmp.outlineColor = new Color32(0, 0, 0, 215);
         }
 
-        StartCoroutine(AnimatePopup(instance, sizeMultiplier, fruitTextDuration, fruitTextRise, slot));
+        StartCoroutine(AnimatePopup(instance, sizeMultiplier, fruitTextDuration, fruitTextRise, () => ReleaseSlot(slot)));
     }
 
     // Slot order is a fixed cycle (centre, right, left, farther right, ...), never derived from the reward or the
@@ -206,26 +208,26 @@ public class HarvestUI : MonoBehaviour
             return;
         }
 
-        float baseScale = sessionConfig != null ? sessionConfig.PopupScale : 1.7f;
+        float baseScale = (sessionConfig != null ? sessionConfig.PopupScale : 1.7f) * SealedPopupScale;
         Color color = sessionConfig != null ? sessionConfig.PopupColor : Color.white;
         color.a = 1f;
         RectTransform instance = Instantiate(floatingTextPrefab, canvas.transform);
         instance.anchorMin = instance.anchorMax = new Vector2(0.5f, 0.5f);
         instance.pivot = new Vector2(0.5f, 0.5f);
         instance.localScale = Vector3.one;
-        int slot = ClaimSlot();
-        instance.anchoredPosition = popupOffset + Vector2.right * SlotOffsetX(slot);
+        instance.anchoredPosition = popupOffset;                // always in the centre and one size: it carries no information (no slot)
         TextMeshProUGUI tmp = instance.GetComponentInChildren<TextMeshProUGUI>();
         if (tmp != null)
         {
             tmp.text = "+???";
             tmp.fontStyle = FontStyles.Bold;
+            tmp.font = UiStyle.DisplayFont;
             tmp.color = color;
-            tmp.outlineWidth = 0.22f;
+            tmp.outlineWidth = 0.3f;
             tmp.outlineColor = new Color32(0, 0, 0, 215);
         }
 
-        StartCoroutine(AnimatePopup(instance, baseScale, fruitTextDuration * 1.5f, fruitTextRise, slot));
+        StartCoroutine(AnimatePopup(instance, baseScale, fruitTextDuration * 1.5f, fruitTextRise));
         if (totalScoreText != null)
         {
             if (_punch != null)
@@ -284,7 +286,7 @@ public class HarvestUI : MonoBehaviour
 
     // Pop in with an overshoot and a small wobble while rising, linger, then fade out. The whole popup (text and
     // outline) fades through a CanvasGroup.
-    private IEnumerator AnimatePopup(RectTransform rect, float sizeMultiplier, float duration, float risePixels, int slot)
+    private IEnumerator AnimatePopup(RectTransform rect, float sizeMultiplier, float duration, float risePixels, System.Action onDone = null)
     {
         var group = rect.gameObject.AddComponent<CanvasGroup>();
         group.alpha = 0f;
@@ -310,11 +312,15 @@ public class HarvestUI : MonoBehaviour
             yield return null;
         }
 
+        onDone?.Invoke();
+        Destroy(rect.gameObject);
+    }
+
+    private void ReleaseSlot(int slot)
+    {
         if (_slotBusy != null && slot < _slotBusy.Length)
         {
             _slotBusy[slot] = false;
         }
-
-        Destroy(rect.gameObject);
     }
 }

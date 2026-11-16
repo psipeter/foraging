@@ -19,9 +19,9 @@ using UnityEngine.InputSystem;
 //   bout                the nth harvest that took fruit, when it ends (`{points}` = what it earned)
 //   exhausted           the nth bush picked empty
 //   patch_switch        the nth patch switch (the nearest tile changes and the player is a few units into the new one)
-//   ranking_start       the nth ranking break, as it starts
+//   ranking_start       the nth ranking break, a quarter second after the bushes of its first set have grown (the hint pauses the set's countdown)
 //   ranking_end         the nth ranking break, as it ends
-//   seconds             this many foraging seconds into the session (n = seconds)
+//   seconds             this many foraging seconds into the session (n = seconds); like `after`, it waits for a harvest under way to end
 //   idle                after this many seconds standing still without harvesting (n = seconds)
 //   after               `@after <trigger>:<n> <seconds>`: that many foraging seconds (the session clock, which a ranking break holds) after the hint with that id was shown,
 //                       for example `@after ranking_start:1 30`; never fires if that hint is never shown
@@ -29,6 +29,7 @@ using UnityEngine.InputSystem;
 // (`hint_shown`, `hint_dismissed`: id, trigger, n). A resumed session starts its hints again.
 public class TutorialHints : MonoBehaviour
 {
+    private const float RankingHintDelay = 0.25f;      // seconds after the first set's bushes have grown before the ranking hint appears (the set's countdown runs meanwhile; the hint then pauses it)
     private const float PatchSettleDepth = 3f;       // units into the new tile before a patch switch counts (the edge itself would flicker)
 
     private class Hint
@@ -151,7 +152,7 @@ public class TutorialHints : MonoBehaviour
         HarvestManager.OnFruitCollected += HandleFruit;
         HarvestManager.OnHarvestBoutEnded += HandleBout;
         HarvestManager.OnBushExhausted += HandleExhausted;
-        RankingBreak.OnBreakStarted += HandleBreakStarted;
+        RankingBreak.OnSetReady += HandleSetReady;
         RankingBreak.OnBreakEnded += HandleBreakEnded;
     }
 
@@ -161,7 +162,7 @@ public class TutorialHints : MonoBehaviour
         HarvestManager.OnFruitCollected -= HandleFruit;
         HarvestManager.OnHarvestBoutEnded -= HandleBout;
         HarvestManager.OnBushExhausted -= HandleExhausted;
-        RankingBreak.OnBreakStarted -= HandleBreakStarted;
+        RankingBreak.OnSetReady -= HandleSetReady;
         RankingBreak.OnBreakEnded -= HandleBreakEnded;
     }
 
@@ -208,9 +209,18 @@ public class TutorialHints : MonoBehaviour
         }
     }
 
-    private void HandleBreakStarted()
+    private void HandleSetReady(int indexInBreak)
     {
-        Fire("ranking_start");
+        if (indexInBreak == 0)
+        {
+            StartCoroutine(FireAfter("ranking_start", RankingHintDelay));
+        }
+    }
+
+    private System.Collections.IEnumerator FireAfter(string trigger, float seconds)
+    {
+        yield return new WaitForSeconds(seconds);
+        Fire(trigger);
     }
 
     private void HandleBreakEnded()
@@ -271,7 +281,7 @@ public class TutorialHints : MonoBehaviour
             return;
         }
 
-        if (_sun != null)
+        if (_sun != null && !HarvestHeld())          // a clock-timed hint waits until the harvest under way has ended
         {
             float elapsed = _config.SessionDuration - _sun.SessionTimeRemaining;
             foreach (Hint hint in _hints)
