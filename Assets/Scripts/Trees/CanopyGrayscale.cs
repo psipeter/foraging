@@ -2,7 +2,7 @@ using UnityEngine;
 
 // Greyed copies of the canopy texture, for fading the world's bushes to grayscale during a ranking break (Tree.SetGray). The canopy is URP/Lit, which has no saturation
 // control, so the texture is stepped through a few progressively desaturated copies (the tint, a colour, is faded smoothly beside it) instead of changing the shader.
-// Made once, on first use, at half the texture's size from a GPU copy of it (the canopy texture is not readable).
+// Made once, on first use, at 512 x 512 (Size) from a GPU copy of it (the canopy texture is not readable).
 public static class CanopyGrayscale
 {
     public const int Levels = 5;                         // level 0 is the original, level Levels - 1 fully grey

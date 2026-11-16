@@ -13,6 +13,8 @@ public class ExperimentStanding
     public string status;            // none, in_progress, finished, terminated
     public int sessions_done;
     public float session_progress;   // how far through its current unfinished session the participant is, 0 to 1 (the foraging clock over the session's length)
+    public float session_foraging_seconds;   // the foraging clock of that session (the logged clock less the time held in ranking breaks)
+    public int session_rankings;            // the ranking breaks it has ended (an interrupted one is not counted)
     public float points;             // the score of its completed sessions plus its ranking bonuses, practice left out
     public bool unlocked;            // the prerequisites are finished (the server enforces it when the run starts)
 }

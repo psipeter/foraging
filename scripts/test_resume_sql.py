@@ -102,6 +102,16 @@ def test_the_menu_reports_the_progress_of_an_experiment_in_progress(db):
     db.execute("insert into public.release_experiments (build_commit, experiment, n_sessions) values ('abc', 'T', 2) on conflict do nothing")
     entry = db.execute("select server.menu(%s, 'abc')", (person,)).fetchone()[0][0]
     assert entry["code"] == "T" and entry["sessions_done"] == 0 and entry["session_progress"] == pytest.approx(0.5)
+    assert entry["session_foraging_seconds"] == pytest.approx(60.0) and entry["session_rankings"] == 0
+
+
+def test_the_standing_counts_the_foraging_seconds_and_the_rankings_ended_not_aborted(db):
+    run = make_run(db, [(0, "session_start", None), (10, "rank_break_start", {"break": 1}), (30, "rank_break_end", {"break": 1}), (31, "session_resume", {}),
+                        (31, "rank_break_start", {"break": 2}), (35, "rank_break_end", {"break": 2, "aborted": True}), (70, "fruit", None)])
+    standing = db.execute("select server.session_standing(%s)", (run,)).fetchone()[0]
+    assert standing["rankings"] == 1 and standing["foraging_seconds"] == pytest.approx(70 - 20 - 4)       # 20 s and 4 s held in the two breaks
+    done = make_run(db, [(0, "session_start", None), (100, "session_end", None)], completed=True)
+    assert db.execute("select server.session_standing(%s)", (done,)).fetchone()[0] == {"foraging_seconds": 0, "rankings": 0}
 
 
 def test_the_leaving_count_and_a_due_ranking_that_has_not_begun_come_back(db):

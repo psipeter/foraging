@@ -1,6 +1,6 @@
 using UnityEngine;
 
-// Fades a full-screen overlay (the "Paused" screen, the data gate) in and out instead of switching it on and off: `UiStyle.SetShown` is the way to show or hide one.
+// Fades a full-screen overlay (the "Paused" screen, the data gate) in and out instead of switching it on and off: `OverlayFade.SetShown` is the way to show or hide one.
 // Real time, since the game is held still behind it. The object stays active while it fades out and is deactivated when it is gone.
 public class OverlayFade : MonoBehaviour
 {

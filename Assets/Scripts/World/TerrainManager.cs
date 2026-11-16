@@ -143,8 +143,6 @@ public class TerrainManager : MonoBehaviour
 
     }
 
-    // Terrain fields are bilinear samples of the world file's mesh grids (the mesh interpolates the same way).
-    // Valley elevation (coupled to moisture) plus the mountain term, which is exactly 0 inside the valley.
     // The terrain's own material instance (the textures and settings of this session; the ranking stage's disc copies it).
     public Material MaterialInstance { get; private set; }
 
@@ -157,6 +155,8 @@ public class TerrainManager : MonoBehaviour
         }
     }
 
+    // Terrain fields are bilinear samples of the world file's mesh grids (the mesh interpolates by triangles, within millimetres of that).
+    // Valley elevation (coupled to moisture) plus the mountain term, which is exactly 0 inside the valley.
     public float SampleElevation(float worldX, float worldZ)
     {
         return world != null ? world.Sample(world.ElevationGrid, worldX, worldZ) : 0f;

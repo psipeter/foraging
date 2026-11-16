@@ -5,7 +5,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
-// The introduction: the page a participant sees after logging in and before the menu, and again whenever they open it from the menu (or from the (i) beside the points).
+// The introduction: the page a participant sees after logging in and before the menu, and again whenever they open it from the menu.
 // It tells them what to know before playing: how they are paid, how long things take and whether they may stop, the sound. The text is StreamingAssets/introduction.txt: the
 // first line is the title, then sections separated by a blank line, each a heading line followed by its text. Built at runtime like the other overlays.
 public class IntroScreen : MonoBehaviour

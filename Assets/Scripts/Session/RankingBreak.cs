@@ -5,13 +5,13 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
-// A ranking break: a ranking set played in place, inside a foraging session, so the participant stays in the foraging stage (SessionConfig.rankingBreak*,
-// docs/DECISIONS.md "FOR: ranking breaks inside the session"). After every `rankingBreakEvery` patch switches (a settled crossing into another tile of a tiles
+// A ranking break: a ranking set played in place, inside a foraging session, so the participant stays in the foraging stage (SessionConfig.ranking*,
+// docs/DECISIONS.md "FOR: ranking breaks inside the session"). After the patch switches of the leaving schedule (`rankingLeavings`) (a settled crossing into another tile of a tiles
 // world) the real bushes fade to grayscale (and cannot be aimed at) and a set of ranking bushes grows on an arc in front of the player, on the terrain they stand on. The player
 // harvests them from most to least points under these rules (stationary, any bush in view, a started harvest is finished). The session clock is held
 // while a break runs (SunController.ClockHeld) and a second countdown shows the set's own seconds; outcomes are hidden and the ranking bushes pay nothing
 // (zero fruit rewards), so the score does not move. The sets come from the session's pool file (scripts/ranking.py pool), used in order.
-// Created at runtime by GameManager (no scene wiring). Not built yet: replay/visibility gaps, resume. The arc is placed on whatever ground is there (no wait for flat ground: it looked fine in the first playtest).
+// Created at runtime by GameManager (no scene wiring). Change its timing, blocks and events together with scripts/replay.py, visibility.py and validate_run.py. The arc is placed on whatever ground is there (no wait for flat ground: it looked fine in the first playtest).
 public class RankingBreak : MonoBehaviour
 {
     [Serializable]
@@ -264,7 +264,7 @@ public class RankingBreak : MonoBehaviour
             return;
         }
 
-        // A switch counts once the player is `rankingBreakSettleDepth` past the edge on the new side (0: at the edge, which puts the arc farthest from the next cluster); one inside the cooldown after a break,
+        // A switch counts once the player is `rankingSettleDepth` past the edge on the new side (0: at the edge, which puts the arc farthest from the next cluster); one inside the cooldown after a break,
         // or in the last seconds of the session, or before enough bushes have been harvested, is ignored (it does not wait to fire later, in the middle of the next patch).
         if (tile != _tile && _world.DepthIntoTile(p.x, p.z, _tile, tile) >= _config.RankingSettleDepth)
         {

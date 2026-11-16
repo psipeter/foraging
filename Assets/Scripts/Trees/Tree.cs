@@ -426,7 +426,7 @@ public class Tree : MonoBehaviour
     }
 
     // Ranking: the rank this bush was given (1 = the first harvested) shown as a number above the crown, facing the camera at the
-    // ring's constant apparent size. 0 removes it. A spent bush keeps its number.
+    // size reference harvestRingSizeDeg (the ring itself is the crosshair's). 0 removes it. A spent bush keeps its number.
     public void SetRank(int rank)
     {
         if (rank <= 0)

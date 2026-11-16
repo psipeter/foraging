@@ -18,6 +18,8 @@ the camera, so it is recomputed here from `replay.SessionLog`:
 * In a ranking break (a session's in-place ranking: `rank_break_start` / `rank_break_end`) the real bushes stay (grey, not harvestable) and the current set's stand
   among them (their table is the `rank_set` event); a set is taken as standing from its `rank_set` to its `rank_set_end` (the growth and the shrinking are not modelled),
   and the returned `tree_id` of such a bush is its logged id. The grey is not modelled either: a real bush counts as visible as ever.
+  Known limit (RT-B3): the stage stands on a disc above or beside the terrain, but the occluders are the real terrain and bushes, so stage bushes behind real terrain count as hidden
+  (about 46% of the stage sightings of run 521651ec): their counts are lower bounds.
 
 Not modelled: fruit visibility (fruit hanging in front of a canopy, or hiding behind one), foliage that is translucent at the
 edges, a camera inside a canopy, fog, and any limit on how far away attributes can be resolved. Use the returned `distance` and angular `width`/`height` to threshold

@@ -1,6 +1,6 @@
-"""FOR, foraging in tiles (prototype, 2026-11-12): the merged experiment that varies the reward function and the spatial arrangement together, in a world of hexagonal tiles with a cluster of bushes
-in the middle of each (`tiles.py`). Phases 1 and 2 of the plan only: one instance at a time to see the world in the Editor (the combination of a between-tile mode and a within-tile mode being tried); no Interludes yet (the injected
-rankings are a later phase), no difficulty sampling and no spec system (the next phase). Both pay through shape and colour equally (a linear reward over the two).
+"""FOR, foraging in tiles (2026-11-12): the experiment that varies the reward function and the spatial arrangement together, in a world of hexagonal tiles with a cluster of bushes
+in the middle of each (`tiles.py`). One instance at a time (the combination of a between-tile mode and a within-tile mode being tried), with ranking breaks in the session (`RANKING_FIELDS`;
+the ranking pools come from `ranking.py`). Both features pay equally (a linear reward over shape and colour). An empty mode ("" and "") means the features ignore the tiles (`none` between, `pool` within).
 """
 
 from design import Instance

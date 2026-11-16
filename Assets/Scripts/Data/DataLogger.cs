@@ -59,6 +59,7 @@ public class DataLogger : MonoBehaviour
     private int _eventSeq, _frameSeq, _setSeq;
     private string _sessionJson;
     private ResumeReply _resume;        // the server's state when this session continues an interrupted one
+    private bool _poseRestored = true;  // false from the resume until ApplyResume has put the player back: the frames in between log the restored pose, not the scene's start (the origin)
 
     // Session clock now: this frame's value whether or not this frame's trajectory row has been written yet.
     private double Now => _lastRowFrame == Time.frameCount ? _t : _t + Time.deltaTime;
@@ -127,6 +128,7 @@ public class DataLogger : MonoBehaviour
     private void BeginResumed(ResumeReply r)
     {
         _resume = r;
+        _poseRestored = !r.has_pose;
         _eventSeq = r.events_next;
         _frameSeq = r.trajectory_next;
         _setSeq = r.sets_next;
@@ -183,6 +185,7 @@ public class DataLogger : MonoBehaviour
             sunController?.SetSessionTime((float)(r.clock - r.held_seconds));      // the logged clock runs on through ranking breaks; the session clock does not
         }
 
+        _poseRestored = true;
         ResumeInfo.Pending = null;
         yield return null;                                          // one frame drawn at the restored pose before the cover goes
         if (_resumeCover != null)
@@ -224,10 +227,18 @@ public class DataLogger : MonoBehaviour
             _dtMax = Mathf.Max(_dtMax, dt);
 
             Vector3 p = playerController.transform.position;
+            float yaw = _cameraController.Yaw, pitch = _cameraController.Pitch;
+            if (!_poseRestored)
+            {
+                p = new Vector3(_resume.pose.x, p.y, _resume.pose.z);
+                yaw = _resume.pose.yaw;
+                pitch = _resume.pose.pitch;
+            }
+
             Vector2 move = playerController.MoveInput;
             int keys = (move.y > 0.01f ? KeyForward : 0) | (move.y < -0.01f ? KeyBack : 0) | (playerController.HarvestHeld ? KeyHarvest : 0);
 
-            _pendingFrames.Add(FrameQ.From(_t, p.x, p.z, _cameraController.Yaw, _cameraController.Pitch, keys));
+            _pendingFrames.Add(FrameQ.From(_t, p.x, p.z, yaw, pitch, keys));
         }
 
         bool paused = Time.timeScale <= 0f;

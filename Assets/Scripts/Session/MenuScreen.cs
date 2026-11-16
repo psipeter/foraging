@@ -98,8 +98,9 @@ public class MenuScreen : MonoBehaviour
                     row.Enabled = s.unlocked;
                     if (played != null)
                     {
-                        row.Progress = played.Count > 0 ? Mathf.Clamp01((s.sessions_done + s.session_progress) / played.Count) : 0f;       // the sessions done and the time in the current one
-                        row.Detail = $"{CountSessions(played, s.sessions_done)} of {sessions} · {TimeLeftText(ExperimentConfig.SecondsLeft(played, s.sessions_done, s.session_progress, RunModes.Active ? RunModes.Short : 1f))}";
+                        float shortFactor = RunModes.Active ? RunModes.Short : 1f;
+                        row.Progress = ExperimentConfig.Progress(played, s.sessions_done, s.session_foraging_seconds, s.session_rankings, shortFactor);       // against the experiment's maximum time
+                        row.Detail = $"{CountSessions(played, s.sessions_done)} of {sessions} · {TimeLeftText(ExperimentConfig.SecondsLeft(played, s.sessions_done, s.session_foraging_seconds, s.session_rankings, shortFactor))}";
                     }
                     else
                     {

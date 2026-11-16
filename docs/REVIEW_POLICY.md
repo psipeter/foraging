@@ -77,8 +77,6 @@ Re-raise one only with new evidence or because the code around it changed.
   times) had about 98 per 1000 fruits one frame off. Outside a tie `TIME_TOL` is the only absorber. A game bug that moved fruits one
   frame only at ties would go unseen, as it would be indistinguishable from float rounding.
 - `trial_start` is applied one frame early in `replay.py` and `visibility.py` (the row at that time still has the old pose).
-- `WorldKnowledge.from_sidecar` drops the reward function, so an oracle over a sidecar without a `value` entry cannot compute values.
-- Every S1/S2 Interlude has one free "either" trial, so chance accuracy there is 0.6, not 0.5 (matches the game's bonus rule).
 - Visibility samples 1.8% of canopy points below the terrain; a few count as visible.
 - Non-finite critic utilities (`inf`, `nan`) are not rejected by the choice rules.
 - The actor's RNG exposes the world seed. The information boundary guards against accidents, not against a deliberate cheat.
@@ -87,3 +85,10 @@ Re-raise one only with new evidence or because the code around it changed.
 - The simulator pays about 0.9 more fruits per 60 s than the game (frame quantisation): compare agents to humans as paired
   differences.
 - After walking to a bush, rounding leaves the agent a hair outside its range in about 40% of cases, so re-harvesting it after leaving early is charged a W press the game would not need (`costs.approach`). No actor leaves a bush early yet; fix when one does (see DECISIONS, "Review of the engine-agent boundary").
+- A resume does not restore the cooldown after the last ranking break (`_lastEnd`; RT-B2): the first patch leaving after a reload counts at once, and `validate_run` can FAIL a session the game produced correctly when a resume falls between two breaks. Accepted with the other gaps of ONLINE_DATA_PLAN section 4 (a fix needs a server field).
+- A resume does not restore the progress on a partly harvested bush or on the fruit being picked, nor which individual fruits were taken (only counts per bush); the k-th fruit pays the pre-drawn reward, so scores stay right and the loss is a few fruits' look.
+- The idle hint's standing time is not restored: the idle trigger no longer exists (removed 2026-11-16), kept here only so the older note in ONLINE_DATA_PLAN section 4 is not re-raised.
+- `visibility.py` hides stage bushes behind the real terrain (RT-B3: about 46% of the stage sightings of run 521651ec): the occluders do not know the stage disc. Documented in its docstring; a fix would split the occluders.
+- Two bogus trajectory rows at (0, 0) at each resume (RT-A3: the world's start pose, logged for two frames before the pose is restored), until fixed: analyses of path or visibility drop the frames before the restored pose.
+- `human_data.py download` pages with OFFSET (RT-A8): rows can repeat if participants upload during a download; a rerun fixes it.
+- The world generator draws from scipy's Halton sequence and no file records the installed scipy version (RT-C8 / RT-E5): a different scipy could produce different worlds from the same seed; the world hash in the session row would show it.

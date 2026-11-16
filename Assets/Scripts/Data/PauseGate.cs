@@ -1,7 +1,7 @@
 using UnityEngine;
 
 // The one place that sets Time.timeScale. Three things can hold the game still: a screen the participant has to dismiss
-// (InstructionsPanel), the data service (connecting, or waiting for the server to acknowledge data) and, in a browser, a
+// (InstructionsPanel and TutorialHints), the data service (connecting, or waiting for the server to acknowledge data) and, in a browser, a
 // released mouse capture. The game runs only when none does, so one releasing never un-pauses another.
 public static class PauseGate
 {

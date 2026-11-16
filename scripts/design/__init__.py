@@ -12,7 +12,7 @@ A design module defines
 `build_experiment.py <code>` turns that into assets (through the Editor), worlds, ranking pools and texts. An instance's `design` dict is stored as
 JSON in the session asset's `designJson`, which the logger records with the rest of the config: the instance id, its cell parameters, its hint
 arm. A design whose factors are features lists them under the keys `visible` (the visible features), `weights` (each paying feature's share of the reward, summing to
-one) and `direction` (0 higher pays, 1 lower pays) and sets `REWARD_SCALE`: `test_realization.py` then checks that the world built from each instance shows exactly that. Field names are SessionConfig's serialized names; nested ones use a dotted path (`rewardFunction.shapeComponent.weight`), and a list is sized
+one) and `direction` (0 higher pays, 1 lower pays) and sets `REWARD_SCALE`: `test_realization.py` checks that configurations of that form (built by `synthetic.py`, not these modules) show exactly that; no test loads a design module. Field names are SessionConfig's serialized names; nested ones use a dotted path (`rewardFunction.shapeComponent.weight`), and a list is sized
 first by `<path>.Array.size`.
 """
 

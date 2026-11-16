@@ -90,7 +90,7 @@ public class HarvestManager : MonoBehaviour
     }
 
     // While blocked no bout can start and Space presses are discarded (the gap between ranking sets). The caller
-    // ends any open bout first; replay mirrors the window with the trial_end / trial_go events.
+    // ends any open bout first; replay mirrors the window with the rank_break_start / rank_set_end ... rank_go / rank_break_end events.
     public void SetBlocked(bool blocked)
     {
         _blocked = blocked;
@@ -400,7 +400,7 @@ public class HarvestManager : MonoBehaviour
 
     // Ranking: the player stands still and picks by aiming; a harvest started (Space pressed on the bush aimed at) runs to the bush's last fruit whatever the
     // key and the crosshair do afterwards (the commitment: the rank of a bush is the order of starting and of finishing alike). The harvest range is ignored (any bush in view can be harvested) and the
-    // crosshair must be within `toleranceDegrees` of the canopy's edge (0 = inside the canopy) instead of HarvestMaxAngle; the progress ring is
+    // crosshair rule applies as in the foraging (the ranking's own radius, `rankingCrosshairRadius`); `toleranceDegrees` (a bearing limit beyond the canopy's edge) matters only for the cone rule, `crosshairRadius` 0; the progress ring is
     // shown only on the bush aimed at or harvested, the rank number replacing it once the bush is finished). scripts/replay.py and scripts/visibility.py mirror this rule.
     public void SetAimMode(bool on, float toleranceDegrees)
     {
