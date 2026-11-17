@@ -103,3 +103,7 @@ def test_check_reports_the_factors_and_the_points_of_a_session_on_fresh_worlds()
     out = factors.check("FIX_T0", synthetic.DEFAULT_MAP, {"tile_radius": 70.0}, range(3), session_duration=30.0)
     assert out["factors"]["travel_time"][0] == pytest.approx((math.sqrt(3.0) * 70.0 - 2.0 * p.tile_cluster_radius) / p.player_move_speed)
     assert set(out["points"]) == {"nearest", "oracle"} and out["points"]["oracle"][0] >= out["points"]["nearest"][0] > 0
+
+
+def test_the_anchor_is_a_rate_so_a_longer_session_has_proportionally_more_points():
+    assert factors.anchor_points(120.0) == pytest.approx(750.0) and factors.anchor_points(180.0) == pytest.approx(1.5 * factors.anchor_points(120.0))

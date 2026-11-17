@@ -1,0 +1,14 @@
+{
+ "code": "FORX",
+ "session": "FOR_S1",
+ "duration": 180,
+ "note": "Example cells to exercise the loader, not a design: the three rungs of the ladder at two sparsities.",
+ "cells": [
+  {"id": 1, "class": "additive", "gini": 0.35, "travel_time": 6.0, "diversity": 0.5},
+  {"id": 2, "class": "multiplicative", "gini": 0.35, "travel_time": 6.0, "diversity": 0.5},
+  {"id": 3, "class": "nonseparable", "gini": 0.35, "travel_time": 6.0, "diversity": 0.5},
+  {"id": 4, "class": "additive", "gini": 0.55, "travel_time": 9.0, "diversity": 0.7},
+  {"id": 5, "class": "multiplicative", "gini": 0.55, "travel_time": 9.0, "diversity": 0.7},
+  {"id": 6, "class": "nonseparable", "gini": 0.55, "travel_time": 9.0, "diversity": 0.7}
+ ]
+}

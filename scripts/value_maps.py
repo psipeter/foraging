@@ -185,6 +185,21 @@ ROTATED_LOG_MIN = 0.10
 SEARCH = {"de_maxiter": 60, "de_popsize": 12, "nm_maxiter": 150}        # the effort of `calibrate_map` (a test lowers it)
 
 
+MULTIPLICATIVE_SHARE_OF_CAP = 0.9                       # the multiplicative rung asks for this share of the interaction an axis-aligned Gaussian of that Gini can reach: as interactive as that family gets
+ALIGNED_CAP = ((0.2, 0.06), (0.4, 0.12), (0.6, 0.21), (0.8, 0.37))        # what an axis-aligned Gaussian can reach, by Gini (docs/SESSION_FACTORS_PLAN.md, the reachable region)
+NONSEPARABLE_INTERACTION = 0.4                          # the interaction asked of the non-separable rung unless a cell says otherwise
+CLASS_KLASS = {"additive": "corner", "multiplicative": "aligned", "nonseparable": "rotated"}      # the family each rung of the ladder is searched in
+
+
+def aligned_cap(gini):
+    return float(np.interp(gini, [g for g, _ in ALIGNED_CAP], [c for _, c in ALIGNED_CAP]))
+
+
+def default_interaction(name, gini):
+    """The interaction asked of a rung of the ladder at a Gini: additive None (the smallest its corner allows), multiplicative a share of what an aligned map can reach, non-separable 0.4."""
+    return {"additive": None, "multiplicative": MULTIPLICATIVE_SHARE_OF_CAP * aligned_cap(gini), "nonseparable": NONSEPARABLE_INTERACTION}[name]
+
+
 def _gaussian_from(x, rotated, scale, std):
     centre_shape, centre_color, across, aspect = x[:4]
     return gaussian(float(centre_shape), float(centre_color), float(across), float(aspect), float(x[4]) if rotated else 0.0, scale, std)

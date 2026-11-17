@@ -98,7 +98,12 @@ def policy_points(session, agent="nearest", seeds=range(6), **overrides):
 
 
 ANCHOR_AGENT = "learner"        # the registry agent whose points the gain holds equal across sessions: a mid-quality learner, whose parameters are to be tuned toward the human data over time (docs/DECISIONS.md, "The anchor is a mid-quality learner")
-ANCHOR_POINTS = 750.0           # the points `ANCHOR_AGENT` earns in a 120 s session of the reference (FOR_S1, the additive map at gain 1, the default layout): 754 +- 7 on 40 worlds, rounded
+ANCHOR_RATE = 6.25               # the points per second `ANCHOR_AGENT` earns over a whole session, averaged over many worlds, that the gain holds equal across sessions: 750 points in 120 s on the reference (FOR_S1, the additive map at gain 1, the default layout: 754 +- 7 on 40 worlds). A rate, so a session of any length has its own anchor (the learner's points grow about in proportion to the time)
+def anchor_points(duration):
+    """The points the anchor agent should earn in a session of `duration` seconds."""
+    return ANCHOR_RATE * float(duration)
+
+
 FRUIT_CAP = 9                   # the per-fruit range of every session is 0 to this (PI, 2026-11-17)
 MAX_PEAK = 8.0                  # so the best bush is worth at most this: with the noise (SD 0.6) a fruit of the best bush stays at or below FRUIT_CAP
 
@@ -117,18 +122,27 @@ def check(session, valuemap, settings, seeds, agents=("nearest", "oracle"), **ov
             "points": {a: stats(sim.run_n(REGISTRY[a], worlds=worlds).totals) for a in agents}}
 
 
-def realize(session, gini, interaction, klass, travel_time, diversity, anchor=ANCHOR_POINTS, agent=ANCHOR_AGENT, seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, max_peak=MAX_PEAK, corner=(1.0, 1.0), **overrides):
+def points_on_world(session, valuemap, settings, seed, agents=(ANCHOR_AGENT,), **overrides):
+    """{agent: points} the registry agents earn on the one world of `seed` (a session is one world, whatever the average over worlds is)."""
+    import sim
+    from agents import REGISTRY
+    world = generate_world(load_session(session, **overrides, **settings, **valuemap.compile()), seed)
+    return {a: float(sim.run_n(REGISTRY[a], worlds=[world]).totals[0]) for a in agents}
+
+
+def realize(session, gini, interaction, klass, travel_time, diversity, anchor=None, agent=ANCHOR_AGENT, seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, max_peak=MAX_PEAK, corner=(1.0, 1.0), seed=0, **overrides):
     """A session from four knobs (milestone 3's calibrators together): the Gaussian with the stated sparsity (`gini`) and complexity (`klass`, `interaction`), the tile layout with the stated `travel_time`
-    and within-patch `diversity` (reward units), and the gain at which `agent` earns `anchor` points in a session. Returns {"map": the ValueMap (gain included), "settings": the layout settings,
+    and within-patch `diversity` (reward units), and the gain at which `agent` earns `anchor` points in a session (default: `ANCHOR_RATE` times the session's duration). Returns {"map": the ValueMap (gain included), "settings": the layout settings,
     "fields": the serialized SessionConfig fields of both, "achieved": `check` on fresh worlds, "within_tolerance": whether the anchor was met, "rounds": how many}.
 
     The pieces depend on one another: a diversity in points scales with the gain, and the points depend on the layout (a longer walk earns less), so the layout is solved for the current gain and the
     gain for the current layout on the worlds of `seeds`, round after round until the gain changes by less than 5 percent (at most `steps`; ValueError if it does not settle). Those few worlds give
     the points a sampling error of several percent, so a correction pass follows: `check` on the fresh `check_seeds` (40 worlds, common to every session, so sessions are equal on the same worlds; the points of one world vary by a third under a high contrast, so against the population the standard error is about 5 percent), and while the points are off the
     `anchor` by more than `tolerance` (a share) the gain is scaled by anchor / points, the layout re-solved for it and the session checked again (at most twice). `overrides` are `load_session`
-    overrides (for example `session_duration`)."""
+    overrides (for example `session_duration`). `corner` and `seed` are the nuisance of the map (which corner an additive map sits in, the start of the search that places the other bumps)."""
     base = load_session(session, **overrides)
-    shape_map = value_maps.calibrate_map(gini, interaction, klass, std=float(base.reward_std), corner=corner)
+    anchor = anchor_points(base.session_duration) if anchor is None else anchor
+    shape_map = value_maps.calibrate_map(gini, interaction, klass, std=float(base.reward_std), corner=corner, seed=seed)
     with_gain = lambda g: value_maps.ValueMap(shape_map.bumps, shape_map.noise, {"type": "gain", "value": float(g)})
     current, rounds = shape_map, 0
     for rounds in range(1, steps + 1):

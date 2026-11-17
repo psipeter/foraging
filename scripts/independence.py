@@ -26,13 +26,9 @@ import value_maps
 ROOT = Path(__file__).resolve().parent.parent
 RANGES = {"gini": (0.3, 0.7), "travel_time": (3.0, 12.0), "diversity": (0.2, 0.9)}
 ROTATED_INTERACTION = (0.15, 0.65)
-MULTIPLICATIVE_SHARE_OF_CAP = 0.9                                            # the multiplicative rung asks for this share of the interaction an axis-aligned Gaussian of that Gini can reach: as interactive as that family gets
-ALIGNED_CAP = ((0.2, 0.06), (0.4, 0.12), (0.6, 0.21), (0.8, 0.37))        # what an axis-aligned Gaussian can reach, by Gini (docs/SESSION_FACTORS_PLAN.md, the reachable region)
+MULTIPLICATIVE_SHARE_OF_CAP = value_maps.MULTIPLICATIVE_SHARE_OF_CAP
+aligned_cap = value_maps.aligned_cap
 CLASSES = ("additive", "multiplicative", "nonseparable")
-
-
-def aligned_cap(gini):
-    return float(np.interp(gini, [g for g, _ in ALIGNED_CAP], [c for _, c in ALIGNED_CAP]))
 
 
 def design(n=40, seed=0):
@@ -134,7 +130,7 @@ def report(args):
     fruit = [r["factors"].get("share_fruit_over_cap", (float("nan"), 0))[0] for r in ok]
     print(f"fruits over {factors.FRUIT_CAP}: mean share {np.nanmean(fruit):.4f}, worst session {np.nanmax(fruit):.4f}")
     anchor = data[names.index(factors.ANCHOR_AGENT)]
-    print(f"\nthe anchor: {factors.ANCHOR_AGENT} points {anchor.mean():.0f} +- {anchor.std():.0f} (target {factors.ANCHOR_POINTS:.0f}), travel time within {np.abs(data[2] - np.array([r['knobs']['travel_time'] for r in ok])).max():.3f} s of its target")
+    print(f"\nthe anchor: {factors.ANCHOR_AGENT} points {anchor.mean():.0f} +- {anchor.std():.0f} (target {factors.anchor_points(120.0):.0f}), travel time within {np.abs(data[2] - np.array([r['knobs']['travel_time'] for r in ok])).max():.3f} s of its target")
 
 
 def plot(args):
