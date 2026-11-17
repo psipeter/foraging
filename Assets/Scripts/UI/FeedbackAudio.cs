@@ -18,6 +18,7 @@ public class FeedbackAudio : MonoBehaviour
 
     private const int SampleRate = 44100;
     private const int VoiceCount = 4;
+    private const float PickToneHz = 440f;
 
     private readonly Dictionary<Cue, AudioClip> _clips = new Dictionary<Cue, AudioClip>();
     private AudioSource[] _voices;
@@ -104,11 +105,12 @@ public class FeedbackAudio : MonoBehaviour
 
     private void BuildClips()
     {
-        // Pick: a short bright blip (fundamental + soft harmonics, fast exponential decay).
+        // Pick: a short bright blip (fundamental + soft harmonics, fast exponential decay). The fundamental is the lowest tone, the one a fruit worth nothing gets, the same in every session;
+        // the pitch rises from it by `pitchSemitoneRange` (an octave) as the fruit's points go from 0 to the session's `rewardFeedbackMax`.
         _clips[Cue.FruitPick] = Synthesize("FruitPick", 0.16f, (t) =>
-            (Mathf.Sin(2f * Mathf.PI * 660f * t)
-             + 0.35f * Mathf.Sin(2f * Mathf.PI * 1320f * t)
-             + 0.12f * Mathf.Sin(2f * Mathf.PI * 1980f * t)) * Mathf.Exp(-t * 24f));
+            (Mathf.Sin(2f * Mathf.PI * PickToneHz * t)
+             + 0.35f * Mathf.Sin(2f * Mathf.PI * 2f * PickToneHz * t)
+             + 0.12f * Mathf.Sin(2f * Mathf.PI * 3f * PickToneHz * t)) * Mathf.Exp(-t * 24f));
 
         // Ranking pick: a very short, soft, low "bloop" that falls in pitch (the main pick blip is bright and has a
         // fixed upward contour), so it cannot be mistaken for the reward cue. At a ranking's fast per-fruit rate it

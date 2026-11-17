@@ -96,7 +96,7 @@ MonoBehaviour:
   popupScale: 1.7
   popupExtraScale: 0.9
   popupColor: {r: 1, g: 0.95, b: 0.78, a: 1}
-  pitchSemitoneRange: 7
+  pitchSemitoneRange: 12
   sfxVolume: 0.5
   burstCount: 7
   burstSpeed: 3.5

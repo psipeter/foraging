@@ -156,7 +156,7 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private bool showHarvestHint = true;
 
     [Header("Feedback (HUD and audio)")]
-    [Tooltip("Per-fruit reward at which popup size/brightness and sound pitch reach their maximum (about the top of the per-fruit reward range).")]
+    [Tooltip("Per-fruit reward at which popup size/brightness and sound pitch reach their maximum (about the top of the per-fruit reward range; a fruit worth more takes the top tone). Differs per session, always in points (scripts/design: the map's peak).")]
     [SerializeField] private float rewardFeedbackMax = 6f;
     [Tooltip("How strongly the +X popup's size and brightness follow the reward: 0 = every fruit gets an identical popup, 1 = full scaling. The number itself is always shown.")]
     [SerializeField] [Range(0f, 1f)] private float rewardSizeScaling = 1f;
@@ -166,8 +166,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float popupExtraScale = 0.9f;
     [Tooltip("Popup and score-flash color. Keep it pale and near-neutral: fruit hue runs blue to orange, and red/green are not used.")]
     [SerializeField] private Color popupColor = new Color(1f, 0.95f, 0.78f);
-    [Tooltip("Pitch range of the fruit-pick sound, in semitones from zero reward to rewardFeedbackMax. 0 = the same pitch for every reward.")]
-    [SerializeField] private float pitchSemitoneRange = 7f;
+    [Tooltip("Pitch range of the fruit-pick sound, in semitones from zero reward (440 Hz) to rewardFeedbackMax, in equal steps per point. 12 (an octave) in every session, so the lowest and the highest tone sound the same whatever the session's maximum. 0 = the same pitch for every reward.")]
+    [SerializeField] private float pitchSemitoneRange = 12f;
     [Tooltip("Master volume of feedback sounds (0-1).")]
     [SerializeField] [Range(0f, 1f)] private float sfxVolume = 0.5f;
     [Tooltip("Small spheres in the fruit's color that burst out when a fruit is picked. 0 disables.")]

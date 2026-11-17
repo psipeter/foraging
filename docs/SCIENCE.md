@@ -311,7 +311,7 @@ Reward-dependent salience is a **scientific parameter**, not decoration: the num
 size/brightness (`rewardSizeScaling`, `popupExtraScale`) and pitch (`pitchSemitoneRange`) can scale with the
 per-fruit reward, up to `rewardFeedbackMax`. This adds a second, graded cue next to the number; set the scaling
 to 0 (and the pitch range to 0) for identical feedback on every fruit. Feedback colors are pale and near-neutral
-so they do not read as part of the fruit hue axis. Defaults (full scaling, 7 semitones) are untuned starting
+so they do not read as part of the fruit hue axis. Defaults (full scaling, an octave of 12 semitones since 2026-11-17: DECISIONS "Reward scale per session") are untuned starting
 values; record the values used when collecting data (they live in `SessionConfig`).
 
 Popups never overlap: `HarvestUI` has `popupSlotCount` (5) side-by-side slots, `popupSlotSpacing` (120 px) apart, fanned out

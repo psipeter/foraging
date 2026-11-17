@@ -6,7 +6,7 @@ The instruction page and the hints are `instructions_S1.txt` and `hints_S1.txt`,
 
 import value_maps
 from design import Instance
-from design.FOR import CROSSHAIR_RADIUS, CROSSHAIR_RING_DEG, RANKING_FIELDS, REWARD_SCALE, REWARD_STD, _fields
+from design.FOR import CROSSHAIR_RADIUS, CROSSHAIR_RING_DEG, FEEDBACK_FIELDS, RANKING_FIELDS, REWARD_SCALE, REWARD_STD, _fields
 
 CODE = "TUT"
 TITLE = "Tutorial"
@@ -95,7 +95,7 @@ def instances():
                      {"sessionDuration": SECONDS, "instructionsFile": f"Experiments/{CODE}/instructions_S1.txt", "hintsFile": f"Experiments/{CODE}/hints_S1.txt", "sessionLabel": LABEL, "controlsReminder": CONTROLS_REMINDER,
                       "scoreCaptionForaging": "points earned from harvesting bushes", "scoreCaptionRanking": "points earned from ranking bushes",
                       "scoreNote": "**Payment** is based on total points earned",
-                      "isPractice": True, "crosshairRadius": CROSSHAIR_RADIUS, "crosshairRingSizeDeg": CROSSHAIR_RING_DEG, **RANKING_FIELDS},
+                      "isPractice": True, "crosshairRadius": CROSSHAIR_RADIUS, "crosshairRingSizeDeg": CROSSHAIR_RING_DEG, **FEEDBACK_FIELDS, **RANKING_FIELDS},
                      {"experiment": CODE, "index": 1, "cell": "tutorial", "tutorial": True, **TUTORIAL_MAP.describe()})]
 
 
