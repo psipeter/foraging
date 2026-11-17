@@ -1,19 +1,22 @@
 """The factors of a session as realised in a generated world (docs/SESSION_FACTORS_PLAN.md, milestone 1): what to measure on a world, so that a knob's target can be compared with what was made.
 
     ./venv/bin/python scripts/factors.py measure FOR_S1 [--seeds 0-9]
+    ./venv/bin/python scripts/factors.py calibrate FOR_S1 --travel-time 8 --diversity 0.5 [--seeds 0-19]
 
 `measure(world)` takes a world from `world.generate_world` and returns the patch factors (travel time, contrast between tiles, diversity within a tile), the mean bush value (anchor a of the
 plan), the bush Gini, the realised per-fruit noise and the descriptors of the reward map (`value_maps.descriptors`, the part that does not depend on the world's draw). A tile is a patch: its
-cluster of bushes. Nothing here changes a world; it only reads one.
+cluster of bushes. `measure` changes nothing; the calibrators (`travel_time_settings`, `diversity_settings`, `calibrate`) go the other way, from a target to the generator settings that make it, and
+`verify` generates worlds from those settings and reports the realised value against the target and what else moved.
 """
 
 import argparse
+import math
 
 import numpy as np
 
 import tiles
 import value_maps
-from world import bush_value, generate_world, load_session
+from world import REWARDS, _camel, bush_value, generate_world, load_session, stage_names
 
 NOISE_FLOOR_SDS = 3.0        # the realised noise is read from bushes paying at least this many noise SDs, where the clip at 0 does not bite
 
@@ -51,13 +54,68 @@ def measure(world):
             "n_tiles": int(ts.n_tiles), "n_bushes": int(len(v)), "walk_visits": float(params.session_duration) / (gap / speed)}
 
 
+# --------------------------------------------------------------------------------------------------
+# Calibrators: a target factor to the generator settings (snake_case names, `load_session` overrides; `fields` gives the serialized names a design module passes on)
+# --------------------------------------------------------------------------------------------------
+
+def travel_time_settings(params, seconds):
+    """`tile_radius` at which the walk across the gap between two neighbouring clusters takes `seconds` at the player's speed: the tile pitch is sqrt(3) * radius, the gap the pitch less two cluster
+    radii, so radius = (seconds * speed + 2 * cluster radius) / sqrt(3). Closed form and exact. Refused when the gap is narrower than the ramp between plateaus (the cluster would not fit its plateau)."""
+    gap = float(seconds) * float(params.player_move_speed)
+    if gap < float(params.tile_ramp_width):
+        raise ValueError(f"a travel time of {seconds} s is a gap of {gap:.1f} units, less than the ramp between plateaus ({params.tile_ramp_width}): at least {params.tile_ramp_width / params.player_move_speed:.2f} s")
+    return {"tile_radius": (gap + 2.0 * float(params.tile_cluster_radius)) / math.sqrt(3.0)}
+
+
+def diversity_settings(params, target_sd, seed=0):
+    """The tile layout and `tile_spread` at which a tile's bushes have a mean reward SD of `target_sd`: tile centres uniform over the plane (between `random`) and each tile's bushes scattered around
+    its centre (within `scatter`), the spread solved by `tiles.spread_for_reward_sd` on the session's reward. (Under the default modes, `none` and `pool`, a tile's bushes are a draw from the
+    whole map, the spread is not read, and the diversity is the map's own SD: not a knob.) Refused outside the range the reward can give."""
+    reward = REWARDS[stage_names(params)[2]]
+    return {"tile_value_mode": "random", "tile_within_mode": "scatter", "tile_spread": tiles.spread_for_reward_sd(params, reward, float(target_sd), seed=seed)}
+
+
+def calibrate(params, travel_time=None, diversity=None):
+    """The settings for the stated targets (a target left None is not set): {"tile_radius": ..., "tile_value_mode": ..., "tile_within_mode": ..., "tile_spread": ...}."""
+    settings = {}
+    if travel_time is not None:
+        settings.update(travel_time_settings(params, travel_time))
+    if diversity is not None:
+        settings.update(diversity_settings(params, diversity))
+    return settings
+
+
+def fields(settings):
+    """The SessionConfig field settings (serialized names) of calibrated `settings`, for a design module."""
+    return {_camel(k): v for k, v in settings.items()}
+
+
+def verify(session, settings, seeds, **overrides):
+    """Generate a world of `session` with `settings` for each seed and measure it: [measure(world)], one dict per seed."""
+    params = load_session(session, **{**overrides, **settings})
+    return [measure(generate_world(params, s)) for s in seeds]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("command", choices=["measure"])
+    ap.add_argument("command", choices=["measure", "calibrate"])
     ap.add_argument("session", help="a session asset name, e.g. FOR_S1")
     ap.add_argument("--seeds", default=None, help="world seeds, e.g. 0-9 or 1,2,7 (default: the session's own seed)")
+    ap.add_argument("--travel-time", type=float, default=None, help="calibrate: target travel time in seconds")
+    ap.add_argument("--diversity", type=float, default=None, help="calibrate: target within-patch reward SD")
     args = ap.parse_args()
     params = load_session(args.session)
+    if args.command == "calibrate":
+        settings = calibrate(params, args.travel_time, args.diversity)
+        print("settings:", {k: (round(v, 4) if isinstance(v, float) else v) for k, v in settings.items()})
+        seeds = _parse_seeds(args.seeds) if args.seeds else list(range(10))
+        rows = verify(args.session, settings, seeds)
+        for key, target in (("travel_time", args.travel_time), ("diversity", args.diversity)):
+            if target is not None:
+                got = np.array([r[key] for r in rows])
+                print(f"  {key}: target {target}, realised {got.mean():.3f} +- {got.std():.3f} over {len(seeds)} worlds ({100 * (got.mean() - target) / target:+.1f}%)")
+        print("  what else (mean over the worlds): " + ", ".join(f"{k} {np.mean([r[k] for r in rows]):.3f}" for k in ("contrast", "diversity", "mean_bush_value", "bush_gini", "n_tiles")))
+        return
     seeds = _parse_seeds(args.seeds) if args.seeds else [int(params.world_seed)]
     rows = [measure(generate_world(params, s)) for s in seeds]
     print(f"{args.session}, {len(seeds)} world(s), seeds {seeds[0]}" + (f" to {seeds[-1]}" if len(seeds) > 1 else ""))

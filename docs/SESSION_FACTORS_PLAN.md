@@ -151,6 +151,27 @@ Each calibrator takes one target and returns generator parameters; the others ar
 
 Findings: (1) **Interaction is capped by sparsity for an axis-aligned Gaussian** (an upper curve rising with the Gini: at most 0.08 at Gini 0.2 to 0.3, 0.15 at 0.4 to 0.5, 0.28 at 0.6 to 0.7), so at low sparsity the multiplicative rung is hardly distinguishable from the additive one by the raw interaction, and it separates only where the map is sparse; (2) **a rotated Gaussian reaches any interaction up to about 0.7 at any Gini**, so the non-separable rung exists at every sparsity, and the top of the range is a ceiling near 0.75 to 0.8; (3) **complexity is not one number**: at one Gini (0.5 to 0.6, say) an axis-aligned and a rotated map can have the same interaction, and only the log interaction tells them apart, so a complexity target is a pair (class, interaction), not the interaction alone; (4) when both features must pay (shape share 0.25 to 0.75) the lowest interaction at Gini 0.4 to 0.5 is about 0.02 and at 0.6 to 0.7 about 0.05: an additive map exists at moderate sparsity but its interaction cannot be driven to exactly 0 without becoming a one-feature rule (an edge Gaussian); (5) the reference examples (Gini 0.24, 0.63, 0.50) do not lie on one Gini because the multiplicative rung needs sparsity to differ from additive. A matched-Gini ladder is possible only where the rungs overlap: at Gini 0.65, additive 0.05, multiplicative up to 0.28, non-separable 0.13 to 0.78.
 
+**Status of M3, step 2 (2026-11-17): travel time and diversity** (`factors.travel_time_settings`, `diversity_settings`, `calibrate`, `fields`, `verify`; `factors.py calibrate <session> --travel-time S --diversity D`; 11 tests in `test_factors.py`). Measured on FOR_S1, 20 worlds per target:
+
+| Travel time target | `tile_radius` | realised | tiles in the world | walk-only visits | contrast |
+|---|---|---|---|---|---|
+| 2 s | 30.3 | 2.000 ± 0 | 115 | 60 | 0.29 |
+| 5 s | 49.8 | 5.000 ± 0 | 42 | 24 | 0.29 |
+| 8 s | 69.3 | 8.000 ± 0 | 22 | 15 | 0.28 |
+| 12 s | 95.3 | 12.000 ± 0 | 12.6 (min 12) | 10 | 0.26 |
+| 16 s | 121.2 | 16.000 ± 0 | 7.2 (min 6) | 7.5 | 0.28 |
+
+| Diversity target | `tile_spread` | realised | contrast | mean bush value |
+|---|---|---|---|---|
+| 0.1 | 0.036 | 0.100 ± 0.004 | 0.86 | 2.27 |
+| 0.2 | 0.073 | 0.200 ± 0.008 | 0.84 | 2.26 |
+| 0.4 | 0.157 | 0.400 ± 0.018 | 0.77 | 2.26 |
+| 0.6 | 0.261 | 0.600 ± 0.028 | 0.63 | 2.25 |
+| 0.8 | 0.454 | 0.801 ± 0.022 | 0.40 | 2.23 |
+| 1.0 | refused | outside 0.003 to 0.856 for this map | | |
+
+Findings: (1) **Travel time is exact** (the only limit is the ramp: at least 1.24 s) and independent of the map and of contrast and diversity, but **the number of patches falls with it**: below about 12 tiles (travel time above about 12 s) a world has too few patches; 120 s at 12 s per walk allows at most 10 visits, so long travel times cost patch variety and learning data. (2) **Diversity is hit to within 1 percent on average, with a spread of about 5 percent between worlds** (±0.018 at 0.4): a per-world tolerance tighter than about 5 percent needs worlds re-drawn or picked. (3) **Under the default tile modes diversity is not a knob**: bushes are drawn from the whole map, `tile_spread` is not read, and the diversity is the map's own SD (0.85 for FOR_S1); a diversity target switches the layout to between `random` and within `scatter`. (4) **Contrast and diversity are coupled by the map's variance**: contrast squared plus diversity squared is about the map's variance (0.4 and 0.77: 0.16 + 0.59 = 0.75, the variance of FOR_S1's map is 0.86 squared = 0.74), so with the map fixed a within-patch diversity target sets the between-patch contrast (0.86 at diversity 0.1, 0.40 at 0.8), and the maximum diversity is the map's SD. A contrast knob and a diversity knob in absolute units cannot both be free; what can be set apart is their ratio relative to the map's spread. (5) The mean bush value moves a little with the layout (2.21 under the default modes, 2.23 to 2.27 under `random` + `scatter`): the gain step of M3 absorbs that.
+
 ### 7.4 TODOs left open on purpose
 
 - **Value-map design:** which maps to test, and the equalising transforms beyond a gain (and the noise-map transforms), chosen once the raw maps are in mind.

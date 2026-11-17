@@ -66,3 +66,32 @@ def test_the_mean_value_and_the_noise_are_those_of_the_world():
 def test_the_map_descriptors_are_those_of_the_value_map():
     p = session()
     assert factors.map_descriptors(p) == pytest.approx(synthetic.DEFAULT_MAP.descriptors())
+
+
+def test_the_travel_time_settings_give_the_target_walk_exactly_and_refuse_a_gap_narrower_than_the_ramp():
+    p = session()
+    radius = factors.travel_time_settings(p, 8.0)["tile_radius"]
+    assert factors.measure(generate_world(session(tile_radius=radius), 1))["travel_time"] == pytest.approx(8.0, abs=1e-9)
+    with pytest.raises(ValueError, match="ramp"):
+        factors.travel_time_settings(p, 0.5 * p.tile_ramp_width / p.player_move_speed)
+
+
+def test_the_diversity_settings_give_the_target_within_patch_sd_on_average_and_refuse_what_the_map_cannot_give():
+    p = session()
+    settings = factors.diversity_settings(p, 0.5)
+    assert settings["tile_value_mode"] == "random" and settings["tile_within_mode"] == "scatter"
+    got = np.mean([factors.measure(generate_world(session(**settings), s))["diversity"] for s in range(6)])
+    assert got == pytest.approx(0.5, rel=0.08)
+    with pytest.raises(ValueError, match="outside"):
+        factors.diversity_settings(p, 5.0)
+
+
+def test_under_the_default_modes_the_diversity_is_the_maps_own_and_the_spread_is_not_a_knob():
+    assert measured(tile_spread=0.05)["diversity"] == measured(tile_spread=0.3)["diversity"]
+
+
+def test_calibrate_merges_the_targets_and_fields_gives_the_serialized_names():
+    p = session()
+    settings = factors.calibrate(p, travel_time=6.0, diversity=0.4)
+    assert set(settings) == {"tile_radius", "tile_value_mode", "tile_within_mode", "tile_spread"} and factors.calibrate(p) == {}
+    assert factors.fields({"tile_radius": 1.0, "tile_spread": 0.2}) == {"tileRadius": 1.0, "tileSpread": 0.2}
