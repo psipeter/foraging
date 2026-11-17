@@ -76,6 +76,20 @@ title) on either side with the captions "points earned from harvesting bushes" a
 together from zero. The ranking set's outcome is sealed during play (a centred, larger "+???" and a chime, `DECISIONS`, "Ranking feedback sealed"). **Not built:** hint triggers other than the four above (`bout`, `patch_switch`, `ranking_start`, `ranking_end`; the rest were removed, DECISIONS 2026-11-16; a resumed tutorial skips the hints already shown),
 non-modal hints, any guarantee that a participant sees a ranking (it comes at a patch switch); the wording is the PI's and still open to change. See DECISIONS ("The tutorial" and its addenda) for the reasoning.
 
+### Reward complexity ladder (PI, 2026-11-17)
+
+The reward function of a session is a **value map** R(shape, colour) over the unit plane, and its complexity is a position on a ladder of three rungs, all one **Gaussian bump** (a placeable, stretchable, rotatable primitive; `scripts/value_maps.py`). Rationale and rejected alternatives: `docs/DECISIONS.md` ("Reward complexity ladder"); how it plugs into the session factors: `docs/SESSION_FACTORS_PLAN.md`.
+
+| Rung | The map | interaction | log interaction | nonlinearity | Gini | shape share |
+|---|---|---|---|---|---|---|
+| additive | a **wide corner Gaussian** (corner (1, 1), spreads 0.63 along shape, 0.78 along colour); the exact two-ramp map is `value_maps.ramps` | 0.03 | 0.00 | 0.05 | 0.24 | 0.58 |
+| multiplicative | an **axis-aligned, stretched** Gaussian (centre (0.55, 0.45), width 0.15, aspect 1.5, angle 0) | 0.20 | 0.00 | 0.97 | 0.63 | 0.39 |
+| non-separable | the same Gaussian **rotated** and more stretched (aspect 3, angle 45 degrees) | 0.61 | 0.84 | 0.94 | 0.50 | 0.50 |
+
+Figure: `docs/value_map_examples.png` (made by `scripts/value_map_examples.py`; the parameters above are a proposal for a reference guide, not a design). **How separability is measured** (computed on a 101 x 101 grid of the map): `interaction` is 1 - R^2 of the best additive fit f(shape) + g(colour) to the map (0 = a sum of a function of each feature); `log_interaction` is the same fit to log R where R is at least 1 percent of the maximum (0 = a product of a function of each feature: exactly 0 for any axis-aligned Gaussian, wherever it lies and however stretched, and growing with rotation); `nonlinearity` is 1 - R^2 of the best plane. Read together: additive = interaction near 0; multiplicative = log interaction 0 and interaction above 0; non-separable = both above 0. Separability falls up the ladder (interaction 0.03, 0.20, 0.61).
+
+**Caveats to keep in mind.** Sparsity (Gini) and separability are entangled through the widths: a wide corner bump is near a plane (Gini 0.24), a narrow one sparse, so the Gini is not matched across these three examples and a comparison of the rungs is confounded with sparsity until the sparsity step of the calibration (plan, M3) equalises it. A stretched axis-aligned Gaussian loses interaction as it lengthens (width 0.2: raw interaction 0.19 round, 0.04 at aspect 2, 0.01 at aspect 3: a bump that long crosses the whole range of one feature and is nearly a one-feature rule), so the multiplicative rung that differs most from additive is the round or mildly stretched one. A corner Gaussian is near additive only when wide (spreads of about 0.5 or more; raw interaction below 0.03 with a range of 3.3 to 3.6 instead of 4); wide along an edge it is a one-feature rule. The additive, multiplicative and non-separable maps are built by `value_maps.additive`, `multiplicative`, `nonseparable`, each with the nuisance (corner or centre, tilt, which feature has the long axis) drawn from a seed.
+
 ---
 
 ## Scientific rationale
