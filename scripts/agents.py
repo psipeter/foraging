@@ -259,7 +259,7 @@ class OracleCritic(Critic):
         if ids is not None and self.values is not None:
             mean = np.asarray(self.values, dtype=float)[np.asarray(ids)]
         else:
-            mean = np.asarray(bush_value(self.reward_function, attrs[:, 0], attrs[:, 1], attrs[:, 2]), dtype=float)
+            mean = np.asarray(bush_value(self.reward_function, attrs[:, 0], attrs[:, 1]), dtype=float)
         return mean, np.zeros(len(mean))
 
 

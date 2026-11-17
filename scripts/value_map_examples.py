@@ -11,9 +11,8 @@ from pathlib import Path
 
 import value_maps as vm
 
-SHARE, BASE = 0.6, 0.7          # the additive proxy: 60 percent of the slope on shape, the spreads' geometric mean 0.7 (vm.additive's recipe, at an explicit corner)
 EXAMPLES = {
-    "additive": ("Additive\nwide corner", vm.ValueMap((vm.Bump(1.0, 1.0, BASE * ((1 - SHARE) / SHARE) ** 0.25, BASE * (SHARE / (1 - SHARE)) ** 0.25, 0.0, 4.0),))),
+    "additive": ("Additive\nwide corner", vm.wide_corner((1.0, 1.0), shape_share=0.6, base=0.7)),                  # 60 percent of the slope on shape, the spreads' geometric mean 0.7
     "multiplicative": ("Multiplicative\naxis-aligned, stretched", vm.gaussian(0.55, 0.45, 0.15, 1.5, 0.0)),
     "nonseparable": ("Non-separable\nrotated, stretched", vm.gaussian(0.55, 0.45, 0.15, 3.0, 45.0)),
 }

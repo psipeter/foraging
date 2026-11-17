@@ -1,5 +1,4 @@
-"""Milestone 2 of the new session structure: a feature that does not vary, the random per-bush value of the practice session, and moisture as
-decoration (out of what the simulated agents sense)."""
+"""A feature that does not vary, and moisture as decoration (it pays nothing; out of what the simulated agents sense)."""
 
 import numpy as np
 
@@ -10,25 +9,18 @@ from world import load_session as _load_session
 
 
 def load_session(name=synthetic.TEMPLATE, **overrides):
-    """A session of a stated plain configuration (shape and colour pay, moisture decoration, no random reward) on the
-    template asset, unless overridden; the tests are about the flags, not about a shipped session."""
-    return _load_session(name, **{**synthetic.overrides(synthetic.FEATURES, {"shape": 0.6, "color": 0.4}, {"color": 1}, moisture_is_feature=False), **overrides})
-
-
-def moisture_weight(w):
-    """The plain configuration's reward function with a moisture reward weight `w`."""
-    rf = synthetic.reward_function({"shape": 0.6, "color": 0.4}, {"color": 1})
-    rf["moistureComponent"]["weight"] = w
-    return rf
+    """A session of a stated plain configuration (shape and colour vary, the wide corner Gaussian pays) on the template asset, unless overridden; the tests are about the flags,
+    not about a shipped session."""
+    return _load_session(name, **{**synthetic.overrides(synthetic.FEATURES), **overrides})
 
 
 def test_old_assets_get_the_new_fields_by_default(tmp_path):
     text = world.session_asset_path(synthetic.TEMPLATE).read_text()
-    old = "\n".join(line for line in text.split("\n") if not line.strip().startswith(("shapeVaries", "colorVaries", "shapeWhenFixed", "colorWhenFixed", "randomBushValueRange")))
+    old = "\n".join(line for line in text.split("\n") if not line.strip().startswith(("shapeVaries", "colorVaries", "shapeWhenFixed", "colorWhenFixed")))
     path = tmp_path / "Old.asset"                              # an asset file saved before the fields existed
     path.write_text(old)
     p = _load_session(str(path))
-    assert p.shape_varies is True and p.color_varies is True and tuple(p.random_bush_value_range) == (0.0, 0.0) and p.shape_when_fixed == 0.5
+    assert p.shape_varies is True and p.color_varies is True and p.shape_when_fixed == 0.5
 
 
 def test_a_feature_that_does_not_vary_is_constant_and_nothing_else_moves():
@@ -41,34 +33,11 @@ def test_a_feature_that_does_not_vary_is_constant_and_nothing_else_moves():
     assert np.array_equal(only_color.color, base.color)                                              # the colour draws are the same ones
 
 
-def test_random_bush_value_is_independent_of_the_attributes_and_leaves_other_worlds_unchanged():
-    base = generate_world(load_session(), 2)
-    rnd = generate_world(load_session(random_bush_value_range=(1.0, 3.0)), 2)
-    assert np.array_equal(base.pos, rnd.pos) and np.array_equal(base.shape, rnd.shape)
-    extra = rnd.value - base.value
-    assert extra.min() >= 1.0 and extra.max() <= 3.0 and extra.std() > 0.4                        # a spread of about 0.58
-    for attr in (rnd.shape, rnd.color, rnd.moisture):
-        assert abs(np.corrcoef(extra, attr)[0, 1]) < 0.15                                        # no attribute predicts it
-    assert np.array_equal(generate_world(load_session(), 2).fruit_reward, base.fruit_reward)  # off by default: nothing moved
-
-
 def test_check_values_carry_the_new_fields_only_when_they_differ_from_the_default():
     default = world.check_values(load_session())
-    assert not any(k in default for k in ("shapeVaries", "colorVaries", "randomBushValueRange.min", "randomBushValueRange.max"))   # old world files stay identical
-    v = world.check_values(load_session(shape_varies=False, random_bush_value_range=(1.0, 3.0)))
+    assert not any(k in default for k in ("shapeVaries", "colorVaries"))   # old world files stay identical
+    v = world.check_values(load_session(shape_varies=False))
     assert v["shapeVaries"] == 0.0 and "colorVaries" not in v
-    assert v["randomBushValueRange.min"] == 1.0 and v["randomBushValueRange.max"] == 3.0
-
-
-def test_session_features_declare_what_is_visible_and_what_pays():
-    from world import session_features
-    f = session_features(load_session(color_varies=False, reward_function=moisture_weight(0.0)))
-    assert (f["shape"]["visible"], f["color"]["visible"], f["moisture"]["visible"]) == (True, False, False)     # a decoration moisture is not declared
-    assert f["shape"]["rewarded"] == (f["shape"]["relevance"] > 0.0) and not f["moisture"]["rewarded"]
-    pays = session_features(load_session(reward_function=moisture_weight(1.5)))
-    assert pays["moisture"]["visible"] and pays["moisture"]["rewarded"] and pays["moisture"]["relevance"] == 1.5
-    assert session_features(load_session(reward_function=moisture_weight(0.0), moisture_is_feature=True))["moisture"]["visible"]   # declared, though it pays nothing
-    assert not session_features(load_session(reward_function=moisture_weight(1.5), moisture_varies=False))["moisture"]["visible"]   # a flat valley shows no moisture
 
 
 def test_a_flat_moisture_gives_a_flat_valley_and_leaves_the_other_worlds_alone():

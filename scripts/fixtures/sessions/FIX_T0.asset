@@ -43,24 +43,13 @@ MonoBehaviour:
   firstHarvestMessage: 
   controlsReminderOpacity: 0.35
   rewardFunction:
-    shapeComponent:
-      basisFunctionType: 0
-      weight: 2
-      peak: 0
-      width: 0
-    colorComponent:
-      basisFunctionType: 0
-      weight: 2
-      peak: 0
-      width: 0
-    moistureComponent:
-      basisFunctionType: 0
-      weight: 0
-      peak: 0
-      width: 0
-    bumps: []
-    products: []
-    factors: []
+    bumps:
+    - centerShape: 1
+      centerColor: 1
+      width: 0.7
+      widthColor: 0.7
+      angle: 0
+      height: 4
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -159,8 +148,6 @@ MonoBehaviour:
   colorWhenFixed: 0.5
   moistureVaries: 1
   moistureWhenFixed: 0.5
-  moistureIsFeature: 0
-  randomBushValueRange: {x: 0, y: 0}
   harvestRangeGapBase: 7
   harvestRangeGapPerRadius: 0
   fruitColorPreservation: 0.5

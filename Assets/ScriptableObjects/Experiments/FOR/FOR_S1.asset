@@ -40,7 +40,6 @@ MonoBehaviour:
   rankingBonusPerPair: 4
   rankingAimTolerance: 1.5
   rankingCrosshairRadius: 1
-  rankingStage: 1
   rankingStageDrop: 3
   rankingStageMargin: 4
   rankingStageWorldGray: 0.6
@@ -53,24 +52,13 @@ MonoBehaviour:
   controlsReminder: 
   controlsReminderOpacity: 0.35
   rewardFunction:
-    shapeComponent:
-      basisFunctionType: 0
-      weight: 2
-      peak: 0
-      width: 0
-    colorComponent:
-      basisFunctionType: 0
-      weight: 2
-      peak: 0
-      width: 0
-    moistureComponent:
-      basisFunctionType: 0
-      weight: 0
-      peak: 0
-      width: 0
-    bumps: []
-    products: []
-    factors: []
+    bumps:
+    - centerShape: 1
+      centerColor: 1
+      width: 0.7
+      widthColor: 0.7
+      angle: 0
+      height: 4
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -152,15 +140,20 @@ MonoBehaviour:
   assignment: tiles
   rewardStage: 
   designJson: '{"cell": "default", "experiment": "FOR", "index": 1, "instance": "FOR_S1",
-    "prototype": true, "tile_value_mode": "", "tile_within_mode": ""}'
+    "prototype": true, "tile_value_mode": "", "tile_within_mode": "", "value_map":
+    {"bumps": [{"angle": 0.0, "center_color": 1.0, "center_shape": 1.0, "height":
+    4.0, "width": 0.7, "width_color": 0.7}], "equaliser": {"type": "gain", "value":
+    1.0}, "noise": {"sd": 0.6, "type": "flat"}}, "value_map_descriptors": {"effective_weight_color":
+    1.8913, "effective_weight_shape": 1.8913, "effective_weight_total": 3.7826, "fraction_above_half_max":
+    0.5314, "gini": 0.2282, "interaction": 0.0368, "log_interaction": 0.0, "max":
+    4.0, "mean": 2.2043, "min": 0.5197, "nonlinearity": 0.0589, "range": 3.4803,
+    "shape_share": 0.5}}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1
   colorWhenFixed: 0.5
   moistureVaries: 1
   moistureWhenFixed: 0.5
-  moistureIsFeature: 0
-  randomBushValueRange: {x: 0, y: 0}
   harvestRangeGapBase: 7
   harvestRangeGapPerRadius: 0
   fruitColorPreservation: 0.5

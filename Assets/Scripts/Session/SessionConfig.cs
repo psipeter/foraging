@@ -206,15 +206,15 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private string layout = "";
     [Tooltip("Which stage gives each bush its attributes (scripts/world.py ASSIGNMENTS). The only assignment is \"tiles\".")]
     [SerializeField] private string assignment = "";
-    [Tooltip("Which stage turns a bush's attributes into its reward (scripts/world.py REWARDS). Empty = the sum of the reward function's terms.")]
+    [Tooltip("Which stage turns a bush's attributes into its reward (scripts/world.py REWARDS). Empty = the sum of the reward function's bumps.")]
     [SerializeField] private string rewardStage = "";
     [Tooltip("What the experiment's design says about this instance (scripts/design/<code>.py): the instance id, its cell parameters and its hint arm, as JSON. Written by the experiment builder, logged with the rest of this config, read by no game code.")]
     [SerializeField] private string designJson = "";
-    [Tooltip("False: every bush has the value shapeWhenFixed, so all canopies are identical; give the shape component weight 0. Read by scripts/world.py: regenerate the world after changing it.")]
+    [Tooltip("False: every bush has the value shapeWhenFixed, so all canopies are identical, so the reward is read at one shape value. Read by scripts/world.py: regenerate the world after changing it.")]
     [SerializeField] private bool shapeVaries = true;
     [Tooltip("The shape value of every bush when shapeVaries is off (0..1; the canopy size then follows the shape axis). Read by scripts/world.py.")]
     [SerializeField] private float shapeWhenFixed = 0.5f;
-    [Tooltip("False: every bush has the value colorWhenFixed, so all fruit have one color; give the color component weight 0. Read by scripts/world.py: regenerate the world after changing it.")]
+    [Tooltip("False: every bush has the value colorWhenFixed, so all fruit have one color, so the reward is read at one color value. Read by scripts/world.py: regenerate the world after changing it.")]
     [SerializeField] private bool colorVaries = true;
     [Tooltip("The color value of every bush when colorVaries is off (0..1). Read by scripts/world.py.")]
     [SerializeField] private float colorWhenFixed = 0.5f;
@@ -222,10 +222,6 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private bool moistureVaries = true;
     [Tooltip("The moisture of the whole valley when moistureVaries is off (0..1).")]
     [SerializeField] private float moistureWhenFixed = 0.5f;
-    [Tooltip("Declare moisture a feature of the task even though it pays nothing: it counts as a feature of the task. Moisture that pays is always counted; with this off and a zero weight it is decoration.")]
-    [SerializeField] private bool moistureIsFeature = false;
-    [Tooltip("A per-bush point value drawn uniformly from (min, max) and added to the reward function, independent of every attribute: the practice session's random reward. (0, 0) = off. Pre-drawn in the world file by scripts/world.py.")]
-    [SerializeField] private Vector2 randomBushValueRange = Vector2.zero;
     [Tooltip("Harvest becomes available when the player is within gap(R) = base + perRadius * canopyRadius of the canopy EDGE (horizontal distance). ~7 shows the whole bush at the 5.1 eye height / 75 deg vertical FOV (the near foot is visible from 5.1 / tan(37.5 deg) = 6.6).")]
     [SerializeField] private float harvestRangeGapBase = 7f;
     [SerializeField] private float harvestRangeGapPerRadius = 0f;
@@ -458,8 +454,6 @@ public class SessionConfig : ScriptableObject
     public bool ColorVaries => colorVaries;
     public bool MoistureVaries => moistureVaries;
     public float MoistureWhenFixed => moistureWhenFixed;
-    public bool MoistureIsFeature => moistureIsFeature;
-    public Vector2 RandomBushValueRange => randomBushValueRange;
 
     public int TargetFrameRate => targetFrameRate;
     public float UploadGraceSeconds => uploadGraceSeconds;

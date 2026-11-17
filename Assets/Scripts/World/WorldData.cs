@@ -291,13 +291,8 @@ public class WorldData
             { "tileGradient", config.TileGradient },
             { "tileGradientAngle", config.TileGradientAngle },
             { "tileCoverageMin", config.TileCoverageMin },
-            { "tileStartSpreadMin", config.TileStartSpreadMin },
-            { "randomBushValueRange.min", config.RandomBushValueRange.x },
-            { "randomBushValueRange.max", config.RandomBushValueRange.y }
+            { "tileStartSpreadMin", config.TileStartSpreadMin }
         };
-        AddReward(current, "shape", config.RewardFunction.ShapeComponent);
-        AddReward(current, "color", config.RewardFunction.ColorComponent);
-        AddReward(current, "moisture", config.RewardFunction.MoistureComponent);
         RewardBump[] bumps = config.RewardFunction.Bumps;
         for (int i = 0; i < bumps.Length; i++)
         {
@@ -309,25 +304,6 @@ public class WorldData
             current[$"reward.bump{i}.angle"] = bumps[i].Angle;
         }
 
-        RewardProduct[] products = config.RewardFunction.Products;
-        for (int i = 0; i < products.Length; i++)
-        {
-            current[$"reward.product{i}.linearInShape"] = products[i].LinearInShape ? 1f : 0f;
-            current[$"reward.product{i}.linearInverted"] = products[i].LinearInverted ? 1f : 0f;
-            current[$"reward.product{i}.center"] = products[i].Center;
-            current[$"reward.product{i}.width"] = products[i].Width;
-            current[$"reward.product{i}.height"] = products[i].Height;
-        }
-
-        RewardFactors[] factors = config.RewardFunction.Factors;
-        for (int i = 0; i < factors.Length; i++)
-        {
-            current[$"reward.factor{i}.combine"] = (float)(int)factors[i].Combine;
-            current[$"reward.factor{i}.height"] = factors[i].Height;
-            AddFactor(current, $"reward.factor{i}.shape", factors[i].ShapeFactor);
-            AddFactor(current, $"reward.factor{i}.color", factors[i].ColorFactor);
-        }
-
         var mismatches = new List<string>();
         for (int i = 0; i < _checkNames.Length; i++)
         {
@@ -337,23 +313,22 @@ public class WorldData
             }
         }
 
-        // Reward terms newer than the first world files: a product or factor term, and a bump's color spread or angle when it is not 0, are written only when present, so a file
-        // without them was made without them and a config that has them now is stale.
+        // A bump's color spread or angle, when it is not 0, is written only when present, so a file without it was made without it and a config that has it now is stale; so is a config that has a bump
+        // the file has none of (every bump's centre is in the file, so a missing `.centerShape` is a bump added since).
         foreach (KeyValuePair<string, float> entry in current)
         {
-            bool newer = entry.Key.StartsWith("reward.product") || entry.Key.StartsWith("reward.factor")
-                || ((entry.Key.EndsWith(".widthColor") || entry.Key.EndsWith(".angle")) && !Mathf.Approximately(entry.Value, 0f));
+            bool newer = entry.Key.EndsWith(".centerShape") || ((entry.Key.EndsWith(".widthColor") || entry.Key.EndsWith(".angle")) && !Mathf.Approximately(entry.Value, 0f));
             if (newer && Array.IndexOf(_checkNames, entry.Key) < 0)
             {
                 mismatches.Add(entry.Key);
             }
         }
 
-        // Names the generator writes only when they differ from the default (1 for the "varies" flags, 0.5 for the "when fixed" values, 0 for the random value range):
+        // Names the generator writes only when they differ from the default (1 for the "varies" flags, 0.5 for the "when fixed" values):
         // a file without one was made with the default, so a config that now differs is stale.
-        foreach (string name in new[] { "shapeVaries", "colorVaries", "moistureVaries", "shapeWhenFixed", "colorWhenFixed", "moistureWhenFixed", "randomBushValueRange.min", "randomBushValueRange.max" })
+        foreach (string name in new[] { "shapeVaries", "colorVaries", "moistureVaries", "shapeWhenFixed", "colorWhenFixed", "moistureWhenFixed" })
         {
-            float fallback = name.StartsWith("randomBushValueRange") ? 0f : name.EndsWith("WhenFixed") ? 0.5f : 1f;
+            float fallback = name.EndsWith("WhenFixed") ? 0.5f : 1f;
             if (Array.IndexOf(_checkNames, name) < 0 && current.TryGetValue(name, out float now) && !Mathf.Approximately(now, fallback))
             {
                 mismatches.Add(name);
@@ -361,21 +336,5 @@ public class WorldData
         }
 
         return mismatches;
-    }
-
-    private static void AddFactor(Dictionary<string, float> current, string prefix, RewardFactor factor)
-    {
-        current[$"{prefix}.kind"] = (float)(int)factor.Kind;
-        current[$"{prefix}.center"] = factor.Center;
-        current[$"{prefix}.scale"] = factor.Scale;
-        current[$"{prefix}.inverted"] = factor.Inverted ? 1f : 0f;
-    }
-
-    private static void AddReward(Dictionary<string, float> values, string part, RewardComponent component)
-    {
-        values[$"reward.{part}.basisFunctionType"] = (int)Enum.Parse(typeof(BasisFunctionType), component.TypeName);
-        values[$"reward.{part}.weight"] = component.Weight;
-        values[$"reward.{part}.peak"] = component.Peak;
-        values[$"reward.{part}.width"] = component.Width;
     }
 }

@@ -223,9 +223,9 @@ def _p(params, name, default):
 
 
 def _plane_values(params, rng, reward, n=PLANE_SAMPLE):
-    """(points of the feature plane, the reward at each) for `n` uniform points (the reward at the middle moisture)."""
+    """(points of the feature plane, the reward at each) for `n` uniform points."""
     c = rng.uniform(0.0, 1.0, (n, 2))
-    return c, np.asarray(reward(params.reward_function, c[:, 0], c[:, 1], np.full(n, 0.5)), dtype=float)
+    return c, np.asarray(reward(params.reward_function, c[:, 0], c[:, 1]), dtype=float)
 
 
 def _region(params, rng, reward, low, high, need=40):
@@ -342,7 +342,7 @@ def start_spread(params, ts, features, reward):
     """How different the tiles that meet at the start are: the range of their mean reward as a share of the reward's range over the plane."""
     if len(ts.start) < 2:
         return 0.0
-    v = np.asarray(reward(params.reward_function, features[:, 0], features[:, 1], np.full(len(features), 0.5)), dtype=float)
+    v = np.asarray(reward(params.reward_function, features[:, 0], features[:, 1]), dtype=float)
     means = np.array([v[ts.tile_of == t].mean() for t in ts.start])
     lo, hi = plane_range(params, reward)
     return float((means.max() - means.min()) / max(hi - lo, 1e-9))
@@ -376,7 +376,7 @@ def stats(params, pos, shape, color, grid, reward):
     """The realised pattern of a world: tiles, the spread of the tiles' mean reward, the mean within-tile reward SD, their ratio (contrast), the share of tiles whose mean pays at least 70% of the best bush
     (spatial sparsity), the share of bushes that do (bush sparsity), the neighbourhood coverage and the start spread."""
     ts = TileSet(grid, pos)
-    v = np.asarray(reward(params.reward_function, shape, color, np.full(len(shape), 0.5)), dtype=float)
+    v = np.asarray(reward(params.reward_function, shape, color), dtype=float)
     means = np.array([v[ts.tile_of == t].mean() for t in range(ts.n_tiles)])
     within = np.array([v[ts.tile_of == t].std(ddof=1) for t in range(ts.n_tiles)])
     best = v.max()
@@ -396,7 +396,7 @@ def spread_for_reward_sd(params, reward, target_sd, n=3000, seed=0):
 
     def sd(spread):
         f = _reflect(centres + spread * noise).reshape(-1, 2)
-        v = np.asarray(reward(params.reward_function, f[:, 0], f[:, 1], np.full(len(f), 0.5)), dtype=float).reshape(n, m)
+        v = np.asarray(reward(params.reward_function, f[:, 0], f[:, 1]), dtype=float).reshape(n, m)
         return float(v.std(axis=1, ddof=1).mean())
 
     lo, hi = 1e-3, 0.8

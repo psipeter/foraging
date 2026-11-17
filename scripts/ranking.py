@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from world import REWARDS, load_session, session_features, stage_names, unity_world_path
+from world import REWARDS, load_session, stage_names, unity_world_path
 
 TIE_TOLERANCE = 0.05        # a pair whose true values differ by less than this is a tie: it is not scored
 MIN_ASPECT = 4.0 / 3.0      # the narrowest window the arc must fit in (the camera's vertical field of view is fixed)
@@ -96,7 +96,7 @@ def candidate_pool(params, rng, n=POOL_SIZE, moisture=0.5):
     shape = rng.uniform(0.0, 1.0, n) if params.shape_varies else np.full(n, float(params.shape_when_fixed))
     color = rng.uniform(0.0, 1.0, n) if params.color_varies else np.full(n, float(params.color_when_fixed))
     mois = np.full(n, float(moisture))
-    value = np.asarray(REWARDS[stage_names(params)[2]](params.reward_function, shape, color, mois), dtype=float)
+    value = np.asarray(REWARDS[stage_names(params)[2]](params.reward_function, shape, color), dtype=float)
     return {"shape": shape, "color": color, "moisture": mois, "value": value}
 
 
@@ -180,10 +180,8 @@ def generate_pool(name, pool_size=POOL_SIZE, steps=SEARCH_STEPS, **overrides):
     """The pool of the ranking sets a session plays in place after its patch switches: `rankingPoolSets` sets of `rankingSetSize` bushes of the session's own
     reward function, chosen jointly, used in order by the game, on an arc of `rankingArcSpan` degrees at `rankingDistance`, the tie gap `rankingTieGap`.
     Positions (`treePos`) are relative to the player standing at the origin and facing +z; the game turns and moves them to the player's pose and puts the
-    bush on the ground there, so `moisture` is only used to evaluate the values. Returns (sidecar, params)."""
+    bush on the ground there, so `moisture` is only a recorded value (moisture never pays). Returns (sidecar, params)."""
     params = load_session(name, **overrides)
-    if session_features(params)["moisture"]["rewarded"]:
-        raise ValueError(f"{name}: moisture pays, but a ranking set has no moisture feature; reward shape and colour only")
     set_size, set_count = int(params.ranking_set_size), int(params.ranking_pool_sets)
     arc_span, distance, gap = float(params.ranking_arc_span), float(params.ranking_distance), float(params.ranking_tie_gap)
     moisture = float(params.moisture_when_fixed)

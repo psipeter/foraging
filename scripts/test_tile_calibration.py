@@ -15,7 +15,7 @@ import world
 
 
 def tile_world(seed=0, **extra):
-    p = synthetic.session(visible=("shape", "color"), weights={"shape": 0.5, "color": 0.5}, layout="tiles", assignment="tiles", session_duration=120.0, **extra)
+    p = synthetic.session(visible=("shape", "color"), layout="tiles", assignment="tiles", session_duration=120.0, **extra)
     return world.generate_world(p, seed)
 
 

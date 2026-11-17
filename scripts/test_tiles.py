@@ -1,6 +1,6 @@
 """The tiles world (tiles.py): the hexagonal ground, the clusters in the middle of the tiles, and how the tiles' features are dealt.
 
-Tests state their configuration (`synthetic.session`: shape and colour pay equally, a tiles layout and assignment) and do not name a shipped session.
+Tests state their configuration (`synthetic.session`: the wide corner Gaussian pays, a tiles layout and assignment) and do not name a shipped session.
 """
 
 import numpy as np
@@ -14,7 +14,7 @@ SEEDS = range(6)
 
 
 def tile_params(**extra):
-    return synthetic.session(visible=("shape", "color"), weights={"shape": 0.5, "color": 0.5}, layout="tiles", assignment="tiles", **{"moisture_varies": True, **extra})
+    return synthetic.session(visible=("shape", "color"), layout="tiles", assignment="tiles", **{"moisture_varies": True, **extra})
 
 
 def tile_world(seed=1, **extra):
@@ -123,7 +123,7 @@ def test_graded_tiles_run_evenly_from_poor_to_rich_and_smoothness_makes_neighbou
     w0, s0 = realised(2, tile_value_mode="graded", tile_within_mode="scatter", tile_spread=0.02)
     ids = tile_of(w0)
     means = np.sort([w0.value[ids == t].mean() for t in range(ids.max() + 1)])
-    plane = world.bush_value(w0.params.reward_function, *np.random.default_rng(1).uniform(0, 1, (2, 5000)), np.full(5000, 0.5))
+    plane = world.bush_value(w0.params.reward_function, *np.random.default_rng(1).uniform(0, 1, (2, 5000)))
     assert means[0] < np.quantile(plane, 0.15) and means[-1] > np.quantile(plane, 0.85)
     assert np.max(np.abs(np.diff(means) - np.ptp(means) / (len(means) - 1))) < 0.15 * np.ptp(means)
 

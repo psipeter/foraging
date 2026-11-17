@@ -1,3 +1,4 @@
+import json
 import math
 
 import numpy as np
@@ -6,12 +7,12 @@ import pytest
 import ranking
 import synthetic
 from ranking import angular_radius, check_arc, generate_pool, horizontal_fov, kendall_tau, first_pick_regret, implied_pair_scores, pair_accuracy, pair_scores, rank_gain, slot_bearings
-from world import bush_value
+from world import bush_value, load_session
 
 SESSION = "FIX_T0"
-TWO_FEATURES = synthetic.overrides(visible=("shape", "color"), weights={"shape": 0.5, "color": 0.5})
-COLOR_ONLY = synthetic.overrides(visible=("shape", "color"), weights={"color": 1.0})
-SHAPE_ONLY_VISIBLE = synthetic.overrides(visible=("shape",), weights={"shape": 1.0})
+TWO_FEATURES = synthetic.overrides(visible=("shape", "color"))                      # the wide corner Gaussian pays, both features alike
+COLOR_ONLY = synthetic.overrides(visible=("shape", "color"), valuemap=synthetic.feature_only("color"))
+SHAPE_ONLY_VISIBLE = synthetic.overrides(visible=("shape",), valuemap=synthetic.feature_only("shape"))
 _CACHE = {}
 
 
@@ -26,6 +27,18 @@ def built(label="two", **options):
 def bush_table(sidecar):
     pos = np.asarray(sidecar["treePos"]).reshape(-1, 2)
     return pos, np.asarray(sidecar["canopyRadius"]), np.asarray(sidecar["shape"]), np.asarray(sidecar["color"]), np.asarray(sidecar["value"])
+
+
+def test_every_committed_pool_pays_its_sessions_value_map():
+    """Unity checks the world file against the asset but nothing checks the pool file: a reward change followed by `world.py --unity` alone would leave rankings scored against the old rule."""
+    from world import EXPERIMENTS_DIR, STREAMING_EXPERIMENTS
+    pools = sorted(STREAMING_EXPERIMENTS.glob("*/*.ranking.json"))
+    assert pools
+    for path in pools:
+        session = path.name.split("_seed")[0]
+        assert (EXPERIMENTS_DIR / session.split("_")[0] / f"{session}.asset").exists(), session
+        _, _, shape, color, value = bush_table(json.loads(path.read_text()))
+        assert value == pytest.approx(bush_value(load_session(session).reward_function, shape, color), abs=1e-6), f"{path.name} is stale: run scripts/ranking.py pool {session}"
 
 
 # ---- geometry -------------------------------------------------------------------------------------
@@ -75,7 +88,7 @@ def test_values_are_the_rewards_of_the_bushes_and_a_set_has_one_moisture():
     _, _, shape, color, value = bush_table(sidecar)
     moisture = np.asarray(sidecar["moisture"])
     assert np.ptp(moisture) == 0.0 and moisture[0] == sidecar["groundMoisture"]
-    assert value == pytest.approx(bush_value(params.reward_function, shape, color, moisture))
+    assert value == pytest.approx(bush_value(params.reward_function, shape, color))
 
 
 def test_every_set_is_a_ladder_with_no_tie_and_the_sets_are_disjoint():
@@ -114,11 +127,6 @@ def test_same_seed_same_file_and_other_seed_other_file():
     b, _ = generate_pool(SESSION, **TWO_FEATURES, world_seed=5, steps=2000)
     c, _ = generate_pool(SESSION, **TWO_FEATURES, world_seed=6, steps=2000)
     assert a == b and a != c
-
-
-def test_a_reward_on_moisture_is_refused():
-    with pytest.raises(ValueError, match="moisture"):
-        generate_pool(SESSION, **synthetic.overrides(weights={"moisture": 1.0}, visible=("shape", "color", "moisture")), steps=100)
 
 
 def test_a_range_too_narrow_for_the_tie_gap_is_refused():

@@ -5,7 +5,7 @@ using UnityEngine;
 // `width` is the spread along shape; `widthColor` the spread along color, and 0 (the default) means the same as `width`, a round bump.
 // `angle` (degrees, 0 = the axes of the plane) turns the bump about its center, so the spreads lie along the turned axes: `width` along the axis that
 // is `angle` from the shape axis, `widthColor` along the one at right angles (an elongated, tilted bump no one-feature term can make).
-// Added to the reward function's per-feature terms; mirrored by bush_value in scripts/world.py.
+// Summed by RewardFunction; mirrored by bush_value in scripts/world.py.
 [Serializable]
 public class RewardBump
 {

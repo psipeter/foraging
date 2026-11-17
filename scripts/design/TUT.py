@@ -1,11 +1,12 @@
 """TUT, the tutorial: its own experiment of one practice session that must be finished before FOR unlocks (FOR.REQUIRES). The world is the tiles world of FOR in its own seed, played for practice
-(`isPractice`: not paid, not counted in the menu's total), with popup hints fired by what the participant does (`SessionConfig.hintsFile`, `UI/TutorialHints.cs`). Shape and colour both pay, in a different mix (3:1) and shape pays more when LOWER (`TUTORIAL_INVERTED`)
-from FOR's equal, both-increasing rule, so the practice does not teach FOR's rule. TUTORIAL_TILES / TUTORIAL_BETWEEN / TUTORIAL_WITHIN / TUTORIAL_REWARD are the knobs for what the bushes of a cluster look like and pay.
+(`isPractice`: not paid, not counted in the menu's total), with popup hints fired by what the participant does (`SessionConfig.hintsFile`, `UI/TutorialHints.cs`). Shape and colour both pay (the additive rung, `TUTORIAL_MAP`: a wide corner Gaussian), in a different mix (about 0.71 of the slope on shape, 0.29 on colour: `wide_corner` asked for 0.75) and shape pays more when LOWER
+from FOR's equal, both-increasing rule, so the practice does not teach FOR's rule. TUTORIAL_TILES / TUTORIAL_BETWEEN / TUTORIAL_WITHIN / TUTORIAL_MAP are the knobs for what the bushes of a cluster look like and pay.
 The instruction page and the hints are `instructions_S1.txt` and `hints_S1.txt`, written here; edit the text in this file and rebuild (`build_experiment.py TUT`).
 """
 
+import value_maps
 from design import Instance
-from design.FOR import CROSSHAIR_RADIUS, CROSSHAIR_RING_DEG, RANKING_FIELDS, _fields
+from design.FOR import CROSSHAIR_RADIUS, CROSSHAIR_RING_DEG, RANKING_FIELDS, REWARD_SCALE, REWARD_STD, _fields
 
 CODE = "TUT"
 TITLE = "Tutorial"
@@ -17,8 +18,7 @@ SECONDS = 120
 WORLD_SEED = 6001
 TUTORIAL_TILES = {}                     # tile fields that differ from FOR's (for example tileBushes, tileSpread)
 TUTORIAL_BETWEEN, TUTORIAL_WITHIN = "", ""      # the layers of tiles.py (default none + pool)
-TUTORIAL_REWARD = {"shape": 0.75, "color": 0.25}  # each feature's share of the reward scale: both pay (the hints say so), in a different mix from FOR's equal one
-TUTORIAL_INVERTED = ("shape",)          # features that pay more when LOWER (InvertedLinear); FOR pays both more when higher, so the practice does not teach its direction
+TUTORIAL_MAP = value_maps.wide_corner((0.0, 1.0), shape_share=0.75, base=0.7, scale=REWARD_SCALE, std=REWARD_STD)     # the additive rung in another corner: shape pays more when LOWER (FOR pays both more when higher, so the practice does not teach its direction) and carries about 0.71 of the slope, colour 0.29 (a request of 3/4 and 1/4; FOR's equal mix)
 CONTROLS_REMINDER = "Mouse: look. W / S: walk. Space: hold to harvest"      # the bar at the bottom of the screen for the whole tutorial ("Key: action" pairs, `InstructionsPanel.FormatControls`)
 LABEL = "Tutorial"                      # the small blue line over every instruction screen and popup, and on the end screen
 
@@ -90,16 +90,13 @@ Press [Enter] to continue
 
 
 def instances():
-    weights = (("shape", TUTORIAL_REWARD["shape"]), ("color", TUTORIAL_REWARD["color"]), ("moisture", 0.0))
-    fields = _fields(TUTORIAL_BETWEEN, TUTORIAL_WITHIN, TUTORIAL_TILES, WORLD_SEED, weights)
-    for feature in TUTORIAL_INVERTED:
-        fields[f"rewardFunction.{feature}Component.basisFunctionType"] = 1
+    fields = _fields(TUTORIAL_BETWEEN, TUTORIAL_WITHIN, TUTORIAL_TILES, WORLD_SEED, TUTORIAL_MAP)
     return [Instance(f"{CODE}_S1", fields,
                      {"sessionDuration": SECONDS, "instructionsFile": f"Experiments/{CODE}/instructions_S1.txt", "hintsFile": f"Experiments/{CODE}/hints_S1.txt", "sessionLabel": LABEL, "controlsReminder": CONTROLS_REMINDER,
                       "scoreCaptionForaging": "points earned from harvesting bushes", "scoreCaptionRanking": "points earned from ranking bushes",
                       "scoreNote": "**Payment** is based on total points earned",
                       "isPractice": True, "crosshairRadius": CROSSHAIR_RADIUS, "crosshairRingSizeDeg": CROSSHAIR_RING_DEG, **RANKING_FIELDS},
-                     {"experiment": CODE, "index": 1, "cell": "tutorial", "tutorial": True})]
+                     {"experiment": CODE, "index": 1, "cell": "tutorial", "tutorial": True, **TUTORIAL_MAP.describe()})]
 
 
 def texts():

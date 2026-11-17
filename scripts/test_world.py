@@ -4,13 +4,14 @@ import numpy as np
 import pytest
 
 import synthetic
-from world import FEATURES, PROJECT_ROOT, Perlin, World, _basis, bush_value, check_values, generate_world, load_session
+import value_maps
+from world import FEATURES, PROJECT_ROOT, Perlin, World, bush_value, check_values, generate_world, load_session
 
-DEFAULT = dict(visible=FEATURES, weights={"shape": 0.5, "color": 0.3, "moisture": 0.2}, direction={"color": 1})      # what the generic world tests build
+DEFAULT = dict(visible=FEATURES)      # what the generic world tests build: all three features vary, the default value map pays
 
 
 def make(seed=1, **extra):
-    """A world of the default configuration (all three features visible and paying, one inverted); `extra` are load_session overrides or configuration keys."""
+    """A world of the default configuration (all three features vary, the wide corner Gaussian pays); `extra` are load_session overrides or configuration keys."""
     return generate_world(synthetic.session(**{**DEFAULT, **extra}), seed)
 
 
@@ -22,27 +23,9 @@ def test_bush_ids_are_not_spatially_ordered():
     assert abs(np.corrcoef(np.arange(w.n), w.pos[:, 0])[0, 1]) < 0.2
 
 
-def _weights(w):
-    """The (shape, color, moisture) component dicts of the session's reward function, read from the SessionConfig asset like world.py does."""
-    rf = w.params.reward_function
-    return rf["shapeComponent"], rf["colorComponent"], rf["moistureComponent"]
-
-
-def _expected(w):
-    """The session's reward function evaluated on the world's bushes, term by term (the asset says which features and directions)."""
-    shape, color, moisture = _weights(w)
-    return _basis(shape, w.shape) + _basis(color, w.color) + _basis(moisture, w.moisture)
-
-
-def _nonzero(w):
-    return [c for c in _weights(w) if c["weight"] != 0]
-
-
 def test_attributes_and_rewards():
-    w = make(1, weights={"color": 1.0}, direction={"color": 1})                  # one rewarded feature, linear
-    (rewarded,) = _nonzero(w)
-    assert rewarded["basisFunctionType"] in (0, 1)
-    assert np.allclose(w.value, _expected(w))
+    w = make(1)
+    assert np.allclose(w.value, bush_value(w.params.reward_function, w.shape, w.color))        # the value map of the session, at the bushes' shape and colour
     assert ((0 <= w.moisture) & (w.moisture <= 1)).all()
     lo, hi = w.params.canopy_width_range
     assert w.canopy_radius.min() >= lo / 2 - 1e-9 and w.canopy_radius.max() <= hi / 2 + 1e-9
@@ -50,24 +33,15 @@ def test_attributes_and_rewards():
     assert abs(w.fruit_reward.mean() - w.value.mean()) < 0.1   # rounding and clipping at 0 barely bias the mean at the reward_std
 
 
-def test_a_gaussian_component_peaks_where_it_is_told_to():
-    rf = synthetic.reward_function({"shape": 1.0})
-    rf["shapeComponent"] = {"basisFunctionType": 2, "weight": 4.0, "peak": 0.4, "width": 0.2}
-    w = make(1, reward_function=rf)
-    (rewarded,) = _nonzero(w)                  # one rewarded feature, a Gaussian peak inside the range
-    assert rewarded["basisFunctionType"] == 2 and 0.2 < rewarded["peak"] < 0.8
-    assert np.allclose(w.value, _expected(w))
-    assert abs(w.shape[np.argmax(w.value)] - 0.4) < 0.05
+def test_moisture_pays_nothing():
+    a, b = make(1), make(1, moisture_when_fixed=0.9, moisture_varies=False)
+    assert np.array_equal(a.shape, b.shape) and np.allclose(a.value, b.value)
 
 
-def test_bush_value_adds_the_bumps_to_the_component_terms():
-    rf = {"shapeComponent": {"basisFunctionType": 0, "weight": 0, "peak": 0, "width": 0}, "colorComponent": {"basisFunctionType": 0, "weight": 0, "peak": 0, "width": 0},
-          "moistureComponent": {"basisFunctionType": 0, "weight": 1.0, "peak": 0, "width": 0},
-          "bumps": [{"centerShape": 0.3, "centerColor": 0.6, "width": 0.2, "height": 2.0}]}
-    assert abs(bush_value(rf, 0.3, 0.6, 0.5) - 2.5) < 1e-12                                   # at the centre: the height plus the moisture term
-    d = 0.2
-    assert abs(bush_value(rf, 0.3 + d, 0.6, 0.0) - 2.0 * np.exp(-0.5)) < 1e-12                # one width away along either axis: height * exp(-1/2)
-    assert abs(bush_value(rf, 0.3, 0.6 - d, 0.0) - 2.0 * np.exp(-0.5)) < 1e-12
+def test_a_bump_peaks_where_it_is_told_to():
+    w = make(1, **value_maps.gaussian(0.4, 0.6, 0.2).compile())
+    best = np.argmax(w.value)
+    assert abs(w.shape[best] - 0.4) < 0.1 and abs(w.color[best] - 0.6) < 0.1
 
 
 def test_noise_range_and_smoothness():
@@ -155,7 +129,7 @@ def test_exported_grids_hold_the_terrains_values_under_their_names(tmp_path):
 def test_checked_parameters_cover_the_world_shaping_ones():
     names = set(check_values(synthetic.session(**DEFAULT)))
     assert {"rewardStd", "fruitCount", "treeEdgeMargin", "mountainHeight", "terrainMaxElevation",
-            "canopyWidthRange.min", "shapeRange.max", "reward.shape.weight"} <= names
+            "canopyWidthRange.min", "shapeRange.max", "reward.bump0.height"} <= names
 
 
 @pytest.mark.slow
@@ -176,28 +150,6 @@ def test_committed_world_files_are_fresh(tmp_path):
         (h_new, g_new), (h_old, g_old) = read_unity_world(fresh), read_unity_world(committed)          # the content, not the bytes: they depend on the zlib that compressed them
         assert h_new == h_old and all(np.array_equal(g_new[k], g_old[k]) for k in g_old), (
             f"{committed.name} is stale: re-run ./venv/bin/python scripts/world.py {name} --unity")
-
-
-def test_bump_with_its_own_color_spread_and_product_terms_have_the_documented_formulas():
-    rf = {"shapeComponent": {"basisFunctionType": 0, "weight": 0, "peak": 0, "width": 0}, "colorComponent": {"basisFunctionType": 0, "weight": 0, "peak": 0, "width": 0},
-          "moistureComponent": {"basisFunctionType": 0, "weight": 0, "peak": 0, "width": 0}}
-    x = np.array([0.0, 0.3, 0.7, 1.0])
-    y = np.array([0.2, 0.7, 0.9, 0.0])
-    round_bump = {**rf, "bumps": [{"centerShape": 0.3, "centerColor": 0.7, "width": 0.2, "height": 2.0}]}
-    assert np.allclose(bush_value(round_bump, x, y, x), 2.0 * np.exp(-(((x - 0.3) ** 2 + (y - 0.7) ** 2) / (2 * 0.2 ** 2))))        # no widthColor: round
-    flipped = {**rf, "products": [{"linearInShape": 0, "linearInverted": 1, "center": 0.4, "width": 0.3, "height": 1.0}]}
-    assert np.allclose(bush_value(flipped, x, y, x), (1.0 - y) * np.exp(-((x - 0.4) ** 2) / (2 * 0.3 ** 2)))                         # linear in colour (inverted), Gaussian in shape
-
-
-def test_new_reward_terms_agree_with_unity():
-    """Values of RewardFunction.Evaluate in Unity (read through the editor on 2026-11-05) for the S6 product term and the S7 anisotropic bump."""
-    zero = {"basisFunctionType": 0, "weight": 0, "peak": 0, "width": 0}
-    base = {"shapeComponent": zero, "colorComponent": zero, "moistureComponent": zero}
-    s6 = {**base, "products": [{"linearInShape": 1, "linearInverted": 0, "center": 0.6, "width": 0.25, "height": 4.0}]}
-    s7 = {**base, "bumps": [{"centerShape": 0.30, "centerColor": 0.70, "width": 0.25, "widthColor": 0.15, "height": 4.0}]}
-    points = [(0.2, 0.7), (0.9, 0.5), (0.3, 0.7), (0.6, 0.1)]
-    for rf, expected in ((s6, [0.738493, 3.323219, 1.107740, 0.324805]), (s7, [3.692465, 0.092311, 4.000000, 0.000653])):
-        assert np.allclose([float(bush_value(rf, a, b, 0.5)) for a, b in points], expected, atol=2e-6)
 
 
 def test_a_session_defaults_to_the_tiles_and_terms_stages():

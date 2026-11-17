@@ -13,7 +13,7 @@ SeedSequence (the order below is part of the format; add new streams at the end)
     4 per-fruit reward noise                5 mountain ridge noise
     6 mountain rock-edge noise              7 mountain snow-edge noise
     8 bush id order (a shuffle of the finished bush table: an id says nothing about where a bush is)
-    9 per-bush random value (`randomBushValueRange`; drawn only when the range is not (0, 0))
+    9 (unused since the per-bush random value was removed, 2026-11-17)
     10-16 (unused: the spatial balance, terrace and plane-coverage streams of the removed non-tiles generator; the numbers stay as they were)
     17 tile grid (rotation, ground levels)   18 tile clusters   19 tiles' feature centres and scatter (see tiles.py)
 
@@ -61,8 +61,6 @@ def session_asset_path(name):
         return FIXTURE_SESSIONS / f"{name}.asset"
     return EXPERIMENTS_DIR / experiment_of(name) / f"{name}.asset"
 
-BASIS_NAMES = ["Linear", "InvertedLinear", "GaussianPeak", "InvertedGaussian", "Constant"]
-
 
 # --------------------------------------------------------------------------------------------------
 # Session parameters (read from the Unity .asset YAML)
@@ -105,8 +103,8 @@ def _convert(value):
 
 
 # Fields an older asset file does not have yet (Unity adds a field to an asset only when it is saved): their defaults, snake_case names.
-FIELD_DEFAULTS = {"shape_varies": True, "color_varies": True, "shape_when_fixed": 0.5, "color_when_fixed": 0.5, "random_bush_value_range": (0.0, 0.0), "design_json": "",
-                  "moisture_varies": True, "moisture_when_fixed": 0.5, "moisture_is_feature": False,
+FIELD_DEFAULTS = {"shape_varies": True, "color_varies": True, "shape_when_fixed": 0.5, "color_when_fixed": 0.5, "design_json": "",
+                  "moisture_varies": True, "moisture_when_fixed": 0.5,
                   "layout": None, "assignment": None, "reward_stage": None,      # (stage names: None = the default, see stage_names)
                   "tile_radius": 70.0, "tile_ramp_width": 14.0, "tile_moisture_levels": 4, "tile_bushes": 9, "tile_cluster_radius": 22.0, "tile_cluster_spacing": 12.0, "tile_spread": 0.12,
                   "tile_arrangement": None, "tile_value_mode": None, "tile_within_mode": None, "tile_good_fraction": 0.25, "tile_smoothness": 0, "tile_gradient": 0.3, "tile_gradient_angle": -1.0,
@@ -138,42 +136,10 @@ def load_session(name="FIX_T0", **overrides):
 # Reward function
 # --------------------------------------------------------------------------------------------------
 
-def _basis(component, x):
-    x = np.clip(x, 0.0, 1.0)
-    kind = BASIS_NAMES[int(component["basisFunctionType"])]
-    if kind == "Linear":
-        v = x
-    elif kind == "InvertedLinear":
-        v = 1.0 - x
-    elif kind in ("GaussianPeak", "InvertedGaussian"):
-        sigma = max(float(component["width"]), 1e-4)
-        g = np.exp(-((x - float(component["peak"])) ** 2) / (2.0 * sigma * sigma))
-        v = g if kind == "GaussianPeak" else 1.0 - g
-    else:
-        v = np.ones_like(x)
-    return v * float(component["weight"])
-
-
-def factor_value(factor, x):
-    """One feature's factor of a `factors` term (`RewardFactor.Evaluate`): kind 0 a sigmoid of steepness `scale` about `center`, divided by its value at the paying end (x = 1, or x = 0
-    when `inverted`), so it is 1 there; kind 1 a Gaussian of spread `scale` about `center`."""
-    x = np.clip(x, 0.0, 1.0)
-    center, scale = float(factor["center"]), float(factor["scale"])
-    if int(factor["kind"]) == 1:
-        sigma = max(scale, 1e-4)
-        return np.exp(-((x - center) ** 2) / (2.0 * sigma * sigma))
-    if bool(factor["inverted"]):
-        x = 1.0 - x
-    return (1.0 / (1.0 + np.exp(-scale * (x - center)))) / (1.0 / (1.0 + np.exp(-scale * (1.0 - center))))
-
-
-def bush_value(reward_function, shape, color, moisture):
-    """R_bush = w1 f1(shape) + w2 f2(color) + w3 f3(moisture) + the sum of the Gaussian bumps over (shape, color), each turned by its `angle` (degrees) about its centre
-    + the sum of the product terms (one feature linear times a Gaussian of the other) + the sum of the `factors` terms (one sigmoid or Gaussian factor per feature, as their
-    product or their mean); no normalization."""
-    value = (_basis(reward_function["shapeComponent"], shape)
-             + _basis(reward_function["colorComponent"], color)
-             + _basis(reward_function["moistureComponent"], moisture))
+def bush_value(reward_function, shape, color):
+    """R_bush = the sum of the reward function's Gaussian bumps over (shape, colour), each turned by its `angle` (degrees) about its centre (`RewardBump.Evaluate`); the value
+    map of `scripts/value_maps.py`; moisture never pays; no normalization."""
+    value = 0.0
     for b in reward_function.get("bumps") or []:
         sigma_shape = max(float(b["width"]), 1e-4)
         width_color = float(b.get("widthColor") or 0.0)            # 0 (or absent): the same spread as along shape, a round bump
@@ -184,28 +150,7 @@ def bush_value(reward_function, shape, color, moisture):
             cos, sin = math.cos(math.radians(angle)), math.sin(math.radians(angle))
             ds, dc = ds * cos + dc * sin, -ds * sin + dc * cos
         value = value + float(b["height"]) * np.exp(-(ds * ds / (2.0 * sigma_shape ** 2) + dc * dc / (2.0 * sigma_color ** 2)))
-    for p in reward_function.get("products") or []:
-        in_shape = bool(p["linearInShape"])
-        linear = np.clip(shape if in_shape else color, 0.0, 1.0)
-        if bool(p["linearInverted"]):
-            linear = 1.0 - linear
-        sigma = max(float(p["width"]), 1e-4)
-        d = np.clip(color if in_shape else shape, 0.0, 1.0) - float(p["center"])
-        value = value + float(p["height"]) * linear * np.exp(-(d * d) / (2.0 * sigma * sigma))
-    for t in reward_function.get("factors") or []:
-        fs, fc = factor_value(t["shapeFactor"], shape), factor_value(t["colorFactor"], color)
-        value = value + float(t["height"]) * (fs * fc if int(t["combine"]) == 0 else 0.5 * (fs + fc))
-    return value
-
-
-def terms_relevance(reward_function):
-    """How much each feature matters to a `terms` reward: |weight| of its component, plus the height of every bump and product term (each makes
-    both of its features, shape and colour, relevant)."""
-    w = {f: abs(float(reward_function[f + "Component"]["weight"])) for f in FEATURES}
-    for b in list(reward_function.get("bumps") or []) + list(reward_function.get("products") or []) + list(reward_function.get("factors") or []):
-        w["shape"] += abs(float(b["height"]))
-        w["color"] += abs(float(b["height"]))
-    return w
+    return value + np.zeros(np.broadcast(shape, color).shape)       # (an array of the features' shape even with no bump)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -469,17 +414,11 @@ def check_values(params):
     for name, value, default in (("shapeVaries", float(bool(params.shape_varies)), 1.0), ("colorVaries", float(bool(params.color_varies)), 1.0),
                                  ("moistureVaries", float(bool(params.moisture_varies)), 1.0),
                                  ("shapeWhenFixed", float(params.shape_when_fixed), 0.5), ("colorWhenFixed", float(params.color_when_fixed), 0.5),
-                                 ("moistureWhenFixed", float(params.moisture_when_fixed), 0.5),
-                                 ("randomBushValueRange.min", float(params.random_bush_value_range[0]), 0.0),
-                                 ("randomBushValueRange.max", float(params.random_bush_value_range[1]), 0.0)):
+                                 ("moistureWhenFixed", float(params.moisture_when_fixed), 0.5)):
         if value != default:
             out[name] = value
     for name in tiles.TILE_PARAMS:                                 # the numbers the tiles layout reads
         out[_camel(name)] = float(getattr(params, name))
-    for part in FEATURES:
-        comp = params.reward_function[part + "Component"]
-        for field in ("basisFunctionType", "weight", "peak", "width"):
-            out[f"reward.{part}.{field}"] = float(comp[field])
     for i, b in enumerate(params.reward_function.get("bumps") or []):
         for field in ("centerShape", "centerColor", "width", "height"):
             out[f"reward.bump{i}.{field}"] = float(b[field])
@@ -487,14 +426,6 @@ def check_values(params):
             out[f"reward.bump{i}.widthColor"] = float(b["widthColor"])
         if float(b.get("angle") or 0.0) != 0.0:
             out[f"reward.bump{i}.angle"] = float(b["angle"])
-    for i, p in enumerate(params.reward_function.get("products") or []):
-        for field in ("linearInShape", "linearInverted", "center", "width", "height"):
-            out[f"reward.product{i}.{field}"] = float(p[field])
-    for i, t in enumerate(params.reward_function.get("factors") or []):
-        out[f"reward.factor{i}.combine"], out[f"reward.factor{i}.height"] = float(t["combine"]), float(t["height"])
-        for side in ("shape", "color"):
-            for field in ("kind", "center", "scale", "inverted"):
-                out[f"reward.factor{i}.{side}.{field}"] = float(t[side + "Factor"][field])
     return out
 
 
@@ -597,31 +528,17 @@ def read_unity_world(path):
 
 def assign_tiles(params, pos, terrain, rngs, reward):
     """(shape, colour) dealt tile by tile (tiles.py `deal_features`, stream 19): each tile's bushes lie around a centre of the tile in the feature plane; a feature that does not vary
-    is `*_when_fixed` everywhere. Stream 9 gives the per-bush random value (`randomBushValueRange`, the practice session's reward that no attribute predicts)."""
+    is `*_when_fixed` everywhere."""
     n = len(pos)
     tile_shape, tile_color = tiles.deal_features(params, pos, terrain.tiles, rngs[19], reward)
     shape = tile_shape if params.shape_varies else np.full(n, float(params.shape_when_fixed))
     color = tile_color if params.color_varies else np.full(n, float(params.color_when_fixed))
-    lo, hi = params.random_bush_value_range
-    extra = rngs[9].uniform(lo, hi, n) if hi > lo else np.zeros(n)
-    return shape, color, extra
+    return shape, color
 
 
 LAYOUTS = {"tiles": tiles.layout_tiles}
 ASSIGNMENTS = {"tiles": assign_tiles}
 REWARDS = {"terms": bush_value}
-RELEVANCE = {"terms": terms_relevance}          # per reward stage: {feature: how much it matters}, for the instruction texts
-
-
-def session_features(params):
-    """The features a session declares: {name: {"visible": bool, "rewarded": bool, "relevance": float}}, in FEATURES order. Visible = it varies between
-    bushes (`shapeVaries`, `colorVaries`; moisture: `moistureVaries`, and then only if it pays or the asset declares it with `moistureIsFeature`, so a
-    decoration moisture is not a declared feature). Rewarded = the session's reward stage gives it a nonzero relevance."""
-    rf = getattr(params, "reward_function", None)
-    relevance = RELEVANCE[stage_names(params)[2]](rf) if rf is not None else {f: 1.0 for f in FEATURES}
-    visible = {"shape": bool(params.shape_varies), "color": bool(params.color_varies),
-               "moisture": bool(params.moisture_varies) and (relevance["moisture"] > 0.0 or bool(params.moisture_is_feature))}
-    return {f: {"visible": visible[f], "rewarded": relevance[f] > 0.0, "relevance": relevance[f]} for f in FEATURES}
 
 
 def stage_names(params):
@@ -631,6 +548,8 @@ def stage_names(params):
 
 def generate_world(params, seed):
     """Build the world for (params, seed). `params` is a namespace from load_session()."""
+    if not params.reward_function.get("bumps"):
+        raise ValueError(f"{params.session_name}: the reward function has no bumps (the reward is a sum of Gaussian bumps; a session saved before 2026-11-17 has ramp components instead)")
     layout_name, assignment_name, reward_name = stage_names(params)
     reward = REWARDS[reward_name]
     rngs = [np.random.default_rng(c) for c in np.random.SeedSequence(int(seed)).spawn(20)]          # (spawn(20) gives the same first children as spawn(11) or spawn(16): the streams are numbered, so no world moves when one is added or dropped)
@@ -638,7 +557,7 @@ def generate_world(params, seed):
 
     pos = LAYOUTS[layout_name](params, terrain, rngs)
     n = len(pos)
-    shape, color, extra = ASSIGNMENTS[assignment_name](params, pos, terrain, rngs, reward)
+    shape, color = ASSIGNMENTS[assignment_name](params, pos, terrain, rngs, reward)
     moisture = terrain.moisture(pos[:, 0], pos[:, 1])
 
     # Tree.ApplyAttributes: canopy is a sphere scaled (sx, sy, sx); radius = max horizontal scale / 2.
@@ -647,7 +566,7 @@ def generate_world(params, seed):
     w_lo, w_hi = params.canopy_width_range
     canopy_radius = (w_hi + (w_lo - w_hi) * t) * 0.5
 
-    value = reward(params.reward_function, shape, color, moisture) + extra
+    value = reward(params.reward_function, shape, color)
 
     # HarvestManager.CollectNextFruit: max(0, round(R_bush + N(0, std))), independent per fruit.
     fruit_count = int(params.fruit_count)

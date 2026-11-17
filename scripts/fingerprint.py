@@ -44,7 +44,7 @@ SIM_FIELDS = (
     "camera_field_of_view", "canopy_height_range", "canopy_width_range", "color_varies", "color_when_fixed", "eye_height", "fruit_count", "fruit_harvest_duration", "harvest_max_angle",
     "harvest_range_gap_base", "harvest_range_gap_per_radius", "layout", "assignment", "reward_stage", "moisture_varies", "moisture_when_fixed",
     "mountain_band_width", "mountain_block_threshold", "mountain_boundary_jitter", "mountain_height", "mountain_noise_scale", "player_move_speed",
-    "random_bush_value_range", "reward_function", "reward_std", "session_duration", "shape_range", "shape_varies", "shape_when_fixed", "snow_line_fraction",
+    "reward_function", "reward_std", "session_duration", "shape_range", "shape_varies", "shape_when_fixed", "snow_line_fraction",
     "terrain_max_elevation", "terrain_mesh_resolution", "tree_edge_margin", "world_half_extent",
     *TILE_FIELDS,
 )
@@ -58,23 +58,11 @@ def _digest(obj):
 # Environment
 # --------------------------------------------------------------------------------------------------
 
-def _reward_without_new_defaults(rf):
-    """The reward function as it was hashed before `factors` and a bump's `angle` existed: an empty `factors` list and a zero `angle` are left out, so re-saving an asset in the Editor
-    (which writes both) moves no stored hash."""
-    if not isinstance(rf, dict):
-        return rf
-    out = {k: v for k, v in rf.items() if not (k == "factors" and not v)}
-    if out.get("bumps"):
-        out["bumps"] = [{k: v for k, v in b.items() if not (k == "angle" and not v)} for b in out["bumps"]]
-    return out
-
-
 def params_hash(name, overrides=None):
     """Hash of the simulation-relevant fields of the session asset `name` after `overrides` (the audio, visuals, UI text and the world
     seed do not change it)."""
     params = load_session(name, **(overrides or {}))
     fields = {f: getattr(params, f, None) for f in SIM_FIELDS}      # (None: a field an older asset file does not have yet)
-    fields["reward_function"] = _reward_without_new_defaults(fields["reward_function"])
     return _digest(fields)
 
 

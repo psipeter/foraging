@@ -29,12 +29,12 @@ and pays nothing. **The start (0, 0), the exact middle of the world, is the corn
 **Which bush has what.** Two composing layers, each with a no-pattern setting: BETWEEN (where the tiles' centres sit in the shape-colour plane: `none`, `random`, `graded`, `bimodal`) and WITHIN (how the bushes of a
 tile spread round that centre: `pool`, `scatter`, `gradient`), optional checks that redraw (`tileCoverageMin`: a neighbourhood spans the plane; `tileStartSpreadMin`: the three start tiles differ). **Default
 `none` + `pool`**: every tile is about equally valuable and holds bushes of widely varying value (a stratified draw of the plane dealt at random), so the decision is *which bushes of a tile to take*, not
-which tile. The reward is the unchanged bush rule (a linear shape and colour reward in the prototype, weights 2 and 2, per-fruit noise 0.6, fruit count 10, never normalised).
+which tile. The reward is the session's value map (since 2026-11-17 a Gaussian bump, the additive rung: in the prototype a wide corner Gaussian where both features pay more when higher, both alike, peak 4; per-fruit noise 0.6, fruit count 10, never normalised).
 
 **Is leaving a tile early the right policy?** `scripts/tile_calibration.py` (an oracle forager through the simulator on tile worlds; 8 seeds, 180 s): the incentive to leave comes from the within-tile decline
 relative to the differences between tiles. At tile radius 45 with 9 bushes the best partial policy takes the bushes at or above the 60th percentile of the world's values, about 4 to 6 bushes per visit,
 **+9 to +11% over exhausting every tile**; larger radii (55 to 90) favour taking most of the tile (6 to 7 bushes), bimodal worlds favour exhausting. The optimum is flat (top-6 to top-9 differ by a few percent)
-and the forager is an oracle, so these are provisional; radius 45 and 9 bushes are the tentative choice (DECISIONS, "FOR: tentative tile radius and bushes per tile").
+and the forager is an oracle, so these are provisional; radius 45 and 9 bushes are the tentative choice (DECISIONS, "FOR: tentative tile radius and bushes per tile"). **STALE (2026-11-17, review item A-1):** `tile_calibration.py FOR_S1 --seeds 0-7 --set session_duration=180` now gives, at the commit before the value-map change, thr-40 / 6.1 bushes per visit / +9.2% and, with the wide corner Gaussian reward, thr-50 / 5.3 bushes / +8.6%, both verdict TOO MANY; the numbers above no longer reproduce and the radius has not been re-opened.
 
 **Harvesting.** A bush can be harvested while it is within the range (7 plus its canopy radius from the canopy's edge) **and a hidden circle around the crosshair touches its canopy**: `crosshairRadius` Z
 (degrees of view angle; default 7, about five times the drawn crosshair's radius) against the canopy's real 3D shape, so looking above or below a bush does not count; a harvest in progress releases at 2 Z. A thin
@@ -58,7 +58,7 @@ a difficulty score, instructions text for the rankings. Not play-tested since th
 ### The tutorial (TUT, 2026-11-16)
 
 One practice session, `TUT_S1`, in its own experiment that must be finished before FOR unlocks (not paid, not in the menu's total). **World:** FOR's tile geometry in its own seed (6001), 120 s, ranking breaks on (one set per break).
-**Reward:** shape 3/4 **inverted** (a lower shape value pays more) plus colour 1/4 (higher pays more), where FOR_S1 pays both 1/2 and both increasing; so what is learned in the practice (heavy shape, low is good) is wrong in FOR,
+**Reward:** shape **inverted** (a lower shape value pays more) with about 0.71 of the slope (a request of 3/4, measured) plus colour (higher pays more), the additive rung in another corner (since 2026-11-17 a wide corner Gaussian, `TUTORIAL_MAP`), where FOR_S1 pays both alike and both increasing; so what is learned in the practice (heavy shape, low is good) is wrong in FOR,
 and the hints say only that "shape and/or color determine how many points you get". **Mechanism:** the Controls screen, then popups fired by what the participant does (`UI/TutorialHints.cs`, a hints text file), each a pause popup that
 fades in and out; every one carries a small blue "Tutorial" label. The popups, in order:
 
@@ -82,7 +82,7 @@ The reward function of a session is a **value map** R(shape, colour) over the un
 
 | Rung | The map | interaction | log interaction | nonlinearity | Gini | shape share |
 |---|---|---|---|---|---|---|
-| additive | a **wide corner Gaussian** (corner (1, 1), spreads 0.63 along shape, 0.78 along colour); the exact two-ramp map is `value_maps.ramps` | 0.03 | 0.00 | 0.05 | 0.24 | 0.58 |
+| additive | a **wide corner Gaussian** (corner (1, 1), spreads 0.63 along shape, 0.78 along colour); a ramp pair is not a primitive | 0.03 | 0.00 | 0.05 | 0.24 | 0.58 |
 | multiplicative | an **axis-aligned, stretched** Gaussian (centre (0.55, 0.45), width 0.15, aspect 1.5, angle 0) | 0.20 | 0.00 | 0.97 | 0.63 | 0.39 |
 | non-separable | the same Gaussian **rotated** and more stretched (aspect 3, angle 45 degrees) | 0.61 | 0.84 | 0.94 | 0.50 | 0.50 |
 
@@ -329,7 +329,7 @@ is deterministic and independent of the reward and the bush, so position is not 
 > **Generator changes, 2026-11-09 (Phase 0 of building the planned experiments).** The Designed mode (contrast, graded and extrapolation trials) and everything
 > built for it were removed from `scripts/interlude.py`: the stimulus types, the moisture placement relations (*same*, *one level apart*, *two or more levels apart*,
 > and the 500 000-placement search for them) and the elevation floor `interludeMinElevationDifference` (the field still exists in `SessionConfig` and is ignored). The default mode is
-> Hybrid, over the features the session declares visible (`world.session_features`); a moisture that pays nothing is not a feature of the gap unless the asset declares it. An experiment that needs
+> Hybrid, over the features the session declares visible (`world.session_features`, removed 2026-11-17); a moisture that pays nothing is not a feature of the gap unless the asset declares it. An experiment that needs
 > a designed kind adds it to `TRIAL_KINDS` (none yet). The shipped Interlude files were unchanged by this (they are all Hybrid or Random). The bullets below that describe Designed mode,
 > the stimulus types, the moisture relations or the elevation floor describe the removed generator and are kept as the record of what past data saw.
 
@@ -519,11 +519,8 @@ decoration that makes the world look natural; shape and fruit colour are the two
 
 ### Reward system
 
-`R_bush = w₁·f₁(shape) + w₂·f₂(color) + w₃·f₃(moisture)` (+ the sum of the session's Gaussian bumps over (shape, color), each with its own spread along each axis, used by S7,
-+ the sum of its product terms, one feature linear times a Gaussian of the other, used by S6, + a random per-bush value drawn from `randomBushValueRange`, used by the practice session) with **no
-normalization** (a deliberate research decision, not an oversight).
-Basis functions `f`: Linear, InvertedLinear, GaussianPeak (peak, width),
-InvertedGaussian, Constant. How the bushes' records are dealt over the map is a separate switch (`spatialBalance`, see "Open questions": spatial evenness of the reward). Each fruit's reward is an independent draw,
+`R_bush` is the session's **value map** over (shape, colour): the sum of its Gaussian bumps (`RewardBump`; a centre, a spread along each axis, an angle that turns it, a height), with **no
+normalization** (a deliberate research decision, not an oversight). The bump is the one primitive; the reward complexity ladder (additive, multiplicative, non-separable) is positions in its parameters ("Reward complexity ladder" above; specification and descriptors in `scripts/value_maps.py`). Moisture never pays. (Until 2026-11-17 the reward was also a sum of per-feature components (Linear, InvertedLinear, GaussianPeak, InvertedGaussian, Constant), product terms, two-factor terms and a random per-bush value; they were removed, `docs/DECISIONS.md`, "Reward function: the Gaussian bump is the only term".) Each fruit's reward is an independent draw,
 `max(0, round(N(R_bush, rewardStd)))`; the harvest pays the sum over the
 tree's fruits, shown as floating numbers rising from each fruit and a
 running score.
@@ -644,8 +641,8 @@ picture of the learned value function across these sessions, within and across p
 - **Durations** are practice 30 s, S1 and S2 90 s, S3 and S4 2 minutes, S5 to S7 3 minutes, adjusted as needed; the Interlude analysis, and whether 20 trials suffice for the 2-D sessions, come later.
 - **S7 does the old S5's job** (one bump over shape and colour); the two-bump version stays rejected.
 
-**Where it lives.** Reward terms: `RewardFunction` with `RewardBump` (a spread along each axis: `width` along shape, `widthColor` along colour, 0 = the same) and `RewardProduct` (C#), mirrored by `world.bush_value`
-(C# and Python agree to 1e-6, pinned in `test_world.py`); a random per-bush value `randomBushValueRange`; constant features `shapeVaries` / `colorVaries` with `shapeWhenFixed` / `colorWhenFixed`; moisture as decoration
+**Where it lives.** Reward terms: `RewardFunction` with `RewardBump` (a spread along each axis: `width` along shape, `widthColor` along colour, 0 = the same) and `RewardProduct` (C#; removed 2026-11-17), mirrored by `world.bush_value`
+(C# and Python agree to 1e-6, pinned in `test_world.py`); a random per-bush value `randomBushValueRange` (removed 2026-11-17); constant features `shapeVaries` / `colorVaries` with `shapeWhenFixed` / `colorWhenFixed`; moisture as decoration
 (`world.moisture_matters`: out of the Interlude's feature gap only; the simulated agents sense moisture like participants do); `ladder.py` (the table of the ladder, `--recreate` copies S2 into a new session), `spatial.py`. The generator tests that need the old moisture-paying or bump sessions use `legacy_sessions.py`.
 
 **Provisional, not done:** the durations are first values; the reward spread across sessions is not matched; the instruction files are the old texts (S6 and S7 copies of S5's); the carry-over scripts

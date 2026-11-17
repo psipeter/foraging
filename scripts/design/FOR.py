@@ -1,8 +1,9 @@
 """FOR, foraging in tiles (2026-11-12): the experiment that varies the reward function and the spatial arrangement together, in a world of hexagonal tiles with a cluster of bushes
 in the middle of each (`tiles.py`). One instance at a time (the combination of a between-tile mode and a within-tile mode being tried), with ranking breaks in the session (`RANKING_FIELDS`;
-the ranking pools come from `ranking.py`). Both features pay equally (a linear reward over shape and colour). An empty mode ("" and "") means the features ignore the tiles (`none` between, `pool` within).
+the ranking pools come from `ranking.py`). The reward is a value map (`value_maps.py`): the additive rung, a wide Gaussian in the corner where both features pay more when higher, both alike. An empty mode ("" and "") means the features ignore the tiles (`none` between, `pool` within).
 """
 
+import value_maps
 from design import Instance
 from design.common import instruction_page
 
@@ -12,7 +13,8 @@ REQUIRES = ("TUT",)                 # the tutorial experiment (design/TUT.py) mu
 TEMPLATE_SESSION = "FOR_S1"         # copied only when an instance has no asset yet (the lighting, camera and so on come from it)
 
 REWARD_STD = 0.6
-REWARD_SCALE = 4.0                  # the best bush pays about this much when the weights sum to one, as in every built experiment
+REWARD_SCALE = 4.0                  # the best bush pays about this much, as in every built experiment
+VALUE_MAP = value_maps.wide_corner((1.0, 1.0), shape_share=0.5, base=0.7, scale=REWARD_SCALE, std=REWARD_STD)       # the additive rung: both features pay more when higher, both alike
 SECONDS = 120
 FIRST_WORLD_SEED = 7001
 TILE_FIELDS = {"tileRadius": 45.0, "tileRampWidth": 14.0, "tileMoistureLevels": 4, "tileBushes": 9, "tileClusterRadius": 15.0, "tileClusterSpacing": 10.0, "tileSpread": 0.12}
@@ -26,20 +28,16 @@ CELLS = (("default", "", "", {}),)
 
 
 
-def _fields(between, within, extra, seed, weights=(("shape", 0.5), ("color", 0.5), ("moisture", 0.0))):
-    f = {"worldSeed": seed, "rewardStd": REWARD_STD, "layout": "tiles", "assignment": "tiles", "tileValueMode": between,
-         "tileWithinMode": within, "tileArrangement": "random", **{**TILE_FIELDS, **extra}, "terrainMaxElevation": 9.0, "shapeVaries": True, "colorVaries": True, "moistureVaries": True, "moistureIsFeature": False,
-         "rewardFunction.bumps.Array.size": 0, "rewardFunction.products.Array.size": 0}
-    for feature, weight in weights:
-        f.update({f"rewardFunction.{feature}Component.basisFunctionType": 0, f"rewardFunction.{feature}Component.weight": REWARD_SCALE * weight,
-                  f"rewardFunction.{feature}Component.peak": 0, f"rewardFunction.{feature}Component.width": 0})
-    return f
+def _fields(between, within, extra, seed, valuemap=VALUE_MAP):
+    return {"worldSeed": seed, "layout": "tiles", "assignment": "tiles", "tileValueMode": between,
+            "tileWithinMode": within, "tileArrangement": "random", **{**TILE_FIELDS, **extra}, "terrainMaxElevation": 9.0, "shapeVaries": True, "colorVaries": True, "moistureVaries": True,
+            **valuemap.fields()}
 
 
 def instances():
     return [
         Instance(f"{CODE}_S{n}", _fields(between, within, extra, FIRST_WORLD_SEED + 100 * n), {"sessionDuration": SECONDS, "instructionsFile": f"Experiments/{CODE}/instructions_S{n}.txt", "isPractice": False, "crosshairRadius": CROSSHAIR_RADIUS, "crosshairRingSizeDeg": CROSSHAIR_RING_DEG, **RANKING_FIELDS},
-                 {"experiment": CODE, "index": n, "cell": cid, "tile_value_mode": between, "tile_within_mode": within, "prototype": True})
+                 {"experiment": CODE, "index": n, "cell": cid, "tile_value_mode": between, "tile_within_mode": within, "prototype": True, **VALUE_MAP.describe()})
         for n, (cid, between, within, extra) in enumerate(CELLS, start=1)]
 
 

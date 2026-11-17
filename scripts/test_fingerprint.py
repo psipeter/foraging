@@ -32,7 +32,7 @@ def test_params_hash_is_stable_and_follows_simulation_parameters_only():
 
 def test_a_changed_reward_function_changes_the_hash():
     rf = world.load_session("FIX_T0").reward_function
-    other = {**rf, "colorComponent": {**rf["colorComponent"], "weight": rf["colorComponent"]["weight"] + 1.0}}
+    other = {**rf, "bumps": [{**rf["bumps"][0], "height": rf["bumps"][0]["height"] + 1.0}]}
     assert params_hash("FIX_T0", {"reward_function": other}) != params_hash("FIX_T0")
 
 
