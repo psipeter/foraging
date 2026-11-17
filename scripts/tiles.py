@@ -4,13 +4,13 @@ The valley is cut into regular hexagonal tiles. Each tile is a plateau at its ow
 neighbours; a tight cluster of bushes sits in the middle of it, and the walk from a tile's edge to the cluster is the cost of going there. The ground level is drawn on its own stream
 and never depends on what the tile's bushes pay (a later option may make it a cue).
 
-The bushes' features are generated tile by tile, in two layers that compose (see "Assignment" below): a BETWEEN mode gives every tile a centre in the (shape, colour) plane, a WITHIN mode gives each
-bush its features from its tile's centre and its place in the cluster; each has a mode that means "no pattern", and checks on the result (a neighbourhood of tiles must span enough of the plane,
-the tiles around the start must differ enough) redraw it. `stats` reports what a world realised (tile contrast, spatial and bush sparsity). Tables of methods, so a new one is one entry:
+The bushes' features come in two steps (see "Assignment" below). First the world's POOL of bushes: as many points of the (shape, colour) plane as there are bush sites, an even cover of the
+plane (scrambled Halton), so the function is learnable wherever the bushes are and the world's distribution of bush values is the value map's own. Second a PLACEMENT, which deals the pool's bushes to
+the sites of the tiles and changes nothing else; checks on the result (a neighbourhood of tiles must span enough of the plane, the tiles around the start must differ enough) redraw it. `stats` reports
+what a world realised (tile contrast, spatial and bush sparsity). Tables of methods, so a new one is one entry:
 
     ARRANGEMENTS    where the bushes lie inside a tile: `random` (a minimum spacing)
-    BETWEEN_MODES   `none`, `random`, `graded`, `bimodal`
-    WITHIN_MODES    `pool`, `scatter`, `gradient`
+    PLACEMENTS      how the pool is dealt to the tiles: `random` (the others of earlier versions, which chose the tiles' centres and scattered the bushes around them, were removed 2026-11-18)
 
 The tile of a bush is found again from its position (`TileGrid.nearest`), so the bush table needs no tile column. Random streams (world.py's list): 17 the grid (rotation, ground levels), 18 the
 clusters, 19 the assignment.
@@ -21,14 +21,11 @@ import math
 import numpy as np
 
 SQRT3 = math.sqrt(3.0)
-TILE_PARAMS = ("tile_radius", "tile_ramp_width", "tile_moisture_levels", "tile_bushes", "tile_cluster_radius", "tile_cluster_spacing", "tile_spread", "tile_good_fraction", "tile_smoothness",
-               "tile_gradient", "tile_gradient_angle", "tile_coverage_min", "tile_start_spread_min")
+TILE_PARAMS = ("tile_radius", "tile_ramp_width", "tile_moisture_levels", "tile_bushes", "tile_cluster_radius", "tile_cluster_spacing", "tile_coverage_min", "tile_start_spread_min")
 CLUSTER_MARGIN = 5.0              # world units: a cluster (plus this) must lie inside the valley
 RELAX_STEPS = 500                 # pushes `arrange_random` makes in one try
 REPAIR_PASSES = 20                # passes that give a tile sharing its level with a neighbour another one
 RELAX_TRIES = 30                  # fresh starts it makes before it gives up on a cluster
-GRADED_CANDIDATES = 4000         # points of the feature plane the graded mode picks the tiles' centres from
-GRADED_QUANTILES = (0.05, 0.95)   # the poorest and richest tile centre sit at these quantiles of the reward over the plane
 NEIGHBOURS = ((0, 0), (1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1))      # a tile and its six neighbours, in lattice steps (the lattice basis is 60 degrees apart)
 
 
@@ -183,21 +180,16 @@ def layout_tiles(params, terrain, rngs):
 
 
 # --------------------------------------------------------------------------------------------------
-# Assignment: which features the bushes have, generated tile by tile
+# Assignment: which features the bushes have
 # --------------------------------------------------------------------------------------------------
-# Two layers that compose, each with a mode that means "no pattern": the BETWEEN layer gives every tile a centre in the feature plane (so the tiles' values and how they relate to
-# one another), the WITHIN layer gives each bush its features given its tile's centre and its place in the cluster. A session picks one of each (the default is `none` and `pool`: no pattern anywhere, so every tile holds bushes of widely varying value and the tiles are about equally valuable) (`tile_value_mode`, `tile_within_mode`):
-#     between `none` and within `pool`    no pattern anywhere: a stratified draw of the plane dealt to the bushes in random order
-#     between `random` and within `pool`  the same (the pool ignores the centres)
-#     between `graded`/`bimodal`, within `scatter` with a spread of 0   pure tiles with a stated pattern across them
-#     between `none`, within `gradient`   no difference between tiles, the same pattern inside every tile
-# Checks on the finished assignment (a neighbourhood of tiles must span enough of the plane, the tiles around the start must differ enough) redraw it until they hold.
+# Step 1, the pool: an even cover of the feature plane, one point per bush site (`bush_pool`). Step 2, the placement: which pool bush goes to which site (`PLACEMENTS`, `tile_placement`,
+# default `random`: the pool in random order, so a tile's bushes tell nothing about the tile and the tiles are about equally valuable). A placement is a permutation of the pool: it never changes
+# which bushes exist. Checks on the finished placement (a neighbourhood of tiles must span enough of the plane, the tiles around the start must differ enough) redraw it until they hold.
 
 GOOD_OF_MAX = 0.7                 # a bush or tile is "good" when it pays at least this share of the best (the sparsity definition of the RW design)
-POOR_OF_MAX = 0.3                 # and "poor" when it pays at most this share
 COVERAGE_CELLS = 4                # the feature plane is cut into this many cells per axis to measure how much of it a neighbourhood spans
 MAX_ATTEMPTS = 200                # redraws of the assignment before a constraint is declared unsatisfiable
-PLANE_SAMPLE = 20000              # points of the feature plane the reward's range, and the regions the modes draw from, are estimated with
+PLANE_SAMPLE = 20000              # points of the feature plane the reward's range is estimated with
 
 
 class TileSet:
@@ -228,96 +220,18 @@ def _plane_values(params, rng, reward, n=PLANE_SAMPLE):
     return c, np.asarray(reward(params.reward_function, c[:, 0], c[:, 1]), dtype=float)
 
 
-def _region(params, rng, reward, low, high, need=40):
-    """Points of the feature plane whose reward lies in [low, high] (as shares of the plane's best), drawn in batches until there are `need` (a narrow peak has few): the region the good or the poor tiles draw their centres from."""
-    out = []
-    for _ in range(40):
-        c, v = _plane_values(params, rng, reward)
-        if not out:
-            vmax = v.max()
-        out.append(c[(v >= low * vmax) & (v <= high * vmax)])
-        if sum(len(a) for a in out) >= need:
-            break
-    pts = np.concatenate(out)
-    if len(pts) == 0:
-        raise ValueError(f"the reward function has no points between {low:.0%} and {high:.0%} of its best")
-    return pts
-
-
-def _latent_rank(ts, rng, passes):
-    """A rank in (0, 1) per tile from a random field over the tile lattice, smoothed by `passes` averages with the neighbours (0: independent; more: neighbouring tiles alike)."""
-    u = rng.uniform(size=ts.n_tiles)
-    for _ in range(int(passes)):
-        u = np.array([(u[t] + u[ts.neighbours[t]].sum()) / (1 + len(ts.neighbours[t])) for t in range(ts.n_tiles)])
-    return (np.argsort(np.argsort(u)) + 0.5) / ts.n_tiles
-
-
-def between_none(params, ts, rng, reward):
-    """No difference between tiles: every centre is the middle of the plane."""
-    return np.full((ts.n_tiles, 2), 0.5)
-
-
-def between_random(params, ts, rng, reward):
-    """Each tile's centre uniform over the plane."""
-    return rng.uniform(0.0, 1.0, (ts.n_tiles, 2))
-
-
-def between_graded(params, ts, rng, reward):
-    """The reward at the tiles' centres spread evenly from poor to rich (5th to 95th percentile of the reward over the plane), the richest where a smoothed random field (`tile_smoothness` passes: 0 = a random order)
-    is highest, so with smoothness neighbouring tiles have similar values."""
-    c, v = _plane_values(params, rng, reward, GRADED_CANDIDATES)
-    lo, hi = np.quantile(v, GRADED_QUANTILES)
-    targets = lo + (hi - lo) * _latent_rank(ts, rng, _p(params, "tile_smoothness", 0))
-    return c[[int(np.argmin(np.abs(v - t))) for t in targets]]
-
-
-def between_bimodal(params, ts, rng, reward):
-    """A share `tile_good_fraction` of the tiles are good (centres where the reward is at least 70% of the best), the rest poor (at most 30%), the good ones where a smoothed random field is highest
-    (`tile_smoothness`): spatial sparsity, and with smoothness good tiles beside one another."""
-    good = np.zeros(ts.n_tiles, dtype=bool)
-    good[np.argsort(-_latent_rank(ts, rng, _p(params, "tile_smoothness", 0)))[:int(round(float(_p(params, "tile_good_fraction", 0.25)) * ts.n_tiles))]] = True
-    hi, lo = _region(params, rng, reward, GOOD_OF_MAX, np.inf), _region(params, rng, reward, 0.0, POOR_OF_MAX)
-    return np.where(good[:, None], hi[rng.integers(len(hi), size=ts.n_tiles)], lo[rng.integers(len(lo), size=ts.n_tiles)])
-
-
-BETWEEN_MODES = {"none": between_none, "random": between_random, "graded": between_graded, "bimodal": between_bimodal}
-
-
-def _reflect(x):
-    """Fold values into [0, 1] by reflecting at the ends, so the scatter around a tile's centre keeps its shape near an edge of the feature range."""
-    y = np.mod(x, 2.0)
-    return np.where(y > 1.0, 2.0 - y, y)
-
-
-def _plane_points(n, rng):
+def bush_pool(n, rng):
+    """The world's pool: `n` points of the (shape, colour) plane, a scrambled Halton sequence (an even cover)."""
     from scipy.stats import qmc
     return qmc.Halton(d=2, scramble=True, seed=rng).random(n)
 
 
-def within_pool(params, ts, centres, rng, reward):
-    """Ignores the tiles' centres: a scrambled Halton draw of the whole plane (even coverage), dealt to the bushes in random order, so a tile's bushes tell nothing about the tile."""
-    n = len(centres)
-    return _plane_points(n, rng)[rng.permutation(n)]
+def place_random(params, ts, pool, rng, reward):
+    """The pool in random order over the sites."""
+    return pool[rng.permutation(len(pool))]
 
 
-def within_scatter(params, ts, centres, rng, reward):
-    """The tile's centre plus a normal scatter of `tile_spread` per axis (0: every bush of a tile the same), reflected into the plane."""
-    return _reflect(centres + float(params.tile_spread) * rng.standard_normal(centres.shape))
-
-
-def within_gradient(params, ts, centres, rng, reward):
-    """A line across each cluster: the features move along a direction of the plane (`tile_gradient_angle` degrees, -1 = a random one per tile) by `tile_gradient` from one side of the cluster to the other
-    (the cluster's own axis is drawn per tile), plus the scatter of `tile_spread`."""
-    t = ts.tile_of
-    axis = rng.uniform(0.0, 2.0 * np.pi, ts.n_tiles)[t]
-    along = (ts.offsets[:, 0] * np.cos(axis) + ts.offsets[:, 1] * np.sin(axis)) / max(float(params.tile_cluster_radius), 1e-9)
-    angle = float(_p(params, "tile_gradient_angle", -1.0))
-    phi = np.radians(angle) if angle >= 0.0 else rng.uniform(0.0, 2.0 * np.pi, ts.n_tiles)[t]
-    shift = float(_p(params, "tile_gradient", 0.3)) * along
-    return within_scatter(params, ts, centres + np.stack([shift * np.cos(phi), shift * np.sin(phi)], axis=1), rng, reward)
-
-
-WITHIN_MODES = {"pool": within_pool, "scatter": within_scatter, "gradient": within_gradient}
+PLACEMENTS = {"random": place_random}
 
 
 def plane_range(params, reward):
@@ -355,17 +269,15 @@ def constraints_hold(params, ts, features, reward):
 
 
 def deal_features(params, pos, grid, rng, reward):
-    """(shape, colour) of every bush: the between mode's centres, then the within mode's features (stream 19; each attempt draws its own generator from it), redrawn until the constraints hold."""
+    """(shape, colour) of every bush: the world's pool (stream 19), then the placement of the pool over the sites (each attempt draws its own generator from the stream), redrawn until the constraints hold."""
     ts = TileSet(grid, pos)
-    between = BETWEEN_MODES[getattr(params, "tile_value_mode", None) or "none"]
-    within = WITHIN_MODES[getattr(params, "tile_within_mode", None) or "pool"]
+    pool = bush_pool(len(pos), np.random.default_rng(int(rng.integers(2 ** 62))))
+    place = PLACEMENTS[getattr(params, "tile_placement", None) or "random"]
     for _ in range(MAX_ATTEMPTS):
-        sub = np.random.default_rng(int(rng.integers(2 ** 62)))
-        centres = between(params, ts, sub, reward)
-        features = within(params, ts, centres[ts.tile_of], sub, reward)
+        features = place(params, ts, pool, np.random.default_rng(int(rng.integers(2 ** 62))), reward)
         if constraints_hold(params, ts, features, reward):
             return features[:, 0], features[:, 1]
-    raise ValueError(f"no assignment met tile_coverage_min {_p(params, 'tile_coverage_min', 0.0)} and tile_start_spread_min {_p(params, 'tile_start_spread_min', 0.0)} in {MAX_ATTEMPTS} draws")
+    raise ValueError(f"no placement met tile_coverage_min {_p(params, 'tile_coverage_min', 0.0)} and tile_start_spread_min {_p(params, 'tile_start_spread_min', 0.0)} in {MAX_ATTEMPTS} draws")
 
 
 # --------------------------------------------------------------------------------------------------
@@ -384,25 +296,3 @@ def stats(params, pos, shape, color, grid, reward):
     return {"n_tiles": int(ts.n_tiles), "tile_value_sd": float(means.std()), "within_sd": float(within.mean()), "contrast": float(means.std() / max(within.mean(), 1e-9)),
             "good_tile_share": float(np.mean(means >= GOOD_OF_MAX * best)), "good_bush_share": float(np.mean(v >= GOOD_OF_MAX * best)),
             "coverage_min": neighbourhood_coverage(ts, features), "start_spread": start_spread(params, ts, features, reward)}
-
-
-def spread_for_reward_sd(params, reward, target_sd, n=3000, seed=0):
-    """The scatter `tile_spread` (feature units) at which a tile's bushes have a mean reward SD of `target_sd` points: the within-tile heterogeneity in reward units, solved for this reward function
-    (tile centres uniform, `tile_bushes` bushes each; bisection, since the SD rises with the spread)."""
-    rng = np.random.default_rng(seed)
-    m = int(params.tile_bushes)
-    centres = rng.uniform(0.0, 1.0, (n, 1, 2))
-    noise = rng.standard_normal((n, m, 2))
-
-    def sd(spread):
-        f = _reflect(centres + spread * noise).reshape(-1, 2)
-        v = np.asarray(reward(params.reward_function, f[:, 0], f[:, 1]), dtype=float).reshape(n, m)
-        return float(v.std(axis=1, ddof=1).mean())
-
-    lo, hi = 1e-3, 0.8
-    if not sd(lo) <= target_sd <= sd(hi):
-        raise ValueError(f"a within-tile reward SD of {target_sd} is outside {sd(lo):.3f} to {sd(hi):.3f} for this reward function")
-    for _ in range(30):
-        mid = 0.5 * (lo + hi)
-        lo, hi = (mid, hi) if sd(mid) < target_sd else (lo, mid)
-    return 0.5 * (lo + hi)

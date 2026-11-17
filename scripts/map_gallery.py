@@ -2,7 +2,7 @@
 
     ./venv/bin/python scripts/map_gallery.py [--ginis 0.3,0.4,0.5,0.6,0.7] [--gains results/independence_m4b.jsonl] [--out docs/value_map_gallery.png]
 
-Each map is calibrated by `value_maps.calibrate_map` to its Gini and to the interaction of its class (the design of `independence.py`: additive a Gaussian exactly on a corner, its interaction the smallest that leaves; multiplicative 90 percent of what an aligned map of
+Each map is calibrated by `value_maps.calibrate_map` to its Gini and to the interaction of its class (the design of `independence.py`: additive a Gaussian exactly on a corner, stretched 2:1 along colour; multiplicative 90 percent of what an aligned map of
 that Gini can reach; non-separable 0.4). With `--gains` (an independence run) the map is drawn at the gain a session of that Gini needs to hold the anchor (a straight line fitted to the run), on the
 fixed 0 to 9 scale of a fruit's pay, so the picture shows the level as well as the shape; without it the gain is 1.
 """
@@ -28,7 +28,7 @@ def interaction_of(name, gini):
 
 def one(args):
     (name, klass), gini = args
-    return vm.calibrate_map(gini, interaction_of(name, gini), klass, share=(0.3, 0.7) if klass == "corner" else (0.25, 0.75))
+    return vm.calibrate_map(gini, interaction_of(name, gini), klass, share=(0.25, 0.75), aspect=vm.corner_aspect(2.0, False))      # the additive rung is shown stretched 2:1 along colour
 
 
 def gain_line(path):
@@ -48,7 +48,7 @@ def main():
     ginis = [float(g) for g in args.ginis.split(",")]
     slope, intercept = gain_line(args.gains) if args.gains else (0.0, 1.0)
     jobs = [(c, g) for c in CLASSES for g in ginis]
-    cache = ROOT / "results" / "map_gallery_maps_v2.json"
+    cache = ROOT / "results" / "map_gallery_maps_v3.json"
     saved = json.loads(cache.read_text()) if cache.exists() else {}
     key = lambda job: f"{job[0][0]}@{job[1]}"
     todo = [j for j in jobs if key(j) not in saved]

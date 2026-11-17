@@ -5,11 +5,11 @@
     ./venv/bin/python scripts/independence.py plot --tag T [--out docs/independence_correlations.png]
 
 `run` appends one JSON line per session to `results/independence_<tag>.jsonl` (flat, gitignored): the knobs asked, then either the realised session (map descriptors, gain, layout, the factors and
-points measured on fresh worlds, whether the anchor was met, whether a ranking pool could be built) or the reason it could not be made (an unreachable pair, a diversity the map cannot give, a gain
+points measured on fresh worlds, whether the anchor was met, whether a ranking pool could be built) or the reason it could not be made (an unreachable pair, a gain
 that does not settle). A rerun with the same tag skips the settings already done. `report` prints the failures, the correlation matrix of the realised factors and the side effects of each knob.
 
-The knobs (the PI's ranges, 2026-11-17): Gini 0.3 to 0.7 (0.2 to 0.8 in the first runs: 0.2 is too undifferentiated to learn from, and above 0.7 few classes stay under the cap); travel time 3 to 12 s; within-patch diversity 0.2 to 0.9 reward units; complexity in the three classes of the ladder (additive: an aligned map
-with the smallest interaction that leaves; multiplicative: aligned, an interaction of 90 percent of what an aligned map of that Gini can reach; non-separable: rotated, an interaction of 0.15 to 0.65).
+The knobs (the PI's ranges, 2026-11-17): Gini 0.3 to 0.7 (0.2 to 0.8 in the first runs: 0.2 is too undifferentiated to learn from, and above 0.7 few classes stay under the cap); travel time 3 to 12 s (within-patch diversity is no longer a knob: the pool is placed at random, 2026-11-18); complexity in the three classes of the ladder (
+additive: a Gaussian exactly on a corner, round or stretched 2:1 or 3:1 along shape or colour (the interaction is what that gives, 0.05 to 0.3 with the Gini); multiplicative: aligned, an interaction of 90 percent of what an aligned map of that Gini can reach; non-separable: rotated, an interaction of 0.15 to 0.65).
 """
 
 import argparse
@@ -24,7 +24,7 @@ import factors
 import value_maps
 
 ROOT = Path(__file__).resolve().parent.parent
-RANGES = {"gini": (0.3, 0.7), "travel_time": (3.0, 12.0), "diversity": (0.2, 0.9)}
+RANGES = {"gini": (0.3, 0.7), "travel_time": (3.0, 12.0)}
 ROTATED_INTERACTION = (0.15, 0.65)
 MULTIPLICATIVE_SHARE_OF_CAP = value_maps.MULTIPLICATIVE_SHARE_OF_CAP
 aligned_cap = value_maps.aligned_cap
@@ -32,23 +32,23 @@ CLASSES = ("additive", "multiplicative", "nonseparable")
 
 
 def design(n=40, seed=0):
-    """`n` knob settings spread evenly over the ranges (a Latin hypercube over Gini, class, the position within the class, travel time and diversity)."""
+    """`n` knob settings spread evenly over the ranges (a Latin hypercube over Gini, class, the position within the class and travel time)."""
     from scipy.stats import qmc
     out = []
     rng = np.random.default_rng(seed)
-    for gu, cu, iu, tu, du in qmc.LatinHypercube(d=5, seed=seed).random(n):
+    for gu, cu, iu, tu in qmc.LatinHypercube(d=4, seed=seed).random(n):
         gini = RANGES["gini"][0] + gu * (RANGES["gini"][1] - RANGES["gini"][0])
         name = CLASSES[min(int(cu * 3), 2)]
         corner = [int(c) for c in rng.integers(0, 2, 2)]                     # which feature pays more when higher: a nuisance, drawn for every setting
+        aspect = value_maps.corner_aspect(rng.choice(value_maps.CORNER_STRETCHES), bool(rng.integers(2)))     # the stretch of an additive map (round, 2:1, 3:1), along shape or colour: a nuisance
         if name == "additive":
             klass, interaction = "corner", None
         elif name == "multiplicative":
             klass, interaction = "aligned", MULTIPLICATIVE_SHARE_OF_CAP * aligned_cap(gini)
         else:
             klass, interaction = "rotated", ROTATED_INTERACTION[0] + iu * (ROTATED_INTERACTION[1] - ROTATED_INTERACTION[0])
-        out.append({"gini": round(float(gini), 3), "class": name, "klass": klass, "interaction": None if interaction is None else round(float(interaction), 3), "corner": corner,
-                    "travel_time": round(float(RANGES["travel_time"][0] + tu * (RANGES["travel_time"][1] - RANGES["travel_time"][0])), 2),
-                    "diversity": round(float(RANGES["diversity"][0] + du * (RANGES["diversity"][1] - RANGES["diversity"][0])), 3)})
+        out.append({"gini": round(float(gini), 3), "class": name, "klass": klass, "interaction": None if interaction is None else round(float(interaction), 3), "corner": corner, "aspect": round(aspect, 4),
+                    "travel_time": round(float(RANGES["travel_time"][0] + tu * (RANGES["travel_time"][1] - RANGES["travel_time"][0])), 2)})
     return out
 
 
@@ -67,7 +67,7 @@ def run_one(args):
     t = time.time()
     row = {"knobs": knobs}
     try:
-        r = factors.realize(session, knobs["gini"], knobs["interaction"], knobs["klass"], knobs["travel_time"], knobs["diversity"], max_peak=max_peak, corner=tuple(float(c) for c in knobs.get("corner", (1, 1))))
+        r = factors.realize(session, knobs["gini"], knobs["interaction"], knobs["klass"], knobs["travel_time"], max_peak=max_peak, corner=tuple(float(c) for c in knobs.get("corner", (1, 1))), aspect=knobs.get("aspect", 1.0))
     except ValueError as e:
         row.update(ok=False, reason=str(e)[:240], seconds=round(time.time() - t))
         return row
@@ -90,7 +90,7 @@ def run(args):
         for i, row in enumerate(pool.imap_unordered(run_one, [(args.session, k, not args.no_pool, args.max_peak) for k in todo]), 1):
             out.write(json.dumps(row) + "\n")
             out.flush()
-            print(f"{i}/{len(todo)} {row['knobs']['class']:14s} gini {row['knobs']['gini']:.2f} travel {row['knobs']['travel_time']:5.1f} div {row['knobs']['diversity']:.2f}: " +
+            print(f"{i}/{len(todo)} {row['knobs']['class']:14s} gini {row['knobs']['gini']:.2f} travel {row['knobs']['travel_time']:5.1f}: " +
                   (f"ok, gain {row['gain']:.2f}, nearest {row['points']['nearest'][0]:.0f}" + ("" if row["within_tolerance"] else " (anchor missed)") if row["ok"] else "FAILED " + row["reason"][:90]) + f" ({row['seconds']} s)", flush=True)
 
 
@@ -114,10 +114,10 @@ def report(args):
     print(f"{len(rows)} sessions asked, {len(ok)} realised, {sum(r['within_tolerance'] for r in ok)} within the anchor tolerance, {sum(r['pool'] is True for r in ok)} with a ranking pool")
     for r in rows:
         if not r["ok"]:
-            print("  FAILED", {k: r["knobs"][k] for k in ("class", "gini", "interaction", "travel_time", "diversity")}, r["reason"][:110])
+            print("  FAILED", {k: r["knobs"][k] for k in ("class", "gini", "interaction", "travel_time")}, r["reason"][:110])
     for r in ok:
         if r["pool"] not in (True, None):
-            print("  NO POOL", {k: r["knobs"][k] for k in ("class", "gini", "travel_time", "diversity")}, r["pool"])
+            print("  NO POOL", {k: r["knobs"][k] for k in ("class", "gini", "travel_time")}, r["pool"])
     if len(ok) < 4:
         return
     corr = np.corrcoef(data)
@@ -147,10 +147,10 @@ def plot(args):
     for i in range(len(names)):
         for j in range(len(names)):
             ax.text(j, i, f"{corr[i, j]:.2f}", ha="center", va="center", fontsize=7.5, color="white" if abs(corr[i, j]) > 0.6 else "#1f2933")
-    ax.axhline(3.5, color="black", lw=0.8)
-    ax.axvline(3.5, color="black", lw=0.8)
+    ax.axhline(2.5, color="black", lw=0.8)
+    ax.axvline(2.5, color="black", lw=0.8)
     fig.colorbar(image, ax=ax, shrink=0.8).set_label("correlation across sessions", fontsize=9)
-    ax.set_title(f"Realised factors of {len(ok)} sessions: the four knobs (top left block) and what moves with them", fontsize=10, loc="left")
+    ax.set_title(f"Realised factors of {len(ok)} sessions: the three knobs (top left block) and what moves with them", fontsize=10, loc="left")
     fig.savefig(args.out, dpi=200, bbox_inches="tight", facecolor="white")
 
 

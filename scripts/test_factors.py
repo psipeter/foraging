@@ -41,11 +41,6 @@ def test_a_flat_map_has_no_contrast_and_no_diversity_and_a_constant_value():
     assert m["mean_bush_value"] == pytest.approx(3.0, abs=1e-6) and m["bush_gini"] < 1e-6
 
 
-def test_tiles_of_a_single_point_each_have_no_diversity_but_do_differ_from_one_another():
-    m = measured(tile_value_mode="random", tile_within_mode="scatter", tile_spread=0.0)
-    assert m["diversity"] < 1e-9 and m["contrast"] > 0.2 and m["neighbour_difference"] > 0.2
-
-
 def test_the_gain_scales_the_reward_measures_and_leaves_the_walk_alone():
     base = synthetic.DEFAULT_MAP
     doubled = value_maps.ValueMap(base.bumps, base.noise, {"type": "gain", "value": 2.0})
@@ -76,25 +71,16 @@ def test_the_travel_time_settings_give_the_target_walk_exactly_and_refuse_a_gap_
         factors.travel_time_settings(p, 0.5 * p.tile_ramp_width / p.player_move_speed)
 
 
-def test_the_diversity_settings_give_the_target_within_patch_sd_on_average_and_refuse_what_the_map_cannot_give():
+def test_the_diversity_is_the_maps_own_under_random_placement_and_the_tiles_differ_no_more_than_chance():
+    m = measured()
+    assert m["diversity"] > 0.5 and m["contrast"] < m["diversity"]
+
+
+def test_calibrate_gives_the_travel_time_settings_and_fields_gives_the_serialized_names():
     p = session()
-    settings = factors.diversity_settings(p, 0.5)
-    assert settings["tile_value_mode"] == "random" and settings["tile_within_mode"] == "scatter"
-    got = np.mean([factors.measure(generate_world(session(**settings), s))["diversity"] for s in range(6)])
-    assert got == pytest.approx(0.5, rel=0.08)
-    with pytest.raises(ValueError, match="outside"):
-        factors.diversity_settings(p, 5.0)
-
-
-def test_under_the_default_modes_the_diversity_is_the_maps_own_and_the_spread_is_not_a_knob():
-    assert measured(tile_spread=0.05)["diversity"] == measured(tile_spread=0.3)["diversity"]
-
-
-def test_calibrate_merges_the_targets_and_fields_gives_the_serialized_names():
-    p = session()
-    settings = factors.calibrate(p, travel_time=6.0, diversity=0.4)
-    assert set(settings) == {"tile_radius", "tile_value_mode", "tile_within_mode", "tile_spread"} and factors.calibrate(p) == {}
-    assert factors.fields({"tile_radius": 1.0, "tile_spread": 0.2}) == {"tileRadius": 1.0, "tileSpread": 0.2}
+    settings = factors.calibrate(p, travel_time=6.0)
+    assert set(settings) == {"tile_radius"} and factors.calibrate(p) == {}
+    assert factors.fields({"tile_radius": 1.0, "tile_placement": "random"}) == {"tileRadius": 1.0, "tilePlacement": "random"}
 
 
 def test_check_reports_the_factors_and_the_points_of_a_session_on_fresh_worlds():

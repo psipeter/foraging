@@ -37,7 +37,7 @@ ROOT = SCRIPTS.parent
 ENGINE_FILES = ("sim.py", "costs.py", "perception.py", "world.py", "tiles.py")
 AGENT_FILES = ("agents.py", "specs.py")
 
-TILE_FIELDS = (*tiles.TILE_PARAMS, "tile_arrangement", "tile_value_mode", "tile_within_mode")
+TILE_FIELDS = (*tiles.TILE_PARAMS, "tile_arrangement", "tile_placement")
 
 
 SIM_FIELDS = (

@@ -99,109 +99,51 @@ def test_the_same_seed_gives_the_same_world_and_another_seed_another():
     assert a.n != c.n or not np.array_equal(a.pos, c.pos)
 
 
-def test_features_scatter_around_the_tiles_centre_by_the_stated_spread_and_stay_in_range():
-    within, means = [], []
-    for seed in SEEDS:
-        w = tile_world(seed, tile_value_mode="random", tile_within_mode="scatter", tile_spread=0.08)
-        assert 0.0 <= w.shape.min() and w.shape.max() <= 1.0 and 0.0 <= w.color.min() and w.color.max() <= 1.0
-        ids = tile_of(w)
-        for t in range(ids.max() + 1):
-            s = w.shape[ids == t]
-            means.append(s.mean())
-            if 0.3 < s.mean() < 0.7:                                  # away from the ends, where the reflection would shrink the scatter
-                within.append(s.var(ddof=1))
-    assert np.sqrt(np.mean(within)) == pytest.approx(0.08, abs=0.02)
-    assert np.std(means) == pytest.approx(np.sqrt(1.0 / 12.0), abs=0.06)       # the tiles' centres are uniform over the plane
-
-
 def realised(seed=1, **extra):
     w = tile_world(seed, **extra)
     return w, tiles.stats(w.params, w.pos, w.shape, w.color, w.terrain.tiles, world.bush_value)
 
 
-def test_graded_tiles_run_evenly_from_poor_to_rich_and_smoothness_makes_neighbours_alike():
-    w0, s0 = realised(2, tile_value_mode="graded", tile_within_mode="scatter", tile_spread=0.02)
-    ids = tile_of(w0)
-    means = np.sort([w0.value[ids == t].mean() for t in range(ids.max() + 1)])
-    plane = world.bush_value(w0.params.reward_function, *np.random.default_rng(1).uniform(0, 1, (2, 5000)))
-    assert means[0] < np.quantile(plane, 0.15) and means[-1] > np.quantile(plane, 0.85)
-    assert np.max(np.abs(np.diff(means) - np.ptp(means) / (len(means) - 1))) < 0.15 * np.ptp(means)
-
-    def neighbour_corr(passes):
-        out = []
-        for seed in range(4):
-            w = tile_world(seed, tile_value_mode="graded", tile_within_mode="scatter", tile_smoothness=passes)
-            ts = tiles.TileSet(w.terrain.tiles, w.pos)
-            m = np.array([w.value[ts.tile_of == t].mean() for t in range(ts.n_tiles)])
-            out += [(m[t], m[u]) for t in range(ts.n_tiles) for u in ts.neighbours[t]]
-        return np.corrcoef(np.array(out).T)[0, 1]
-    assert neighbour_corr(6) > neighbour_corr(0) + 0.3
+def test_the_pool_is_an_even_cover_of_the_feature_plane_and_a_placement_only_deals_it():
+    pool = tiles.bush_pool(400, np.random.default_rng(3))
+    assert pool.shape == (400, 2) and pool.min() >= 0.0 and pool.max() <= 1.0
+    cells = np.minimum((pool * 4).astype(int), 3)
+    assert np.bincount(cells[:, 0] * 4 + cells[:, 1], minlength=16).min() >= 15                  # an even cover: 25 a cell on average, never fewer than 15
+    dealt = tiles.place_random(None, None, pool, np.random.default_rng(1), None)
+    assert not np.array_equal(dealt, pool) and np.array_equal(np.sort(dealt, axis=0), np.sort(pool, axis=0))
+    assert np.array_equal(np.unique(dealt, axis=0), np.unique(pool, axis=0))                     # the same bushes, in another order
 
 
-def test_the_modes_are_tables_and_an_unknown_mode_is_an_error():
-    assert set(tiles.BETWEEN_MODES) >= {"none", "random", "graded", "bimodal"} and set(tiles.WITHIN_MODES) >= {"pool", "scatter", "gradient"} and set(tiles.ARRANGEMENTS) >= {"random"}
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_world_holds_the_whole_plane_and_stays_in_range(seed):
+    w = tile_world(seed)
+    assert 0.0 <= w.shape.min() and w.shape.max() <= 1.0 and 0.0 <= w.color.min() and w.color.max() <= 1.0
+    cells = np.minimum((np.stack([w.shape, w.color], axis=1) * 4).astype(int), 3)
+    assert len(np.unique(cells[:, 0] * 4 + cells[:, 1])) == 16
+
+
+def test_the_placements_are_a_table_and_an_unknown_one_is_an_error():
+    assert set(tiles.PLACEMENTS) == {"random"} and set(tiles.ARRANGEMENTS) >= {"random"}
     with pytest.raises(KeyError):
-        tile_world(tile_value_mode="nonsense")
-    with pytest.raises(KeyError):
-        tile_world(tile_within_mode="nonsense")
+        tile_world(tile_placement="nonsense")
 
 
-def test_no_pattern_anywhere_gives_tiles_that_differ_no_more_than_chance():
-    ratios = []
-    for seed in range(4):
-        _, s = realised(seed, tile_value_mode="none", tile_within_mode="pool")
-        ratios.append(s["contrast"])
-    assert np.mean(ratios) < 0.6                                       # the tile means vary only as nine bushes' means do (about 1/3 of the within SD), against several for patterned tiles
-    _, patterned = realised(1, tile_value_mode="random", tile_within_mode="scatter", tile_spread=0.05)
-    assert patterned["contrast"] > 2.0 * np.mean(ratios)
-
-
-def test_pure_tiles_have_no_spread_inside_and_the_same_pattern_in_every_tile_has_none_between():
-    _, pure = realised(1, tile_value_mode="random", tile_within_mode="scatter", tile_spread=0.0)
-    assert pure["within_sd"] == pytest.approx(0.0, abs=1e-6)
-    stats = [realised(seed, tile_value_mode="none", tile_within_mode="gradient", tile_gradient=0.5, tile_spread=0.02)[1] for seed in range(4)]
-    assert np.mean([s["tile_value_sd"] / s["within_sd"] for s in stats]) < 0.4 and min(s["within_sd"] for s in stats) > 0.3        # every tile alike (the means of nine bushes differ by about a third of the spread inside), each with a visible line inside
-
-
-def test_a_gradient_adds_spread_inside_a_tile_along_a_line():
-    _, none = realised(3, tile_value_mode="random", tile_within_mode="scatter", tile_spread=0.02)
-    _, grad = realised(3, tile_within_mode="gradient", tile_gradient=0.5, tile_spread=0.02)
-    assert grad["within_sd"] > none["within_sd"] + 0.2
-
-
-def test_the_bimodal_mode_sets_the_share_of_good_tiles():
-    shares = [realised(seed, tile_value_mode="bimodal", tile_within_mode="scatter", tile_good_fraction=0.3, tile_spread=0.04)[1]["good_tile_share"] for seed in range(4)]
-    assert np.mean(shares) == pytest.approx(0.3, abs=0.12)
-    few = np.mean([realised(seed, tile_value_mode="bimodal", tile_within_mode="scatter", tile_good_fraction=0.1, tile_spread=0.04)[1]["good_tile_share"] for seed in range(4)])
-    assert few < np.mean(shares)
+def test_random_placement_gives_tiles_that_differ_no_more_than_chance():
+    stats = [realised(seed)[1] for seed in range(4)]
+    assert np.mean([s["contrast"] for s in stats]) < 0.6                  # the tile means vary only as nine bushes' means do (about a third of the within SD)
+    assert min(s["within_sd"] for s in stats) > 0.5                       # and the bushes of a tile vary as the whole map does
 
 
 def test_the_neighbourhood_coverage_check_redraws_until_it_holds_and_an_impossible_one_is_an_error():
-    _, s = realised(2, tile_value_mode="random", tile_within_mode="scatter", tile_spread=0.04, tile_coverage_min=0.4)
-    assert s["coverage_min"] >= 0.4
-    with pytest.raises(ValueError, match="no assignment"):
-        tile_world(tile_value_mode="none", tile_within_mode="scatter", tile_spread=0.0, tile_coverage_min=0.5)               # identical tiles of identical bushes cover one cell
+    _, s = realised(2, tile_coverage_min=0.8)
+    assert s["coverage_min"] >= 0.8
+    with pytest.raises(ValueError, match="no placement"):
+        tile_world(tile_bushes=1, tile_coverage_min=0.6)                  # seven bushes cannot span more than seven of the sixteen cells
 
 
 def test_the_start_check_makes_the_tiles_around_the_start_differ():
-    _, s = realised(2, tile_value_mode="random", tile_within_mode="scatter", tile_spread=0.04, tile_start_spread_min=0.4)
-    assert s["start_spread"] >= 0.4
-
-
-def test_the_scatter_for_a_reward_sd_gives_that_sd():
-    p = tile_params()
-    spread = tiles.spread_for_reward_sd(p, world.bush_value, 0.5)
-    sds = [realised(seed, tile_value_mode="random", tile_within_mode="scatter", tile_spread=spread)[1]["within_sd"] for seed in range(4)]
-    assert np.mean(sds) == pytest.approx(0.5, abs=0.12)
-    with pytest.raises(ValueError, match="outside"):
-        tiles.spread_for_reward_sd(p, world.bush_value, 5.0)
-
-
-def test_the_default_is_no_pattern_anywhere():
-    _, default = realised(1)
-    _, explicit = realised(1, tile_value_mode="none", tile_within_mode="pool")
-    assert default == explicit
-    assert default["contrast"] < 0.8 and default["within_sd"] > 0.5      # bushes of a tile vary a lot, the tiles are about equally valuable
+    _, s = realised(2, tile_start_spread_min=0.15)
+    assert s["start_spread"] >= 0.15
 
 
 def test_stats_reports_the_realised_pattern():
@@ -212,7 +154,7 @@ def test_stats_reports_the_realised_pattern():
 def test_the_ground_level_of_a_tile_does_not_predict_its_value():
     ground, value = [], []
     for seed in range(10):
-        w = tile_world(seed, tile_value_mode="random", tile_within_mode="scatter")
+        w = tile_world(seed)
         ids = tile_of(w)
         for t in range(ids.max() + 1):
             ground.append(w.moisture[ids == t].mean())

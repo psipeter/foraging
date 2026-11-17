@@ -191,6 +191,14 @@ NONSEPARABLE_INTERACTION = 0.4                          # the interaction asked 
 CLASS_KLASS = {"additive": "corner", "multiplicative": "aligned", "nonseparable": "rotated"}      # the family each rung of the ladder is searched in
 
 
+CORNER_STRETCHES = (1.0, 2.0, 3.0)                      # the additive rung's Gaussian is round or stretched 2:1 or 3:1 (PI, 2026-11-17); the long axis (shape or colour) is a nuisance
+
+
+def corner_aspect(stretch, long_shape):
+    """The ratio of the shape width to the colour width of a stretched corner Gaussian: `stretch` times longer along shape when `long_shape`, else along colour."""
+    return float(stretch) if long_shape else 1.0 / float(stretch)
+
+
 def aligned_cap(gini):
     return float(np.interp(gini, [g for g, _ in ALIGNED_CAP], [c for _, c in ALIGNED_CAP]))
 
@@ -205,22 +213,28 @@ def _gaussian_from(x, rotated, scale, std):
     return gaussian(float(centre_shape), float(centre_color), float(across), float(aspect), float(x[4]) if rotated else 0.0, scale, std)
 
 
-def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0.02, 0.02), share=(0.25, 0.75), seed=0, corner=(1.0, 1.0)):
+def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0.02, 0.02), share=(0.25, 0.75), seed=0, corner=(1.0, 1.0), aspect=1.0):
     """The Gaussian map whose Gini is `gini` and raw interaction `interaction` (each within `tol`), found by a search over the family of `gaussian` (a centre anywhere, a short axis 0.05 to 1.5,
     an aspect 1 to 6, and for `klass` "rotated" an angle of 15 to 75 degrees; "aligned" maps have axes along the features, a log interaction of 0, and are additive or multiplicative according to
     the interaction asked: near 0 additive, larger multiplicative). Both features must pay: the share of the slope on shape lies within `share`. Raises ValueError, naming the closest map found,
     when the pair is not reachable (`map_region.py` shows the region). `klass` "corner" is the additive rung proper: the Gaussian centred exactly on a corner of the plane (`corner`, each coordinate 0 or 1:
-    that feature pays more when it is higher (1) or lower (0)), so both features pay monotonically; its two widths are solved for the Gini and the interaction that is left is the smallest the corner
-    allows (`interaction` None: minimised, which is what the additive rung is; a number is a target). The gain is not touched: `scale` is the peak and the equaliser (`solve_gain`) sets the level afterwards."""
+    that feature pays more when it is higher (1) or lower (0)), so both features pay monotonically; its widths have the ratio `aspect` (shape over colour; `corner_aspect`) and their size is solved for the Gini; the interaction and the shape share are what that gives (`interaction` is ignored). The gain is not touched: `scale` is the peak and the equaliser (`solve_gain`) sets the level afterwards."""
     from scipy.optimize import differential_evolution, minimize
     rotated = {"aligned": False, "rotated": True, "corner": False}[klass]
     at_corner = klass == "corner"
     if at_corner:
-        build = lambda x: ValueMap((Bump(float(corner[0]), float(corner[1]), float(x[0]), float(x[1]), 0.0, scale),), {"type": "flat", "sd": std})
-        bounds = [(0.08, 3.0), (0.08, 3.0)]
+        build = lambda x: ValueMap((Bump(float(corner[0]), float(corner[1]), float(x[0]) * aspect ** 0.5, float(x[0]) / aspect ** 0.5, 0.0, scale),), {"type": "flat", "sd": std})
+        bounds = [(0.08, 3.0)]
     else:
         build = lambda x: _gaussian_from(x, rotated, scale, std)
         bounds = [(0.0, 1.0), (0.0, 1.0), (0.05, 1.5), (1.0, 6.0)] + ([(15.0, 75.0)] if rotated else [])
+    if at_corner:                                                                 # one width left once the aspect is fixed: the Gini decides it, the interaction and shares follow
+        from scipy.optimize import brentq
+        best = build([brentq(lambda w: build([w]).descriptors()["gini"] - gini, *bounds[0], xtol=1e-5)])
+        d = best.descriptors()
+        if abs(d["gini"] - gini) > tol[0]:
+            raise ValueError(f"no corner Gaussian of aspect {aspect:.2f} with Gini {gini}: the closest has Gini {d['gini']:.3f}")
+        return best
 
     def loss(x, n):
         d = build(x).descriptors(n)

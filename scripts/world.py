@@ -15,7 +15,7 @@ SeedSequence (the order below is part of the format; add new streams at the end)
     8 bush id order (a shuffle of the finished bush table: an id says nothing about where a bush is)
     9 (unused since the per-bush random value was removed, 2026-11-17)
     10-16 (unused: the spatial balance, terrace and plane-coverage streams of the removed non-tiles generator; the numbers stay as they were)
-    17 tile grid (rotation, ground levels)   18 tile clusters   19 tiles' feature centres and scatter (see tiles.py)
+    17 tile grid (rotation, ground levels)   18 tile clusters   19 the pool of bushes and its placement (see tiles.py)
 
 Every world is a tiles world (hexagonal plateaus, a cluster of bushes in each; tiles.py). This module mirrors TerrainManager (mountain ramp,
 tree-site mask), Tree.ApplyAttributes (canopy radius) and RewardFunction/HarvestManager (bush value,
@@ -106,8 +106,8 @@ def _convert(value):
 FIELD_DEFAULTS = {"shape_varies": True, "color_varies": True, "shape_when_fixed": 0.5, "color_when_fixed": 0.5, "design_json": "",
                   "moisture_varies": True, "moisture_when_fixed": 0.5,
                   "layout": None, "assignment": None, "reward_stage": None,      # (stage names: None = the default, see stage_names)
-                  "tile_radius": 70.0, "tile_ramp_width": 14.0, "tile_moisture_levels": 4, "tile_bushes": 9, "tile_cluster_radius": 22.0, "tile_cluster_spacing": 12.0, "tile_spread": 0.12,
-                  "tile_arrangement": None, "tile_value_mode": None, "tile_within_mode": None, "tile_good_fraction": 0.25, "tile_smoothness": 0, "tile_gradient": 0.3, "tile_gradient_angle": -1.0,
+                  "tile_radius": 70.0, "tile_ramp_width": 14.0, "tile_moisture_levels": 4, "tile_bushes": 9, "tile_cluster_radius": 22.0, "tile_cluster_spacing": 12.0,
+                  "tile_arrangement": None, "tile_placement": None,
                   "tile_coverage_min": 0.0, "tile_start_spread_min": 0.0}               # (the tiles layout, tiles.py)
 
 
@@ -527,7 +527,7 @@ def read_unity_world(path):
 # --------------------------------------------------------------------------------------------------
 
 def assign_tiles(params, pos, terrain, rngs, reward):
-    """(shape, colour) dealt tile by tile (tiles.py `deal_features`, stream 19): each tile's bushes lie around a centre of the tile in the feature plane; a feature that does not vary
+    """(shape, colour) dealt tile by tile (tiles.py `deal_features`, stream 19): the pool of bushes placed over the tiles; a feature that does not vary
     is `*_when_fixed` everywhere."""
     n = len(pos)
     tile_shape, tile_color = tiles.deal_features(params, pos, terrain.tiles, rngs[19], reward)

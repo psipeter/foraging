@@ -285,11 +285,6 @@ public class WorldData
             { "tileBushes", config.TileBushes },
             { "tileClusterRadius", config.TileClusterRadius },
             { "tileClusterSpacing", config.TileClusterSpacing },
-            { "tileSpread", config.TileSpread },
-            { "tileGoodFraction", config.TileGoodFraction },
-            { "tileSmoothness", config.TileSmoothness },
-            { "tileGradient", config.TileGradient },
-            { "tileGradientAngle", config.TileGradientAngle },
             { "tileCoverageMin", config.TileCoverageMin },
             { "tileStartSpreadMin", config.TileStartSpreadMin }
         };

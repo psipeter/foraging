@@ -146,7 +146,7 @@ def test_sim_fields_cover_every_session_parameter_the_simulator_reads(monkeypatc
             sim.run_episode(REGISTRY[name](), w)
     sim.run_episode(ComposedAgent(Script(Explore(0.0, 40.0)), OracleCritic(), FullMemory()), worlds[0])   # walks: reads the mountain block
     tiles = dict(layout="tiles", assignment="tiles")                                # the modes that read their own fields
-    for extra in (dict(tile_value_mode="bimodal", tile_within_mode="scatter"), dict(tile_value_mode="graded", tile_within_mode="gradient"), dict(tile_within_mode="pool"),
+    for extra in (dict(tile_placement="random"),
                   dict(moisture_varies=False), dict(color_varies=False), dict(shape_varies=False)):
         world.generate_world(traced("FIX_T0", **({**tiles, **extra} if any(k.startswith("tile_") for k in extra) else extra)), 0)
     world.generate_world(traced("FIX_T0", **tiles), 0)

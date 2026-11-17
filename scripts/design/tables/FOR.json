@@ -1,0 +1,20 @@
+{
+ "code": "FOR",
+ "session": "FOR_S1",
+ "duration": 180,
+ "note": "The baseline of FOR (PI, 2026-11-17): the additive rung, a round Gaussian in the corner where both features pay more when higher.",
+ "cells": [
+  {
+   "id": 1,
+   "class": "additive",
+   "gini": 0.4,
+   "travel_time": 8.0,
+   "corner": [
+    1,
+    1
+   ],
+   "aspect": 1.0,
+   "world_seed": 9182
+  }
+ ]
+}

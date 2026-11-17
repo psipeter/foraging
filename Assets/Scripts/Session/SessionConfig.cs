@@ -249,22 +249,10 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float tileClusterRadius = 22f;
     [Tooltip("Smallest distance (world units) between two bushes of a cluster.")]
     [SerializeField] private float tileClusterSpacing = 12f;
-    [Tooltip("Spread (standard deviation, feature units 0-1) of the bushes' shape and colour around their tile's centre in the feature plane: how alike the bushes of a tile are.")]
-    [SerializeField] private float tileSpread = 0.12f;
     [Tooltip("How the bushes lie inside a tile (scripts/tiles.py ARRANGEMENTS). Empty = random.")]
     [SerializeField] private string tileArrangement = "";
-    [Tooltip("The BETWEEN layer: how the tiles' centres in the feature plane, and so the tiles' values, are dealt (scripts/tiles.py BETWEEN_MODES: none, random, graded, bimodal). Empty = none (no difference between tiles).")]
-    [SerializeField] private string tileValueMode = "";
-    [Tooltip("The WITHIN layer: how a tile's bushes get their features from the tile's centre and their place in the cluster (scripts/tiles.py WITHIN_MODES: pool, scatter, gradient). Empty = pool (a stratified draw of the whole plane: much variation inside every tile).")]
-    [SerializeField] private string tileWithinMode = "";
-    [Tooltip("bimodal only: the share of the tiles that are good (centres where the reward is at least 70% of the best); the rest are poor.")]
-    [SerializeField] [Range(0f, 1f)] private float tileGoodFraction = 0.25f;
-    [Tooltip("graded and bimodal: passes of averaging with the neighbouring tiles applied to the random field that decides which tiles are richer, so neighbouring tiles have similar values (0 = independent).")]
-    [SerializeField] private int tileSmoothness = 0;
-    [Tooltip("gradient only: how far (feature units) the features move from one side of a cluster to the other.")]
-    [SerializeField] private float tileGradient = 0.3f;
-    [Tooltip("gradient only: the direction in the (shape, colour) plane in degrees; -1 = a random one per tile.")]
-    [SerializeField] private float tileGradientAngle = -1f;
+    [Tooltip("How the world's pool of bushes (an even cover of the feature plane) is dealt to the tiles (scripts/tiles.py PLACEMENTS: random). Empty = random.")]
+    [SerializeField] private string tilePlacement = "";
     [Tooltip("A tile together with its six neighbours must have bushes in at least this share of the feature plane (4 x 4 cells), for every tile with all six; the assignment is redrawn until it holds. 0 = off.")]
     [SerializeField] [Range(0f, 1f)] private float tileCoverageMin = 0f;
     [Tooltip("The tiles around the start must differ in mean reward by at least this share of the reward's range over the feature plane; the assignment is redrawn until it holds. 0 = off.")]
@@ -437,14 +425,8 @@ public class SessionConfig : ScriptableObject
     public int TileBushes => tileBushes;
     public float TileClusterRadius => tileClusterRadius;
     public float TileClusterSpacing => tileClusterSpacing;
-    public float TileSpread => tileSpread;
+    public string TilePlacement => tilePlacement;
     public string TileArrangement => tileArrangement;
-    public string TileValueMode => tileValueMode;
-    public string TileWithinMode => tileWithinMode;
-    public float TileGoodFraction => tileGoodFraction;
-    public int TileSmoothness => tileSmoothness;
-    public float TileGradient => tileGradient;
-    public float TileGradientAngle => tileGradientAngle;
     public float TileCoverageMin => tileCoverageMin;
     public float TileStartSpreadMin => tileStartSpreadMin;
     public string DesignJson => designJson;

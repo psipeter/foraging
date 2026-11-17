@@ -235,6 +235,8 @@ The six example cells realised again at 180 s (anchor 1125): all on the first dr
 
 ### 7.4 TODOs left open on purpose
 
+- **Advanced tile placements (2026-11-18):** the layout is a pool of bushes (an even cover of the plane) and a placement; only `random` exists. To recreate as placements: value-sorted, a mix with one number for the share of the value variance between patches (contrast and diversity as knobs again), a smooth field of patch means, a gradient inside a patch. Diversity and contrast are not knobs until then. The search among worlds was removed (`cells.choose_world`, `world_candidates`): with random placement one world is within about 10 percent of the anchor, and a redraw a placement needs belongs to that placement (DECISIONS, "The search among worlds is removed").
+
 - **Value-map design:** which maps to test, and the equalising transforms beyond a gain (and the noise-map transforms), chosen once the raw maps are in mind.
 - **Ranking pools relative to the value map:** methods to sample evenly across the map's reward range and gradients; ranking sets are then chosen from the map, not from today's tie-gap rule.
 
@@ -264,3 +266,9 @@ The six example cells realised again at 180 s (anchor 1125): all on the first dr
 ## 10. What does not change
 
 The data columns, the replay and visibility rules, the harvest rule, the ranking-break design, the tutorial, the pre-drawn per-fruit rewards in the world file. `scripts/fixtures/` and `FIX_T0` are not touched; the tests build sessions from stated configurations (`synthetic.py`).
+
+**Update (2026-11-17, after M5): the additive rung is a corner Gaussian round or stretched 2:1 or 3:1** (`calibrate_map(..., "corner", aspect=)`; `cells.aspect_of`; DECISIONS "The additive rung is a corner Gaussian stretched"). The matrix `m4d` was run before this change and was not rerun. FOR is 180 s, TUT 120 s.
+
+**Update (2026-11-18): the layout is a pool and a placement; diversity is no longer a knob.** `tiles.py` builds the bushes' features as an even cover of the plane (the pool) dealt to the tile sites by a placement; only `random` is implemented (DECISIONS, "Bush generation: a pool of bushes, then a placement"). The earlier between and within modes, `tile_spread` and `diversity_settings` are deleted, so the steps above that set contrast and diversity (step 3 of the recipe, the diversity rows of the M3 and M4 tables, the four-knob independence results) describe the old layouts and are history; the knobs now are Gini, complexity and travel time (`realize`, `cells`, `independence` take three), diversity and contrast are measured. Redoing them as placements is a TODO (7.4). FOR (8 s, 180 s) and TUT (5 s, 120 s) are realised cells at the baseline Gini 0.4, round additive corner.
+
+The world search described under M5 (choosing a world among candidates on the learner's and oracle's points) was removed on 2026-11-18; a cell's world is its `world_seed` or its first seed.

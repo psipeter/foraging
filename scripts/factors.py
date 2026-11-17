@@ -1,11 +1,11 @@
 """The factors of a session as realised in a generated world (docs/SESSION_FACTORS_PLAN.md, milestone 1): what to measure on a world, so that a knob's target can be compared with what was made.
 
     ./venv/bin/python scripts/factors.py measure FOR_S1 [--seeds 0-9]
-    ./venv/bin/python scripts/factors.py calibrate FOR_S1 --travel-time 8 --diversity 0.5 [--seeds 0-19]
+    ./venv/bin/python scripts/factors.py calibrate FOR_S1 --travel-time 8 [--seeds 0-19]
 
 `measure(world)` takes a world from `world.generate_world` and returns the patch factors (travel time, contrast between tiles, diversity within a tile), the mean bush value (anchor a of the
 plan), the bush Gini, the realised per-fruit noise and the descriptors of the reward map (`value_maps.descriptors`, the part that does not depend on the world's draw). A tile is a patch: its
-cluster of bushes. `measure` changes nothing; the calibrators (`travel_time_settings`, `diversity_settings`, `calibrate`) go the other way, from a target to the generator settings that make it, and
+cluster of bushes. `measure` changes nothing; the calibrators (`travel_time_settings`, `calibrate`) go the other way, from a target to the generator settings that make it, and
 `verify` generates worlds from those settings and reports the realised value against the target and what else moved.
 """
 
@@ -68,22 +68,10 @@ def travel_time_settings(params, seconds):
     return {"tile_radius": (gap + 2.0 * float(params.tile_cluster_radius)) / math.sqrt(3.0)}
 
 
-def diversity_settings(params, target_sd, seed=0):
-    """The tile layout and `tile_spread` at which a tile's bushes have a mean reward SD of `target_sd`: tile centres uniform over the plane (between `random`) and each tile's bushes scattered around
-    its centre (within `scatter`), the spread solved by `tiles.spread_for_reward_sd` on the session's reward. (Under the default modes, `none` and `pool`, a tile's bushes are a draw from the
-    whole map, the spread is not read, and the diversity is the map's own SD: not a knob.) Refused outside the range the reward can give."""
-    reward = REWARDS[stage_names(params)[2]]
-    return {"tile_value_mode": "random", "tile_within_mode": "scatter", "tile_spread": tiles.spread_for_reward_sd(params, reward, float(target_sd), seed=seed)}
-
-
-def calibrate(params, travel_time=None, diversity=None):
-    """The settings for the stated targets (a target left None is not set): {"tile_radius": ..., "tile_value_mode": ..., "tile_within_mode": ..., "tile_spread": ...}."""
-    settings = {}
-    if travel_time is not None:
-        settings.update(travel_time_settings(params, travel_time))
-    if diversity is not None:
-        settings.update(diversity_settings(params, diversity))
-    return settings
+def calibrate(params, travel_time=None):
+    """The settings for the stated target (a target left None is not set): {"tile_radius": ...}. The within-patch diversity is no longer set: with the pool placed at random (`tiles.PLACEMENTS`) it is
+    the map's own, and `measure` reports it."""
+    return travel_time_settings(params, travel_time) if travel_time is not None else {}
 
 
 def policy_points(session, agent="nearest", seeds=range(6), **overrides):
@@ -122,31 +110,22 @@ def check(session, valuemap, settings, seeds, agents=("nearest", "oracle"), **ov
             "points": {a: stats(sim.run_n(REGISTRY[a], worlds=worlds).totals) for a in agents}}
 
 
-def points_on_world(session, valuemap, settings, seed, agents=(ANCHOR_AGENT,), **overrides):
-    """{agent: points} the registry agents earn on the one world of `seed` (a session is one world, whatever the average over worlds is)."""
-    import sim
-    from agents import REGISTRY
-    world = generate_world(load_session(session, **overrides, **settings, **valuemap.compile()), seed)
-    return {a: float(sim.run_n(REGISTRY[a], worlds=[world]).totals[0]) for a in agents}
-
-
-def realize(session, gini, interaction, klass, travel_time, diversity, anchor=None, agent=ANCHOR_AGENT, seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, max_peak=MAX_PEAK, corner=(1.0, 1.0), seed=0, **overrides):
-    """A session from four knobs (milestone 3's calibrators together): the Gaussian with the stated sparsity (`gini`) and complexity (`klass`, `interaction`), the tile layout with the stated `travel_time`
-    and within-patch `diversity` (reward units), and the gain at which `agent` earns `anchor` points in a session (default: `ANCHOR_RATE` times the session's duration). Returns {"map": the ValueMap (gain included), "settings": the layout settings,
+def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=ANCHOR_AGENT, seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, max_peak=MAX_PEAK, corner=(1.0, 1.0), aspect=1.0, seed=0, **overrides):
+    """A session from three knobs (milestone 3's calibrators together): the Gaussian with the stated sparsity (`gini`) and complexity (`klass`, `interaction`), the tile layout with the stated `travel_time`
+    (the pool of bushes placed at random: no diversity knob since 2026-11-18), and the gain at which `agent` earns `anchor` points in a session (default: `ANCHOR_RATE` times the session's duration). Returns {"map": the ValueMap (gain included), "settings": the layout settings,
     "fields": the serialized SessionConfig fields of both, "achieved": `check` on fresh worlds, "within_tolerance": whether the anchor was met, "rounds": how many}.
 
-    The pieces depend on one another: a diversity in points scales with the gain, and the points depend on the layout (a longer walk earns less), so the layout is solved for the current gain and the
-    gain for the current layout on the worlds of `seeds`, round after round until the gain changes by less than 5 percent (at most `steps`; ValueError if it does not settle). Those few worlds give
+    The points depend on the layout (a longer walk earns less) and the gain is solved for the layout (the layout does not depend on the gain now; the rounds remain for the learner's jagged points) on the worlds of `seeds`, round after round until the gain changes by less than 5 percent (at most `steps`; ValueError if it does not settle). Those few worlds give
     the points a sampling error of several percent, so a correction pass follows: `check` on the fresh `check_seeds` (40 worlds, common to every session, so sessions are equal on the same worlds; the points of one world vary by a third under a high contrast, so against the population the standard error is about 5 percent), and while the points are off the
     `anchor` by more than `tolerance` (a share) the gain is scaled by anchor / points, the layout re-solved for it and the session checked again (at most twice). `overrides` are `load_session`
-    overrides (for example `session_duration`). `corner` and `seed` are the nuisance of the map (which corner an additive map sits in, the start of the search that places the other bumps)."""
+    overrides (for example `session_duration`). `corner`, `aspect` and `seed` are the nuisance of the map (which corner an additive map sits in and how its Gaussian is stretched, the start of the search that places the other bumps)."""
     base = load_session(session, **overrides)
     anchor = anchor_points(base.session_duration) if anchor is None else anchor
-    shape_map = value_maps.calibrate_map(gini, interaction, klass, std=float(base.reward_std), corner=corner, seed=seed)
+    shape_map = value_maps.calibrate_map(gini, interaction, klass, std=float(base.reward_std), corner=corner, aspect=aspect, seed=seed)
     with_gain = lambda g: value_maps.ValueMap(shape_map.bumps, shape_map.noise, {"type": "gain", "value": float(g)})
     current, rounds = shape_map, 0
     for rounds in range(1, steps + 1):
-        settings = calibrate(load_session(session, **overrides, **current.compile()), travel_time, diversity)
+        settings = {**calibrate(load_session(session, **overrides, **current.compile()), travel_time), "tile_placement": "random"}
         solved = value_maps.solve_gain(shape_map, policy_points(session, agent, seeds, **overrides, **settings), anchor, rel_tol=0.03)
         settled = abs(solved.gain() / current.gain() - 1.0) < 0.05
         current = with_gain(solved.gain())
@@ -155,14 +134,14 @@ def realize(session, gini, interaction, klass, travel_time, diversity, anchor=No
         if settled:
             break
     else:
-        raise ValueError(f"the gain and the layout did not settle in {steps} rounds (gain {current.gain():.3f}); lower the diversity or the travel time, or raise `steps`")
+        raise ValueError(f"the gain and the layout did not settle in {steps} rounds (gain {current.gain():.3f}); change the travel time or raise `steps`")
     achieved = check(session, current, settings, check_seeds, agents=tuple(dict.fromkeys(("nearest", "oracle", agent))), **overrides)
     for _ in range(2):
         points = achieved["points"][agent][0]
         if abs(points / anchor - 1.0) <= tolerance:
             break
         current = with_gain(current.gain() * anchor / points)
-        settings = calibrate(load_session(session, **overrides, **current.compile()), travel_time, diversity)
+        settings = {**calibrate(load_session(session, **overrides, **current.compile()), travel_time), "tile_placement": "random"}
         achieved = check(session, current, settings, check_seeds, agents=tuple(dict.fromkeys(("nearest", "oracle", agent))), **overrides)
     within = abs(achieved["points"][agent][0] / anchor - 1.0) <= tolerance
     peak = current.descriptors()["max"]
@@ -188,15 +167,14 @@ def main():
     ap.add_argument("session", help="a session asset name, e.g. FOR_S1")
     ap.add_argument("--seeds", default=None, help="world seeds, e.g. 0-9 or 1,2,7 (default: the session's own seed)")
     ap.add_argument("--travel-time", type=float, default=None, help="calibrate: target travel time in seconds")
-    ap.add_argument("--diversity", type=float, default=None, help="calibrate: target within-patch reward SD")
     args = ap.parse_args()
     params = load_session(args.session)
     if args.command == "calibrate":
-        settings = calibrate(params, args.travel_time, args.diversity)
+        settings = calibrate(params, args.travel_time)
         print("settings:", {k: (round(v, 4) if isinstance(v, float) else v) for k, v in settings.items()})
         seeds = _parse_seeds(args.seeds) if args.seeds else list(range(10))
         rows = verify(args.session, settings, seeds)
-        for key, target in (("travel_time", args.travel_time), ("diversity", args.diversity)):
+        for key, target in (("travel_time", args.travel_time),):
             if target is not None:
                 got = np.array([r[key] for r in rows])
                 print(f"  {key}: target {target}, realised {got.mean():.3f} +- {got.std():.3f} over {len(seeds)} worlds ({100 * (got.mean() - target) / target:+.1f}%)")

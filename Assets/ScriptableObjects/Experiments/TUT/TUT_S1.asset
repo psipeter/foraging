@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: TUT_S1
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
   sessionDuration: 120
-  worldSeed: 6001
+  worldSeed: 9102
   isPractice: 1
   freezeSun: 0
   rankingEvery: 1
@@ -55,10 +55,10 @@ MonoBehaviour:
     bumps:
     - centerShape: 0
       centerColor: 1
-      width: 0.5319
-      widthColor: 0.9213
+      width: 0.5017864
+      widthColor: 0.5017864
       angle: 0
-      height: 4
+      height: 5.5214725
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -91,7 +91,7 @@ MonoBehaviour:
   spentTint: {r: 0.55, g: 0.5, b: 0.42, a: 1}
   fruitPopDuration: 0.15
   showHarvestHint: 1
-  rewardFeedbackMax: 4
+  rewardFeedbackMax: 6
   rewardSizeScaling: 1
   popupScale: 1.7
   popupExtraScale: 0.9
@@ -139,15 +139,17 @@ MonoBehaviour:
   layout: tiles
   assignment: tiles
   rewardStage: 
-  designJson: '{"cell": "tutorial", "experiment": "TUT", "index": 1, "instance":
-    "TUT_S1", "tutorial": true, "value_map": {"bumps": [{"angle": 0.0, "center_color":
-    1.0, "center_shape": 0.0, "height": 4.0, "width": 0.5319, "width_color": 0.9213}],
-    "equaliser": {"type": "gain", "value": 1.0}, "noise": {"sd": 0.6, "type": "flat"}},
-    "value_map_descriptors": {"effective_weight_color": 1.1121, "effective_weight_shape":
-    2.7473, "effective_weight_total": 3.8594, "fraction_above_half_max": 0.5186,
-    "gini": 0.2748, "interaction": 0.0238, "log_interaction": 0.0, "max": 4.0, "mean":
-    2.0874, "min": 0.3791, "nonlinearity": 0.0377, "range": 3.6209, "shape_share":
-    0.7118}}'
+  designJson: '{"calibrator": 1, "cell": "tutorial", "experiment": "TUT", "index":
+    1, "instance": "TUT_S1", "knobs": {"aspect": 1.0, "class": "additive", "corner":
+    [0, 1], "gini": 0.4, "travel_time": 5.0, "world_candidates": 10}, "tutorial":
+    true, "value_map": {"bumps": [{"angle": 0.0, "center_color": 1.0, "center_shape":
+    0.0, "height": 4.0, "width": 0.5017864110731842, "width_color": 0.5017864110731842}],
+    "equaliser": {"type": "gain", "value": 1.380368098159509}, "noise": {"sd": 0.6,
+    "type": "flat"}}, "value_map_descriptors": {"effective_weight_color": 2.8368,
+    "effective_weight_shape": 2.8368, "effective_weight_total": 5.6735, "fraction_above_half_max":
+    0.2749, "gini": 0.4, "interaction": 0.1045, "log_interaction": 0.0, "max": 5.5215,
+    "mean": 1.9843, "min": 0.104, "nonlinearity": 0.1133, "range": 5.4174, "shape_share":
+    0.5}, "world_seed": 9102}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1
@@ -162,20 +164,14 @@ MonoBehaviour:
   fruitExposureCompensation: 1
   canopyTintDark: {r: 0.55, g: 0.7, b: 0.65, a: 1}
   canopyTintLight: {r: 1.3, g: 1.2, b: 1.3, a: 1}
-  tileRadius: 45
+  tileRadius: 49.79646
   tileRampWidth: 14
   tileMoistureLevels: 4
   tileBushes: 9
   tileClusterRadius: 15
   tileClusterSpacing: 10
-  tileSpread: 0.12
   tileArrangement: random
-  tileValueMode: 
-  tileWithinMode: 
-  tileGoodFraction: 0.25
-  tileSmoothness: 0
-  tileGradient: 0.3
-  tileGradientAngle: -1
+  tilePlacement: random
   tileCoverageMin: 0
   tileStartSpreadMin: 0
   terrainMaxElevation: 9

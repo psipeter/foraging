@@ -146,3 +146,13 @@ def test_calibrate_map_finds_a_map_with_the_stated_sparsity_and_complexity_and_s
     assert abs(rotated["gini"] - 0.4) <= 0.04 and abs(rotated["interaction"] - 0.4) <= 0.04 and rotated["log_interaction"] >= vm.ROTATED_LOG_MIN
     with pytest.raises(ValueError, match="closest"):
         vm.calibrate_map(0.3, 0.3, "aligned", tol=(0.02, 0.02))                                     # an axis-aligned map this smooth cannot have so much interaction
+
+
+@pytest.mark.parametrize("stretch", vm.CORNER_STRETCHES)
+@pytest.mark.parametrize("long_shape", [True, False])
+def test_the_corner_map_has_the_stated_gini_and_stretch_and_the_stretch_lowers_the_interaction(stretch, long_shape):
+    m = vm.calibrate_map(0.5, None, "corner", corner=(0.0, 1.0), aspect=vm.corner_aspect(stretch, long_shape))
+    bump, d = m.bumps[0], m.descriptors()
+    assert abs(d["gini"] - 0.5) < 0.02 and (bump.center_shape, bump.center_color) == (0.0, 1.0)
+    assert abs(max(bump.width, bump.width_color) / min(bump.width, bump.width_color) - stretch) < 1e-6 and (bump.width > bump.width_color) == (long_shape and stretch > 1)
+    assert d["interaction"] < {1.0: 0.2, 2.0: 0.1, 3.0: 0.05}[stretch]

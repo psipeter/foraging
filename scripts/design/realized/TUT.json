@@ -1,0 +1,135 @@
+{
+ "code": "TUT",
+ "session": "FOR_S1",
+ "duration": 120.0,
+ "cells": [
+  {
+   "id": 1,
+   "status": "ok",
+   "knobs": {
+    "class": "additive",
+    "gini": 0.4,
+    "travel_time": 5.0,
+    "corner": [
+     0,
+     1
+    ],
+    "aspect": 1.0,
+    "world_seed": 9102
+   },
+   "interaction": null,
+   "draw": 0,
+   "failed_draws": [],
+   "map": {
+    "bumps": [
+     {
+      "center_shape": 0.0,
+      "center_color": 1.0,
+      "width": 0.5017864110731842,
+      "width_color": 0.5017864110731842,
+      "angle": 0.0,
+      "height": 4.0
+     }
+    ],
+    "noise": {
+     "type": "flat",
+     "sd": 0.6
+    },
+    "equaliser": {
+     "type": "gain",
+     "value": 1.380368098159509
+    }
+   },
+   "settings": {
+    "tile_radius": 49.79646071760523,
+    "tile_placement": "random"
+   },
+   "peak": 5.521472392638036,
+   "feedback_max": 6,
+   "duration": 120.0,
+   "anchor_points": 750.0,
+   "world_seed": 9102,
+   "achieved": {
+    "factors": {
+     "travel_time": [
+      5.0,
+      0.0
+     ],
+     "travel_time_nearest_bush": [
+      5.297738866651505,
+      0.004049597787026247
+     ],
+     "travel_time_centres": [
+      7.666666666666667,
+      0.0
+     ],
+     "contrast": [
+      0.47097433386264437,
+      0.00885399092223204
+     ],
+     "neighbour_difference": [
+      0.5390609577765687,
+      0.011456638291760732
+     ],
+     "diversity": [
+      1.384099694770737,
+      0.003955241525968301
+     ],
+     "mean_bush_value": [
+      1.986397898827261,
+      0.0008504691981842783
+     ],
+     "bush_gini": [
+      0.39721763902969204,
+      0.00011591901772901417
+     ],
+     "max_bush_value": [
+      5.5053123237900765,
+      0.0016442966663277817
+     ],
+     "noise_sd": [
+      0.6672991238050872,
+      0.0016861538464075128
+     ],
+     "max_fruit": [
+      7.025,
+      0.024999999999999998
+     ],
+     "share_fruit_over_cap": [
+      0.0,
+      0.0
+     ],
+     "n_tiles": [
+      43.075,
+      0.16941641914797712
+     ],
+     "n_bushes": [
+      387.675,
+      1.524747772331794
+     ],
+     "walk_visits": [
+      24.0,
+      0.0
+     ]
+    },
+    "points": {
+     "nearest": [
+      655.8,
+      12.052726045513731
+     ],
+     "oracle": [
+      885.7,
+      9.76474558860887
+     ],
+     "learner": [
+      738.45,
+      13.051817340793422
+     ]
+    }
+   },
+   "within_tolerance": true,
+   "calibrator": 1,
+   "seconds": 103
+  }
+ ]
+}
