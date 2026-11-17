@@ -51,6 +51,7 @@ def measure(world):
             "contrast": float(means.std()), "neighbour_difference": float(np.mean([abs(means[t] - means[u]) for t, u in pairs])), "diversity": float(within.mean()),
             "mean_bush_value": float(v.mean()), "bush_gini": value_maps.gini(v), "max_bush_value": float(v.max()),
             "noise_sd": float(noise.std()) if noise.size > 1 else float("nan"),
+            "max_fruit": float(world.fruit_reward.max()), "share_fruit_over_cap": float(np.mean(world.fruit_reward > FRUIT_CAP)),
             "n_tiles": int(ts.n_tiles), "n_bushes": int(len(v)), "walk_visits": float(params.session_duration) / (gap / speed)}
 
 
@@ -96,7 +97,10 @@ def policy_points(session, agent="nearest", seeds=range(6), **overrides):
     return points
 
 
-ANCHOR_POINTS = 700.0           # the points the `nearest` policy earns in a 120 s session, held equal across sessions by the gain (provisional; docs/DECISIONS.md, "The anchor is the naive forager's points")
+ANCHOR_AGENT = "learner"        # the registry agent whose points the gain holds equal across sessions: a mid-quality learner, whose parameters are to be tuned toward the human data over time (docs/DECISIONS.md, "The anchor is a mid-quality learner")
+ANCHOR_POINTS = 750.0           # the points `ANCHOR_AGENT` earns in a 120 s session of the reference (FOR_S1, the additive map at gain 1, the default layout): 754 +- 7 on 40 worlds, rounded
+FRUIT_CAP = 9                   # the per-fruit range of every session is 0 to this (PI, 2026-11-17)
+MAX_PEAK = 8.0                  # so the best bush is worth at most this: with the noise (SD 0.6) a fruit of the best bush stays at or below FRUIT_CAP
 
 
 def check(session, valuemap, settings, seeds, agents=("nearest", "oracle"), **overrides):
@@ -113,38 +117,43 @@ def check(session, valuemap, settings, seeds, agents=("nearest", "oracle"), **ov
             "points": {a: stats(sim.run_n(REGISTRY[a], worlds=worlds).totals) for a in agents}}
 
 
-def realize(session, gini, interaction, klass, travel_time, diversity, anchor=ANCHOR_POINTS, agent="nearest", seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, **overrides):
+def realize(session, gini, interaction, klass, travel_time, diversity, anchor=ANCHOR_POINTS, agent=ANCHOR_AGENT, seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, max_peak=MAX_PEAK, corner=(1.0, 1.0), **overrides):
     """A session from four knobs (milestone 3's calibrators together): the Gaussian with the stated sparsity (`gini`) and complexity (`klass`, `interaction`), the tile layout with the stated `travel_time`
     and within-patch `diversity` (reward units), and the gain at which `agent` earns `anchor` points in a session. Returns {"map": the ValueMap (gain included), "settings": the layout settings,
     "fields": the serialized SessionConfig fields of both, "achieved": `check` on fresh worlds, "within_tolerance": whether the anchor was met, "rounds": how many}.
 
     The pieces depend on one another: a diversity in points scales with the gain, and the points depend on the layout (a longer walk earns less), so the layout is solved for the current gain and the
-    gain for the current layout on the worlds of `seeds`, round after round until the gain changes by less than 2 percent (at most `steps`; ValueError if it does not settle). Those few worlds give
+    gain for the current layout on the worlds of `seeds`, round after round until the gain changes by less than 5 percent (at most `steps`; ValueError if it does not settle). Those few worlds give
     the points a sampling error of several percent, so a correction pass follows: `check` on the fresh `check_seeds` (40 worlds, common to every session, so sessions are equal on the same worlds; the points of one world vary by a third under a high contrast, so against the population the standard error is about 5 percent), and while the points are off the
     `anchor` by more than `tolerance` (a share) the gain is scaled by anchor / points, the layout re-solved for it and the session checked again (at most twice). `overrides` are `load_session`
     overrides (for example `session_duration`)."""
     base = load_session(session, **overrides)
-    shape_map = value_maps.calibrate_map(gini, interaction, klass, std=float(base.reward_std))
+    shape_map = value_maps.calibrate_map(gini, interaction, klass, std=float(base.reward_std), corner=corner)
     with_gain = lambda g: value_maps.ValueMap(shape_map.bumps, shape_map.noise, {"type": "gain", "value": float(g)})
     current, rounds = shape_map, 0
     for rounds in range(1, steps + 1):
         settings = calibrate(load_session(session, **overrides, **current.compile()), travel_time, diversity)
-        solved = value_maps.solve_gain(shape_map, policy_points(session, agent, seeds, **overrides, **settings), anchor, rel_tol=0.02)
-        settled = abs(solved.gain() / current.gain() - 1.0) < 0.02
+        solved = value_maps.solve_gain(shape_map, policy_points(session, agent, seeds, **overrides, **settings), anchor, rel_tol=0.03)
+        settled = abs(solved.gain() / current.gain() - 1.0) < 0.05
         current = with_gain(solved.gain())
+        if max_peak is not None and current.descriptors()["max"] > max_peak * 1.15:
+            break                                                     # far over the cap already: no point in refining; the check below refuses it
         if settled:
             break
     else:
         raise ValueError(f"the gain and the layout did not settle in {steps} rounds (gain {current.gain():.3f}); lower the diversity or the travel time, or raise `steps`")
-    achieved = check(session, current, settings, check_seeds, **overrides)
+    achieved = check(session, current, settings, check_seeds, agents=tuple(dict.fromkeys(("nearest", "oracle", agent))), **overrides)
     for _ in range(2):
         points = achieved["points"][agent][0]
         if abs(points / anchor - 1.0) <= tolerance:
             break
         current = with_gain(current.gain() * anchor / points)
         settings = calibrate(load_session(session, **overrides, **current.compile()), travel_time, diversity)
-        achieved = check(session, current, settings, check_seeds, **overrides)
+        achieved = check(session, current, settings, check_seeds, agents=tuple(dict.fromkeys(("nearest", "oracle", agent))), **overrides)
     within = abs(achieved["points"][agent][0] / anchor - 1.0) <= tolerance
+    peak = current.descriptors()["max"]
+    if max_peak is not None and peak > max_peak:
+        raise ValueError(f"the best bush would be worth {peak:.1f} points (gain {current.gain():.2f}), over the cap of {max_peak}: this sparsity cannot hold the anchor of {anchor:.0f} points within the per-fruit range of 0 to {FRUIT_CAP}")
     return {"map": current, "settings": settings, "fields": {**current.fields(), **fields(settings)}, "achieved": achieved, "within_tolerance": within, "rounds": rounds}
 
 

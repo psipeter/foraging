@@ -8,8 +8,8 @@
 points measured on fresh worlds, whether the anchor was met, whether a ranking pool could be built) or the reason it could not be made (an unreachable pair, a diversity the map cannot give, a gain
 that does not settle). A rerun with the same tag skips the settings already done. `report` prints the failures, the correlation matrix of the realised factors and the side effects of each knob.
 
-The knobs (the PI's ranges, 2026-11-17): Gini 0.2 to 0.8; travel time 3 to 12 s; within-patch diversity 0.2 to 0.9 reward units; complexity in the three classes of the ladder (additive: an aligned map
-with a small interaction; multiplicative: aligned, an interaction of 60 percent of what an aligned map of that Gini can reach; non-separable: rotated, an interaction of 0.15 to 0.65).
+The knobs (the PI's ranges, 2026-11-17): Gini 0.3 to 0.7 (0.2 to 0.8 in the first runs: 0.2 is too undifferentiated to learn from, and above 0.7 few classes stay under the cap); travel time 3 to 12 s; within-patch diversity 0.2 to 0.9 reward units; complexity in the three classes of the ladder (additive: an aligned map
+with the smallest interaction that leaves; multiplicative: aligned, an interaction of 90 percent of what an aligned map of that Gini can reach; non-separable: rotated, an interaction of 0.15 to 0.65).
 """
 
 import argparse
@@ -24,9 +24,9 @@ import factors
 import value_maps
 
 ROOT = Path(__file__).resolve().parent.parent
-RANGES = {"gini": (0.2, 0.8), "travel_time": (3.0, 12.0), "diversity": (0.2, 0.9)}
+RANGES = {"gini": (0.3, 0.7), "travel_time": (3.0, 12.0), "diversity": (0.2, 0.9)}
 ROTATED_INTERACTION = (0.15, 0.65)
-ADDITIVE_INTERACTION = 0.05
+MULTIPLICATIVE_SHARE_OF_CAP = 0.9                                            # the multiplicative rung asks for this share of the interaction an axis-aligned Gaussian of that Gini can reach: as interactive as that family gets
 ALIGNED_CAP = ((0.2, 0.06), (0.4, 0.12), (0.6, 0.21), (0.8, 0.37))        # what an axis-aligned Gaussian can reach, by Gini (docs/SESSION_FACTORS_PLAN.md, the reachable region)
 CLASSES = ("additive", "multiplicative", "nonseparable")
 
@@ -39,16 +39,18 @@ def design(n=40, seed=0):
     """`n` knob settings spread evenly over the ranges (a Latin hypercube over Gini, class, the position within the class, travel time and diversity)."""
     from scipy.stats import qmc
     out = []
+    rng = np.random.default_rng(seed)
     for gu, cu, iu, tu, du in qmc.LatinHypercube(d=5, seed=seed).random(n):
         gini = RANGES["gini"][0] + gu * (RANGES["gini"][1] - RANGES["gini"][0])
         name = CLASSES[min(int(cu * 3), 2)]
+        corner = [int(c) for c in rng.integers(0, 2, 2)]                     # which feature pays more when higher: a nuisance, drawn for every setting
         if name == "additive":
-            klass, interaction = "aligned", ADDITIVE_INTERACTION
+            klass, interaction = "corner", None
         elif name == "multiplicative":
-            klass, interaction = "aligned", 0.6 * aligned_cap(gini)
+            klass, interaction = "aligned", MULTIPLICATIVE_SHARE_OF_CAP * aligned_cap(gini)
         else:
             klass, interaction = "rotated", ROTATED_INTERACTION[0] + iu * (ROTATED_INTERACTION[1] - ROTATED_INTERACTION[0])
-        out.append({"gini": round(float(gini), 3), "class": name, "klass": klass, "interaction": round(float(interaction), 3),
+        out.append({"gini": round(float(gini), 3), "class": name, "klass": klass, "interaction": None if interaction is None else round(float(interaction), 3), "corner": corner,
                     "travel_time": round(float(RANGES["travel_time"][0] + tu * (RANGES["travel_time"][1] - RANGES["travel_time"][0])), 2),
                     "diversity": round(float(RANGES["diversity"][0] + du * (RANGES["diversity"][1] - RANGES["diversity"][0])), 3)})
     return out
@@ -65,11 +67,11 @@ def pool_builds(session, valuemap, settings):
 
 
 def run_one(args):
-    session, knobs, check_pool = args
+    session, knobs, check_pool, max_peak = args
     t = time.time()
     row = {"knobs": knobs}
     try:
-        r = factors.realize(session, knobs["gini"], knobs["interaction"], knobs["klass"], knobs["travel_time"], knobs["diversity"])
+        r = factors.realize(session, knobs["gini"], knobs["interaction"], knobs["klass"], knobs["travel_time"], knobs["diversity"], max_peak=max_peak, corner=tuple(float(c) for c in knobs.get("corner", (1, 1))))
     except ValueError as e:
         row.update(ok=False, reason=str(e)[:240], seconds=round(time.time() - t))
         return row
@@ -89,7 +91,7 @@ def run(args):
     todo = [k for k in design(args.n) if json.dumps(k, sort_keys=True) not in done(path)]
     print(f"{len(todo)} of {args.n} sessions to realise, {args.workers} at a time -> {path}", flush=True)
     with mp.Pool(args.workers) as pool, path.open("a") as out:
-        for i, row in enumerate(pool.imap_unordered(run_one, [(args.session, k, not args.no_pool) for k in todo]), 1):
+        for i, row in enumerate(pool.imap_unordered(run_one, [(args.session, k, not args.no_pool, args.max_peak) for k in todo]), 1):
             out.write(json.dumps(row) + "\n")
             out.flush()
             print(f"{i}/{len(todo)} {row['knobs']['class']:14s} gini {row['knobs']['gini']:.2f} travel {row['knobs']['travel_time']:5.1f} div {row['knobs']['diversity']:.2f}: " +
@@ -99,12 +101,12 @@ def run(args):
 def table(path):
     rows = [json.loads(line) for line in path.read_text().splitlines()]
     ok = [r for r in rows if r["ok"]]
-    names = ["gini", "interaction", "travel_time", "diversity", "contrast", "mean_bush_value", "max_bush_value", "n_tiles", "gain", "nearest", "oracle", "headroom"]
+    names = ["gini", "interaction", "travel_time", "diversity", "contrast", "mean_bush_value", "max_bush_value", "n_tiles", "gain", "nearest", "learner", "oracle", "headroom"]
     cols = {
         "gini": [r["map"]["gini"] for r in ok], "interaction": [r["map"]["interaction"] for r in ok], "travel_time": [r["factors"]["travel_time"][0] for r in ok],
         "diversity": [r["factors"]["diversity"][0] for r in ok], "contrast": [r["factors"]["contrast"][0] for r in ok], "mean_bush_value": [r["factors"]["mean_bush_value"][0] for r in ok],
         "max_bush_value": [r["map"]["max"] for r in ok], "n_tiles": [r["factors"]["n_tiles"][0] for r in ok], "gain": [r["gain"] for r in ok],
-        "nearest": [r["points"]["nearest"][0] for r in ok], "oracle": [r["points"]["oracle"][0] for r in ok],
+        "nearest": [r["points"]["nearest"][0] for r in ok], "learner": [r["points"].get("learner", (float("nan"), 0.0))[0] for r in ok], "oracle": [r["points"]["oracle"][0] for r in ok],
     }
     cols["headroom"] = [o / n for o, n in zip(cols["oracle"], cols["nearest"])]
     return rows, ok, names, np.array([cols[n] for n in names])
@@ -127,8 +129,12 @@ def report(args):
     print(" " * 16 + "".join(f"{n[:7]:>8s}" for n in names))
     for i, n in enumerate(names):
         print(f"{n:16s}" + "".join(f"{corr[i, j]:8.2f}" for j in range(len(names))))
-    nearest = data[names.index("nearest")]
-    print(f"\nthe anchor: nearest points {nearest.mean():.0f} +- {nearest.std():.0f} (target {factors.ANCHOR_POINTS:.0f}), travel time within {np.abs(data[2] - np.array([r['knobs']['travel_time'] for r in ok])).max():.3f} s of its target")
+    peak, gini = data[names.index("max_bush_value")], data[names.index("gini")]
+    print(f"\nthe best bush (cap {factors.MAX_PEAK}): " + "; ".join(f"Gini {lo:.1f} to {hi:.1f}: mean {peak[m].mean():.1f}, max {peak[m].max():.1f}, {int((peak[m] > factors.MAX_PEAK).sum())} of {int(m.sum())} over" for lo, hi in ((0.2, 0.4), (0.4, 0.6), (0.6, 0.8)) for m in [(gini >= lo) & (gini < hi)] if m.any()))
+    fruit = [r["factors"].get("share_fruit_over_cap", (float("nan"), 0))[0] for r in ok]
+    print(f"fruits over {factors.FRUIT_CAP}: mean share {np.nanmean(fruit):.4f}, worst session {np.nanmax(fruit):.4f}")
+    anchor = data[names.index(factors.ANCHOR_AGENT)]
+    print(f"\nthe anchor: {factors.ANCHOR_AGENT} points {anchor.mean():.0f} +- {anchor.std():.0f} (target {factors.ANCHOR_POINTS:.0f}), travel time within {np.abs(data[2] - np.array([r['knobs']['travel_time'] for r in ok])).max():.3f} s of its target")
 
 
 def plot(args):
@@ -161,6 +167,7 @@ def main():
     ap.add_argument("--session", default="FOR_S1")
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--no-pool", action="store_true", help="skip the ranking-pool check")
+    ap.add_argument("--max-peak", type=lambda t: None if t == "none" else float(t), default=factors.MAX_PEAK, help="refuse a session whose best bush is worth more (default factors.MAX_PEAK; `none` records every session, to find the Gini ceiling)")
     args = ap.parse_args()
     {"run": run, "report": report, "plot": plot}[args.command](args)
 

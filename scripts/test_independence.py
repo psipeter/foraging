@@ -11,16 +11,16 @@ def test_the_design_is_reproducible_stays_in_the_ranges_and_has_all_three_classe
     for k in d:
         for name, (lo, hi) in ind.RANGES.items():
             assert lo <= k[name] <= hi
-        assert (k["klass"] == "rotated") == (k["class"] == "nonseparable")
+        assert (k["klass"] == "rotated") == (k["class"] == "nonseparable") and (k["klass"] == "corner") == (k["class"] == "additive") and set(k["corner"]) <= {0, 1}
     assert {k["class"] for k in d} == set(ind.CLASSES) and min(sum(k["class"] == c for k in d) for c in ind.CLASSES) >= 8
 
 
 def test_the_multiplicative_interaction_is_inside_what_an_aligned_map_of_that_gini_can_reach():
     for k in ind.design(60, seed=3):
         if k["class"] == "multiplicative":
-            assert abs(k["interaction"] - 0.6 * ind.aligned_cap(k["gini"])) < 1e-3 and k["interaction"] <= ind.aligned_cap(k["gini"])
+            assert abs(k["interaction"] - ind.MULTIPLICATIVE_SHARE_OF_CAP * ind.aligned_cap(k["gini"])) < 1e-3 and k["interaction"] <= ind.aligned_cap(k["gini"])
         if k["class"] == "additive":
-            assert k["interaction"] == ind.ADDITIVE_INTERACTION
+            assert k["interaction"] is None
 
 
 def test_done_reads_the_knobs_of_the_finished_rows(tmp_path):

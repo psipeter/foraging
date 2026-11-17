@@ -190,26 +190,36 @@ def _gaussian_from(x, rotated, scale, std):
     return gaussian(float(centre_shape), float(centre_color), float(across), float(aspect), float(x[4]) if rotated else 0.0, scale, std)
 
 
-def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0.02, 0.02), share=(0.25, 0.75), seed=0):
+def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0.02, 0.02), share=(0.25, 0.75), seed=0, corner=(1.0, 1.0)):
     """The Gaussian map whose Gini is `gini` and raw interaction `interaction` (each within `tol`), found by a search over the family of `gaussian` (a centre anywhere, a short axis 0.05 to 1.5,
     an aspect 1 to 6, and for `klass` "rotated" an angle of 15 to 75 degrees; "aligned" maps have axes along the features, a log interaction of 0, and are additive or multiplicative according to
     the interaction asked: near 0 additive, larger multiplicative). Both features must pay: the share of the slope on shape lies within `share`. Raises ValueError, naming the closest map found,
-    when the pair is not reachable (`map_region.py` shows the region). The gain is not touched: `scale` is the peak and the equaliser (`solve_gain`) sets the level afterwards."""
+    when the pair is not reachable (`map_region.py` shows the region). `klass` "corner" is the additive rung proper: the Gaussian centred exactly on a corner of the plane (`corner`, each coordinate 0 or 1:
+    that feature pays more when it is higher (1) or lower (0)), so both features pay monotonically; its two widths are solved for the Gini and the interaction that is left is the smallest the corner
+    allows (`interaction` None: minimised, which is what the additive rung is; a number is a target). The gain is not touched: `scale` is the peak and the equaliser (`solve_gain`) sets the level afterwards."""
     from scipy.optimize import differential_evolution, minimize
-    rotated = {"aligned": False, "rotated": True}[klass]
-    bounds = [(0.0, 1.0), (0.0, 1.0), (0.05, 1.5), (1.0, 6.0)] + ([(15.0, 75.0)] if rotated else [])
+    rotated = {"aligned": False, "rotated": True, "corner": False}[klass]
+    at_corner = klass == "corner"
+    if at_corner:
+        build = lambda x: ValueMap((Bump(float(corner[0]), float(corner[1]), float(x[0]), float(x[1]), 0.0, scale),), {"type": "flat", "sd": std})
+        bounds = [(0.08, 3.0), (0.08, 3.0)]
+    else:
+        build = lambda x: _gaussian_from(x, rotated, scale, std)
+        bounds = [(0.0, 1.0), (0.0, 1.0), (0.05, 1.5), (1.0, 6.0)] + ([(15.0, 75.0)] if rotated else [])
 
     def loss(x, n):
-        d = _gaussian_from(x, rotated, scale, std).descriptors(n)
-        penalty = (10.0 * max(0.0, share[0] - d["shape_share"], d["shape_share"] - share[1])) ** 2
+        d = build(x).descriptors(n)
+        penalty = (60.0 * max(0.0, share[0] - d["shape_share"], d["shape_share"] - share[1])) ** 2
         penalty += (10.0 * (max(0.0, ROTATED_LOG_MIN - d["log_interaction"]) if rotated else max(0.0, d["log_interaction"] - ALIGNED_LOG_MAX))) ** 2
+        if interaction is None:                                                  # the smallest interaction the Gini allows: the Gini first, then the interaction pushed down
+            return 100.0 * ((d["gini"] - gini) / tol[0]) ** 2 + d["interaction"] / tol[1] + penalty
         return ((d["gini"] - gini) / tol[0]) ** 2 + ((d["interaction"] - interaction) / tol[1]) ** 2 + penalty
 
     found = differential_evolution(loss, bounds, args=(SEARCH_GRID,), seed=seed, maxiter=SEARCH["de_maxiter"], popsize=SEARCH["de_popsize"], tol=1e-6, polish=False)
     found = minimize(loss, found.x, args=(GRID,), method="Nelder-Mead", bounds=bounds, options={"maxiter": SEARCH["nm_maxiter"], "xatol": 1e-4, "fatol": 1e-6})
-    best = _gaussian_from(found.x, rotated, scale, std)
+    best = build(found.x)
     d = best.descriptors()
-    if abs(d["gini"] - gini) > tol[0] or abs(d["interaction"] - interaction) > tol[1] or not share[0] <= d["shape_share"] <= share[1]:
+    if abs(d["gini"] - gini) > tol[0] or (interaction is not None and abs(d["interaction"] - interaction) > tol[1]) or not share[0] - 0.01 <= d["shape_share"] <= share[1] + 0.01:
         raise ValueError(f"no {klass} Gaussian with Gini {gini} and interaction {interaction} (within {tol}, shape share {share}): the closest has Gini {d['gini']:.3f}, interaction {d['interaction']:.3f}, share {d['shape_share']:.2f}")
     return best
 
@@ -227,18 +237,27 @@ def map_proxies(valuemap, quantile=0.9):
             f"q{int(100 * quantile)}_bush_value": float(np.quantile(r, quantile))}
 
 
-def solve_gain(valuemap, proxy, target, lo=0.05, hi=20.0, rel_tol=0.01, max_steps=15):
+def solve_gain(valuemap, proxy, target, lo=0.05, hi=20.0, rel_tol=0.01, max_steps=15, gain_tol=0.015):
     """The map with an equaliser gain at which `proxy(map)` equals `target` (within `rel_tol`): `proxy` is a function of a ValueMap (a key of `map_proxies` by name, or any callable, for example the
-    points a reference policy earns, `factors.policy_points`). The points rise about in proportion to the gain, so the gain is multiplied by target / value each step (two or three steps; a
-    policy proxy costs a simulation each). Raises ValueError if the gain needed leaves `lo` to `hi`, or the steps do not converge."""
+    points a reference policy earns, `factors.policy_points`). The proxy is taken to follow a power of the gain (about the first power: the points rise in proportion), the exponent estimated from the
+    last two evaluations, and each step moves the gain to where that law reaches the target. A learning agent's points are a jagged function of the gain, so the steps stop, and the gain with the value
+    nearest the target is returned, once the gains on the two sides of the target are within `gain_tol` (a share) of each other, even if the value is not within `rel_tol`: the caller checks.
+    Raises ValueError if the gain needed leaves `lo` to `hi`, or the steps do not settle."""
     f = (lambda m: map_proxies(m)[proxy]) if isinstance(proxy, str) else proxy
     with_gain = lambda g: ValueMap(valuemap.bumps, valuemap.noise, {"type": "gain", "value": float(g)})
-    gain = valuemap.gain()
+    gain, history, exponent = valuemap.gain(), [], 1.0
     for _ in range(max_steps):
         value = f(with_gain(gain))
+        history.append((gain, value))
         if abs(value - target) <= rel_tol * abs(target):
             return with_gain(gain)
-        gain *= target / max(value, 1e-9)
+        below = [g for g, v in history if v < target]
+        above = [g for g, v in history if v >= target]
+        if below and above and min(above) / max(below) - 1.0 <= gain_tol:
+            return with_gain(min(history, key=lambda gv: abs(gv[1] - target))[0])
+        if len(history) >= 2 and history[-1][1] > 0 and history[-2][1] > 0 and abs(np.log(history[-1][0] / history[-2][0])) > 1e-6:
+            exponent = float(np.clip(np.log(history[-1][1] / history[-2][1]) / np.log(history[-1][0] / history[-2][0]), 0.5, 2.0))
+        gain *= (target / max(value, 1e-9)) ** (1.0 / exponent)
         if not lo <= gain <= hi:
             raise ValueError(f"a target of {target} needs a gain of about {gain:.3g}, outside {lo} to {hi}")
     raise ValueError(f"the gain did not settle within {max_steps} steps for a target of {target} (last value {value:.4g})")
