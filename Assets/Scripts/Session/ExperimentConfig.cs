@@ -34,12 +34,11 @@ public class ExperimentConfig : ScriptableObject
     public bool CountsTowardTotal => countsTowardTotal;
     public float TypicalPoints => typicalPoints;
 
-    private const float RoundMinutesTo = 5f;
 
     // The minutes the menu quotes: the stated estimate, else MinutesOf the sessions.
     public float EstimatedMinutes => estimatedMinutes > 0f ? estimatedMinutes : MinutesOf(sessions, 1f);
 
-    // The time the sessions take at most (SessionSecondsAtMost: foraging time plus the rankings), `shortFactor` as RunModes.Short applies it, rounded to 5 minutes.
+    // The time the sessions take at most (SessionSecondsAtMost: foraging time plus the rankings), `shortFactor` as RunModes.Short applies it, rounded to the nearest minute (at least 1).
     public static float MinutesOf(IList<SessionConfig> list, float shortFactor)
     {
         float seconds = 0f;
@@ -48,7 +47,7 @@ public class ExperimentConfig : ScriptableObject
             seconds += SessionSecondsAtMost(session, shortFactor);
         }
 
-        return Mathf.Max(RoundMinutesTo, Mathf.Round(seconds / 60f / RoundMinutesTo) * RoundMinutesTo);
+        return Mathf.Max(1f, Mathf.Round(seconds / 60f));
     }
 
     // A session's time at most: its foraging time plus its rankings at their longest. The menu's bar and time left are measured against it.
