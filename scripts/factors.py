@@ -99,25 +99,53 @@ def policy_points(session, agent="nearest", seeds=range(6), **overrides):
 ANCHOR_POINTS = 700.0           # the points the `nearest` policy earns in a 120 s session, held equal across sessions by the gain (provisional; docs/DECISIONS.md, "The anchor is the naive forager's points")
 
 
-def realize(session, gini, interaction, klass, travel_time, diversity, anchor=ANCHOR_POINTS, agent="nearest", seeds=range(6), steps=4, **overrides):
+def check(session, valuemap, settings, seeds, agents=("nearest", "oracle"), **overrides):
+    """What a realised session is on fresh worlds: for each seed generate the world (the map and the layout `settings` on `session`), measure it and run each registry agent on it.
+    Returns {"factors": {name: (mean, standard error)}, "points": {agent: (mean, standard error)}}."""
+    import sim
+    from agents import REGISTRY
+    params = load_session(session, **overrides, **settings, **valuemap.compile())
+    worlds = [generate_world(params, s) for s in seeds]
+    rows = [measure(w) for w in worlds]
+    n = len(rows)
+    stats = lambda x: (float(np.nanmean(x)), float(np.nanstd(x, ddof=1) / math.sqrt(n)) if n > 1 else float("nan"))
+    return {"factors": {k: stats([r[k] for r in rows]) for k in rows[0]},
+            "points": {a: stats(sim.run_n(REGISTRY[a], worlds=worlds).totals) for a in agents}}
+
+
+def realize(session, gini, interaction, klass, travel_time, diversity, anchor=ANCHOR_POINTS, agent="nearest", seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, **overrides):
     """A session from four knobs (milestone 3's calibrators together): the Gaussian with the stated sparsity (`gini`) and complexity (`klass`, `interaction`), the tile layout with the stated `travel_time`
     and within-patch `diversity` (reward units), and the gain at which `agent` earns `anchor` points in a session. Returns {"map": the ValueMap (gain included), "settings": the layout settings,
-    "fields": the serialized SessionConfig fields of both, "steps": how many rounds it took}.
+    "fields": the serialized SessionConfig fields of both, "achieved": `check` on fresh worlds, "within_tolerance": whether the anchor was met, "rounds": how many}.
 
     The pieces depend on one another: a diversity in points scales with the gain, and the points depend on the layout (a longer walk earns less), so the layout is solved for the current gain and the
-    gain for the current layout, round after round until the gain changes by less than 2 percent (at most `steps`; ValueError if it does not settle). The points are the mean of the `seeds` worlds
-    (six by default), so the anchor is met to about the sampling error of six worlds (a few percent): `verify` it on more. `overrides` are `load_session` overrides (for example `session_duration`)."""
+    gain for the current layout on the worlds of `seeds`, round after round until the gain changes by less than 2 percent (at most `steps`; ValueError if it does not settle). Those few worlds give
+    the points a sampling error of several percent, so a correction pass follows: `check` on the fresh `check_seeds` (40 worlds, common to every session, so sessions are equal on the same worlds; the points of one world vary by a third under a high contrast, so against the population the standard error is about 5 percent), and while the points are off the
+    `anchor` by more than `tolerance` (a share) the gain is scaled by anchor / points, the layout re-solved for it and the session checked again (at most twice). `overrides` are `load_session`
+    overrides (for example `session_duration`)."""
     base = load_session(session, **overrides)
     shape_map = value_maps.calibrate_map(gini, interaction, klass, std=float(base.reward_std))
-    current = shape_map
-    for step in range(1, steps + 1):
+    with_gain = lambda g: value_maps.ValueMap(shape_map.bumps, shape_map.noise, {"type": "gain", "value": float(g)})
+    current, rounds = shape_map, 0
+    for rounds in range(1, steps + 1):
         settings = calibrate(load_session(session, **overrides, **current.compile()), travel_time, diversity)
         solved = value_maps.solve_gain(shape_map, policy_points(session, agent, seeds, **overrides, **settings), anchor, rel_tol=0.02)
         settled = abs(solved.gain() / current.gain() - 1.0) < 0.02
-        current = value_maps.ValueMap(shape_map.bumps, shape_map.noise, {"type": "gain", "value": solved.gain()})
+        current = with_gain(solved.gain())
         if settled:
-            return {"map": current, "settings": settings, "fields": {**current.fields(), **fields(settings)}, "steps": step}
-    raise ValueError(f"the gain and the layout did not settle in {steps} rounds (gain {current.gain():.3f}); lower the diversity or the travel time, or raise `steps`")
+            break
+    else:
+        raise ValueError(f"the gain and the layout did not settle in {steps} rounds (gain {current.gain():.3f}); lower the diversity or the travel time, or raise `steps`")
+    achieved = check(session, current, settings, check_seeds, **overrides)
+    for _ in range(2):
+        points = achieved["points"][agent][0]
+        if abs(points / anchor - 1.0) <= tolerance:
+            break
+        current = with_gain(current.gain() * anchor / points)
+        settings = calibrate(load_session(session, **overrides, **current.compile()), travel_time, diversity)
+        achieved = check(session, current, settings, check_seeds, **overrides)
+    within = abs(achieved["points"][agent][0] / anchor - 1.0) <= tolerance
+    return {"map": current, "settings": settings, "fields": {**current.fields(), **fields(settings)}, "achieved": achieved, "within_tolerance": within, "rounds": rounds}
 
 
 def fields(settings):

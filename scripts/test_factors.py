@@ -95,3 +95,11 @@ def test_calibrate_merges_the_targets_and_fields_gives_the_serialized_names():
     settings = factors.calibrate(p, travel_time=6.0, diversity=0.4)
     assert set(settings) == {"tile_radius", "tile_value_mode", "tile_within_mode", "tile_spread"} and factors.calibrate(p) == {}
     assert factors.fields({"tile_radius": 1.0, "tile_spread": 0.2}) == {"tileRadius": 1.0, "tileSpread": 0.2}
+
+
+def test_check_reports_the_factors_and_the_points_of_a_session_on_fresh_worlds():
+    from world import load_session
+    p = load_session("FIX_T0")
+    out = factors.check("FIX_T0", synthetic.DEFAULT_MAP, {"tile_radius": 70.0}, range(3), session_duration=30.0)
+    assert out["factors"]["travel_time"][0] == pytest.approx((math.sqrt(3.0) * 70.0 - 2.0 * p.tile_cluster_radius) / p.player_move_speed)
+    assert set(out["points"]) == {"nearest", "oracle"} and out["points"]["oracle"][0] >= out["points"]["nearest"][0] > 0
