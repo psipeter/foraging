@@ -85,6 +85,41 @@ def calibrate(params, travel_time=None, diversity=None):
     return settings
 
 
+def policy_points(session, agent="nearest", seeds=range(6), **overrides):
+    """A proxy for `value_maps.solve_gain`: a function of a ValueMap that returns the mean points the registry agent `agent` earns on one world per seed of `session` (the simulator; `overrides`,
+    for example `session_duration`, are `load_session` overrides) when the session pays that map. `nearest` and `oracle` are the reference policies of the plan (anchor c)."""
+    import sim
+    from agents import REGISTRY
+
+    def points(valuemap):
+        return float(sim.run_n(REGISTRY[agent], session, seeds, **{**overrides, **valuemap.compile()}).mean)
+    return points
+
+
+ANCHOR_POINTS = 700.0           # the points the `nearest` policy earns in a 120 s session, held equal across sessions by the gain (provisional; docs/DECISIONS.md, "The anchor is the naive forager's points")
+
+
+def realize(session, gini, interaction, klass, travel_time, diversity, anchor=ANCHOR_POINTS, agent="nearest", seeds=range(6), steps=4, **overrides):
+    """A session from four knobs (milestone 3's calibrators together): the Gaussian with the stated sparsity (`gini`) and complexity (`klass`, `interaction`), the tile layout with the stated `travel_time`
+    and within-patch `diversity` (reward units), and the gain at which `agent` earns `anchor` points in a session. Returns {"map": the ValueMap (gain included), "settings": the layout settings,
+    "fields": the serialized SessionConfig fields of both, "steps": how many rounds it took}.
+
+    The pieces depend on one another: a diversity in points scales with the gain, and the points depend on the layout (a longer walk earns less), so the layout is solved for the current gain and the
+    gain for the current layout, round after round until the gain changes by less than 2 percent (at most `steps`; ValueError if it does not settle). The points are the mean of the `seeds` worlds
+    (six by default), so the anchor is met to about the sampling error of six worlds (a few percent): `verify` it on more. `overrides` are `load_session` overrides (for example `session_duration`)."""
+    base = load_session(session, **overrides)
+    shape_map = value_maps.calibrate_map(gini, interaction, klass, std=float(base.reward_std))
+    current = shape_map
+    for step in range(1, steps + 1):
+        settings = calibrate(load_session(session, **overrides, **current.compile()), travel_time, diversity)
+        solved = value_maps.solve_gain(shape_map, policy_points(session, agent, seeds, **overrides, **settings), anchor, rel_tol=0.02)
+        settled = abs(solved.gain() / current.gain() - 1.0) < 0.02
+        current = value_maps.ValueMap(shape_map.bumps, shape_map.noise, {"type": "gain", "value": solved.gain()})
+        if settled:
+            return {"map": current, "settings": settings, "fields": {**current.fields(), **fields(settings)}, "steps": step}
+    raise ValueError(f"the gain and the layout did not settle in {steps} rounds (gain {current.gain():.3f}); lower the diversity or the travel time, or raise `steps`")
+
+
 def fields(settings):
     """The SessionConfig field settings (serialized names) of calibrated `settings`, for a design module."""
     return {_camel(k): v for k, v in settings.items()}

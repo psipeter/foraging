@@ -114,3 +114,35 @@ def test_the_reference_examples_fall_in_separability_up_the_ladder():
     assert d["additive"]["interaction"] < 0.05 and d["additive"]["log_interaction"] < 1e-9
     assert d["multiplicative"]["interaction"] > 3 * d["additive"]["interaction"] and d["multiplicative"]["log_interaction"] < 1e-9
     assert d["nonseparable"]["interaction"] > 2 * d["multiplicative"]["interaction"] and d["nonseparable"]["log_interaction"] > 0.5
+
+
+def test_the_proxies_of_a_flat_map_are_its_value_and_the_fruit_pay_follows_the_rounding_and_the_clamp():
+    flat = vm.ValueMap((vm.Bump(0.5, 0.5, 1e4, 0.0, 0.0, 3.0),))
+    p = vm.map_proxies(flat)
+    assert p["mean_bush_value"] == pytest.approx(3.0) and p["median_bush_value"] == pytest.approx(3.0) and p["q90_bush_value"] == pytest.approx(3.0)
+    assert p["mean_fruit_pay"] == pytest.approx(3.0, abs=0.01)                     # a whole-number mean: the rounding is symmetric, the clamp does not bite
+    zero = vm.map_proxies(vm.ValueMap((vm.Bump(0.5, 0.5, 1e4, 0.0, 0.0, 0.0),)))["mean_fruit_pay"]
+    assert zero == pytest.approx(0.2086, abs=0.003)                                # a bush worth 0 still pays: the clamp drops the negative draws, a draw above 0.5 rounds up to 1
+    half = vm.map_proxies(vm.ValueMap((vm.Bump(0.5, 0.5, 1e4, 0.0, 0.0, 0.5),)))["mean_fruit_pay"]
+    assert half > 0.5                                                              # the clamp at 0 lifts the mean of a poor bush
+
+
+@pytest.mark.parametrize("proxy", ["mean_bush_value", "median_bush_value", "mean_fruit_pay", "q90_bush_value"])
+def test_the_gain_makes_a_proxy_equal_its_target_and_scales_the_map(proxy):
+    base = vm.nonseparable(2)
+    m = vm.solve_gain(base, proxy, 1.7)
+    assert vm.map_proxies(m)[proxy] == pytest.approx(1.7, rel=0.011) and m.bumps == base.bumps and m.equaliser["value"] > 0
+    with pytest.raises(ValueError, match="outside"):
+        vm.solve_gain(base, proxy, 1e4)
+
+
+def test_calibrate_map_finds_a_map_with_the_stated_sparsity_and_complexity_and_says_when_there_is_none(monkeypatch):
+    monkeypatch.setitem(vm.SEARCH, "de_maxiter", 25)
+    monkeypatch.setitem(vm.SEARCH, "nm_maxiter", 60)
+    aligned = vm.calibrate_map(0.5, 0.10, "aligned", tol=(0.04, 0.04))
+    d = aligned.descriptors()
+    assert abs(d["gini"] - 0.5) <= 0.04 and abs(d["interaction"] - 0.10) <= 0.04 and d["log_interaction"] < vm.ALIGNED_LOG_MAX and 0.25 <= d["shape_share"] <= 0.75
+    rotated = vm.calibrate_map(0.4, 0.4, "rotated", tol=(0.04, 0.04)).descriptors()
+    assert abs(rotated["gini"] - 0.4) <= 0.04 and abs(rotated["interaction"] - 0.4) <= 0.04 and rotated["log_interaction"] >= vm.ROTATED_LOG_MIN
+    with pytest.raises(ValueError, match="closest"):
+        vm.calibrate_map(0.3, 0.3, "aligned", tol=(0.02, 0.02))                                     # an axis-aligned map this smooth cannot have so much interaction

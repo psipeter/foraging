@@ -175,6 +175,75 @@ def nonseparable(seed, scale=4.0, across=0.2, aspect=3.0, std=0.6):
     return gaussian(float(rng.uniform(0.35, 0.65)), float(rng.uniform(0.35, 0.65)), across, aspect, angle, scale, std)
 
 
+# --------------------------------------------------------------------------------------------------
+# Calibration: the Gaussian that has a stated sparsity and complexity, and the gain that equalises the points earnable
+# --------------------------------------------------------------------------------------------------
+
+SEARCH_GRID = 41          # the grid of the search (the final map is checked on GRID)
+ALIGNED_LOG_MAX = 0.05    # an axis-aligned map has a log interaction at most this (0 up to rounding), a rotated one at least ROTATED_LOG_MIN
+ROTATED_LOG_MIN = 0.10
+SEARCH = {"de_maxiter": 60, "de_popsize": 12, "nm_maxiter": 150}        # the effort of `calibrate_map` (a test lowers it)
+
+
+def _gaussian_from(x, rotated, scale, std):
+    centre_shape, centre_color, across, aspect = x[:4]
+    return gaussian(float(centre_shape), float(centre_color), float(across), float(aspect), float(x[4]) if rotated else 0.0, scale, std)
+
+
+def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0.02, 0.02), share=(0.25, 0.75), seed=0):
+    """The Gaussian map whose Gini is `gini` and raw interaction `interaction` (each within `tol`), found by a search over the family of `gaussian` (a centre anywhere, a short axis 0.05 to 1.5,
+    an aspect 1 to 6, and for `klass` "rotated" an angle of 15 to 75 degrees; "aligned" maps have axes along the features, a log interaction of 0, and are additive or multiplicative according to
+    the interaction asked: near 0 additive, larger multiplicative). Both features must pay: the share of the slope on shape lies within `share`. Raises ValueError, naming the closest map found,
+    when the pair is not reachable (`map_region.py` shows the region). The gain is not touched: `scale` is the peak and the equaliser (`solve_gain`) sets the level afterwards."""
+    from scipy.optimize import differential_evolution, minimize
+    rotated = {"aligned": False, "rotated": True}[klass]
+    bounds = [(0.0, 1.0), (0.0, 1.0), (0.05, 1.5), (1.0, 6.0)] + ([(15.0, 75.0)] if rotated else [])
+
+    def loss(x, n):
+        d = _gaussian_from(x, rotated, scale, std).descriptors(n)
+        penalty = (10.0 * max(0.0, share[0] - d["shape_share"], d["shape_share"] - share[1])) ** 2
+        penalty += (10.0 * (max(0.0, ROTATED_LOG_MIN - d["log_interaction"]) if rotated else max(0.0, d["log_interaction"] - ALIGNED_LOG_MAX))) ** 2
+        return ((d["gini"] - gini) / tol[0]) ** 2 + ((d["interaction"] - interaction) / tol[1]) ** 2 + penalty
+
+    found = differential_evolution(loss, bounds, args=(SEARCH_GRID,), seed=seed, maxiter=SEARCH["de_maxiter"], popsize=SEARCH["de_popsize"], tol=1e-6, polish=False)
+    found = minimize(loss, found.x, args=(GRID,), method="Nelder-Mead", bounds=bounds, options={"maxiter": SEARCH["nm_maxiter"], "xatol": 1e-4, "fatol": 1e-6})
+    best = _gaussian_from(found.x, rotated, scale, std)
+    d = best.descriptors()
+    if abs(d["gini"] - gini) > tol[0] or abs(d["interaction"] - interaction) > tol[1] or not share[0] <= d["shape_share"] <= share[1]:
+        raise ValueError(f"no {klass} Gaussian with Gini {gini} and interaction {interaction} (within {tol}, shape share {share}): the closest has Gini {d['gini']:.3f}, interaction {d['interaction']:.3f}, share {d['shape_share']:.2f}")
+    return best
+
+
+def map_proxies(valuemap, quantile=0.9):
+    """The proxies for the points earnable that need nothing but the map (uniform feature plane): the mean and the median bush value, the mean per-fruit pay (the rounding and the clamp at 0 of
+    `max(0, round(N(R, sd)))` included, the sum over the whole points the noise can give) and the `quantile` of the bush values (what a good forager collects)."""
+    _, r = valuemap.grid()
+    sd = float(valuemap.noise["sd"])
+    z = np.arange(0, int(np.ceil(r.max() + 6.0 * sd)) + 2)
+    from math import erf, sqrt
+    cdf = np.vectorize(erf)((z[None, :] + 0.5 - r.reshape(-1, 1)) / (sd * sqrt(2.0))) * 0.5 + 0.5        # P(rounded draw <= z), the clamp at 0 puts the mass below 0.5 on 0
+    pmf = np.diff(np.concatenate([np.zeros((cdf.shape[0], 1)), cdf], axis=1), axis=1)
+    return {"mean_bush_value": float(r.mean()), "median_bush_value": float(np.median(r)), "mean_fruit_pay": float((pmf * z[None, :]).sum(axis=1).mean()),
+            f"q{int(100 * quantile)}_bush_value": float(np.quantile(r, quantile))}
+
+
+def solve_gain(valuemap, proxy, target, lo=0.05, hi=20.0, rel_tol=0.01, max_steps=15):
+    """The map with an equaliser gain at which `proxy(map)` equals `target` (within `rel_tol`): `proxy` is a function of a ValueMap (a key of `map_proxies` by name, or any callable, for example the
+    points a reference policy earns, `factors.policy_points`). The points rise about in proportion to the gain, so the gain is multiplied by target / value each step (two or three steps; a
+    policy proxy costs a simulation each). Raises ValueError if the gain needed leaves `lo` to `hi`, or the steps do not converge."""
+    f = (lambda m: map_proxies(m)[proxy]) if isinstance(proxy, str) else proxy
+    with_gain = lambda g: ValueMap(valuemap.bumps, valuemap.noise, {"type": "gain", "value": float(g)})
+    gain = valuemap.gain()
+    for _ in range(max_steps):
+        value = f(with_gain(gain))
+        if abs(value - target) <= rel_tol * abs(target):
+            return with_gain(gain)
+        gain *= target / max(value, 1e-9)
+        if not lo <= gain <= hi:
+            raise ValueError(f"a target of {target} needs a gain of about {gain:.3g}, outside {lo} to {hi}")
+    raise ValueError(f"the gain did not settle within {max_steps} steps for a target of {target} (last value {value:.4g})")
+
+
 LADDER = {"additive": additive, "multiplicative": multiplicative, "nonseparable": nonseparable}
 
 
