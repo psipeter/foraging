@@ -139,6 +139,18 @@ Each calibrator takes one target and returns generator parameters; the others ar
 - **Acceptance:** a table, for each knob, of target against realised value (mean and spread over 20 seeds) and of the other four factors' movement while it was turned (these are the numbers milestone 4 will try to remove).
 - **Not in this milestone:** solving several knobs at once, anchor (c), the ranking pools (milestone 4 and later).
 
+**Status of M3, step 1 (2026-11-17): the reachable (sparsity, complexity) region of the Gaussian family** (`scripts/map_region.py`; 6000 maps, centre anywhere with corners and edges over-sampled, short axis 0.05 to 1.5, aspect 1 to 6, angle 0 to 90; figure `docs/value_map_region.png`). The calibrator's targets are the map's Gini (sparsity) and its raw interaction (complexity); the class (additive, multiplicative, non-separable) is the log interaction, below 0.05 for an axis-aligned map.
+
+| Gini | axis-aligned maps reach interaction | rotated maps reach |
+|---|---|---|
+| 0.0 to 0.2 | 0 to 0.06 | 0.02 to 0.68 |
+| 0.2 to 0.4 | 0 to 0.12 | 0.02 to 0.74 |
+| 0.4 to 0.6 | 0 to 0.21 | 0.04 to 0.73 |
+| 0.6 to 0.8 | 0 to 0.37 | 0.06 to 0.73 |
+| 0.8 to 1.0 | 0 to 0.81 | 0.16 to 0.77 |
+
+Findings: (1) **Interaction is capped by sparsity for an axis-aligned Gaussian** (an upper curve rising with the Gini: at most 0.08 at Gini 0.2 to 0.3, 0.15 at 0.4 to 0.5, 0.28 at 0.6 to 0.7), so at low sparsity the multiplicative rung is hardly distinguishable from the additive one by the raw interaction, and it separates only where the map is sparse; (2) **a rotated Gaussian reaches any interaction up to about 0.7 at any Gini**, so the non-separable rung exists at every sparsity, and the top of the range is a ceiling near 0.75 to 0.8; (3) **complexity is not one number**: at one Gini (0.5 to 0.6, say) an axis-aligned and a rotated map can have the same interaction, and only the log interaction tells them apart, so a complexity target is a pair (class, interaction), not the interaction alone; (4) when both features must pay (shape share 0.25 to 0.75) the lowest interaction at Gini 0.4 to 0.5 is about 0.02 and at 0.6 to 0.7 about 0.05: an additive map exists at moderate sparsity but its interaction cannot be driven to exactly 0 without becoming a one-feature rule (an edge Gaussian); (5) the reference examples (Gini 0.24, 0.63, 0.50) do not lie on one Gini because the multiplicative rung needs sparsity to differ from additive. A matched-Gini ladder is possible only where the rungs overlap: at Gini 0.65, additive 0.05, multiplicative up to 0.28, non-separable 0.13 to 0.78.
+
 ### 7.4 TODOs left open on purpose
 
 - **Value-map design:** which maps to test, and the equalising transforms beyond a gain (and the noise-map transforms), chosen once the raw maps are in mind.
