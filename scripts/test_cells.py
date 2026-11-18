@@ -29,6 +29,16 @@ def stub_realize(fail_draws=()):
 CELL = {"id": 3, "class": "additive", "gini": 0.4, "travel_time": 6.0}
 
 
+PLANNER = {"flag": None, "per_visit": 5.0, "sizes": {5: 4}, "text": "planner takes 5.0 bushes per tile visit"}
+
+
+@pytest.fixture(autouse=True)
+def stub_planner(monkeypatch):
+    seen = []
+    monkeypatch.setattr(cells, "planner_record", lambda session, valuemap, settings, world_seed, **overrides: seen.append((settings, world_seed, overrides)) or PLANNER)
+    return seen
+
+
 def realize_with(monkeypatch, fail_draws=(), draws=4):
     realize, calls = stub_realize(fail_draws)
     monkeypatch.setattr(factors, "realize", realize)
@@ -94,3 +104,12 @@ def test_a_design_module_over_realised_cells_builds_a_spec(monkeypatch):
 
 def test_a_design_with_no_realised_file_has_no_sessions():
     assert tabled.instances_of("NOFILE_XX") == []
+
+
+def test_the_planner_check_runs_on_the_cells_own_world_with_its_settings_and_is_recorded(monkeypatch, stub_planner):
+    record, _ = realize_with(monkeypatch)
+    assert record["planner"] == PLANNER
+    settings, world_seed, overrides = stub_planner[-1]
+    assert world_seed == record["world_seed"] and settings == record["settings"] and overrides == {"session_duration": 180.0}
+    inaccessible, _ = realize_with(monkeypatch, fail_draws=(0, 1, 2, 3))
+    assert "planner" not in inaccessible

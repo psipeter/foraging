@@ -24,7 +24,9 @@ from pathlib import Path
 import numpy as np
 
 import factors
+import tile_calibration
 import value_maps
+import world
 
 ROOT = Path(__file__).resolve().parent.parent
 TABLES = ROOT / "scripts" / "design" / "tables"
@@ -46,6 +48,13 @@ def aspect_of(cell_id, draw):
     return value_maps.corner_aspect(rng.choice(value_maps.CORNER_STRETCHES), bool(rng.integers(2)))
 
 
+def planner_record(session, valuemap, settings, world_seed, **overrides):
+    """The second patch-leaving check, on the cell's own world: how many bushes per tile visit the beam planner takes (`tile_calibration.planner_check`, a warning when it sits within one bush of 1 or of
+    the tile's bushes). About 20 to 30 seconds."""
+    params = world.load_session(session, **overrides, **settings, **valuemap.compile())
+    return tile_calibration.planner_check(world.generate_world(params, world_seed))
+
+
 def realize_cell(cell, session="FOR_S1", draws=DRAWS, duration=120.0, **overrides):
     """The realised session of one cell (at `duration` seconds), or an `inaccessible` record naming why each draw failed. A cell may fix the nuisance of an additive map: `corner` ([shape, colour], each 0 or 1) and `aspect` (shape width over colour width), else they are drawn; `world_candidates` sets how many worlds are searched."""
     overrides = {**overrides, "session_duration": float(duration)}
@@ -61,8 +70,10 @@ def realize_cell(cell, session="FOR_S1", draws=DRAWS, duration=120.0, **override
         valuemap, settings = r["map"], r["settings"]
         anchor = factors.anchor_points(duration)
         peak = valuemap.descriptors()["max"]
+        world_seed = int(cell.get("world_seed", FIRST_WORLD_SEED + 100 * cid))
         return {"id": cid, "status": "ok", "knobs": {k: cell[k] for k in cell if k != "id"}, "interaction": interaction, "draw": draw, "failed_draws": failed, "map": valuemap.to_dict(), "settings": settings,
-                "peak": peak, "feedback_max": min(factors.FRUIT_CAP, math.ceil(peak)), "duration": float(duration), "anchor_points": anchor, "world_seed": int(cell.get("world_seed", FIRST_WORLD_SEED + 100 * cid)), "achieved": r["achieved"], "within_tolerance": r["within_tolerance"], "calibrator": CALIBRATOR}
+                "peak": peak, "feedback_max": min(factors.FRUIT_CAP, math.ceil(peak)), "duration": float(duration), "anchor_points": anchor, "world_seed": world_seed, "achieved": r["achieved"], "within_tolerance": r["within_tolerance"],
+                "planner": planner_record(session, valuemap, settings, world_seed, **overrides), "calibrator": CALIBRATOR}
     return {"id": cid, "status": "inaccessible", "knobs": {k: cell[k] for k in cell if k != "id"}, "failed_draws": failed, "duration": float(duration), "calibrator": CALIBRATOR}
 
 
@@ -101,6 +112,13 @@ def show(code):
             a = c["achieved"]["points"]
             print(f"{c['id']:3d} {k['class']:15s} gini {k['gini']:.2f} travel {k['travel_time']:4.1f}: draw {c['draw']}, peak {c['peak']:.1f} (feedback maximum {c['feedback_max']}), "
                   f"learner {a[factors.ANCHOR_AGENT][0]:.0f} (anchor {c.get('anchor_points', factors.anchor_points(120.0)):.0f}) and oracle {a['oracle'][0]:.0f} on the check worlds, world {c['world_seed']}")
+            if c.get("planner"):
+                print(f"      leaving, planner (the cell's world {c['world_seed']}): {c['planner']['text']}")
+            leaving = c["achieved"].get("leaving")
+            if leaving:
+                for family, label in (("top_k", "top-k"), ("thr_q", "thr-q")):
+                    if leaving[family]:
+                        print(f"      leaving, {label} ({leaving['n_worlds']} worlds): {leaving[family]['text']}")
         else:
             print(f"{c['id']:3d} {k['class']:15s} gini {k['gini']:.2f}: INACCESSIBLE after {len(c['failed_draws'])} draws")
 

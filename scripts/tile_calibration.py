@@ -10,18 +10,19 @@ harvesting) on the worlds a layout makes, and asks which is best:
            cut-off: it stays long in a rich tile and leaves a poor one at once, which top-k cannot do); the next tile is the one whose qualifying bushes pay the most per second.
   greedy   the standard rate actor (the best reward per second of walk plus harvest, within 15 s of walking, whole bush): it leaves a tile when its remaining bushes' rate falls below
            that of a bush elsewhere.
-  plan     the beam-search planner's route (`PlannerActor`, whole-bush harvesting, no proof of optimality): what a good forager does, read off as how many bushes it takes in each tile
-           it visits and whether they are the tile's good ones. It can fall below the simple policies (it does in worlds whose tiles differ a lot, at a width of 60): a warning says so.
 
 The two things the layout must satisfy (PI, 2026-11-12): the spacing must not be so large that harvesting everything is always right, and a modest policy of harvesting a few of the
-good bushes of a tile must be favoured. The verdict states both: the best partial policy (any top-k below exhaust, any thr-q) beats exhaust by at least `--margin` (paired over the same
-worlds, with its standard error), and it takes a number of bushes per tile visit in the `--few` range. The planner, when asked for, is a reference only.
+good bushes of a tile must be favoured. Since 2026-11-18 each family also gets a **shape check** (`profile_check`): the points of top-1 ... top-n (n the tile's bushes), and of thr-10 ... thr-90, against the best policy of
+the family. Harvesting too little (top-1: much walking) and too much (top-n: long in poor bushes) should both lose clearly, and the best policy should sit between them; the check says where the peak is,
+which policies are within `--plateau` of it, and whether each end loses at least `--end-margin` of the best by `confidence` standard errors, paired over the same worlds. The best policy here is the best of these
+heuristics (a lower bound on the optimum: the beam planner was dropped, it could fall below the simple policies). The verdict states both: the best partial policy (any top-k below exhaust, any thr-q) beats exhaust by at least `--margin` (paired over the same
+worlds, with its standard error), and it takes a number of bushes per tile visit in the `--few` range.
 
     ./venv/bin/python scripts/tile_calibration.py FOR_S1 --seeds 0-9
     ./venv/bin/python scripts/tile_calibration.py FOR_S1 --seeds 0-9 --sweep tile_radius=45,60,70,95 --set session_duration=180
 
 --sweep NAME=v1,v2,... (snake_case session parameters; several give their grid), --set NAME=value (fixed overrides), --ks 1-9 (the k values; default every k up to the tile's bushes), --quantiles 10-90 (the thr-q percentiles, step 10; 0 = off),
---plan (also run the planner; slow, and in worlds whose tiles differ a lot its beam search can fall below the simple policies, which a warning says), --beam-width N, --few LO-HI, --margin FRACTION. It writes nothing. Not covered: what the learner does before it has learned (this is the policy once the
+--few LO-HI, --margin FRACTION, --end-margin FRACTION, --plateau FRACTION. It writes nothing. Not covered: what the learner does before it has learned (this is the policy once the
 critic is learned), the view cone and terrain occlusion (the whole map is known), and the noise of a single fruit (bushes are harvested whole).
 """
 
@@ -39,7 +40,11 @@ from agents import Actor, ComposedAgent, FullKnowledge, Harvest, OracleCritic, P
 
 DEFAULT_FEW = (2, 5)           # the number of bushes per tile that counts as "a few"
 DEFAULT_MARGIN = 0.03          # the best top-k must beat exhaust by this share of exhaust's score
-DEFAULT_BEAM = 100
+DEFAULT_BEAM = 300             # 100 left the planner 4 to 7 percent below the best simple policy on FOR worlds; 300 (about 20 s a world) is within 3 percent, 1000 gains 0.5 percent more
+DEFAULT_NEAR_BOUND = 0.95      # a family's end that reaches this share of the planner's points is not clearly worse: a warning
+DEFAULT_EDGE = 1.0             # the planner's bushes per tile visit must stay this far from 1 and from the tile's bushes
+DEFAULT_END_MARGIN = 0.05      # each end of a family must lose at least this share of the family's best policy
+DEFAULT_PLATEAU = 0.03         # a policy within this share of the best is on the plateau
 DEFAULT_QUANTILES = tuple(range(10, 100, 10))
 CONFIDENCE = 2.0               # the paired gain over exhaust must exceed this many standard errors
 
@@ -139,8 +144,8 @@ def route_stats(result, tile_of, value):
             "walk_share": result.walk_time / max(result.walk_time + result.harvest_time + result.look_time + result.press_time, 1e-9)}
 
 
-def calibrate_world(w, ks, quantiles=DEFAULT_QUANTILES, plan=False, beam_width=DEFAULT_BEAM):
-    """{policy name: (total, route_stats)} for one world: top-k for each k, thr-q for each percentile q, greedy and (optionally) the planner."""
+def calibrate_world(w, ks, quantiles=DEFAULT_QUANTILES):
+    """{policy name: (total, route_stats)} for one world: top-k for each k, thr-q for each percentile q and greedy."""
     tile_of, sizes = tile_of_world(w)
     out = {}
     for k in ks:
@@ -151,9 +156,6 @@ def calibrate_world(w, ks, quantiles=DEFAULT_QUANTILES, plan=False, beam_width=D
         out[f"thr-{q}"] = (r.total, route_stats(r, tile_of, w.value))
     r = sim.run_episode(agents.GreedyAgent(whole_map=True), w)
     out["greedy"] = (r.total, route_stats(r, tile_of, w.value))
-    if plan:
-        r = sim.run_episode(PlannerAgent("beam", beam_width=beam_width), w)
-        out["plan"] = (r.total, route_stats(r, tile_of, w.value))
     return out
 
 
@@ -184,12 +186,87 @@ def verdict(totals, ks, per_visit, few=DEFAULT_FEW, margin=DEFAULT_MARGIN, confi
     return best, gain, se, favoured, few_good, text
 
 
-def run_setting(session, seeds, overrides, ks=None, quantiles=DEFAULT_QUANTILES, plan=False, beam_width=DEFAULT_BEAM, few=DEFAULT_FEW, margin=DEFAULT_MARGIN, out=print):
+def profile_check(totals, names, margin=DEFAULT_END_MARGIN, confidence=CONFIDENCE, plateau=DEFAULT_PLATEAU):
+    """The shape of one family of policies, in order from harvesting least (top-1, thr-90) to most (top-n, thr-10), from `totals` {policy: per-seed totals} over the same worlds. The best policy is the
+    one with the best mean; `loss[name]` is its paired loss against the best as a share of the best's mean, with its standard error. Returns a dict: `best`, `interior` (the best is not an end), `plateau`
+    (the policies within `plateau` of the best), `loss` ({name: (share, se)}), `ends_lose` (both ends lose at least `margin` and `confidence` standard errors), `ok` (interior and ends_lose) and `text`."""
+    means = [float(np.mean(totals[n])) for n in names]
+    best = names[int(np.argmax(means))]
+    best_total = np.asarray(totals[best], dtype=float)
+    scale = max(float(best_total.mean()), 1e-9)
+    loss = {}
+    for n in names:
+        d = (best_total - np.asarray(totals[n], dtype=float)) / scale
+        loss[n] = (float(d.mean()), float(d.std(ddof=1) / np.sqrt(len(d))) if len(d) > 1 else float("nan"))
+    inside = [n for n in names if loss[n][0] <= plateau]
+    interior = best not in (names[0], names[-1])
+    ends = [names[0], names[-1]]
+    significant = [loss[n][0] >= margin and (np.isnan(loss[n][1]) or loss[n][0] >= confidence * loss[n][1]) for n in ends]
+    detail = "; ".join(f"{n} loses {loss[n][0]:.0%} +- {loss[n][1]:.0%}" for n in ends)
+    if interior and all(significant):
+        text = f"SHAPE OK: the best is {best}, within {plateau:.0%} of it {inside[0]} to {inside[-1]}; {detail}"
+    elif not interior:
+        text = f"BEST AT AN END ({best}): " + ("harvesting as little as possible beats leaving later" if best == names[0] else "harvesting everything in a tile beats leaving early") + f"; {detail}"
+    else:
+        weak = [n for n, ok in zip(ends, significant) if not ok]
+        text = f"FLAT ENDS: the best is {best} but {' and '.join(weak)} " + ("does" if len(weak) == 1 else "do") + f" not lose by {margin:.0%} (a clear {confidence:g} standard errors); {detail}"
+    return {"best": best, "interior": interior, "plateau": inside, "loss": loss, "ends_lose": all(significant), "ok": interior and all(significant), "text": text}
+
+
+def leaving_summary(worlds, ks=None, quantiles=DEFAULT_QUANTILES, margin=DEFAULT_END_MARGIN, plateau=DEFAULT_PLATEAU):
+    """The shape check of both families on `worlds` (the realised worlds of a session), as plain data for the realised-session record: {"n_worlds", "top_k": `profile_check`, "thr_q": `profile_check` (None
+    with no quantiles), "means": {policy: mean points}}. A warning, not a gate: a session whose shape is not OK is still realised (`factors.check`, `cells.py show`)."""
+    ks = list(ks) if ks else list(range(1, int(worlds[0].params.tile_bushes) + 1))
+    rows = [calibrate_world(w, ks, quantiles) for w in worlds]
+    totals = {n: np.array([r[n][0] for r in rows]) for n in rows[0]}
+    return {"n_worlds": len(worlds), "top_k": profile_check(totals, [f"top-{k}" for k in ks], margin, plateau=plateau),
+            "thr_q": profile_check(totals, [f"thr-{q}" for q in reversed(quantiles)], margin, plateau=plateau) if quantiles else None,
+            "means": {n: float(t.mean()) for n, t in totals.items()}}
+
+
+def visit_sizes(result, tile_of):
+    """The bushes taken in each visit (a run of consecutive harvests in one tile) of a run."""
+    bushes = [int(b) for b, fruits, _ in result.trace if fruits > 0]
+    return [len(list(g)) for _, g in itertools.groupby(tile_of[bushes])] if bushes else []
+
+
+def planner_check(w, beam_width=DEFAULT_BEAM, edge=DEFAULT_EDGE, near_bound=DEFAULT_NEAR_BOUND):
+    """The default patch-harvesting-against-leaving check (PI, 2026-11-18), on one realised world, the session's own: the beam-search planner (`PlannerAgent`, whole-bush harvesting, no proof of
+    optimality) stands for an approximate upper bound, and the policies of both families are scored against it. The route is read off as how many bushes it takes in each tile visit.
+    A mean per visit within `edge` of 1 (it takes one bush and leaves) or of the tile's bushes (it exhausts every tile) is a warning: the world pushes toward an extreme. Returns plain data: `flag`
+    (None, "eager" or "exhaust"), `per_visit` (the mean), `sizes` ({bushes in a visit: visits}), the route's `bushes`, `visits`, `tile_share` and `top_half` (route_stats), the planner's `total`, the
+    best simple policy's total on the same world (`heuristic_best`, `heuristic_total`, over top-k and thr-q) and `weak` (the planner scored more than 3 percent below it: it is then no upper bound and its
+    route should not be read), `shares` ({policy: its points over the planner's}: the spectrum top-1 to top-n and thr-10 to thr-90), `ends_near` (the ends of a family, top-1 and top-n, thr-90 and
+    thr-10, that reach `near_bound` of the planner's points: that extreme is not clearly worse here, a warning), and `text`. A single world has no sampling error: the numbers are exact for it."""
+    tile_of, sizes = tile_of_world(w)
+    n = int(sizes.max())
+    run = sim.run_episode(PlannerAgent("beam", beam_width=beam_width), w)
+    stats = route_stats(run, tile_of, w.value)
+    visits = visit_sizes(run, tile_of)
+    histogram = {int(k): int(sum(v == k for v in visits)) for k in sorted(set(visits))}
+    simple = {name: total for name, (total, _) in calibrate_world(w, list(range(1, n + 1))).items()}
+    best = max(simple, key=simple.get)
+    weak = bool(run.total < 0.97 * simple[best])
+    shares = {name: float(total / run.total) if run.total > 0 else float("nan") for name, total in simple.items() if name != "greedy"}
+    ends = [f"top-1", f"top-{n}", "thr-90", "thr-10"]
+    ends_near = [name for name in ends if name in shares and shares[name] >= near_bound]
+    flag = None if not visits else "eager" if stats["per_visit"] < 1 + edge else "exhaust" if stats["per_visit"] > n - edge else None
+    text = f"planner takes {stats['per_visit']:.1f} bushes per tile visit ({stats['tile_share']:.0%} of a visited tile's bushes; visits of {', '.join(f'{k}: {v}' for k, v in histogram.items())}) and scores {run.total:.0f}"
+    text += {"eager": f": WARNING, within {edge:g} of 1 bush per visit (the world rewards leaving at once)", "exhaust": f": WARNING, within {edge:g} of the tile's {n} bushes (the world rewards exhausting every tile)", None: ": in the middle"}[flag]
+    spectrum = ", ".join(f"{name} {shares[name]:.0%}" for name in ends if name in shares)
+    text += f"; against the planner: {spectrum}, best simple policy {best} {simple[best] / run.total:.0%}" + (f"; WARNING, {', '.join(ends_near)} reach{'es' if len(ends_near) == 1 else ''} {near_bound:.0%} of the planner: that extreme is not clearly worse in this world" if ends_near else "")
+    if weak:
+        text += f"; CAUTION: the best simple policy ({best}, {simple[best]:.0f}) beats it by more than 3%, so the beam search ({beam_width} wide) did not find the best route: do not read its route as the optimum"
+    return {"flag": flag, "per_visit": stats["per_visit"], "sizes": histogram, "bushes": stats["bushes"], "visits": stats["visits"], "tile_share": stats["tile_share"], "top_half": stats["top_half"],
+            "total": float(run.total), "heuristic_best": best, "heuristic_total": float(simple[best]), "weak": weak, "shares": shares, "ends_near": ends_near, "beam_width": int(beam_width), "text": text}
+
+
+def run_setting(session, seeds, overrides, ks=None, quantiles=DEFAULT_QUANTILES, few=DEFAULT_FEW, margin=DEFAULT_MARGIN, end_margin=DEFAULT_END_MARGIN, plateau=DEFAULT_PLATEAU, out=print):
     """Calibrate one layout (session + overrides) over `seeds`; prints a block and returns its numbers as a dict."""
     worlds = sim.get_worlds(session, seeds, **overrides)
     bushes_per_tile = int(worlds[0].params.tile_bushes)
     ks = list(ks) if ks else list(range(1, bushes_per_tile + 1))
-    rows = [calibrate_world(w, ks, quantiles, plan, beam_width) for w in worlds]
+    rows = [calibrate_world(w, ks, quantiles) for w in worlds]
     names = list(rows[0])
     totals = {n: np.array([r[n][0] for r in rows]) for n in names}
     stats = {n: {key: float(np.mean([r[n][1][key] for r in rows])) for key in rows[0][n][1]} for n in names}
@@ -203,17 +280,14 @@ def run_setting(session, seeds, overrides, ks=None, quantiles=DEFAULT_QUANTILES,
         t = totals[n]
         mark = "  <- best partial" if n == best else ""
         out(f"{n:<9}{t.mean():>8.0f}{t.std(ddof=1) / np.sqrt(len(t)) if len(t) > 1 else float('nan'):>6.1f}{s['bushes']:>8.1f}{s['visits']:>8.1f}{s['tiles']:>7.1f}{s['per_visit']:>10.1f}{s['walk_share']:>7.0%}{s['top_half']:>10.0%}{mark}")
-    if "plan" in stats:
-        ex = totals[f"top-{max(ks)}"].mean()
-        out(f"plan takes {stats['plan']['per_visit']:.1f} bushes per visit ({stats['plan']['tile_share']:.0%} of a visited tile's bushes), {stats['plan']['top_half']:.0%} of them in their tile's top half; "
-            f"plan beats exhaust by {(totals['plan'].mean() - ex) / ex:+.1%}")
     out(text)
-    if "plan" in totals:
-        short = (max(totals[n].mean() for n in names if n != "plan") - totals["plan"].mean()) / max(totals["plan"].mean(), 1e-9)
-        if short > 0.03:
-            out(f"WARNING: the planner scores {short:.0%} below the best simple policy, so its beam search ({beam_width} wide) did not find the best route here: do not read its route as the optimum (widen --beam-width)")
+    top = profile_check(totals, [f"top-{k}" for k in ks], end_margin, plateau=plateau)
+    thr = profile_check(totals, [f"thr-{q}" for q in reversed(quantiles)], end_margin, plateau=plateau) if quantiles else None
+    out("shape, top-k:  " + top["text"])
+    if thr:
+        out("shape, thr-q:  " + thr["text"])
     out("")
-    return {"overrides": dict(overrides), "best": best, "gain": gain, "se": se, "favoured": favoured, "few_good": few_good, "totals": totals, "stats": stats}
+    return {"overrides": dict(overrides), "best": best, "gain": gain, "se": se, "favoured": favoured, "few_good": few_good, "totals": totals, "stats": stats, "shape_topk": top, "shape_thr": thr}
 
 
 def _range(text):
@@ -224,15 +298,18 @@ def _range(text):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Is leaving a tile early the right policy under a layout?")
     ap.add_argument("session")
-    ap.add_argument("--seeds", default="0-9")
+    ap.add_argument("--seeds", default=None, help="world seeds (default 0-9; with --planner, the session's own world seed)")
     ap.add_argument("--set", nargs="*", default=[], metavar="NAME=VALUE", help="session overrides (snake_case)")
     ap.add_argument("--sweep", nargs="*", default=[], metavar="NAME=V1,V2,...", help="session parameters to vary (the grid of all of them)")
     ap.add_argument("--ks", default=None, help="the k values, e.g. 1-9 (default every k up to the tile's bushes)")
     ap.add_argument("--quantiles", default="10-90", help="the thr-q percentiles, step 10 (e.g. 10-90; 0 = none)")
-    ap.add_argument("--plan", action="store_true", help="also run the beam planner (slow)")
-    ap.add_argument("--beam-width", type=int, default=DEFAULT_BEAM)
     ap.add_argument("--few", default=f"{DEFAULT_FEW[0]}-{DEFAULT_FEW[1]}", help="the range of bushes per tile that counts as a few")
     ap.add_argument("--margin", type=float, default=DEFAULT_MARGIN)
+    ap.add_argument("--planner", action="store_true", help="instead of the policy families, run the beam planner on the session's own world (--seeds then names worlds; default the session's seed) and report the bushes it takes per tile visit")
+    ap.add_argument("--beam-width", type=int, default=DEFAULT_BEAM)
+    ap.add_argument("--edge", type=float, default=DEFAULT_EDGE, help="planner: a warning when its bushes per visit are within this of 1 or of the tile's bushes")
+    ap.add_argument("--end-margin", type=float, default=DEFAULT_END_MARGIN, help="each end of a family (top-1 and top-n, thr-90 and thr-10) must lose at least this share of the best")
+    ap.add_argument("--plateau", type=float, default=DEFAULT_PLATEAU, help="policies within this share of the best are on the plateau")
     args = ap.parse_args(argv)
     fixed = {k: sim._coerce(v) for k, v in (kv.split("=") for kv in args.set)}
     sweeps = [(k, [sim._coerce(x) for x in v.split(",")]) for k, v in (kv.split("=") for kv in args.sweep)]
@@ -240,10 +317,16 @@ def main(argv=None):
     qlo, qhi = _range(args.quantiles)
     quantiles = tuple(range(max(qlo, 10), qhi + 1, 10)) if qhi > 0 else ()
     start = time.time()
+    if args.planner:
+        seeds = world._parse_seeds(args.seeds) if args.seeds else [int(world.load_session(args.session, **fixed).world_seed)]
+        for seed, w in zip(seeds, sim.get_worlds(args.session, seeds, **fixed)):
+            print(f"== {args.session} planner, world seed {seed}\n" + planner_check(w, args.beam_width, args.edge)["text"])
+        print(f"({time.time() - start:.0f} s)")
+        return
     results = []
     for values in itertools.product(*[vs for _, vs in sweeps]):
         overrides = {**fixed, **{name: v for (name, _), v in zip(sweeps, values)}}
-        results.append(run_setting(args.session, world._parse_seeds(args.seeds), overrides, ks, quantiles, args.plan, args.beam_width, _range(args.few), args.margin))
+        results.append(run_setting(args.session, world._parse_seeds(args.seeds or "0-9"), overrides, ks, quantiles, _range(args.few), args.margin, args.end_margin, args.plateau))
     if len(results) > 1:
         print("summary:")
         for r in results:

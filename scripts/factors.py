@@ -96,9 +96,9 @@ FRUIT_CAP = 9                   # the per-fruit range of every session is 0 to t
 MAX_PEAK = 8.0                  # so the best bush is worth at most this: with the noise (SD 0.6) a fruit of the best bush stays at or below FRUIT_CAP
 
 
-def check(session, valuemap, settings, seeds, agents=("nearest", "oracle"), **overrides):
-    """What a realised session is on fresh worlds: for each seed generate the world (the map and the layout `settings` on `session`), measure it and run each registry agent on it.
-    Returns {"factors": {name: (mean, standard error)}, "points": {agent: (mean, standard error)}}."""
+def check(session, valuemap, settings, seeds, agents=("nearest", "oracle"), leaving=False, **overrides):
+    """What a realised session is on fresh worlds: for each seed generate the world (the map and the layout `settings` on `session`), measure it and run each registry agent on it, and, when `leaving` is asked for (off by default since 2026-11-18: the default check is the planner on the session's own world, `cells.planner_record`), run the shape check of the patch-leaving policies on the same worlds (`tile_calibration.leaving_summary`: top-1 to top-n and thr-q against the best, a warning not a gate).
+    Returns {"factors": {name: (mean, standard error)}, "points": {agent: (mean, standard error)}, "leaving": the summary}."""
     import sim
     from agents import REGISTRY
     params = load_session(session, **overrides, **settings, **valuemap.compile())
@@ -106,8 +106,12 @@ def check(session, valuemap, settings, seeds, agents=("nearest", "oracle"), **ov
     rows = [measure(w) for w in worlds]
     n = len(rows)
     stats = lambda x: (float(np.nanmean(x)), float(np.nanstd(x, ddof=1) / math.sqrt(n)) if n > 1 else float("nan"))
-    return {"factors": {k: stats([r[k] for r in rows]) for k in rows[0]},
-            "points": {a: stats(sim.run_n(REGISTRY[a], worlds=worlds).totals) for a in agents}}
+    out = {"factors": {k: stats([r[k] for r in rows]) for k in rows[0]},
+           "points": {a: stats(sim.run_n(REGISTRY[a], worlds=worlds).totals) for a in agents}}
+    if leaving:
+        import tile_calibration
+        out["leaving"] = tile_calibration.leaving_summary(worlds)
+    return out
 
 
 def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=ANCHOR_AGENT, seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, max_peak=MAX_PEAK, corner=(1.0, 1.0), aspect=1.0, seed=0, **overrides):

@@ -73,7 +73,8 @@ def run_one(args):
         return row
     d = r["map"].descriptors()
     row.update(ok=True, within_tolerance=r["within_tolerance"], gain=r["map"].gain(), settings=r["settings"], map={k: d[k] for k in ("gini", "interaction", "log_interaction", "shape_share", "max", "mean")},
-               factors=r["achieved"]["factors"], points=r["achieved"]["points"], pool=pool_builds(session, r["map"], r["settings"]) if check_pool else None, seconds=round(time.time() - t))
+               factors=r["achieved"]["factors"], points=r["achieved"]["points"], pool=pool_builds(session, r["map"], r["settings"]) if check_pool else None, seconds=round(time.time() - t),
+               leaving={f: {"ok": s["ok"], "best": s["best"], "interior": s["interior"], "ends_lose": s["ends_lose"]} for f, s in r["achieved"].get("leaving", {}).items() if isinstance(s, dict) and "best" in s})
     return row
 
 
@@ -118,6 +119,13 @@ def report(args):
     for r in ok:
         if r["pool"] not in (True, None):
             print("  NO POOL", {k: r["knobs"][k] for k in ("class", "gini", "travel_time")}, r["pool"])
+    shaped = [r for r in ok if r.get("leaving")]
+    if shaped:
+        print("patch-leaving shape (top-1 to top-n and thr-q against the best; a warning): " + "; ".join(
+            f"{family} OK in {sum(r['leaving'][family]['ok'] for r in shaped if family in r['leaving'])} of {sum(family in r['leaving'] for r in shaped)}" for family in ("top_k", "thr_q")))
+        for r in shaped:
+            if not r["leaving"].get("top_k", {}).get("ok", True):
+                print("  SHAPE", {k: r["knobs"][k] for k in ("class", "gini", "travel_time")}, "top-k best", r["leaving"]["top_k"]["best"], "interior", r["leaving"]["top_k"]["interior"], "ends lose", r["leaving"]["top_k"]["ends_lose"])
     if len(ok) < 4:
         return
     corr = np.corrcoef(data)
