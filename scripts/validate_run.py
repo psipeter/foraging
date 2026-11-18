@@ -446,13 +446,19 @@ def check_break_rules(ctx):
                 problems.append(f"break {k + 1} started {gap:.2f} foraging seconds after break {k} ended (rankingCooldown {cooldown})")
         out.append(Result("break cooldown", FAIL if problems else PASS, "; ".join(problems) or f"{max(len(breaks) - 1, 0)} gaps >= {cooldown} s"))
 
-    # enough bushes harvested before the first break
+    # enough bushes harvested between breaks (rankingMinBushes since the last ranking ended, since the session began before the first; a resume does not restore the count, so a break right after one only warns)
     need = cfg.get("rankingMinBushes")
     if need is None or not starts:
-        out.append(Result("bushes before the first break", WARN if need is None else SKIP, "rankingMinBushes not in the config" if need is None else "no break"))
+        out.append(Result("bushes between breaks", WARN if need is None else SKIP, "rankingMinBushes not in the config" if need is None else "no break"))
     else:
-        bushes = {e["tree_id"] for e in _of(ctx, "fruit") if e["t"] < starts[0] and e["tree_id"] not in ctx.set_ids}
-        out.append(Result("bushes before the first break", FAIL if len(bushes) < need else PASS, f"{len(bushes)} distinct bushes had a fruit before t={starts[0]:.3f}, rankingMinBushes {need}"))
+        problems, notes, since = [], [], 0.0
+        resume_times = [e["t"] for e in _of(ctx, "session_resume")]
+        for k, (s, e) in enumerate(breaks):
+            bushes = {f["tree_id"] for f in _of(ctx, "fruit") if since <= f["t"] < s and f["tree_id"] not in ctx.set_ids}
+            if len(bushes) < need:
+                (notes if any(since <= t <= s for t in resume_times) else problems).append(f"break {number(k, s)} started after {len(bushes)} distinct bushes had a fruit since t={since:.3f}, rankingMinBushes {need}")
+            since = e
+        out.append(Result("bushes between breaks", FAIL if problems else (WARN if notes else PASS), "; ".join(problems + notes) or f"{len(breaks)} breaks, each after at least {need} bushes"))
 
     # not in the last seconds
     if duration is None or last is None:

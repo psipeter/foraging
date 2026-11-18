@@ -19,11 +19,13 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private int rankingEvery = 0;
     [Tooltip("The patch leavings (numbered from 1: a qualifying switch, see rankingCooldown / rankingMinBushes / rankingLastSeconds) after which a ranking is due, for example 1, 2, 4, 8. Empty = every 'rankingEvery'-th leaving. rankingEvery must still be above 0 to turn rankings on.")]
     [SerializeField] private int[] rankingLeavings = new int[0];
+    [Tooltip("An estimate of how many rankings a session holds when there is no schedule (every patch leaving asks for one): only the menu's length and the progress share use it, it is not a limit. 0 = none counted.")]
+    [SerializeField] private int rankingEstimate = 0;
     [Tooltip("Ranking sets played in one ranking.")]
     [SerializeField] private int rankingSets = 1;
     [Tooltip("Seconds of the countdown of one ranking set (the main clock is frozen meanwhile).")]
     [SerializeField] private float rankingSeconds = 20f;
-    [Tooltip("The fewest seconds of foraging between the end of one ranking and a patch switch that counts toward the next (a switch inside this time is ignored).")]
+    [Tooltip("The fewest seconds of foraging between the end of one ranking and a patch switch that counts toward the next (a switch inside this time is ignored; 0 in FOR and TUT: the harvest rule alone spaces the rankings).")]
     [SerializeField] private float rankingCooldown = 10f;
     [Tooltip("A crossing into another tile counts as a patch switch once the player is this many units past the edge between the tiles (0 = at the edge itself, so the ranking starts as early as possible and the arc is farthest from the next cluster).")]
     [SerializeField] private float rankingSettleDepth = 0f;
@@ -37,7 +39,7 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float rankingFruitSeconds = 0.05f;
     [Tooltip("No ranking starts when this many seconds or fewer of the session are left.")]
     [SerializeField] private float rankingLastSeconds = 10f;
-    [Tooltip("A patch switch counts toward a ranking only once the participant has harvested (taken a fruit from) at least this many different bushes in the session, so no ranking comes before they have seen what a bush pays.")]
+    [Tooltip("A patch switch counts toward a ranking only once the participant has harvested (taken a fruit from) at least this many different bushes since the last ranking ended (since the session began, before the first), so no ranking comes before they have seen what a bush pays and none follows another without foraging in between.")]
     [SerializeField] private int rankingMinBushes = 1;
     [Tooltip("The line shown at the top of the screen during a ranking.")]
     [SerializeField] private string rankingText = "Rank these bushes from most to least valuable";
@@ -357,6 +359,7 @@ public class SessionConfig : ScriptableObject
     public bool FreezeSun => freezeSun;
     public int RankingEvery => rankingEvery;
     public int[] RankingLeavings => rankingLeavings ?? new int[0];
+    public int RankingEstimate => rankingEstimate;
     public int RankingSets => rankingSets;
     public float RankingSeconds => rankingSeconds;
     public float RankingCooldown => rankingCooldown;

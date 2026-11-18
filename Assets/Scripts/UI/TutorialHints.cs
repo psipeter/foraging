@@ -18,6 +18,7 @@ using UnityEngine.InputSystem;
 //                       seconds); needs a session with rankings
 //   ranking_start       the nth ranking break, a quarter second after the bushes of its first set have grown (the hint pauses the set's countdown)
 //   ranking_end         the nth ranking break, as it ends
+//   time_left           `@time_left 60`: the first moment 60 foraging seconds or fewer are left (not during a ranking break); the session clock pulses yellow while the hint is up
 // Foraging triggers (`bout`, `patch_switch`) are ignored while a ranking break is running. A foraging hint waiting in the queue holds back a ranking hint behind it (the queue is in order).
 // Each shown and dismissed hint is logged (`hint_shown`, `hint_dismissed`: id `trigger:n`, trigger, n). A resumed session skips the hints already shown (the server's `hints_shown`), and a trigger's
 // count carries on from the highest hint of it that was shown.
@@ -39,12 +40,14 @@ public class TutorialHints : MonoBehaviour
     private readonly Queue<Hint> _queue = new Queue<Hint>();
     private readonly Dictionary<string, int> _counts = new Dictionary<string, int>();
     private SessionConfig _config;
+    private SunController _sun;
+    private SessionTimerUI _timer;
     private DataLogger _log;
     private InstructionsScreen _screen;
     private Hint _current;
     private string _placeholder = "";
 
-    public static TutorialHints Create(SessionConfig config, DataLogger log)
+    public static TutorialHints Create(SessionConfig config, DataLogger log, SunController sun, SessionTimerUI timer)
     {
         if (config == null || string.IsNullOrEmpty(config.HintsFile))
         {
@@ -61,6 +64,8 @@ public class TutorialHints : MonoBehaviour
         var hints = go.AddComponent<TutorialHints>();
         hints._config = config;
         hints._log = log;
+        hints._sun = sun;
+        hints._timer = timer;
         hints.Parse(StreamingData.ReadText(config.HintsFile));
         hints.SkipShown();
         hints._screen = InstructionsScreen.Create();
@@ -142,7 +147,7 @@ public class TutorialHints : MonoBehaviour
 
     private static readonly string[] Triggers =
     {
-        "bout", "patch_switch", "ranking_start", "ranking_end",
+        "bout", "patch_switch", "ranking_start", "ranking_end", "time_left",
     };
 
     private void OnEnable()
@@ -223,6 +228,17 @@ public class TutorialHints : MonoBehaviour
             return;
         }
 
+        if (_sun != null && !RankingBreak.Active && !_sun.SessionComplete && _sun.SessionTimeRemaining > 0f)
+        {
+            foreach (Hint hint in _hints)
+            {
+                if (!hint.shown && hint.trigger == "time_left" && _sun.SessionTimeRemaining <= hint.n)
+                {
+                    Queue(hint);
+                }
+            }
+        }
+
         if (_screen.Visible)
         {
             if (Keyboard.current != null && !PauseGate.Pointer && (Keyboard.current.enterKey.wasPressedThisFrame || Keyboard.current.numpadEnterKey.wasPressedThisFrame))
@@ -255,6 +271,7 @@ public class TutorialHints : MonoBehaviour
         string body = string.Join("\n", lines, 1, Mathf.Max(0, last)).Trim();
         _screen.Show(GameManager.PartLabel, title, body, prompt);
         PauseGate.Instructions = true;
+        _timer?.SetPulse(hint.trigger == "time_left");
         _log?.LogEvent("hint_shown", payload: Json.Obj(("id", hint.Id), ("trigger", hint.trigger), ("n", hint.n)));
     }
 
@@ -262,6 +279,7 @@ public class TutorialHints : MonoBehaviour
     {
         _log?.LogEvent("hint_dismissed", payload: Json.Obj(("id", _current != null ? _current.Id : ""), ("trigger", _current != null ? _current.trigger : ""), ("n", _current != null ? _current.n : 0)));
         _screen.Hide();
+        _timer?.SetPulse(false);
         _current = null;
         if (_queue.Count > 0)
         {

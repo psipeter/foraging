@@ -21,6 +21,8 @@ public class SessionTimerUI : MonoBehaviour
     private UnityEngine.UI.Image _timerPlate;
     private Color _plateIdle;
     private Color _textIdle;
+    private bool _pulse;
+    private static readonly Color PulseColor = new Color(1f, 0.85f, 0.2f, 1f);
 
     private void Start()
     {
@@ -51,6 +53,20 @@ public class SessionTimerUI : MonoBehaviour
         }
 
         timerText.color = paused ? new Color(0.72f, 0.72f, 0.72f, 0.6f) : _textIdle;
+    }
+
+    // The clock pulses yellow (a hint about the time is on screen); false puts the colours back.
+    public void SetPulse(bool pulse)
+    {
+        _pulse = pulse;
+        if (!pulse && timerText != null)
+        {
+            timerText.color = _textIdle;
+            if (_timerPlate != null)
+            {
+                _timerPlate.color = _plateIdle;
+            }
+        }
     }
 
     private void OnEnable()
@@ -125,6 +141,16 @@ public class SessionTimerUI : MonoBehaviour
         int seconds = Mathf.FloorToInt(remaining % 60f);
 
         timerText.text = $"{minutes:D2}:{seconds:D2}";
+
+        if (_pulse)
+        {
+            float k = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 2f * Mathf.PI * 1.2f);      // unscaled: the hint holds the game still
+            timerText.color = Color.Lerp(_textIdle, PulseColor, k);
+            if (_timerPlate != null)
+            {
+                _timerPlate.color = Color.Lerp(_plateIdle, new Color(PulseColor.r, PulseColor.g, PulseColor.b, 0.55f), k * 0.6f);
+            }
+        }
     }
 
     private void HandleScoreChanged(float runningTotal)

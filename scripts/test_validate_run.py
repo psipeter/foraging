@@ -271,7 +271,16 @@ def test_a_break_without_a_tile_change_fails():
 def test_a_break_before_enough_bushes_were_harvested_fails():
     ctx = golden()
     ctx.row["config"]["rankingMinBushes"] = 3
-    assert failing(ctx) == {"bushes before the first break"}
+    assert failing(ctx) == {"bushes between breaks"}
+
+
+def test_a_break_right_after_another_without_a_bush_harvested_between_them_fails():
+    ctx = golden()
+    ctx.events = [e for e in ctx.events if not (e["type"] == "fruit" and e["t"] == 8.0)]                  # the only fruit between break 1 and break 2
+    reseq(ctx.events)
+    assert "bushes between breaks" in failing(ctx)
+    ctx.row["config"]["rankingMinBushes"] = 0
+    assert "bushes between breaks" not in failing(ctx)
 
 
 def test_a_break_in_the_last_seconds_is_noticed():

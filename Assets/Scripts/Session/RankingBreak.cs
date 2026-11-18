@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
 // A ranking break: a ranking set played in place, inside a foraging session, so the participant stays in the foraging stage (SessionConfig.ranking*,
-// docs/DECISIONS.md "FOR: ranking breaks inside the session"). After the patch switches of the leaving schedule (`rankingLeavings`) (a settled crossing into another tile of a tiles
+// docs/DECISIONS.md "FOR: ranking breaks inside the session"). After the patch switches of the leaving schedule (`rankingLeavings`; none: every `rankingEvery`-th, 1 in FOR and TUT) (a settled crossing into another tile of a tiles
 // world) the real bushes fade to grayscale (and cannot be aimed at) and a set of ranking bushes grows on an arc in front of the player, on the terrain they stand on. The player
 // harvests them from most to least points under these rules (stationary, any bush in view, a started harvest is finished). The session clock is held
 // while a break runs (SunController.ClockHeld) and a second countdown shows the set's own seconds; outcomes are hidden and the ranking bushes pay nothing
@@ -103,7 +103,7 @@ public class RankingBreak : MonoBehaviour
     private int _breakNumber;
     private int _poolIndex;
     private int _setCounter;                // sets played in the session so far: the row's position, one after another
-    private readonly HashSet<int> _harvestedBushes = new HashSet<int>();       // the world's bushes a fruit has been taken from
+    private readonly HashSet<int> _bushesSinceBreak = new HashSet<int>();       // the world's bushes a fruit has been taken from since the last ranking ended (since the session began before the first)
     private float _lastEnd = float.NegativeInfinity;       // session seconds elapsed when the last break ended
 
     // The running set.
@@ -192,13 +192,7 @@ public class RankingBreak : MonoBehaviour
                 rankingBreak._leavings = schedule[Mathf.Min(r.breaks, schedule.Length) - 1];       // a server that does not count the leavings: count on from the last break's number
             }
 
-            foreach (TreeCount taken in ResumeInfo.Pending.fruits_taken)
-            {
-                if (taken.n > 0 && taken.tree < world.TreeCount)
-                {
-                    rankingBreak._harvestedBushes.Add(taken.tree);
-                }
-            }
+            // The bushes harvested since the last ranking are not restored (the server does not say which they were): after a resume the next ranking waits for rankingMinBushes more.
         }
 
         return rankingBreak;
@@ -267,7 +261,7 @@ public class RankingBreak : MonoBehaviour
         }
 
         // A switch counts once the player is `rankingSettleDepth` past the edge on the new side (0: at the edge, which puts the arc farthest from the next cluster); one inside the cooldown after a break,
-        // or in the last seconds of the session, or before enough bushes have been harvested, is ignored (it does not wait to fire later, in the middle of the next patch).
+        // or in the last seconds of the session, or before enough bushes have been harvested since the last ranking, is ignored (it does not wait to fire later, in the middle of the next patch).
         if (tile != _tile && _world.DepthIntoTile(p.x, p.z, _tile, tile) >= _config.RankingSettleDepth)
         {
             _tile = tile;
@@ -301,7 +295,7 @@ public class RankingBreak : MonoBehaviour
     {
         float elapsed = _config.SessionDuration - _sun.SessionTimeRemaining;
         return _sun.SessionTimeRemaining > _config.RankingLastSeconds && elapsed - _lastEnd >= _config.RankingCooldown
-            && _harvestedBushes.Count >= _config.RankingMinBushes;
+            && _bushesSinceBreak.Count >= _config.RankingMinBushes;
     }
 
     private IEnumerator RunBreak()
@@ -371,6 +365,7 @@ public class RankingBreak : MonoBehaviour
         _sun.ClockHeld = false;
         _timer?.SetPaused(false);
         _lastEnd = _config.SessionDuration - _sun.SessionTimeRemaining;
+        _bushesSinceBreak.Clear();
         _switches = 0;
         _due = false;
         _running = false;
@@ -599,7 +594,7 @@ public class RankingBreak : MonoBehaviour
     {
         if (!_running && tree != null && tree.treeId < _world.TreeCount)
         {
-            _harvestedBushes.Add(tree.treeId);
+            _bushesSinceBreak.Add(tree.treeId);
         }
 
         if (!_setLive || tree == null || !_setTrees.ContainsValue(tree) || _picks.Contains(tree.treeId) || tree.FruitsRemaining > 0)

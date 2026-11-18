@@ -17,12 +17,13 @@ MonoBehaviour:
   isPractice: 0
   freezeSun: 0
   rankingEvery: 1
-  rankingLeavings: 01000000020000000400000008000000
+  rankingLeavings: 
+  rankingEstimate: 8
   rankingSets: 1
   rankingSeconds: 20
-  rankingCooldown: 10
+  rankingCooldown: 0
   rankingSettleDepth: 0
-  rankingPoolSets: 12
+  rankingPoolSets: 30
   rankingFadeSeconds: 0.4
   rankingGraySeconds: 0.25
   rankingFruitSeconds: 0.05

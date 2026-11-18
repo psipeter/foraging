@@ -56,7 +56,7 @@ public class ExperimentConfig : ScriptableObject
         return session == null ? 0f : RunModes.SessionSeconds(session, shortFactor) + RankingSecondsAtMost(session);
     }
 
-    // The ranking sets of a session at their longest: every ranking on the schedule (SessionConfig.rankingLeavings; a session on the every-N rule counts none, since how many
+    // The ranking sets of a session at their longest: every ranking on the schedule (SessionConfig.rankingLeavings; with no schedule the estimate `rankingEstimate`, since how many
     // leavings there will be is not known), each set its full countdown. The breaks hold the session clock, so they come on top of the session's length.
     public static float RankingSecondsAtMost(SessionConfig session)
     {
@@ -65,7 +65,8 @@ public class ExperimentConfig : ScriptableObject
             return 0f;
         }
 
-        return session.RankingLeavings.Length * session.RankingSets * session.RankingSeconds;
+        int rankings = session.RankingLeavings.Length > 0 ? session.RankingLeavings.Length : session.RankingEstimate;
+        return rankings * session.RankingSets * session.RankingSeconds;
     }
 
     // How much of a session's maximum time is behind a participant who has `foragingSeconds` on the foraging clock and `rankings` rankings ended: the foraging seconds (at most the

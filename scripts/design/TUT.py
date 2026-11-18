@@ -36,7 +36,7 @@ HINTS = """# Tutorial hints. A block is a trigger line, then the popup: title, t
 #     Press [Enter] to continue
 #
 # Triggers (Assets/Scripts/UI/TutorialHints.cs; an unknown one is an error): bout n (a harvest that took fruit ends), patch_switch n (the nth qualifying patch leaving, as the rankings count them),
-# ranking_start n, ranking_end n. A waiting foraging hint holds back a ranking hint behind it; after a resume, counts carry on from the highest hint of a trigger already shown.
+# ranking_start n, ranking_end n, time_left s (the first moment s foraging seconds or fewer are left; the clock pulses yellow while the hint is up). A waiting foraging hint holds back a ranking hint behind it; after a resume, counts carry on from the highest hint of a trigger already shown.
 # {points} is what the harvest that fired it earned.
 
 @bout 1
@@ -75,7 +75,7 @@ These **hidden** points are added at session end
 
 Press [Enter] to continue
 
-@patch_switch 3
+@time_left 60
 Scoring
 
 You have a limited **time** in each session
