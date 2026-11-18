@@ -253,12 +253,14 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float tileClusterSpacing = 12f;
     [Tooltip("How the bushes lie inside a tile (scripts/tiles.py ARRANGEMENTS). Empty = random.")]
     [SerializeField] private string tileArrangement = "";
-    [Tooltip("How the world's pool of bushes (an even cover of the feature plane) is dealt to the tiles (scripts/tiles.py PLACEMENTS: random). Empty = random.")]
+    [Tooltip("How the world's pool of bushes (an even cover of the feature plane) is dealt to the tiles (scripts/tiles.py PLACEMENTS: random, balanced). Empty = random.")]
     [SerializeField] private string tilePlacement = "";
     [Tooltip("A tile together with its six neighbours must have bushes in at least this share of the feature plane (4 x 4 cells), for every tile with all six; the assignment is redrawn until it holds. 0 = off.")]
     [SerializeField] [Range(0f, 1f)] private float tileCoverageMin = 0f;
     [Tooltip("The tiles around the start must differ in mean reward by at least this share of the reward's range over the feature plane; the assignment is redrawn until it holds. 0 = off.")]
     [SerializeField] [Range(0f, 1f)] private float tileStartSpreadMin = 0f;
+    [Tooltip("No tile's total bush value (points, after the session's gain) may differ from the mean tile total by more than this; the assignment is redrawn until it holds (use with the balanced placement). 0 = off.")]
+    [SerializeField] private float tileSumTol = 0f;
 
     [Header("Terrain")]
     [SerializeField] private float terrainMaxElevation = 3f;
@@ -432,6 +434,7 @@ public class SessionConfig : ScriptableObject
     public string TileArrangement => tileArrangement;
     public float TileCoverageMin => tileCoverageMin;
     public float TileStartSpreadMin => tileStartSpreadMin;
+    public float TileSumTol => tileSumTol;
     public string DesignJson => designJson;
     public bool ShapeVaries => shapeVaries;
     public float ShapeWhenFixed => shapeWhenFixed;

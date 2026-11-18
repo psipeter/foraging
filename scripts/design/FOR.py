@@ -17,7 +17,7 @@ REWARD_SCALE = 4.0                  # the best bush pays about this much, as in 
 VALUE_MAP = value_maps.wide_corner((1.0, 1.0), shape_share=0.5, base=0.7, scale=REWARD_SCALE, std=REWARD_STD)       # the additive rung: both features pay more when higher, both alike
 SECONDS = 180                    # 180 s (PI, 2026-11-17); the learner earns 1132 points at gain 1 on 40 worlds, the anchor 1125 (6.25 per second)
 FIRST_WORLD_SEED = 7001
-TILE_FIELDS = {"tileRadius": 45.0, "tileRampWidth": 14.0, "tileMoistureLevels": 4, "tileBushes": 9, "tileClusterRadius": 15.0, "tileClusterSpacing": 10.0}
+TILE_FIELDS = {"tilePlacement": "balanced", "tileSumTol": 1.0, "tileRadius": 45.0, "tileRampWidth": 14.0, "tileMoistureLevels": 4, "tileBushes": 9, "tileClusterRadius": 15.0, "tileClusterSpacing": 10.0}
 FEEDBACK_FIELDS = {"rewardFeedbackMax": REWARD_SCALE, "pitchSemitoneRange": 12.0}      # popup size and pick pitch rise with the points up to the session's maximum (here the map's peak); the pitch spans an octave from 440 Hz in every session
 CROSSHAIR_RING_DEG = 3.5            # the harvest ring the crosshair becomes on a bush (SessionConfig.crosshairRingSizeDeg)
 CROSSHAIR_RADIUS = 7.0              # the hidden hit circle of the crosshair (degrees; SessionConfig.crosshairRadius)
@@ -27,7 +27,7 @@ RANKING_FIELDS = {"rankingEvery": 1, "rankingLeavings.Array.size": 4, "rankingLe
 
 
 def _fields(extra, seed, valuemap=VALUE_MAP):
-    return {"worldSeed": seed, "layout": "tiles", "assignment": "tiles", "tilePlacement": "random", "tileArrangement": "random", **{**TILE_FIELDS, **extra}, "terrainMaxElevation": 9.0, "shapeVaries": True, "colorVaries": True, "moistureVaries": True,
+    return {"worldSeed": seed, "layout": "tiles", "assignment": "tiles", "tileArrangement": "random", **{**TILE_FIELDS, **extra}, "terrainMaxElevation": 9.0, "shapeVaries": True, "colorVaries": True, "moistureVaries": True,
             **valuemap.fields()}
 
 

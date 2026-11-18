@@ -123,7 +123,7 @@ def test_a_world_holds_the_whole_plane_and_stays_in_range(seed):
 
 
 def test_the_placements_are_a_table_and_an_unknown_one_is_an_error():
-    assert set(tiles.PLACEMENTS) == {"random"} and set(tiles.ARRANGEMENTS) >= {"random"}
+    assert set(tiles.PLACEMENTS) == {"random", "balanced"} and set(tiles.ARRANGEMENTS) >= {"random"}
     with pytest.raises(KeyError):
         tile_world(tile_placement="nonsense")
 
@@ -132,6 +132,24 @@ def test_random_placement_gives_tiles_that_differ_no_more_than_chance():
     stats = [realised(seed)[1] for seed in range(4)]
     assert np.mean([s["contrast"] for s in stats]) < 0.6                  # the tile means vary only as nine bushes' means do (about a third of the within SD)
     assert min(s["within_sd"] for s in stats) > 0.5                       # and the bushes of a tile vary as the whole map does
+
+
+def test_balanced_placement_deals_the_same_pool_and_equalises_tile_totals():
+    for seed in range(4):
+        w, s = realised(seed, tile_placement="balanced")
+        r, sr = realised(seed, tile_placement="random")
+        key = lambda x: np.lexsort((x.color, x.shape))
+        assert np.allclose(np.stack([w.shape, w.color], 1)[key(w)], np.stack([r.shape, r.color], 1)[key(r)])      # the same bushes, dealt differently
+        assert np.bincount(tile_of(w)).min() == np.bincount(tile_of(w)).max()
+        assert s["tile_sum_dev_share"] < 0.05 and s["tile_sum_dev"] < sr["tile_sum_dev"] / 3
+        assert s["contrast"] < 0.1 and s["within_sd"] > 0.5 * sr["within_sd"]                                   # tiles alike in total, each still spread out as the map is
+
+
+def test_the_tile_sum_check_redraws_until_it_holds_and_an_impossible_one_is_an_error():
+    _, s = realised(2, tile_placement="balanced", tile_sum_tol=0.5)
+    assert s["tile_sum_dev"] <= 0.5
+    with pytest.raises(ValueError, match="tile_sum_tol"):
+        tile_world(tile_placement="random", tile_sum_tol=0.01)
 
 
 def test_the_neighbourhood_coverage_check_redraws_until_it_holds_and_an_impossible_one_is_an_error():
@@ -148,7 +166,8 @@ def test_the_start_check_makes_the_tiles_around_the_start_differ():
 
 def test_stats_reports_the_realised_pattern():
     _, s = realised(1)
-    assert set(s) == {"n_tiles", "tile_value_sd", "within_sd", "contrast", "good_tile_share", "good_bush_share", "coverage_min", "start_spread"} and s["n_tiles"] > 10
+    assert set(s) == {"n_tiles", "tile_value_sd", "within_sd", "contrast", "good_tile_share", "good_bush_share", "coverage_min", "start_spread",
+                    "tile_sum_dev", "tile_sum_dev_share", "within_sd_range"} and s["n_tiles"] > 10
 
 
 def test_the_ground_level_of_a_tile_does_not_predict_its_value():

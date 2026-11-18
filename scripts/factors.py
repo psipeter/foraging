@@ -114,6 +114,9 @@ def check(session, valuemap, settings, seeds, agents=("nearest", "oracle"), leav
     return out
 
 
+PLACEMENT = {"tile_placement": "balanced", "tile_sum_tol": 1.0}      # how the pool is dealt in realised sessions (equal patch totals, PI 2026-11-18; the design modules' TILE_FIELDS say the same)
+
+
 def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=ANCHOR_AGENT, seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, max_peak=MAX_PEAK, corner=(1.0, 1.0), aspect=1.0, seed=0, **overrides):
     """A session from three knobs (milestone 3's calibrators together): the Gaussian with the stated sparsity (`gini`) and complexity (`klass`, `interaction`), the tile layout with the stated `travel_time`
     (the pool of bushes placed at random: no diversity knob since 2026-11-18), and the gain at which `agent` earns `anchor` points in a session (default: `ANCHOR_RATE` times the session's duration). Returns {"map": the ValueMap (gain included), "settings": the layout settings,
@@ -129,7 +132,7 @@ def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=A
     with_gain = lambda g: value_maps.ValueMap(shape_map.bumps, shape_map.noise, {"type": "gain", "value": float(g)})
     current, rounds = shape_map, 0
     for rounds in range(1, steps + 1):
-        settings = {**calibrate(load_session(session, **overrides, **current.compile()), travel_time), "tile_placement": "random"}
+        settings = {**calibrate(load_session(session, **overrides, **current.compile()), travel_time), **PLACEMENT}
         solved = value_maps.solve_gain(shape_map, policy_points(session, agent, seeds, **overrides, **settings), anchor, rel_tol=0.03)
         settled = abs(solved.gain() / current.gain() - 1.0) < 0.05
         current = with_gain(solved.gain())
@@ -145,7 +148,7 @@ def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=A
         if abs(points / anchor - 1.0) <= tolerance:
             break
         current = with_gain(current.gain() * anchor / points)
-        settings = {**calibrate(load_session(session, **overrides, **current.compile()), travel_time), "tile_placement": "random"}
+        settings = {**calibrate(load_session(session, **overrides, **current.compile()), travel_time), **PLACEMENT}
         achieved = check(session, current, settings, check_seeds, agents=tuple(dict.fromkeys(("nearest", "oracle", agent))), **overrides)
     within = abs(achieved["points"][agent][0] / anchor - 1.0) <= tolerance
     peak = current.descriptors()["max"]

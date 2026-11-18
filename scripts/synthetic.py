@@ -12,7 +12,7 @@ from world import FEATURES, load_session
 TEMPLATE = "FIX_T0"
 TILES = {"layout": "tiles", "assignment": "tiles", "tile_radius": 70.0, "tile_ramp_width": 14.0, "tile_moisture_levels": 4, "tile_bushes": 9, "tile_cluster_radius": 22.0,
          "tile_cluster_spacing": 12.0, "tile_arrangement": None, "tile_placement": None,
-         "tile_coverage_min": 0.0, "tile_start_spread_min": 0.0}       # the tiles, stated (not FIX_T0's own)
+         "tile_coverage_min": 0.0, "tile_start_spread_min": 0.0, "tile_sum_tol": 0.0}       # the tiles, stated (not FIX_T0's own)
 DEFAULT_MAP = value_maps.wide_corner()          # the additive rung, both features alike, the best bush pays 4 as in every built experiment
 
 

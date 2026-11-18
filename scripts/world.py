@@ -108,7 +108,7 @@ FIELD_DEFAULTS = {"shape_varies": True, "color_varies": True, "shape_when_fixed"
                   "layout": None, "assignment": None, "reward_stage": None,      # (stage names: None = the default, see stage_names)
                   "tile_radius": 70.0, "tile_ramp_width": 14.0, "tile_moisture_levels": 4, "tile_bushes": 9, "tile_cluster_radius": 22.0, "tile_cluster_spacing": 12.0,
                   "tile_arrangement": None, "tile_placement": None,
-                  "tile_coverage_min": 0.0, "tile_start_spread_min": 0.0}               # (the tiles layout, tiles.py)
+                  "tile_coverage_min": 0.0, "tile_start_spread_min": 0.0, "tile_sum_tol": 0.0}               # (the tiles layout, tiles.py)
 
 
 FEATURES = ("shape", "color", "moisture")

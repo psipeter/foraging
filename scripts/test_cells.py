@@ -87,7 +87,7 @@ def test_the_instances_are_the_realised_cells_in_order_with_the_realised_map_lay
     inst = tabled.instances_of("ZZ", data)
     assert [i.name for i in inst] == ["ZZ_S1", "ZZ_S2"]                                         # the inaccessible cell has no session
     f, s, d = inst[0].fields, inst[0].session_fields, inst[0].design
-    assert f["worldSeed"] == data["cells"][0]["world_seed"] and f["tileRadius"] == 69.3 and f["tilePlacement"] == "random"
+    assert f["worldSeed"] == data["cells"][0]["world_seed"] and f["tileRadius"] == 69.3 and f["tilePlacement"] == "balanced" and f["tileSumTol"] == 1.0
     assert f["rewardFunction.bumps.Array.size"] == 1 and f["rewardStd"] == 0.6
     assert s["rewardFeedbackMax"] == 5.0 and s["pitchSemitoneRange"] == 12.0 and s["instructionsFile"] == "Experiments/ZZ/instructions_S1.txt" and s["sessionDuration"] == 180.0
     assert d["cell"] == 3 and d["nuisance_draw"] == 0 and d["anchor"]["points"] == factors.anchor_points(180.0) and d["anchor"]["rate"] == factors.ANCHOR_RATE and d["anchor"]["check_points"]["learner"] == 752 and d["value_map"]["bumps"] and "gini" in d["value_map_descriptors"]

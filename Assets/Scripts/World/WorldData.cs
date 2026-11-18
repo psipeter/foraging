@@ -286,7 +286,8 @@ public class WorldData
             { "tileClusterRadius", config.TileClusterRadius },
             { "tileClusterSpacing", config.TileClusterSpacing },
             { "tileCoverageMin", config.TileCoverageMin },
-            { "tileStartSpreadMin", config.TileStartSpreadMin }
+            { "tileStartSpreadMin", config.TileStartSpreadMin },
+            { "tileSumTol", config.TileSumTol }
         };
         RewardBump[] bumps = config.RewardFunction.Bumps;
         for (int i = 0; i < bumps.Length; i++)

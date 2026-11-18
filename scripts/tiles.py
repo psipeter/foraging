@@ -10,7 +10,7 @@ the sites of the tiles and changes nothing else; checks on the result (a neighbo
 what a world realised (tile contrast, spatial and bush sparsity). Tables of methods, so a new one is one entry:
 
     ARRANGEMENTS    where the bushes lie inside a tile: `random` (a minimum spacing)
-    PLACEMENTS      how the pool is dealt to the tiles: `random` (the others of earlier versions, which chose the tiles' centres and scattered the bushes around them, were removed 2026-11-18)
+    PLACEMENTS      how the pool is dealt to the tiles: `random`, `balanced` (equal tile sums: bushes dealt best first to the tile with the least so far; `tile_sum_tol` checks it) (the others of earlier versions, which chose the tiles' centres and scattered the bushes around them, were removed 2026-11-18)
 
 The tile of a bush is found again from its position (`TileGrid.nearest`), so the bush table needs no tile column. Random streams (world.py's list): 17 the grid (rotation, ground levels), 18 the
 clusters, 19 the assignment.
@@ -21,7 +21,7 @@ import math
 import numpy as np
 
 SQRT3 = math.sqrt(3.0)
-TILE_PARAMS = ("tile_radius", "tile_ramp_width", "tile_moisture_levels", "tile_bushes", "tile_cluster_radius", "tile_cluster_spacing", "tile_coverage_min", "tile_start_spread_min")
+TILE_PARAMS = ("tile_radius", "tile_ramp_width", "tile_moisture_levels", "tile_bushes", "tile_cluster_radius", "tile_cluster_spacing", "tile_coverage_min", "tile_start_spread_min", "tile_sum_tol")
 CLUSTER_MARGIN = 5.0              # world units: a cluster (plus this) must lie inside the valley
 RELAX_STEPS = 500                 # pushes `arrange_random` makes in one try
 REPAIR_PASSES = 20                # passes that give a tile sharing its level with a neighbour another one
@@ -231,7 +231,26 @@ def place_random(params, ts, pool, rng, reward):
     return pool[rng.permutation(len(pool))]
 
 
-PLACEMENTS = {"random": place_random}
+def place_balanced(params, ts, pool, rng, reward):
+    """Equal tile sums by a greedy deal (the largest-first rule of balanced partitioning): the pool's bushes in bands of one per open tile, best first; inside a band the best bush goes to the tile with
+    the least value so far (a tie, as in the first band, to a random one). Each tile gets one bush of every band, so its spread is the pool's, and the sums differ by about the last band's range."""
+    v = np.asarray(reward(params.reward_function, pool[:, 0], pool[:, 1]), dtype=float)
+    order = np.argsort(-v, kind="stable")
+    sites = [rng.permutation(np.flatnonzero(ts.tile_of == t)) for t in range(ts.n_tiles)]
+    size = np.array([len(s) for s in sites])
+    total, filled, out, cursor = np.zeros(ts.n_tiles), np.zeros(ts.n_tiles, dtype=int), np.empty_like(pool), 0
+    while cursor < len(order):
+        open_tiles = np.flatnonzero(filled < size)
+        ranked = open_tiles[np.lexsort((rng.random(len(open_tiles)), total[open_tiles]))]
+        for t, b in zip(ranked, order[cursor:cursor + len(open_tiles)]):
+            out[sites[t][filled[t]]] = pool[b]
+            total[t] += v[b]
+            filled[t] += 1
+        cursor += len(open_tiles)
+    return out
+
+
+PLACEMENTS = {"random": place_random, "balanced": place_balanced}
 
 
 def plane_range(params, reward):
@@ -262,10 +281,18 @@ def start_spread(params, ts, features, reward):
     return float((means.max() - means.min()) / max(hi - lo, 1e-9))
 
 
+def tile_sum_deviation(params, ts, features, reward):
+    """The largest distance of a tile's total bush value (points, after the session's gain) from the mean tile total."""
+    v = np.asarray(reward(params.reward_function, features[:, 0], features[:, 1]), dtype=float)
+    sums = np.bincount(ts.tile_of, weights=v, minlength=ts.n_tiles)
+    return float(np.abs(sums - sums.mean()).max())
+
+
 def constraints_hold(params, ts, features, reward):
-    """The session's checks on a finished assignment (each off at 0): `tile_coverage_min` (neighbourhood_coverage) and `tile_start_spread_min` (start_spread)."""
-    cov, spread = float(_p(params, "tile_coverage_min", 0.0)), float(_p(params, "tile_start_spread_min", 0.0))
-    return (cov <= 0.0 or neighbourhood_coverage(ts, features) >= cov) and (spread <= 0.0 or start_spread(params, ts, features, reward) >= spread)
+    """The session's checks on a finished assignment (each off at 0): `tile_coverage_min` (neighbourhood_coverage), `tile_start_spread_min` (start_spread) and `tile_sum_tol` (tile_sum_deviation, at most this)."""
+    cov, spread, tol = float(_p(params, "tile_coverage_min", 0.0)), float(_p(params, "tile_start_spread_min", 0.0)), float(_p(params, "tile_sum_tol", 0.0))
+    return ((cov <= 0.0 or neighbourhood_coverage(ts, features) >= cov) and (spread <= 0.0 or start_spread(params, ts, features, reward) >= spread)
+            and (tol <= 0.0 or tile_sum_deviation(params, ts, features, reward) <= tol))
 
 
 def deal_features(params, pos, grid, rng, reward):
@@ -277,7 +304,7 @@ def deal_features(params, pos, grid, rng, reward):
         features = place(params, ts, pool, np.random.default_rng(int(rng.integers(2 ** 62))), reward)
         if constraints_hold(params, ts, features, reward):
             return features[:, 0], features[:, 1]
-    raise ValueError(f"no placement met tile_coverage_min {_p(params, 'tile_coverage_min', 0.0)} and tile_start_spread_min {_p(params, 'tile_start_spread_min', 0.0)} in {MAX_ATTEMPTS} draws")
+    raise ValueError(f"no placement met tile_coverage_min {_p(params, 'tile_coverage_min', 0.0)} and tile_start_spread_min {_p(params, 'tile_start_spread_min', 0.0)} and tile_sum_tol {_p(params, 'tile_sum_tol', 0.0)} in {MAX_ATTEMPTS} draws")
 
 
 # --------------------------------------------------------------------------------------------------
@@ -286,13 +313,17 @@ def deal_features(params, pos, grid, rng, reward):
 
 def stats(params, pos, shape, color, grid, reward):
     """The realised pattern of a world: tiles, the spread of the tiles' mean reward, the mean within-tile reward SD, their ratio (contrast), the share of tiles whose mean pays at least 70% of the best bush
-    (spatial sparsity), the share of bushes that do (bush sparsity), the neighbourhood coverage and the start spread."""
+    (spatial sparsity), the share of bushes that do (bush sparsity), the neighbourhood coverage, the start spread, the largest deviation of a tile's total value from the mean tile total (points, and as a
+    share of that mean) and the range of the tiles' within-tile SDs."""
     ts = TileSet(grid, pos)
     v = np.asarray(reward(params.reward_function, shape, color), dtype=float)
     means = np.array([v[ts.tile_of == t].mean() for t in range(ts.n_tiles)])
     within = np.array([v[ts.tile_of == t].std(ddof=1) for t in range(ts.n_tiles)])
     best = v.max()
     features = np.stack([shape, color], axis=1)
+    dev = tile_sum_deviation(params, ts, features, reward)
     return {"n_tiles": int(ts.n_tiles), "tile_value_sd": float(means.std()), "within_sd": float(within.mean()), "contrast": float(means.std() / max(within.mean(), 1e-9)),
             "good_tile_share": float(np.mean(means >= GOOD_OF_MAX * best)), "good_bush_share": float(np.mean(v >= GOOD_OF_MAX * best)),
-            "coverage_min": neighbourhood_coverage(ts, features), "start_spread": start_spread(params, ts, features, reward)}
+            "coverage_min": neighbourhood_coverage(ts, features), "start_spread": start_spread(params, ts, features, reward),
+            "tile_sum_dev": dev, "tile_sum_dev_share": float(dev / max(v.sum() / ts.n_tiles, 1e-9)),
+            "within_sd_range": float(within.max() - within.min())}
