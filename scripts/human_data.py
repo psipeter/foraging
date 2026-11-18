@@ -1,10 +1,9 @@
 """Participant data from the online database, as files and tables for analysis (docs/ONLINE_DATA_PLAN.md, sections 1 and 3).
 
-    ./venv/bin/python scripts/human_data.py download [--out ForagingData] [--all]
+    ./venv/bin/python scripts/database.py download [--out ForagingData] [--all]     # reads the database (the password is pasted there)
     ./venv/bin/python scripts/human_data.py list [--exclude peter] [--status finished]
 
-`download` reads the database through the Supabase CLI (`supabase db query --remote`, read-only; the CLI must be logged in to the
-project) and writes, under `ForagingData/` (gitignored; it holds participant names):
+`database.py download` reads the database in a read-only transaction and calls `download` here with its query function; it writes, under `ForagingData/` (gitignored; it holds participant names):
 
     <run_id>/<session:02d>/...   the raw local layout of rundata.py (events, decoded trajectory, ranking sets, world files in
                                  _worlds/), so replay.py and visibility.py read a participant like a local log; run.json also
@@ -31,9 +30,7 @@ strings (case-insensitive); `Humans.trajectory(run_id, session_index)` reads one
 import argparse
 import base64
 import json
-import shutil
 import sqlite3
-import subprocess
 import sys
 import uuid
 from collections import defaultdict
@@ -92,16 +89,7 @@ create view if not exists fruits as
 """
 
 
-def query(sql):
-    """The rows (dicts) of a read-only query on the linked Supabase project, through the CLI."""
-    cli = [shutil.which("supabase")] if shutil.which("supabase") else ["npx", "--yes", "supabase@latest"]
-    done = subprocess.run(cli + ["db", "query", "--remote", "--read-only", "--output-format", "json", sql], capture_output=True, text=True)
-    if done.returncode != 0:
-        raise RuntimeError(f"supabase db query failed ({done.returncode}): {done.stderr.strip() or done.stdout.strip()}")
-    return json.loads(done.stdout)["rows"]
-
-
-def _fetch(select, order, run_ids):
+def _fetch(query, select, order, run_ids):
     ids = ",".join(f"'{uuid.UUID(r)}'" for r in run_ids)      # ids come from the server; the parse makes sure nothing else is pasted in
     rows = []
     while True:
@@ -159,8 +147,8 @@ def _store_run(con, out, run, sessions, events, chunks, sets):
                  run.get("participant_id"), run.get("experiment")))
 
 
-def download(out=DATA_DIR, everything=False, log=print):
-    """Download the runs that are new or changed since the last download into `out`; returns (runs downloaded, runs not on the server)."""
+def download(query, out=DATA_DIR, everything=False, log=print):
+    """`query(sql)` returns the rows (dicts of JSON values) of a read-only query: `database.py download` passes one. Download the runs that are new or changed since the last download into `out`; returns (runs downloaded, runs not on the server)."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(out / DB_NAME)
@@ -176,7 +164,7 @@ def download(out=DATA_DIR, everything=False, log=print):
     todo = [r for r in runs if everything or have.get(r["run_id"]) != _stamp(r) or not (out / r["run_id"]).is_dir()]
     if todo:
         ids = [r["run_id"] for r in todo]
-        rows = {name: _fetch(select, order, ids) for name, select, order in TABLES}
+        rows = {name: _fetch(query, select, order, ids) for name, select, order in TABLES}
         by_run = {name: defaultdict(lambda: defaultdict(list)) for name in ("events", "trajectory", "sets")}
         for name in by_run:
             for row in rows[name]:
@@ -227,7 +215,7 @@ def load(root=DATA_DIR, exclude=(), status=None):
     left out of every table. `status`: keep only runs with this status ('finished')."""
     root = Path(root)
     if not (root / DB_NAME).exists():
-        raise FileNotFoundError(f"{root / DB_NAME} does not exist: run `human_data.py download` first")
+        raise FileNotFoundError(f"{root / DB_NAME} does not exist: run `database.py download` first")
     con = sqlite3.connect(root / DB_NAME)
     people = pd.read_sql("select * from participants order by started_at", con)
     text = (people["participant"].fillna("") + "\n" + people["signature"].fillna("")).str.lower()
@@ -256,19 +244,11 @@ def load(root=DATA_DIR, exclude=(), status=None):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    d = sub.add_parser("download", help="download new or changed runs")
-    d.add_argument("--out", default=str(DATA_DIR))
-    d.add_argument("--all", action="store_true", help="download every run again")
     ls = sub.add_parser("list", help="list the downloaded participants")
     ls.add_argument("--out", default=str(DATA_DIR))
     ls.add_argument("--exclude", nargs="*", default=[], help="leave out participants whose ID or signed name contains any of these")
     ls.add_argument("--status")
     args = parser.parse_args(argv)
-    if args.command == "download":
-        print("downloading...")
-        n, gone = download(args.out, args.all)
-        print(f"{n} run(s) downloaded into {args.out}" + (f"; {gone} run(s) downloaded earlier are no longer on the server (kept)" if gone else ""))
-        return
     h = load(args.out, args.exclude, args.status)
     p = h.participants.assign(date=h.participants["started_at"].dt.strftime("%m-%d %H:%M"), build=h.participants["build_commit"].str[:7])
     with pd.option_context("display.width", 200, "display.max_columns", 20):

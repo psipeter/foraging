@@ -43,7 +43,7 @@ def set_row(run_id, index, seq, correct, total=1):
 
 
 class FakeServer:
-    """What `human_data.query` returns for the queries the download makes; counts the data queries."""
+    """What `database.py` passes to `download` as its query function, for for the queries the download makes; counts the data queries."""
 
     def __init__(self):
         self.runs, self.tables, self.calls = [], {name: [] for name, _, _ in hd.TABLES}, []
@@ -71,7 +71,6 @@ class FakeServer:
 @pytest.fixture
 def server(monkeypatch):
     fake = FakeServer()
-    monkeypatch.setattr(hd, "query", fake)
     monkeypatch.setattr(hd, "PAGE", 3)      # pages of 3 rows: every table is read in several queries
     fake.add(run_row(RUN_A, "Peter_test", "Peter D", feedback="fun"),
              [session_row(RUN_A, 0, "FOR_S1"), session_row(RUN_A, 1, "FOR_S2")],
@@ -85,7 +84,7 @@ def server(monkeypatch):
 
 
 def test_download_writes_the_tidy_tables_and_the_raw_layout(server, tmp_path):
-    assert hd.download(tmp_path, log=lambda *_: None) == (3, 0)
+    assert hd.download(server, tmp_path, log=lambda *_: None) == (3, 0)
     h = hd.load(tmp_path)
     assert set(h.participants["participant"]) == {"Peter_test", "p7788", "someone"}
     a = h.participants.set_index("run_id").loc[RUN_A]
@@ -109,7 +108,7 @@ def test_download_writes_the_tidy_tables_and_the_raw_layout(server, tmp_path):
 
 
 def test_exclude_matches_the_id_or_the_signed_name_in_any_case_and_leaves_every_table(server, tmp_path):
-    hd.download(tmp_path, log=lambda *_: None)
+    hd.download(server, tmp_path, log=lambda *_: None)
     h = hd.load(tmp_path, exclude=["peter"])
     assert list(h.participants["participant"]) == ["p7788"]             # "Peter_test" by ID, "xx PETER xx" by signature
     for table in (h.sessions, h.events, h.fruits, h.ranking_sets):
@@ -119,25 +118,25 @@ def test_exclude_matches_the_id_or_the_signed_name_in_any_case_and_leaves_every_
 
 
 def test_a_second_download_reads_only_the_run_list_and_a_changed_run_replaces_its_rows(server, tmp_path):
-    hd.download(tmp_path, log=lambda *_: None)
+    hd.download(server, tmp_path, log=lambda *_: None)
     server.calls.clear()
-    assert hd.download(tmp_path, log=lambda *_: None) == (0, 0) and server.calls == []
+    assert hd.download(server, tmp_path, log=lambda *_: None) == (0, 0) and server.calls == []
     # the in-progress run uploaded more and finished
     server.runs[2] = run_row(RUN_C, "someone", "xx PETER xx", n_sessions=1, last="2026-11-03 10:30:00+00")
     server.tables["events"] += [event_row(RUN_C, 0, 0, "fruit", 1.0, 1.0), event_row(RUN_C, 0, 1, "fruit", 2.0, 3.0)]
-    assert hd.download(tmp_path, log=lambda *_: None) == (1, 0)
+    assert hd.download(server, tmp_path, log=lambda *_: None) == (1, 0)
     assert all(RUN_C in q and RUN_A not in q for q in server.calls)
-    assert hd.download(tmp_path, log=lambda *_: None) == (0, 0)
-    assert hd.download(tmp_path, everything=True, log=lambda *_: None) == (3, 0)
+    assert hd.download(server, tmp_path, log=lambda *_: None) == (0, 0)
+    assert hd.download(server, tmp_path, everything=True, log=lambda *_: None) == (3, 0)
     h = hd.load(tmp_path)
     assert h.fruits.groupby("run_id").size().to_dict() == {RUN_A: 2, RUN_B: 1, RUN_C: 2} and len(h.events) == 8
     assert h.participants.set_index("run_id").loc[RUN_C, "status"] == "finished"
 
 
 def test_a_run_the_server_no_longer_has_is_kept_and_marked(server, tmp_path):
-    hd.download(tmp_path, log=lambda *_: None)
+    hd.download(server, tmp_path, log=lambda *_: None)
     server.runs = server.runs[:1]
-    assert hd.download(tmp_path, log=lambda *_: None) == (0, 2)
+    assert hd.download(server, tmp_path, log=lambda *_: None) == (0, 2)
     h = hd.load(tmp_path)
     assert h.participants.set_index("run_id")["on_server"].to_dict() == {RUN_A: 1, RUN_B: 0, RUN_C: 0} and RUN_B in set(h.sessions["run_id"])
 
@@ -147,15 +146,7 @@ def test_load_before_a_download_says_what_to_do(tmp_path):
         hd.load(tmp_path)
 
 
-def test_a_failing_query_raises_with_the_cli_message(monkeypatch):
-    class Done:
-        returncode, stdout, stderr = 1, "", "not logged in"
-    monkeypatch.setattr(hd.subprocess, "run", lambda *a, **k: Done())
-    with pytest.raises(RuntimeError, match="not logged in"):
-        hd.query("select 1")
-
-
 def test_the_picks_of_a_set_come_one_row_per_bush(server, tmp_path):
-    hd.download(tmp_path, log=lambda *_: None)
+    hd.download(server, tmp_path, log=lambda *_: None)
     p = hd.load(tmp_path).picks()
     assert len(p) == 3 and set(p["set_index"]) == {0, 1} and set(p["pool_index"]) == {5, 6} and set(p["bush_id"]) == {100, 101}

@@ -5,7 +5,7 @@
 ## Built: `scripts/validate_run.py`
 
 `./venv/bin/python scripts/validate_run.py <session folder | run folder | run id | --all> [--json]` reads a logged run (a local `ForagingData/<run>/` or one pulled with
-`database.py pull` / `human_data.py download`) and reports PASS / WARN / FAIL / SKIP per check, with the numbers that disagree; exit code 1 on any FAIL. It reuses
+`database.py pull` / `database.py download`) and reports PASS / WARN / FAIL / SKIP per check, with the numbers that disagree; exit code 1 on any FAIL. It reuses
 `rundata` and `replay`. Three groups:
 
 1. **Scoring, recomputed independently of the C# code.** `foraging_points` equals the last fruit's running total and the sum of the fruit rewards, each of which equals the
@@ -20,7 +20,7 @@
 Tests (`scripts/test_validate_run.py`) use small golden sessions with one injected fault per check kind, plus the two real browser runs of 2026-11-13 as fixtures
 (`scripts/fixtures/runs/`, participant fields stripped).
 
-**When to run it:** on every pilot run (`validate_run.py --all` after `human_data.py download`), and after any change to `RankingBreak`, `RankingSets`, `DataLogger`
+**When to run it:** on every pilot run (`validate_run.py --all` after `database.py download`), and after any change to `RankingBreak`, `RankingSets`, `DataLogger`
 or `replay.py`. A FAIL is either a validator bug or a game bug; decide which before collecting more.
 
 ## Release checklist (by hand; each line has a command that proves it)
@@ -30,10 +30,10 @@ Before `database.py publish` and `deploy_webgl.sh`:
 - Tests: `run_tests.py --all` green at HEAD (slow tests need the PI's yes); `validate_run.py` clean on the latest pilot or browser run.
 - Generated files fresh: `world.py` / `ranking.py pool` output equals the committed files (the slow freshness tests); `online.json` has `"enabled": true`.
 - Server: every migration applied (`select version from supabase_migrations.schema_migrations`), the Edge Functions' `updated_at` (`supabase functions list`) is later than the last commit touching
-  `supabase/functions`, `ALLOWED_ORIGIN` set. **Migrations and functions go together** (an old build breaks in between); back up with `db_backup.py` first.
+  `supabase/functions`, `ALLOWED_ORIGIN` set. **Migrations and functions go together** (an old build breaks in between); back up with `database.py backup` first.
 - Unity: `recompile` clean, no console errors, scenes saved, build target back to Linux after a WebGL build.
 - After deploy: `https://<user>.github.io/foraging-web/StreamingAssets/build_info.json` shows the new commit (Pages caches up to 10 minutes); play one reduced run in the browser
-  (`?short=0.3`), `human_data.py download`, `validate_run.py` on it.
+  (`?short=0.3`), `database.py download`, `validate_run.py` on it.
 
 ## Not built, on purpose
 

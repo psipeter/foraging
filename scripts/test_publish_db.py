@@ -1,6 +1,9 @@
 """`database.publish` against a real PostgreSQL (pgserver) with the project's migrations; no Deno or Edge Functions needed."""
 
 import glob
+import json
+import urllib.parse
+import uuid
 from pathlib import Path
 
 import pytest
@@ -79,3 +82,99 @@ def test_a_failed_write_changes_nothing_and_a_read_runs_in_a_read_only_transacti
     assert "outcome: failed" in sorted(tmp_path.glob("db_*.log"))[-1].read_text()
     logs = run_main(["runs"], uri, tmp_path, "unused")                                  # a read asks for no confirmation
     assert "outcome: done" in logs[-1].read_text()
+
+
+def test_backup_copies_every_table_with_its_counts_and_download_reads_a_database_without_runs(uri, db, tmp_path):
+    out = tmp_path / "data"
+    out.mkdir()
+    run_main(["backup", "--out", str(out), "--label", "t"], uri, tmp_path, "unused")
+    folder = next(out.glob("_db_backup_t_*"))
+    counts = json.loads((folder / "counts.json").read_text())
+    assert counts["experiments"] == db.execute("select count(*) as n from public.experiments").fetchone()["n"] > 0
+    assert len((folder / "experiments.jsonl").read_text().splitlines()) == counts["experiments"]
+    assert "experiments" in json.loads((folder / "schema.json").read_text())["tables"]
+    logs = run_main(["download", "--out", str(out)], uri, tmp_path, "unused")
+    assert "0 run(s) downloaded" in logs[-1].read_text() and (out / "humans.sqlite").exists()
+
+
+def _insert(db, table, **given):
+    """A row with `given` columns and a dummy value for every other required column."""
+    dummy = {"uuid": lambda: str(uuid.uuid4()), "text": "x", "integer": 0, "bigint": 0, "boolean": False, "jsonb": "{}", "bytea": b"ab", "double precision": 0.0,
+             "timestamp with time zone": "2026-11-18T10:00:00Z"}
+    row = dict(given)
+    for c in db.execute("select column_name, data_type from information_schema.columns where table_schema = 'public' and table_name = %s and is_nullable = 'NO' and column_default is null", (table,)):
+        if c["column_name"] not in row:
+            d = dummy[c["data_type"]]
+            row[c["column_name"]] = d() if callable(d) else d
+    db.execute(f"insert into public.{table} ({', '.join(row)}) values ({', '.join(['%s'] * len(row))})", [psycopg.types.json.Jsonb(v) if isinstance(v, dict) else v for v in row.values()])
+
+
+def test_download_reads_a_run_with_its_session_events_and_trajectory_from_the_database(db, tmp_path):
+    import numpy as np
+    import human_data
+    import trajectory_codec as codec
+    pid, rid = str(uuid.uuid4()), str(uuid.uuid4())
+    db.execute("insert into public.experiments (code, title) values ('DL', 'Download test') on conflict do nothing")
+    _insert(db, "participants", participant_id=pid)
+    _insert(db, "runs", run_id=rid, participant_id=pid, experiment="DL")
+    _insert(db, "sessions", run_id=rid, session_index=0)
+    _insert(db, "events", run_id=rid, session_index=0, seq=0, type="fruit")
+    _insert(db, "trajectory", run_id=rid, session_index=0, first_seq=0, n_frames=5, data=codec.encode(np.column_stack([np.arange(1, 6) * 0.1] + [np.zeros(5)] * 5), 0))
+    with database.read_only(db):
+        assert human_data.download(database.make_query(db), tmp_path, log=lambda *_: None) == (1, 0)
+    h = human_data.load(tmp_path)
+    assert rid in set(h.participants["run_id"]) and len(h.events[h.events.run_id == rid]) == 1 and len(h.trajectory(rid, 0)) == 5
+
+
+@pytest.fixture
+def fresh_uri(uri):
+    """An empty database in the same server (the roles exist cluster-wide), where no migration is applied or recorded."""
+    name = "fresh_" + uuid.uuid4().hex[:8]
+    with psycopg.connect(uri, autocommit=True) as c:
+        c.execute(f"create database {name}")
+    parts = urllib.parse.urlsplit(uri)
+    return urllib.parse.urlunsplit(parts._replace(path="/" + name))
+
+
+def test_migrate_applies_every_file_in_one_transaction_records_them_and_then_has_nothing_to_do(fresh_uri, tmp_path):
+    logs = run_main(["migrate"], fresh_uri, tmp_path, "local")
+    text = logs[-1].read_text()
+    files = [p.name for _, _, p in database.migration_files()]
+    assert "outcome: done" in text and all(f"applied {f}" in text for f in files)
+    with psycopg.connect(fresh_uri, autocommit=True, row_factory=psycopg.rows.dict_row) as c:
+        recorded = c.execute("select version, name from supabase_migrations.schema_migrations order by version").fetchall()
+        assert [r["version"] for r in recorded] == [f.split("_")[0] for f in files] and recorded[0]["name"] == files[0].split("_", 1)[1][:-4]
+        assert c.execute("select to_regclass('public.runs') is not null as found").fetchone()["found"]
+    again = run_main(["migrate"], fresh_uri, tmp_path / "again", "no answer is asked")     # nothing pending: no confirmation
+    assert "every migration is applied" in again[-1].read_text()
+
+
+def test_a_failing_migration_leaves_nothing_applied(fresh_uri, tmp_path, monkeypatch):
+    original_pending = database.pending_migrations
+    (tmp_path / "m").mkdir()
+    (tmp_path / "m" / "20990101000000_good.sql").write_text("create table public.zz_good (a int);")
+    (tmp_path / "m" / "20990101000100_bad.sql").write_text("select no_such_column from public.zz_good;")
+    monkeypatch.setattr(database, "MIGRATIONS", tmp_path / "m")
+    monkeypatch.setattr(database, "pending_migrations", lambda conn, directory=tmp_path / "m": original_pending(conn, directory))
+    with pytest.raises(SystemExit, match="migrate failed"):
+        run_main(["migrate"], fresh_uri, tmp_path, "local")
+    with psycopg.connect(fresh_uri, autocommit=True) as c:
+        assert c.execute("select to_regclass('public.zz_good')").fetchone()[0] is None
+        assert c.execute("select to_regclass('supabase_migrations.schema_migrations')").fetchone()[0] is None
+
+
+def test_cleanup_deletes_a_throwaway_builds_runs_participants_and_release_and_nothing_else(uri, db, tmp_path):
+    db.execute("insert into public.experiments (code, title) values ('CL', 'Cleanup test') on conflict do nothing")
+    database.register_release(db, "smoke-test", {"CL": 1}, None)
+    database.register_release(db, "keep-me", {"CL": 1}, None)
+    for commit in ("smoke-test", "keep-me"):
+        pid, rid = str(uuid.uuid4()), str(uuid.uuid4())
+        _insert(db, "participants", participant_id=pid)
+        _insert(db, "runs", run_id=rid, participant_id=pid, experiment="CL", build_commit=commit)
+        _insert(db, "sessions", run_id=rid, session_index=0)
+    with pytest.raises(SystemExit, match="git commit"):
+        run_main(["cleanup", "--commit", "22f16b46f042459260ad70ceca206e60171d197e"], uri, tmp_path, "local")
+    run_main(["cleanup", "--commit", "smoke-test"], uri, tmp_path, "local")
+    left = {r["build_commit"] for r in db.execute("select build_commit from public.runs where experiment = 'CL'")}
+    assert left == {"keep-me"} and db.execute("select count(*) as n from public.releases where build_commit = 'smoke-test'").fetchone()["n"] == 0
+    assert db.execute("select count(*) as n from public.releases where build_commit = 'keep-me'").fetchone()["n"] == 1

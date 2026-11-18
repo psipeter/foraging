@@ -1,6 +1,9 @@
 """The pure parts of `database.py`: the connection guards (project, scrubbing, terminal, confirmation, log) and `publish`: which experiments the catalog lists, and what a build's plan is."""
 
+import io
 import json
+import os
+import urllib.error
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -56,7 +59,7 @@ def test_a_write_waits_for_the_project_ref_to_be_typed():
 
 def test_no_credential_is_read_from_the_environment_or_a_file():
     source = (Path(__file__).parent / "database.py").read_text()
-    assert "os.environ" not in source and "getenv" not in source and "FORAGING_DB_URL" not in source and "db_url" not in source
+    assert source.count("os.environ") == 1 and "os.environ.copy()" in source and "getenv" not in source and "FORAGING_DB_URL" not in source and "db_url" not in source
 
 
 def test_the_log_keeps_what_was_reported_without_the_secret(tmp_path, capsys):
@@ -134,3 +137,75 @@ def test_url_from_password_encodes_and_keeps_a_full_url():
     assert database.secrets_of(url)[-1] == "p@ss/w:rd#1"
     full = "postgresql://postgres.abcdefgh:pw@h.example:6543/postgres"
     assert database.url_from_password(full, "other") == full
+
+
+class FakeResponse:
+    status = 200
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def run_token(argv, tmp_path, answer="local", opener=None, runner=None, value=None, token="sbp_secrettoken"):
+    database.main(argv, secret=lambda: "dbpassword", ask=lambda prompt: answer, expected="local", log_dir=tmp_path, token=lambda: token, value=value,
+                  opener=opener or (lambda request, timeout: FakeResponse()), runner=runner)
+    return sorted(tmp_path.glob("db_*.log"))[-1].read_text()
+
+
+def test_set_secret_builds_the_pooler_url_from_the_password_sends_it_in_the_body_and_logs_none_of_it(tmp_path):
+    sent = {}
+
+    def opener(request, timeout):
+        sent.update(url=request.full_url, auth=request.get_header("Authorization"), body=json.loads(request.data))
+        return FakeResponse()
+    text = run_token(["set-secret", "--name", "FORAGING_POOLER_URL"], tmp_path, opener=opener, value=lambda: "p@ss/w")
+    assert sent["url"].endswith("/projects/local/secrets") and sent["auth"] == "Bearer sbp_secrettoken"
+    assert sent["body"] == [{"name": "FORAGING_POOLER_URL", "value": "postgresql://postgres.local:p%40ss%2Fw@" + database.POOLER_HOST + ":6543/postgres"}]
+    assert "outcome: done" in text and "secret FORAGING_POOLER_URL set" in text
+    assert "sbp_secrettoken" not in text and "p@ss/w" not in text and "p%40ss" not in text
+
+
+def test_set_secret_needs_the_typed_ref_and_refuses_reserved_names_and_api_errors(tmp_path):
+    called = []
+    with pytest.raises(SystemExit, match="nothing written"):
+        run_token(["set-secret", "--name", "ALLOWED_ORIGIN"], tmp_path, answer="no", opener=lambda r, timeout: called.append(r), value=lambda: "https://x")
+    assert called == []
+    with pytest.raises(SystemExit, match="not a settable"):
+        run_token(["set-secret", "--name", "SUPABASE_URL"], tmp_path, value=lambda: "v")
+
+    def refuse(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 401, "no", {}, io.BytesIO(b"bad token sbp_secrettoken"))
+    with pytest.raises(SystemExit, match="refused the secret \\(401\\)") as e:
+        run_token(["set-secret", "--name", "ALLOWED_ORIGIN"], tmp_path, opener=refuse, value=lambda: "v")
+    assert "sbp_secrettoken" not in str(e.value)
+
+
+def test_deploy_functions_puts_the_token_in_the_child_environment_only_and_scrubs_its_output(tmp_path):
+    seen = {}
+
+    def runner(cmd, **kwargs):
+        seen.update(cmd=cmd, env=kwargs["env"], cwd=kwargs["cwd"])
+
+        class Done:
+            returncode, stdout, stderr = 0, "Deployed run-start with sbp_secrettoken\n", ""
+        return Done()
+    text = run_token(["deploy-functions"], tmp_path, runner=runner)
+    assert seen["env"]["SUPABASE_ACCESS_TOKEN"] == "sbp_secrettoken" and "sbp_secrettoken" not in " ".join(seen["cmd"])
+    assert seen["cmd"][-2:] == ["--project-ref", "local"] and {"participant-start", "run-start", "append", "run-finish", "feedback", "--no-verify-jwt", "--use-api"} <= set(seen["cmd"]) and "_shared" not in seen["cmd"] and "sbp_secrettoken" not in text and "functions deployed" in text
+    assert "SUPABASE_ACCESS_TOKEN" not in os.environ
+
+
+def test_a_failed_deploy_is_a_failed_run(tmp_path):
+    class Done:
+        returncode, stdout, stderr = 1, "", "boom"
+    with pytest.raises(SystemExit, match="deploy failed"):
+        run_token(["deploy-functions"], tmp_path, runner=lambda cmd, **k: Done())
+    assert "outcome: stopped" in sorted(tmp_path.glob("db_*.log"))[-1].read_text()
+
+
+def test_cleanup_refuses_a_git_commit_name():
+    with pytest.raises(SystemExit, match="looks like a git commit"):
+        database.throwaway_rows(None, "22f16b46f042459260ad70ceca206e60171d197e")

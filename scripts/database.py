@@ -9,19 +9,31 @@ do and asks you to type the project ref. Each run leaves `results/db_<operation>
     ./venv/bin/python scripts/database.py register-worlds            # write: hashes Assets/StreamingAssets/Experiments/*/*
     ./venv/bin/python scripts/database.py runs                       # read
     ./venv/bin/python scripts/database.py pull --run <run_id> --out ForagingData   # read: one run as the local layout (participant data: ForagingData is gitignored)
+    ./venv/bin/python scripts/database.py download [--out ForagingData] [--all]   # read: new or changed runs into ForagingData/<run>/ and humans.sqlite (human_data.py reads them)
+    ./venv/bin/python scripts/database.py backup [--out ForagingData] [--label why]   # read: every table of `public` as JSON lines, before a migration
     ./venv/bin/python scripts/database.py describe --build Builds/web [--reason why]   # connects to nothing: the commit message of a build's deploy
 
-Planned (docs/DECISIONS.md, "One database script"): download and backup (moved from human_data.py and db_backup.py), cleanup, migrate, and, with the Supabase access token pasted the same way,
-deploy-functions and set-secret.
+    ./venv/bin/python scripts/database.py migrate                    # write: apply the files of supabase/migrations/ the database has not applied (all in one transaction), recorded in the CLI's own table; back up first
+    ./venv/bin/python scripts/database.py cleanup --commit smoke-test   # write: the runs, participants and release the smoke and load tests left under a throwaway build name (a git hash is refused)
+    ./venv/bin/python scripts/database.py set-secret --name FORAGING_POOLER_URL   # asks the Supabase access token, then the database password (the transaction-pooler string is built from it); no database connection
+    ./venv/bin/python scripts/database.py set-secret --name ALLOWED_ORIGIN         # asks the token, then the value
+    ./venv/bin/python scripts/database.py deploy-functions           # the Supabase CLI as a child process with the token in its environment only; no database connection
+
+`set-secret` and `deploy-functions` use the Supabase access token (Account > Access Tokens), pasted at a hidden prompt the same way as the password; the secret value goes to the Management API in
+the request body, never in argv or a file. Secrets reach the functions on their next start; redeploy only after a change of code.
 """
 
 import argparse
 import getpass
 import hashlib
 import json
+import os
 import re
+import shutil
 import subprocess
+import urllib.error
 import urllib.parse
+import urllib.request
 import uuid
 import sys
 from contextlib import contextmanager
@@ -260,7 +272,8 @@ def pull_run(conn, run_id, out_root):
 
 ONLINE_JSON = PROJECT_ROOT / "Assets" / "StreamingAssets" / "online.json"
 LOG_DIR = PROJECT_ROOT / "results"
-WRITES = {"publish", "register-experiment", "register-release", "register-worlds"}      # the operations that change the database
+WRITES = {"publish", "register-experiment", "register-release", "register-worlds", "cleanup", "migrate"}      # the operations that change the database
+TOKEN_OPERATIONS = {"set-secret", "deploy-functions"}        # no database connection: they use the Supabase access token, pasted the same way
 
 
 def expected_ref(path=ONLINE_JSON):
@@ -294,7 +307,7 @@ def require_terminal(stdin=None, stdout=None):
     """The secret is typed at a terminal: refuse to run with input from a pipe or a file, or with output that goes elsewhere (so nothing can feed it in and no log can hold the prompt)."""
     stdin, stdout = stdin or sys.stdin, stdout or sys.stdout
     if not (stdin.isatty() and stdout.isatty()):
-        raise SystemExit("database.py needs a terminal: run it yourself and paste the database password at the hidden prompt")
+        raise SystemExit("database.py needs a terminal: run it yourself and paste the secret at the hidden prompt")
 
 
 POOLER_HOST = "aws-1-us-west-2.pooler.supabase.com"      # the project's session pooler (Connect > Session pooler; supabase/.temp/pooler-url): not a secret
@@ -364,6 +377,174 @@ class Log:
         return path
 
 
+def make_query(conn):
+    """`query(sql)`: the rows of a read query as dicts of JSON values (timestamps and ids as text, as `to_jsonb` gives them), what `human_data.download` and `backup` read."""
+    return lambda sql: [r["r"] for r in conn.execute(f"select to_jsonb(q) as r from ({sql}) q").fetchall()]
+
+
+BACKUP_PAGE = 1000
+
+
+def backup(query, out, label="legacy", log=print):
+    """A local copy of every table of `public` under `<out>/_db_backup_<label>_<UTC time>/` (gitignored: it holds participant names), cut in primary-key order, so run it while no one is playing:
+    `<table>.jsonl` (one JSON object per row; a bytea column is its hex text), `schema.json` (tables, columns, the migrations applied) and `counts.json` (rows per table, for checking the copy).
+    It takes the tables as it finds them, so it works before and after a migration. To restore a table, insert its rows with `jsonb_populate_recordset`."""
+    folder = Path(out) / f"_db_backup_{label}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    folder.mkdir(parents=True)
+    tables = [r["table_name"] for r in query("select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE' order by table_name")]
+    columns = query("select table_name, column_name, data_type, is_nullable, ordinal_position from information_schema.columns where table_schema = 'public' order by table_name, ordinal_position")
+    has_migrations = query("select to_regclass('supabase_migrations.schema_migrations') is not null as found")[0]["found"]
+    migrations = query("select version, name from supabase_migrations.schema_migrations order by version") if has_migrations else []
+    (folder / "schema.json").write_text(json.dumps({"tables": tables, "columns": columns, "migrations": migrations}, indent=1, default=str))
+    keys = {}
+    for r in query("select tc.table_name, kcu.column_name from information_schema.table_constraints tc join information_schema.key_column_usage kcu "
+                   "on kcu.constraint_name = tc.constraint_name and kcu.table_schema = tc.table_schema "
+                   "where tc.table_schema = 'public' and tc.constraint_type = 'PRIMARY KEY' order by tc.table_name, kcu.ordinal_position"):
+        keys.setdefault(r["table_name"], []).append(f'"{r["column_name"]}"')
+    counts = {}
+    for table in tables:
+        n, order = 0, ", ".join(keys.get(table, ["ctid"]))
+        with open(folder / f"{table}.jsonl", "w") as f:
+            while True:
+                rows = query(f'select * from public."{table}" order by {order} limit {BACKUP_PAGE} offset {n}')
+                f.writelines(json.dumps(row, default=str) + "\n" for row in rows)
+                n += len(rows)
+                if len(rows) < BACKUP_PAGE:
+                    break
+        counts[table] = n
+        log(f"  {table}: {n} rows")
+    (folder / "counts.json").write_text(json.dumps(counts, indent=1))
+    return folder, counts
+
+
+MIGRATIONS = PROJECT_ROOT / "supabase" / "migrations"
+POOLER_TRANSACTION_PORT = 6543          # what the Edge Functions connect through (FORAGING_POOLER_URL)
+API = "https://api.supabase.com/v1"
+SECRET_NAME = re.compile(r"[A-Z][A-Z0-9_]*")
+
+
+def migration_files(directory=MIGRATIONS):
+    """[(version, name, path)] of the migration files in order: `<version>_<name>.sql`, as the Supabase CLI numbers them."""
+    return [(p.name.split("_", 1)[0], p.stem.split("_", 1)[1], p) for p in sorted(Path(directory).glob("*.sql"))]
+
+
+def pending_migrations(conn, directory=MIGRATIONS):
+    """(the files the database has not applied, versions the database has that no file has). The record is the CLI's own table, supabase_migrations.schema_migrations."""
+    found = conn.execute("select to_regclass('supabase_migrations.schema_migrations') is not null as found").fetchone()["found"]
+    applied = {r["version"] for r in conn.execute("select version from supabase_migrations.schema_migrations")} if found else set()
+    local = migration_files(directory)
+    return [m for m in local if m[0] not in applied], sorted(applied - {m[0] for m in local})
+
+
+def apply_migrations(conn, pending, log):
+    """Apply the files in order and record each where the CLI does (its `statements` hold the file as one text); inside the caller's transaction, so a failure leaves nothing applied."""
+    conn.execute("create schema if not exists supabase_migrations")
+    conn.execute("create table if not exists supabase_migrations.schema_migrations (version text not null primary key, statements text[], name text)")
+    for version, name, path in pending:
+        sql = path.read_text()
+        conn.execute(sql)
+        conn.execute("insert into supabase_migrations.schema_migrations (version, statements, name) values (%s, %s, %s)", (version, [sql], name))
+        log("applied", path.name)
+
+
+def throwaway_rows(conn, commit):
+    """What the smoke and load tests left under a throwaway build name: (run ids, participant ids). A real build's commit (a git hash) is refused."""
+    if re.fullmatch(r"[0-9a-f]{7,40}", commit):
+        raise SystemExit(f"{commit} looks like a git commit: cleanup is only for the throwaway names of the smoke and load tests (smoke-test, load-test)")
+    runs = conn.execute("select run_id, participant_id from public.runs where build_commit = %s", (commit,)).fetchall()
+    people = {r["participant_id"] for r in runs}
+    people |= {r["participant_id"] for r in conn.execute("select participant_id from public.pid_registry where prolific_pid like %s", (f"LOAD\\_{commit}\\_%",))}
+    return [r["run_id"] for r in runs], sorted(people, key=str)
+
+
+def cleanup(conn, commit, log):
+    """Delete the throwaway build's runs (their sessions, events and trajectory go with them), its release, and the participants of those runs that have no other run."""
+    runs, people = throwaway_rows(conn, commit)
+    conn.execute("delete from public.runs where build_commit = %s", (commit,))
+    conn.execute("delete from public.participants p where p.participant_id = any(%s) and not exists (select 1 from public.runs r where r.participant_id = p.participant_id)", (people,))
+    released = conn.execute("delete from public.releases where build_commit = %s", (commit,)).rowcount
+    log(f"deleted {len(runs)} run(s), the participants of {len(people)} id(s) without other runs, {released} release(s) of {commit}")
+
+
+def preview(args, conn, log):
+    """What a write is about to do, read first (read-only); False when there is nothing to do, so no confirmation is asked."""
+    with read_only(conn):
+        if args.command == "migrate":
+            pending, unknown = pending_migrations(conn)
+            for version in unknown:
+                log("note: the database has migration", version, "that no file in supabase/migrations/ has")
+            for _, _, path in pending:
+                log("pending:", path.name)
+            if pending:
+                log("note: back up first (database.py backup); each file is applied in one transaction with the others, all or none")
+            else:
+                log("every migration is applied: nothing to do")
+            return bool(pending)
+        if args.command == "cleanup":
+            runs, people = throwaway_rows(conn, args.commit)
+            log(f"would delete {len(runs)} run(s) of build {args.commit}, up to {len(people)} participant(s), and its release")
+    return True
+
+
+def ask_token():
+    require_terminal()
+    value = getpass.getpass("Supabase access token (Account > Access Tokens; input hidden): ").strip()
+    if not value.startswith("sbp_"):
+        raise SystemExit("that is not a Supabase access token (they start with sbp_)")
+    return value
+
+
+def set_secret(token, ref, name, value, opener=urllib.request.urlopen):
+    """Set one Edge Function secret through the Management API (the token goes in a header, nothing in argv or a file)."""
+    if not SECRET_NAME.fullmatch(name) or name.startswith("SUPABASE_"):
+        raise SystemExit(f"{name} is not a settable secret name (capitals, digits and underscores; SUPABASE_ is reserved)")
+    request = urllib.request.Request(f"{API}/projects/{ref}/secrets", data=json.dumps([{"name": name, "value": value}]).encode(), method="POST",
+                                     headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "User-Agent": "foraging-database/1"})
+    try:
+        with opener(request, timeout=30) as response:
+            return response.status
+    except urllib.error.HTTPError as e:
+        raise SystemExit(f"the API refused the secret ({e.code}): {scrub(e.read().decode(errors='replace')[:300], token, value)}")
+    except urllib.error.URLError as e:
+        raise SystemExit(f"could not reach the Supabase API: {scrub(str(e.reason), token, value)}")
+
+
+def deploy_functions(token, ref, log, runner=subprocess.run):
+    """Deploy supabase/functions with the Supabase CLI as a child process; the token is in the child's environment only (never argv), and the CLI's output is scrubbed of it."""
+    cli = [shutil.which("supabase")] if shutil.which("supabase") else ["npx", "--yes", "supabase@latest"]
+    env = os.environ.copy()
+    env["SUPABASE_ACCESS_TOKEN"] = token
+    names = sorted(p.parent.name for p in (PROJECT_ROOT / "supabase" / "functions").glob("*/index.ts"))      # the publishable key is not a JWT: --no-verify-jwt; --use-api bundles on Supabase's side (no Docker)
+    done = runner(cli + ["functions", "deploy", *names, "--no-verify-jwt", "--use-api", "--project-ref", ref], cwd=PROJECT_ROOT, env=env, capture_output=True, text=True, timeout=900)
+    for line in (done.stdout + done.stderr).splitlines():
+        log(line)
+    if done.returncode != 0:
+        raise SystemExit(f"supabase functions deploy failed ({done.returncode})")
+
+
+def token_operation(args, log, ask, ref, token=None, value=None, opener=urllib.request.urlopen, runner=subprocess.run):
+    """`set-secret` and `deploy-functions`: no database connection, the access token pasted at a hidden prompt, the project confirmed by typing its ref.
+    `FORAGING_POOLER_URL` is built from the database password (as `url_from_password`, on the transaction pooler's port), anything else is asked as a value."""
+    log.project = ref
+    log(f"project {ref}")
+    token = (token or ask_token)()
+    log.secrets.append(token)
+    if args.command == "set-secret":
+        if args.name == "FORAGING_POOLER_URL":
+            secret = url_from_password((value or ask_secret)(), ref, port=POOLER_TRANSACTION_PORT)
+            log.secrets += secrets_of(secret)
+        else:
+            secret = (value or (lambda: ask_secret(f"Value of {args.name} (input hidden): ")))()
+            log.secrets.append(secret)
+        confirm_write(ref, ask)
+        set_secret(token, ref, args.name, secret, opener)
+        log(f"secret {args.name} set on project {ref}")
+    else:
+        confirm_write(ref, ask)
+        deploy_functions(token, ref, log, runner)
+        log(f"functions deployed to project {ref}")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -389,6 +570,18 @@ def build_parser():
     d = sub.add_parser("describe", help="print the commit message for a build's deploy (subject line, blank line, body); connects to nothing")
     d.add_argument("--build", required=True)
     d.add_argument("--reason")
+    dl = sub.add_parser("download", help="new or changed runs into ForagingData/<run>/ and humans.sqlite")
+    dl.add_argument("--out", default="ForagingData")
+    dl.add_argument("--all", action="store_true", help="download every run again")
+    b = sub.add_parser("backup", help="every table of public as JSON lines")
+    b.add_argument("--out", default="ForagingData")
+    b.add_argument("--label", default="manual")
+    c = sub.add_parser("cleanup", help="delete what the smoke and load tests left under a throwaway build name")
+    c.add_argument("--commit", required=True, help="the throwaway build name (smoke-test, load-test); a git hash is refused")
+    sub.add_parser("migrate", help="apply the migration files the database has not applied, in one transaction")
+    sc = sub.add_parser("set-secret", help="set an Edge Function secret (Supabase access token pasted; no database connection)")
+    sc.add_argument("--name", required=True, help="FORAGING_POOLER_URL (asks the database password and builds the transaction-pooler string) or another secret (asks its value)")
+    sub.add_parser("deploy-functions", help="deploy supabase/functions with the Supabase CLI (access token pasted; no database connection)")
     p = sub.add_parser("pull")
     p.add_argument("--run", required=True)
     p.add_argument("--out", default="ForagingData")
@@ -411,6 +604,10 @@ def run_operation(args, conn, log, plan=None):
                 experiments = {code: sessions_in_build(args.commit, code) for code in args.experiment}
                 register_release(conn, args.commit, experiments, args.note)
                 log(f"registered {args.commit} with {experiments}")
+            elif args.command == "cleanup":
+                cleanup(conn, args.commit, log)
+            elif args.command == "migrate":
+                apply_migrations(conn, pending_migrations(conn)[0], log)
             else:
                 names = register_worlds(conn)
                 log(f"registered {len(names)} files: {', '.join(names)}")
@@ -420,12 +617,20 @@ def run_operation(args, conn, log, plan=None):
             for run in conn.execute("select r.run_id, r.experiment, r.status, r.started_at, r.build_commit, r.build_dirty, count(s.*) as sessions "
                                     "from public.runs r left join public.sessions s using (run_id) group by r.run_id order by r.started_at").fetchall():
                 log(json.dumps({k: _iso(v) if not isinstance(v, (int, bool, type(None))) else v for k, v in run.items()}, default=str))
+        elif args.command == "download":
+            import human_data
+            n, gone = human_data.download(make_query(conn), args.out, args.all)      # progress names participants: terminal only, not the log
+            log(f"{n} run(s) downloaded into {args.out}" + (f"; {gone} run(s) downloaded earlier are no longer on the server (kept)" if gone else ""))
+        elif args.command == "backup":
+            folder, counts = backup(make_query(conn), args.out, args.label, log)
+            log(f"{sum(counts.values())} rows in {len(counts)} tables written to {folder}")
         else:
             log("pulled into", pull_run(conn, args.run, args.out))
 
 
-def main(argv=None, secret=None, ask=input, expected=None, log_dir=LOG_DIR):
-    """`secret` (default: the hidden prompt), `ask` (the confirmation) and `expected` (the project ref) are replaced by the tests."""
+def main(argv=None, secret=None, ask=input, expected=None, log_dir=LOG_DIR, token=None, value=None, opener=urllib.request.urlopen, runner=subprocess.run):
+    """`secret` (default: the hidden prompt for the database password), `ask` (the confirmation), `expected` (the project ref), `token` and `value` (the access token and a secret's value
+    for `set-secret`), `opener` (the API) and `runner` (the CLI) are replaced by the tests."""
     args = build_parser().parse_args(argv)
     if args.command == "describe":
         subject, body = build_description(args.build, args.reason)
@@ -441,17 +646,22 @@ def main(argv=None, secret=None, ask=input, expected=None, log_dir=LOG_DIR):
         if args.dry_run:
             log("dry run: nothing connected, nothing written")
             return
-    url = url_from_password((secret or ask_secret)(), expected_ref() if expected is None else expected)
-    log.secrets = secrets_of(url)
+    wanted = expected_ref() if expected is None else expected
     conn = None
     outcome = "failed"
     try:
-        conn, ref = connect(url, expected_ref() if expected is None else expected)
-        log.project = ref
-        log(f"project {ref}")
-        if args.command in WRITES:
-            confirm_write(ref, ask)
-        run_operation(args, conn, log, plan)
+        if args.command in TOKEN_OPERATIONS:
+            token_operation(args, log, ask, wanted, token, value or secret, opener, runner)
+        else:
+            url = url_from_password((secret or ask_secret)(), wanted)
+            log.secrets = secrets_of(url)
+            conn, ref = connect(url, wanted)
+            log.project = ref
+            log(f"project {ref}")
+            if args.command not in WRITES or preview(args, conn, log):
+                if args.command in WRITES:
+                    confirm_write(ref, ask)
+                run_operation(args, conn, log, plan)
         outcome = "done"
     except SystemExit as e:
         outcome = f"stopped: {e}"

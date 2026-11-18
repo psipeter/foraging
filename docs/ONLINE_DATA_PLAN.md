@@ -80,13 +80,15 @@ state), reached over a direct database connection (`SUPABASE_DB_URL`). Errors: 4
 - **Resume state** (`run-start`'s `resume`, from the rows): `session_index`, `name`, `completed`, `foraging_points`, `pose` (the last
   frame), `last_event_t`, `running_total`, `fruits_taken` (bush -> count), `open_bout_tree`, `held_seconds`, `breaks`, `sets_played`, `ranking_points` (the sum of the in-progress session's sets' points; each `previous` entry carries `foraging_points` and `ranking_points`) and the three `*_next` sequence numbers (`sets_next` for the ranking sets).
 - **Tools:** `scripts/server_client.py` (the reference client, and `upload_session` to push a local-layout session in batches),
-  `scripts/database.py` (`register-release`, `register-worlds`, `runs`, `pull` = a run back into the local layout of section 2b). **Analysis download:** `scripts/human_data.py download` reads every run through the Supabase CLI (no `FORAGING_DB_URL`), writes the raw layout under `ForagingData/<run>/` and the tidy tables `ForagingData/humans.sqlite` (participants with Prolific ID, signed name and feedback; sessions; events and the `fruits` view; ranking sets); `load(exclude=[...])` filters participants by ID or name.
+  `scripts/database.py` (`register-release`, `register-worlds`, `runs`, `pull` = a run back into the local layout of section 2b). **Analysis download:** `scripts/database.py download` reads every run (a read-only transaction, the password pasted; `human_data.py` keeps the tables and `load`), writes the raw layout under `ForagingData/<run>/` and the tidy tables `ForagingData/humans.sqlite` (participants with Prolific ID, signed name and feedback; sessions; events and the `fruits` view; ranking sets); `load(exclude=[...])` filters participants by ID or name.
 
 Still the client's job (phase 3): an `IDataSink` with the three implementations, the in-memory queue with backoff and the
 pause-until-acknowledged overlay (grace window in `SessionConfig`), the cadence (events within about 1 s, trajectory every 5 s,
 everything on session end and on page unload), and the unload flush for WebGL.
 
 ### Deploying (done once for `emdgczidpqdhftzujyte`; repeat after a change)
+
+**Since 2026-11-18 the secret-bearing steps below go through `scripts/database.py`** (`migrate` instead of `db push`, `deploy-functions` instead of `functions deploy`, `set-secret` instead of `secrets set`, each asking for its secret at a hidden prompt; `docs/DECISIONS.md`, "One database script"). The Supabase CLI commands in this section are the history of how it was first done.
 
 The CLI is the one in `evidence_integration/task_backend/node_modules/.bin/supabase`; `supabase/config.toml` (from `supabase init`) has
 `verify_jwt = false` for the functions. Facts learned doing it: **no Docker and no database password are needed**: after
@@ -286,6 +288,6 @@ A foraging session can contain ranking breaks (`RankingBreak`, DECISIONS "Rankin
 - **Resume.** `server.resume_state` also returns `held_seconds` (the sum of the windows, a break the data stops inside counted to the last thing heard), `breaks`, `sets_played` and `ranking_points`; the game continues
   the foraging clock from `clock - held_seconds`, the break numbering, the pool position, the set rows and the end screen's ranking points. A break the data stops inside is closed at the resume with an `aborted` `rank_break_end` and played again from its first unscored set (`open_break*`; migrations 20261116000000 and 20261116000400: a second reload before the break is played again still finds it open, `open_break_end_logged`).
 - **Points.** `server.run_points` is the sum of `foraging_points + ranking_points` over the run's completed, non-practice sessions. The `session_end` event's payload carries both too.
-- **Migrations to apply before any data is collected** (after `db_backup.py`): `20261112000000_ranking_sets.sql` (the set columns) and `20261113000000_ranking_breaks_resume.sql` (resume fields and run points).
+- **Migrations to apply before any data is collected** (after `database.py backup`): `20261112000000_ranking_sets.sql` (the set columns) and `20261113000000_ranking_breaks_resume.sql` (resume fields and run points).
   (Both are old by now and `20261114` to `20261116000400` follow them; whether each is applied to the Supabase project is read from `supabase migration list`, not from this text. `scripts/test_resume_breaks.py` was deleted 2026-11-16: `scripts/test_resume_sql.py` and `test_server.py` cover the resume rules.)
 - **Replay.** `replay.py` appends each set's bushes (from `rank_set`) to the world's table and replays break windows with the aimed, quick rule; `visibility.py` keeps the real bushes and adds the current set's.
