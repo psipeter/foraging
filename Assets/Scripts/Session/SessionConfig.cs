@@ -59,6 +59,8 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float rankingRankScale = 3f;
     [Tooltip("Hidden bonus points per correctly ordered pair (a set of k bushes implies k(k-1)/2 pairs; pairs whose true values are tied are not counted, and a pair with an unranked bush is never correct), shown only on the final screen. Practice sessions award none. Provisional: scoring is decided at analysis time.")]
     [SerializeField] private float rankingBonusPerPair = 4f;
+    [Tooltip("How a correct pair is paid: \"pair\" (or empty) is the bonus per correct pair; \"pair_mean_value\" is the bonus times the mean of the pair's two true bush values, so a miss among the best bushes costs more than among the poor ones. scripts/ranking.py POINTS_MODES lists the modes; RankingSets.PairWeight is the same rule.")]
+    [SerializeField] private string rankingPointsMode = "pair";
     [Tooltip("Degrees beyond a canopy's edge at which the crosshair still selects it in a ranking when crosshairRadius is 0, the cone rule (0 = the crosshair must be inside the canopy; with the crosshair, rankingCrosshairRadius decides).")]
     [SerializeField] private float rankingAimTolerance = 1.5f;
     [Tooltip("The crosshair's hidden hit circle during a ranking (degrees), in place of crosshairRadius: the bushes of a set stand at least 2 degrees apart in the view, so a circle of up to 1 degree can touch only one of them. 0 = crosshairRadius. Read by scripts/replay.py from the log.")]
@@ -373,6 +375,7 @@ public class SessionConfig : ScriptableObject
     public float RankingMarkerLift => rankingMarkerLift;
     public float RankingRankScale => rankingRankScale;
     public float RankingBonusPerPair => rankingBonusPerPair;
+    public string RankingPointsMode => string.IsNullOrEmpty(rankingPointsMode) ? "pair" : rankingPointsMode;
     public float RankingAimTolerance => rankingAimTolerance;
     public float RankingCrosshairRadius => rankingCrosshairRadius;
     public float RankingStageDrop => rankingStageDrop;

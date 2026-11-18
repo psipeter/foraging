@@ -22,7 +22,7 @@ FEEDBACK_FIELDS = {"rewardFeedbackMax": REWARD_SCALE, "pitchSemitoneRange": 12.0
 CROSSHAIR_RING_DEG = 3.5            # the harvest ring the crosshair becomes on a bush (SessionConfig.crosshairRingSizeDeg)
 CROSSHAIR_RADIUS = 7.0              # the hidden hit circle of the crosshair (degrees; SessionConfig.crosshairRadius)
 # a ranking set in place after the patch leavings of `rankingLeavings` (1, 2, 4, 8; `SessionConfig.ranking*`; the arc fields: 5 bushes, 16 units, 84 degrees): 20 s a set, one set per break
-RANKING_FIELDS = {"rankingEvery": 1, "rankingLeavings.Array.size": 4, "rankingLeavings.Array.data[0]": 1, "rankingLeavings.Array.data[1]": 2, "rankingLeavings.Array.data[2]": 4, "rankingLeavings.Array.data[3]": 8, "rankingSets": 1, "rankingSeconds": 20.0, "rankingCooldown": 10.0, "rankingPoolSets": 12, "rankingMinBushes": 1, "rankingSettleDepth": 0.0, "rankingBonusPerPair": 4.0, "rankingCrosshairRadius": 1.0, "rankingStageDrop": 3.0, "rankingStageMargin": 4.0, "rankingStageWorldGray": 0.6, "rankingText": "Rank these bushes from most to least valuable"}
+RANKING_FIELDS = {"rankingEvery": 1, "rankingLeavings.Array.size": 4, "rankingLeavings.Array.data[0]": 1, "rankingLeavings.Array.data[1]": 2, "rankingLeavings.Array.data[2]": 4, "rankingLeavings.Array.data[3]": 8, "rankingSets": 1, "rankingSeconds": 20.0, "rankingCooldown": 10.0, "rankingPoolSets": 12, "rankingMinBushes": 1, "rankingSettleDepth": 0.0, "rankingBonusPerPair": 4.0, "rankingPointsMode": "pair_mean_value", "rankingCrosshairRadius": 1.0, "rankingStageDrop": 3.0, "rankingStageMargin": 4.0, "rankingStageWorldGray": 0.6, "rankingText": "Rank these bushes from most to least valuable"}
 
 
 

@@ -185,23 +185,25 @@ def check_ranking_sets(ctx):
         return [Result(n, SKIP, "no ranking set was played") for n in names]
     if not ctx.sets:
         return [Result(n, FAIL, "no ranking_sets rows") for n in names]
-    bonus, practice = ctx.config.get("rankingBonusPerPair"), bool(ctx.config.get("isPractice"))
+    bonus, practice, mode = ctx.config.get("rankingBonusPerPair"), bool(ctx.config.get("isPractice")), ctx.config.get("rankingPointsMode") or "pair"
     pairs, points = [], []
+    if mode not in ranking.POINTS_MODES:
+        return [Result(n, FAIL, f"unknown rankingPointsMode {mode!r}") for n in names]
     for i, row in enumerate(ctx.sets):
         if not row["bushes"]:
             pairs.append(f"set {i}: no bushes")
             continue
         picked, values = _scored_values(row)
-        correct, total = ranking.pair_scores(picked, values, ctx.pool_tolerance)
+        expected_points, correct, total = ranking.rankings_to_points(picked, values, bonus or 0.0, mode, ctx.pool_tolerance)
         if (correct, total) != (row["correct_pairs"], row["total_pairs"]):
             pairs.append(f"set {i}: row {row['correct_pairs']}/{row['total_pairs']}, recomputed {correct}/{total}")
         if bonus is None or row["points"] is None:
             continue
-        expect = 0 if practice else row["correct_pairs"] * bonus
+        expect = 0 if practice else expected_points
         if abs(row["points"] - expect) > TOL:
-            points.append(f"set {i}: points {row['points']}, expected {row['correct_pairs']} x {bonus}{' (practice: 0)' if practice else ''} = {expect}")
+            points.append(f"set {i}: points {row['points']}, expected {expect:g} ({row['correct_pairs']} correct pairs, bonus {bonus}, mode {mode or 'pair'}){' (practice: 0)' if practice else ''}")
     out = [Result(names[0], FAIL if pairs else PASS, "; ".join(pairs) or f"{len(ctx.sets)} sets, tolerance {ctx.pool_tolerance}")]
-    out.append(Result(names[1], WARN if bonus is None else (FAIL if points else PASS), "rankingBonusPerPair not in the config" if bonus is None else "; ".join(points) or "points = correct pairs x bonus"))
+    out.append(Result(names[1], WARN if bonus is None else (FAIL if points else PASS), "rankingBonusPerPair not in the config" if bonus is None else "; ".join(points) or f"points = the payout rule, mode {mode}"))
     ends = _of(ctx, "rank_set_end")
     if len(ends) != len(ctx.sets):
         out.append(Result(names[2], SKIP, f"{len(ends)} rank_set_end events for {len(ctx.sets)} rows (see ranking set events)"))

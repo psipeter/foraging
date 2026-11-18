@@ -6,7 +6,7 @@ import pytest
 
 import ranking
 import synthetic
-from ranking import angular_radius, check_arc, generate_pool, horizontal_fov, kendall_tau, first_pick_regret, implied_pair_scores, pair_accuracy, pair_scores, rank_gain, slot_bearings
+from ranking import angular_radius, check_arc, generate_pool, horizontal_fov, kendall_tau, first_pick_regret, implied_pair_scores, pair_accuracy, pair_scores, pair_weight, rank_gain, rankings_to_points, slot_bearings
 from world import bush_value, load_session
 
 SESSION = "FIX_T0"
@@ -190,3 +190,23 @@ def test_a_pair_is_a_set_of_two():
 def test_the_pool_file_sits_beside_the_world_file(tmp_path):
     path, sidecar = ranking.export_pool("FOR_S1", out_dir=tmp_path)
     assert path.name == f"FOR_S1_seed{sidecar['seed']}.ranking.json" and path.parent == tmp_path
+
+
+def test_the_pair_mode_pays_the_bonus_per_correct_pair_and_the_mean_value_mode_weights_each_pair_by_its_bushes():
+    values = [5.61, 4.30, 3.03, 1.75, 0.48]
+    assert rankings_to_points(values, values, 4.0) == (40.0, 10, 10) and rankings_to_points(values, values, 4.0, "") == (40.0, 10, 10)
+    full, correct, total = rankings_to_points(values, values, 4.0, "pair_mean_value")
+    assert (correct, total) == (10, 10) and full == pytest.approx(4.0 * 2.0 * sum(values))        # each bush is in 4 pairs, each pair counts both: 2 x the sum of the values
+    picked = [5.61, 4.30, 1.75, 3.03, 0.48]                                                        # the third and fourth bushes swapped: the pair (3.03, 1.75) is lost
+    points, correct, _ = rankings_to_points(picked, values, 4.0, "pair_mean_value")
+    assert correct == 9 and points == pytest.approx(full - 4.0 * (3.03 + 1.75) / 2)                  # 111.8 as the pilot's third FOR set
+    assert rankings_to_points(picked, values, 4.0)[0] == 36.0
+    assert rankings_to_points([], values, 4.0, "pair_mean_value") == (0.0, 0, 10)                   # a timed-out set earns nothing
+    top, bottom = [4.0, 5.0, 3.0, 2.0, 1.0], [5.0, 4.0, 3.0, 1.0, 2.0]                             # a miss between the top two against one between the bottom two
+    assert rankings_to_points(top, values_ladder := [5.0, 4.0, 3.0, 2.0, 1.0], 1.0, "pair_mean_value")[0] < rankings_to_points(bottom, values_ladder, 1.0, "pair_mean_value")[0]
+
+
+def test_an_unknown_points_mode_is_an_error():
+    with pytest.raises(ValueError, match="unknown ranking points mode"):
+        pair_weight("by_rank", 1.0, 2.0)
+    assert pair_weight("pair_mean_value", 1.0, 3.0) == 2.0 and pair_weight("pair", 1.0, 3.0) == 1.0

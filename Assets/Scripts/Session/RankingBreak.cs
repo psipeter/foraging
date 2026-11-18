@@ -157,7 +157,9 @@ public class RankingBreak : MonoBehaviour
         if (ResumeInfo.MidSession(GameManager.CurrentSessionIndex))
         {
             // What the sets were worth (the end screen shows it) is the correct pairs times the bonus: the paid points are 0 in a practice session, so they would restart the screen at 0.
-            Points = Mathf.Max(ResumeInfo.Pending.ranking_points, ResumeInfo.Pending.ranking_pairs * config.RankingBonusPerPair);
+            // Only the pair count is stored, so in a points mode that weights pairs the practice figure after a resume is this unweighted estimate (the paid points are exact).
+            Points = config.RankingPointsMode == "pair" ? Mathf.Max(ResumeInfo.Pending.ranking_points, ResumeInfo.Pending.ranking_pairs * config.RankingBonusPerPair)
+                : config.IsPractice ? ResumeInfo.Pending.ranking_pairs * config.RankingBonusPerPair : ResumeInfo.Pending.ranking_points;
             PaidPoints = ResumeInfo.Pending.ranking_points;
             // Continuing an interrupted session: the numbering, the pool and the rows carry on. The pool continues from the sets that were scored (a set shown but not scored is
             // shown again), and a break the data stopped inside is played again from its first unscored set (the participant's picks in the interrupted set are not kept).
@@ -548,8 +550,8 @@ public class RankingBreak : MonoBehaviour
         }
 
         float tie = _pool.tieTolerance > 0f ? _pool.tieTolerance : 0.05f;
-        RankingSets.ScorePairs(setIds, values, _picks, tie, out int correct, out int total);
-        float worth = correct * _config.RankingBonusPerPair;
+        RankingSets.ScorePairs(setIds, values, _picks, tie, _config.RankingPointsMode, out int correct, out int total, out float weight);
+        float worth = weight * _config.RankingBonusPerPair;
         float points = _config.IsPractice ? 0f : worth;
         Points += worth;
         PaidPoints += points;

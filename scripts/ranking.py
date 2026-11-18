@@ -257,6 +257,27 @@ def pair_scores(picked_values, all_values, tol=TIE_TOLERANCE):
     return correct, total
 
 
+POINTS_MODES = ("pair", "pair_mean_value")       # how a correct pair is paid (`SessionConfig.rankingPointsMode`; "" is "pair")
+
+
+def pair_weight(mode, value_a, value_b):
+    """What a correct pair is worth, in units of the bonus, in a points mode: `pair` one; `pair_mean_value` the mean of the pair's two true values (a miss among the best bushes costs more than among the poor ones)."""
+    if mode in ("", "pair"):
+        return 1.0
+    if mode == "pair_mean_value":
+        return (float(value_a) + float(value_b)) / 2.0
+    raise ValueError(f"unknown ranking points mode {mode!r} (one of {POINTS_MODES})")
+
+
+def rankings_to_points(picked_values, all_values, bonus, mode="pair", tol=TIE_TOLERANCE):
+    """(points, correct, total) of one ranked set: the payout (`RankingSets.ScorePairs` and `RankingBreak.FinishSet` are the same rule). Which pairs are correct is `pair_scores`; each pays `bonus` times its
+    `pair_weight` in `mode`, so `pair` pays `bonus` per correct pair. A new way of paying is a new mode here and in `RankingSets.PairWeight`, nothing else. Arguments as `pair_scores`."""
+    correct, total = pair_scores(picked_values, all_values, tol)
+    picked = np.asarray(picked_values, dtype=float)
+    weight = sum(pair_weight(mode, picked[i], picked[j]) for i in range(len(picked)) for j in range(i + 1, len(picked)) if picked[i] - picked[j] >= tol)
+    return float(bonus) * weight, correct, total
+
+
 def implied_pair_scores(picked_values, all_values, tol=TIE_TOLERANCE):
     """(correct, total) over the pairs the order itself implies (for analysis, not the payout): every picked bush is above every bush not picked, and the picked ones
     are in the order picked; the pairs among unpicked bushes are not counted. Same arguments as `pair_scores`."""

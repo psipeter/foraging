@@ -176,7 +176,7 @@ def test_a_wrong_correct_pairs_fails_the_pair_score_check():
     ctx.sets[0]["correct_pairs"], ctx.sets[0]["points"] = 2, 8                # the picks were 3 of 3 pairs
     find(ctx.events, "rank_set_end")["payload"].update(correct_pairs=2, points=8)
     set_points(ctx, ranking=16)
-    assert failing(ctx) == {"ranking pair scores"}
+    assert failing(ctx) == {"ranking pair scores", "ranking points"}          # the points are recomputed from the picks too: 8 is not what 3 correct pairs pay
 
 
 def test_wrong_points_fail_the_points_check():
@@ -438,3 +438,15 @@ def test_a_fault_in_a_real_run_is_found(tmp_path):
     row["foraging_points"] += 1
     path.write_text(json.dumps(row))
     assert v.main([str(tmp_path / "run")]) == 1
+
+
+def test_a_weighted_points_mode_is_recomputed_from_the_picks_and_an_unknown_mode_fails():
+    ctx = golden()
+    ctx.config["rankingPointsMode"] = "pair_mean_value"
+    assert failing(ctx) == {"ranking points"}                                  # the golden rows hold the per-pair points (12 and 8)
+    for row, ev, points in ((ctx.sets[0], find(ctx.events, "rank_set_end", 0), 24.0), (ctx.sets[1], find(ctx.events, "rank_set_end", 1), 14.0)):
+        row["points"] = ev["payload"]["points"] = points                       # set 0: all 3 pairs, means 2.5 + 2 + 1.5, times 4; set 1: two pairs, means 1.5 + 2, times 4
+    set_points(ctx, ranking=38.0)
+    assert failing(ctx) == set()
+    ctx.config["rankingPointsMode"] = "by_rank"
+    assert failing(ctx) == {"ranking pair scores", "ranking points", "rank_set_end = row"}

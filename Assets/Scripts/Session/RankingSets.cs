@@ -11,11 +11,12 @@ public static class RankingSets
 
     // The payout rule: a set has one pair per two of its bushes, those whose true values differ by less than `tie` left out (`total`). A pair is `correct` only when
     // both bushes were picked and the one picked first is worth more; a pair with an unpicked bush (a timed-out set) is never correct, so leaving bushes unranked
-    // costs every pair they are in. (scripts/ranking.py pair_scores is the same rule.)
-    public static void ScorePairs(IReadOnlyList<int> setIds, IReadOnlyDictionary<int, float> values, IReadOnlyList<int> picks, float tie, out int correct, out int total)
+    // costs every pair they are in. `weight` is the sum of `PairWeight` over the correct pairs: the set pays the bonus times it. (scripts/ranking.py rankings_to_points is the same rule.)
+    public static void ScorePairs(IReadOnlyList<int> setIds, IReadOnlyDictionary<int, float> values, IReadOnlyList<int> picks, float tie, string mode, out int correct, out int total, out float weight)
     {
         correct = 0;
         total = 0;
+        weight = 0f;
         for (int i = 0; i < setIds.Count; i++)
         {
             for (int j = i + 1; j < setIds.Count; j++)
@@ -32,9 +33,16 @@ public static class RankingSets
                 if (first >= 0 && second >= 0 && (first < second) == (gap > 0f))
                 {
                     correct++;
+                    weight += PairWeight(mode, values[setIds[i]], values[setIds[j]]);
                 }
             }
         }
+    }
+
+    // What a correct pair is worth, in units of the bonus: "pair_mean_value" the mean of its two true values, any other mode (the default "pair") one. (scripts/ranking.py pair_weight.)
+    public static float PairWeight(string mode, float valueA, float valueB)
+    {
+        return mode == "pair_mean_value" ? (valueA + valueB) * 0.5f : 1f;
     }
 
     private static int IndexOf(IReadOnlyList<int> ids, int id)

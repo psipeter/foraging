@@ -38,6 +38,7 @@ MonoBehaviour:
   rankingMarkerLift: 0.75
   rankingRankScale: 3
   rankingBonusPerPair: 4
+  rankingPointsMode: pair_mean_value
   rankingAimTolerance: 1.5
   rankingCrosshairRadius: 1
   rankingStageDrop: 3
@@ -140,17 +141,17 @@ MonoBehaviour:
   assignment: tiles
   rewardStage: 
   designJson: '{"anchor": {"agent": "learner", "check_points": {"learner": 1140,
-    "nearest": 1033, "oracle": 1291}, "duration": 180.0, "own_world_oracle": 1308,
-    "own_world_points": 1126, "points": 1125.0, "rate": 6.25}, "calibrator": 1, "cell":
-    1, "experiment": "FOR", "index": 1, "instance": "FOR_S1", "knobs": {"aspect":
-    1.0, "class": "additive", "corner": [1, 1], "gini": 0.4, "travel_time": 8.0},
-    "nuisance_draw": 0, "value_map": {"bumps": [{"angle": 0.0, "center_color": 1.0,
-    "center_shape": 1.0, "height": 4.0, "width": 0.5017864110731844, "width_color":
-    0.5017864110731844}], "equaliser": {"type": "gain", "value": 1.66256157635468},
-    "noise": {"sd": 0.6, "type": "flat"}}, "value_map_descriptors": {"effective_weight_color":
-    3.4167, "effective_weight_shape": 3.4167, "effective_weight_total": 6.8334, "fraction_above_half_max":
-    0.2749, "gini": 0.4, "interaction": 0.1045, "log_interaction": 0.0, "max": 6.6502,
-    "mean": 2.3899, "min": 0.1253, "nonlinearity": 0.1133, "range": 6.5249, "shape_share":
+    "nearest": 1033, "oracle": 1291}, "duration": 180.0, "points": 1125.0, "rate":
+    6.25}, "calibrator": 1, "cell": 1, "experiment": "FOR", "index": 1, "instance":
+    "FOR_S1", "knobs": {"aspect": 1.0, "class": "additive", "corner": [1, 1], "gini":
+    0.4, "travel_time": 8.0, "world_seed": 9182}, "nuisance_draw": 0, "value_map":
+    {"bumps": [{"angle": 0.0, "center_color": 1.0, "center_shape": 1.0, "height":
+    4.0, "width": 0.5017864110731844, "width_color": 0.5017864110731844}], "equaliser":
+    {"type": "gain", "value": 1.66256157635468}, "noise": {"sd": 0.6, "type": "flat"}},
+    "value_map_descriptors": {"effective_weight_color": 3.4167, "effective_weight_shape":
+    3.4167, "effective_weight_total": 6.8334, "fraction_above_half_max": 0.2749,
+    "gini": 0.4, "interaction": 0.1045, "log_interaction": 0.0, "max": 6.6502, "mean":
+    2.3899, "min": 0.1253, "nonlinearity": 0.1133, "range": 6.5249, "shape_share":
     0.5}, "world_seed": 9182}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
