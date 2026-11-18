@@ -1,0 +1,44 @@
+{
+ "code": "PCX",
+ "session": "FOR_S1",
+ "duration": 180,
+ "note": "Pilot: Complexity (draft, to be designed with the PI): the ladder at one Gini and one travel time, low to high.",
+ "cells": [
+  {
+   "id": 1,
+   "class": "additive",
+   "gini": 0.4,
+   "travel_time": 8.0,
+   "corner": [
+    1,
+    1
+   ],
+   "aspect": 1.0,
+   "world_seed": 9201
+  },
+  {
+   "id": 2,
+   "class": "multiplicative",
+   "gini": 0.4,
+   "travel_time": 8.0,
+   "corner": [
+    1,
+    1
+   ],
+   "aspect": 1.0,
+   "world_seed": 9202
+  },
+  {
+   "id": 3,
+   "class": "nonseparable",
+   "gini": 0.4,
+   "travel_time": 8.0,
+   "corner": [
+    1,
+    1
+   ],
+   "aspect": 1.0,
+   "world_seed": 9203
+  }
+ ]
+}
