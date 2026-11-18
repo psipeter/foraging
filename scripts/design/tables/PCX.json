@@ -7,38 +7,54 @@
   {
    "id": 1,
    "class": "additive",
-   "gini": 0.4,
-   "travel_time": 8.0,
+   "gini": 0.55,
+   "travel_time": 5.0,
    "corner": [
     1,
     1
    ],
-   "aspect": 1.0,
+   "aspect": 2.0,
    "world_seed": 9201
   },
   {
    "id": 2,
    "class": "multiplicative",
-   "gini": 0.4,
-   "travel_time": 8.0,
+   "gini": 0.55,
+   "travel_time": 5.0,
    "corner": [
     1,
     1
    ],
    "aspect": 1.0,
-   "world_seed": 9202
+   "world_seed": 9202,
+   "center": [
+    [
+     0.12,
+     0.3
+    ],
+    [
+     0.65,
+     0.85
+    ]
+   ],
+   "interaction": 0.18
   },
   {
    "id": 3,
    "class": "nonseparable",
-   "gini": 0.4,
-   "travel_time": 8.0,
+   "gini": 0.55,
+   "travel_time": 5.0,
    "corner": [
     1,
     1
    ],
    "aspect": 1.0,
-   "world_seed": 9203
+   "world_seed": 9203,
+   "interaction": 0.4,
+   "center": [
+    0.4,
+    0.6
+   ]
   }
  ]
 }

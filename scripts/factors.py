@@ -93,7 +93,7 @@ def anchor_points(duration):
 
 
 FRUIT_CAP = 9                   # the per-fruit range of every session is 0 to this (PI, 2026-11-17)
-MAX_PEAK = 8.0                  # so the best bush is worth at most this: with the noise (SD 0.6) a fruit of the best bush stays at or below FRUIT_CAP
+MAX_PEAK = 9.0                  # the best bush is worth at most this (PI, 2026-11-18: it was 8, so that a fruit of the best bush stayed at or below FRUIT_CAP with the noise; the aim is no double-digit bush, so a few fruits of the best bushes can pay over FRUIT_CAP: `measure` reports their share)
 
 
 def check(session, valuemap, settings, seeds, agents=("nearest", "oracle"), leaving=False, **overrides):
@@ -117,7 +117,7 @@ def check(session, valuemap, settings, seeds, agents=("nearest", "oracle"), leav
 PLACEMENT = {"tile_placement": "balanced", "tile_sum_tol": 1.0}      # how the pool is dealt in realised sessions (equal patch totals, PI 2026-11-18; the design modules' TILE_FIELDS say the same)
 
 
-def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=ANCHOR_AGENT, seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, max_peak=MAX_PEAK, corner=(1.0, 1.0), aspect=1.0, seed=0, **overrides):
+def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=ANCHOR_AGENT, seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, max_peak=MAX_PEAK, corner=(1.0, 1.0), aspect=1.0, seed=0, center=(0.0, 1.0), **overrides):
     """A session from three knobs (milestone 3's calibrators together): the Gaussian with the stated sparsity (`gini`) and complexity (`klass`, `interaction`), the tile layout with the stated `travel_time`
     (the pool of bushes placed at random: no diversity knob since 2026-11-18), and the gain at which `agent` earns `anchor` points in a session (default: `ANCHOR_RATE` times the session's duration). Returns {"map": the ValueMap (gain included), "settings": the layout settings,
     "fields": the serialized SessionConfig fields of both, "achieved": `check` on fresh worlds, "within_tolerance": whether the anchor was met, "rounds": how many}.
@@ -128,7 +128,7 @@ def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=A
     overrides (for example `session_duration`). `corner`, `aspect` and `seed` are the nuisance of the map (which corner an additive map sits in and how its Gaussian is stretched, the start of the search that places the other bumps)."""
     base = load_session(session, **overrides)
     anchor = anchor_points(base.session_duration) if anchor is None else anchor
-    shape_map = value_maps.calibrate_map(gini, interaction, klass, std=float(base.reward_std), corner=corner, aspect=aspect, seed=seed)
+    shape_map = value_maps.calibrate_map(gini, interaction, klass, std=float(base.reward_std), corner=corner, aspect=aspect, seed=seed, center=center)
     with_gain = lambda g: value_maps.ValueMap(shape_map.bumps, shape_map.noise, {"type": "gain", "value": float(g)})
     current, rounds = shape_map, 0
     for rounds in range(1, steps + 1):

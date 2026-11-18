@@ -56,14 +56,14 @@ def planner_record(session, valuemap, settings, world_seed, **overrides):
 
 
 def realize_cell(cell, session="FOR_S1", draws=DRAWS, duration=120.0, **overrides):
-    """The realised session of one cell (at `duration` seconds), or an `inaccessible` record naming why each draw failed. A cell may fix the nuisance of an additive map: `corner` ([shape, colour], each 0 or 1) and `aspect` (shape width over colour width), else they are drawn; `world_candidates` sets how many worlds are searched."""
+    """The realised session of one cell (at `duration` seconds), or an `inaccessible` record naming why each draw failed. A cell may fix the nuisance of an additive map: `corner` ([shape, colour], each 0 or 1) and `aspect` (shape width over colour width), else they are drawn, and limit the centre of any other map to `center` ([lowest, highest] of both coordinates, or [[shape lowest, highest], [colour lowest, highest]], default [0, 1]); `world_candidates` sets how many worlds are searched."""
     overrides = {**overrides, "session_duration": float(duration)}
     name, cid, gini = cell["class"], int(cell["id"]), float(cell["gini"])
     interaction = cell["interaction"] if "interaction" in cell else value_maps.default_interaction(name, gini)
     failed = []
     for draw in range(draws):
         try:
-            r = factors.realize(session, gini, interaction, value_maps.CLASS_KLASS[name], float(cell["travel_time"]), corner=tuple(float(x) for x in cell["corner"]) if "corner" in cell else corner_of(cid, draw), aspect=float(cell["aspect"]) if "aspect" in cell else aspect_of(cid, draw), seed=draw, **overrides)
+            r = factors.realize(session, gini, interaction, value_maps.CLASS_KLASS[name], float(cell["travel_time"]), corner=tuple(float(x) for x in cell["corner"]) if "corner" in cell else corner_of(cid, draw), aspect=float(cell["aspect"]) if "aspect" in cell else aspect_of(cid, draw), center=cell["center"] if "center" in cell else (0.0, 1.0), seed=draw, **overrides)
         except ValueError as e:
             failed.append({"draw": draw, "error": str(e)[:220]})
             continue

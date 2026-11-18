@@ -156,3 +156,10 @@ def test_the_corner_map_has_the_stated_gini_and_stretch_and_the_stretch_lowers_t
     assert abs(d["gini"] - 0.5) < 0.02 and (bump.center_shape, bump.center_color) == (0.0, 1.0)
     assert abs(max(bump.width, bump.width_color) / min(bump.width, bump.width_color) - stretch) < 1e-6 and (bump.width > bump.width_color) == (long_shape and stretch > 1)
     assert d["interaction"] < {1.0: 0.2, 2.0: 0.1, 3.0: 0.05}[stretch]
+
+
+def test_a_calibrated_aligned_map_keeps_its_centre_inside_the_range_asked():
+    for center in ((0.3, 0.7), ((0.1, 0.3), (0.6, 0.8))):
+        ranges = (center, center) if np.ndim(center) == 1 else center
+        b = vm.calibrate_map(0.5, 0.12, "aligned", center=center, share=(0.2, 0.8)).bumps[0]
+        assert ranges[0][0] - 1e-6 <= b.center_shape <= ranges[0][1] + 1e-6 and ranges[1][0] - 1e-6 <= b.center_color <= ranges[1][1] + 1e-6

@@ -213,8 +213,8 @@ def _gaussian_from(x, rotated, scale, std):
     return gaussian(float(centre_shape), float(centre_color), float(across), float(aspect), float(x[4]) if rotated else 0.0, scale, std)
 
 
-def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0.02, 0.02), share=(0.25, 0.75), seed=0, corner=(1.0, 1.0), aspect=1.0):
-    """The Gaussian map whose Gini is `gini` and raw interaction `interaction` (each within `tol`), found by a search over the family of `gaussian` (a centre anywhere, a short axis 0.05 to 1.5,
+def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0.02, 0.02), share=(0.25, 0.75), seed=0, corner=(1.0, 1.0), aspect=1.0, center=(0.0, 1.0)):
+    """The Gaussian map whose Gini is `gini` and raw interaction `interaction` (each within `tol`), found by a search over the family of `gaussian` (a centre anywhere (or within `center`: one (lowest, highest) for both coordinates, or one for shape and one for colour), a short axis 0.05 to 1.5,
     an aspect 1 to 6, and for `klass` "rotated" an angle of 15 to 75 degrees; "aligned" maps have axes along the features, a log interaction of 0, and are additive or multiplicative according to
     the interaction asked: near 0 additive, larger multiplicative). Both features must pay: the share of the slope on shape lies within `share`. Raises ValueError, naming the closest map found,
     when the pair is not reachable (`map_region.py` shows the region). `klass` "corner" is the additive rung proper: the Gaussian centred exactly on a corner of the plane (`corner`, each coordinate 0 or 1:
@@ -227,7 +227,8 @@ def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0
         bounds = [(0.08, 3.0)]
     else:
         build = lambda x: _gaussian_from(x, rotated, scale, std)
-        bounds = [(0.0, 1.0), (0.0, 1.0), (0.05, 1.5), (1.0, 6.0)] + ([(15.0, 75.0)] if rotated else [])
+        ranges = (center, center) if np.ndim(center) == 1 else center
+        bounds = [tuple(float(x) for x in ranges[0]), tuple(float(x) for x in ranges[1]), (0.05, 1.5), (1.0, 6.0)] + ([(15.0, 75.0)] if rotated else [])
     if at_corner:                                                                 # one width left once the aspect is fixed: the Gini decides it, the interaction and shares follow
         from scipy.optimize import brentq
         best = build([brentq(lambda w: build([w]).descriptors()["gini"] - gini, *bounds[0], xtol=1e-5)])

@@ -91,6 +91,21 @@ Figure: `docs/value_map_examples.png` (made by `scripts/value_map_examples.py`; 
 
 **Caveats to keep in mind.** Sparsity (Gini) and separability are entangled through the widths: a wide corner bump is near a plane (Gini 0.24), a narrow one sparse, so the Gini is not matched across these three examples and a comparison of the rungs is confounded with sparsity until the sparsity step of the calibration (plan, M3) equalises it. A stretched axis-aligned Gaussian loses interaction as it lengthens (width 0.2: raw interaction 0.19 round, 0.04 at aspect 2, 0.01 at aspect 3: a bump that long crosses the whole range of one feature and is nearly a one-feature rule), so the multiplicative rung that differs most from additive is the round or mildly stretched one. A corner Gaussian is near additive only when wide (spreads of about 0.5 or more; raw interaction below 0.03 with a range of 3.3 to 3.6 instead of 4); wide along an edge it is a one-feature rule. The additive, multiplicative and non-separable maps are built by `value_maps.additive`, `multiplicative`, `nonseparable`, each with the nuisance (corner or centre, tilt, which feature has the long axis) drawn from a seed.
 
+
+### Pilot experiments (PI, 2026-11-18)
+
+Short pilots calibrate what participants can tell apart along one knob: **PCX** "Pilot: Complexity", **PSP** "Pilot: Sparsity", **PEF** "Pilot: Efficiency" (the travel time between patches; the participants are not told what varies). Each is three sessions of the foraging task, low, medium and high of the knob, in that fixed order (fatigue is taken to be minimal in a short pilot), after TUT, 180 s, rankings after every patch transition as in FOR, travel time 5 s (PCX, PSP), a world seed per session, balanced patches (`tilePlacement` balanced, `tileSumTol` 1). Designed with `scripts/pilot_report.py` (`preview` and `report`; the figure and the span-and-hold check are in `docs/pilots/PCX.png` and `PCX.txt`), tables in `scripts/design/tables/`, realised cells in `scripts/design/realized/`. PSP and PEF are drafts, not yet realised. The best bush may pay at most 9 (`factors.MAX_PEAK`; a few fruits of the best bushes can pay over 9: measured, none in PCX).
+
+**PCX (Complexity): Gini 0.55, travel time 5 s, 43 tiles.** The value maps (a Gaussian bump over (shape, colour), height 4 times the gain; `width` along shape, `widthColor` along colour; realised 2026-11-18):
+
+| Session | Rung | Centre (shape, colour) | Width (shape, colour) | Angle | Gain | Peak | Gini | Interaction | Log interaction | Nonlinearity | Shape share |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| PCX_S1 | additive: corner (1, 1), stretched 2:1 along shape | (1.00, 1.00) | (0.621, 0.310) | 0 | 1.666 | 6.7 | 0.55 | 0.09 | 0.00 | 0.14 | 0.29 |
+| PCX_S2 | multiplicative: axis-aligned, centre limited to shape 0.12 to 0.30 and colour 0.65 to 0.85, interaction asked 0.18 | (0.120, 0.650) | (0.341, 0.219) | 0 | 1.722 | 6.9 | 0.55 | 0.18 | 0.00 | 0.43 | 0.36 |
+| PCX_S3 | non-separable: rotated, centre limited to 0.4 to 0.6, interaction asked 0.40 | (0.498, 0.585) | (0.809, 0.137) | 21.2 | 1.632 | 6.5 | 0.55 | 0.40 | 0.51 | 0.92 | 0.28 |
+
+World seeds 9201, 9202 and 9203 (tile radius 49.8, 5 s travel); feedback maximum 7; fruit noise 0.6. The knob (interaction) rises 0.09, 0.18, 0.40 and nonlinearity 0.14, 0.43, 0.92; Gini, travel time and the patch totals are held, the mean bush value is not (1.79, 1.93, 2.23; the gain holds the learner's points, 1094, 1133 and 1194 on the cells' own worlds, 1118, 1145 and 1131 on the 40 check worlds, against the anchor 1125). At 5 s travel the planner check warns that leaving after one bush reaches 95 percent or more of the planner's points (top-1 100, 106 and 97 percent), a weaker patch-leaving structure than at 8 s (72 to 85 percent). The earlier trials: at Gini 0.4 the additive and multiplicative maps had the same interaction (0.10); at Gini 0.5 the multiplicative bump sat at an edge; an axis-aligned Gaussian with an interior centre has little interaction at Gini 0.5 (at most 0.16), so the Gini went to 0.55 and the multiplicative centre toward an edge.
+
 ---
 
 ## Scientific rationale

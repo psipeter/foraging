@@ -46,6 +46,7 @@ ROWS = (                         # (key, label, format); a key a record lacks is
     ("travel_time", "travel time (s)", "{:.2f}"), ("walk_visits", "walk visits ceiling", "{:.1f}"), ("n_tiles", "tiles", "{:.0f}"), ("bush_gini", "bush Gini", "{:.3f}"),
     ("mean_bush_value", "mean bush value", "{:.3f}"), ("diversity", "diversity within patches (SD)", "{:.3f}"), ("contrast", "contrast between patches (SD of means)", "{:.3f}"),
     ("tile_sum_dev", "largest patch total deviation", "{:.2f}"),
+    ("share_fruit_over_cap", "share of fruits paying over 9", "{:.4f}"), ("max_fruit", "largest fruit pay", "{:.0f}"),
     ("agents", None, None),
     ("nearest", "nearest, own world", "{:.0f}"), ("learner", "learner, own world", "{:.0f}"), ("oracle", "oracle, own world", "{:.0f}"), ("anchor", "anchor (learner)", "{:.0f}"),
 )
@@ -62,7 +63,7 @@ def session_metrics(valuemap, w, agents=()):
     s = tiles.stats(w.params, w.pos, w.shape, w.color, w.terrain.tiles, world.bush_value)
     m = {k: d[k] for k in ("gini", "interaction", "log_interaction", "nonlinearity", "shape_share", "fraction_above_half_max", "max")}
     m["gain"] = valuemap.gain()
-    m.update({k: f[k] for k in ("travel_time", "walk_visits", "n_tiles", "bush_gini", "mean_bush_value")})
+    m.update({k: f[k] for k in ("travel_time", "walk_visits", "n_tiles", "bush_gini", "mean_bush_value", "max_fruit", "share_fruit_over_cap")})
     m.update({"diversity": f["diversity"], "contrast": f["contrast"], "tile_sum_dev": s["tile_sum_dev"]})
     if agents:
         import sim
@@ -106,7 +107,7 @@ def _record(job):
             corner = tuple(float(x) for x in cell["corner"]) if "corner" in cell else cells.corner_of(cid, 0)
             aspect = float(cell["aspect"]) if "aspect" in cell else cells.aspect_of(cid, 0)
             base = world.load_session(session, session_duration=float(duration))
-            shaped = value_maps.calibrate_map(gini, interaction, value_maps.CLASS_KLASS[kind], std=float(base.reward_std), corner=corner, aspect=aspect, seed=0)
+            shaped = value_maps.calibrate_map(gini, interaction, value_maps.CLASS_KLASS[kind], std=float(base.reward_std), corner=corner, aspect=aspect, center=cell.get("center", (0.0, 1.0)), seed=0)
             valuemap = value_maps.ValueMap(shaped.bumps, shaped.noise, {"type": "gain", "value": TARGET_MEAN / shaped.descriptors()["mean"]})
             settings = {**factors.calibrate(world.load_session(session, session_duration=float(duration), **valuemap.compile()), float(cell["travel_time"])), **factors.PLACEMENT}
             seed = int(cell.get("world_seed", cells.FIRST_WORLD_SEED + 100 * cid))
@@ -181,7 +182,7 @@ def plot(code, mode, recs, path):
         ax.imshow(r["grid"].T, origin="lower", extent=(0, 1, 0, 1), cmap="Blues", vmin=0, vmax=9)
         ax.contour(np.linspace(0, 1, r["grid"].shape[0]), np.linspace(0, 1, r["grid"].shape[0]), r["grid"].T, levels=[0.5 * m["max"]], colors="k", linewidths=0.8)
         ax.scatter(r["shape"], r["color"], s=5, c="k", alpha=0.35, linewidths=0)
-        ax.set_title(f"{r['name']}\nGini {m['gini']:.2f}, interaction {m['interaction']:.2f}, log {m['log_interaction']:.2f}\npeak {m['max']:.1f}, gain {m['gain']:.2f}, travel {m['travel_time']:.1f} s", fontsize=7.5, loc="left")
+        ax.set_title(f"{r['name']}\nGini {m['gini']:.2f}, interaction {m['interaction']:.2f}, nonlinearity {m['nonlinearity']:.2f}", fontsize=7.5, loc="left")
         ax.set_xlabel("shape", fontsize=7)
         ax.set_ylabel("colour", fontsize=7)
         ax.tick_params(labelsize=7)
