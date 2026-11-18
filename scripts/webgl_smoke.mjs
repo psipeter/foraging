@@ -7,7 +7,7 @@
 // The flow (clicks at the screens' fixed positions, since the UI is drawn on a canvas): the ID screen (the pid from the address, locked) ->
 // Continue; the consent screen (unless --returning: the server already holds this pid's signature) -> type the name, Continue; the menu -> the
 // button of row --row (0 = the first experiment, the Tutorial) -> the experiment's files download -> "Click anywhere to begin" -> click ->
-// the instruction screen -> Enter. The server must know the build's commit and offer the experiment (server_admin register-experiment,
+// the instruction screen -> Enter. The server must know the build's commit and offer the experiment (database register-experiment,
 // register-release --experiment CODE=N).
 //
 // --release: a non-development build ignores the URL overrides for the server (by design), so the page is opened with only ?pid=

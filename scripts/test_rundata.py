@@ -128,7 +128,7 @@ def test_a_local_copy_of_a_session_continued_elsewhere_may_start_after_seq_zero(
 
 def test_archive_worlds_takes_the_files_from_git_at_the_build_commit(tmp_path, capsys):
     import subprocess
-    import server_admin
+    import database
     repo = tmp_path / "repo"
     folder = repo / "Assets" / "StreamingAssets" / "Experiments" / "CF"
     folder.mkdir(parents=True)
@@ -140,7 +140,7 @@ def test_archive_worlds_takes_the_files_from_git_at_the_build_commit(tmp_path, c
     git("commit", "-q", "-m", "worlds")
     sha = hashlib.sha256(blob).hexdigest()
     out = tmp_path / "out"
-    server_admin.archive_worlds("HEAD", [{"world_file": name, "world_sha256": sha}, {"world_file": name, "world_sha256": "0" * 64}], out, repo=repo)
+    database.archive_worlds("HEAD", [{"world_file": name, "world_sha256": sha}, {"world_file": name, "world_sha256": "0" * 64}], out, repo=repo)
     assert (out / "_worlds" / f"{sha[:8]}_{name}").read_bytes() == blob
     assert [p.name for p in (out / "_worlds").iterdir()] == [f"{sha[:8]}_{name}"]          # the file with a wrong sha is not written
     assert "not in git" in capsys.readouterr().err
@@ -150,13 +150,13 @@ def test_archive_worlds_takes_the_files_from_git_at_the_build_commit(tmp_path, c
     git("add", ".")
     git("commit", "-q", "-m", "old layout")
     old_sha = hashlib.sha256(b"old world").hexdigest()
-    server_admin.archive_worlds("HEAD", [{"world_file": "FIX_T0_seed1.world", "world_sha256": old_sha}], out, repo=repo)
+    database.archive_worlds("HEAD", [{"world_file": "FIX_T0_seed1.world", "world_sha256": old_sha}], out, repo=repo)
     assert (out / "_worlds" / f"{old_sha[:8]}_FIX_T0_seed1.world").read_bytes() == b"old world"
 
 
 def test_a_release_counts_the_sessions_of_the_experiment_asset_at_its_commit(tmp_path):
     import subprocess
-    import server_admin
+    import database
     folder = tmp_path / "Assets" / "ScriptableObjects" / "Experiments" / "XX"
     folder.mkdir(parents=True)
     entry = "  - {fileID: 11400000, guid: a2c1af91c6840f167b2e2427d351cbd4, type: 2}\n"
@@ -165,6 +165,6 @@ def test_a_release_counts_the_sessions_of_the_experiment_asset_at_its_commit(tmp
     git("init", "-q")
     git("add", ".")
     git("commit", "-q", "-m", "asset")
-    assert server_admin.sessions_in_build("HEAD", "XX", repo=tmp_path) == 3            # the requires entry and the later fields are not sessions
+    assert database.sessions_in_build("HEAD", "XX", repo=tmp_path) == 3            # the requires entry and the later fields are not sessions
     with pytest.raises(ValueError):
-        server_admin.sessions_in_build("HEAD", "NOPE", repo=tmp_path)
+        database.sessions_in_build("HEAD", "NOPE", repo=tmp_path)

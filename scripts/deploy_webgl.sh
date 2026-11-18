@@ -5,9 +5,9 @@
 #
 #   scripts/deploy_webgl.sh <build dir> <Pages repository clone> [--branch NAME] ["reason"]
 #
-# The commit message is made from the build (`server_admin.py describe`): "Development build d2edc3c (dirty): 146 MB, parts TUT 2, FN 42" and a body with the
+# The commit message is made from the build (`database.py describe`): "Development build d2edc3c (dirty): 146 MB, parts TUT 2, FN 42" and a body with the
 # repository commit it was made from, what it holds and when; the optional reason (what this deploy is for) goes in the body. The Pages repository keeps only its latest
-# commit, so the record of each deploy is the release `server_admin.py publish` registers, whose note is the same subject line (and `--note`, the reason).
+# commit, so the record of each deploy is the release `database.py publish` registers, whose note is the same subject line (and `--note`, the reason).
 #
 # Use a clone made only for this (never your Unity project folder: the script deletes every file of the clone's working tree).
 # With the foraging repository itself, clone it again (git clone <url> ~/foraging-pages) and deploy to a separate branch
@@ -43,7 +43,7 @@ if ls "$build"/Build/*.br "$build"/Build/*.gz >/dev/null 2>&1; then
 fi
 
 python="$(dirname "$0")/../venv/bin/python"; [ -x "$python" ] || python=python3
-message="$("$python" "$(dirname "$0")/server_admin.py" describe --build "$build" ${reason:+--reason "$reason"})"
+message="$("$python" "$(dirname "$0")/database.py" describe --build "$build" ${reason:+--reason "$reason"})"
 
 branch="${branch:-$(git -C "$repo" symbolic-ref --short HEAD)}"
 git -C "$repo" checkout --quiet --orphan deploy-tmp

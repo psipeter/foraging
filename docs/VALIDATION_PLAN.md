@@ -5,7 +5,7 @@
 ## Built: `scripts/validate_run.py`
 
 `./venv/bin/python scripts/validate_run.py <session folder | run folder | run id | --all> [--json]` reads a logged run (a local `ForagingData/<run>/` or one pulled with
-`server_admin.py pull` / `human_data.py download`) and reports PASS / WARN / FAIL / SKIP per check, with the numbers that disagree; exit code 1 on any FAIL. It reuses
+`database.py pull` / `human_data.py download`) and reports PASS / WARN / FAIL / SKIP per check, with the numbers that disagree; exit code 1 on any FAIL. It reuses
 `rundata` and `replay`. Three groups:
 
 1. **Scoring, recomputed independently of the C# code.** `foraging_points` equals the last fruit's running total and the sum of the fruit rewards, each of which equals the
@@ -25,7 +25,7 @@ or `replay.py`. A FAIL is either a validator bug or a game bug; decide which bef
 
 ## Release checklist (by hand; each line has a command that proves it)
 
-Before `server_admin.py publish` and `deploy_webgl.sh`:
+Before `database.py publish` and `deploy_webgl.sh`:
 - Git: `git status` clean (the font atlases excepted), HEAD pushed, `Builds/web/StreamingAssets/build_info.json` has `"commit"` = `git rev-parse HEAD` and `"dirty": false`.
 - Tests: `run_tests.py --all` green at HEAD (slow tests need the PI's yes); `validate_run.py` clean on the latest pilot or browser run.
 - Generated files fresh: `world.py` / `ranking.py pool` output equals the committed files (the slow freshness tests); `online.json` has `"enabled": true`.

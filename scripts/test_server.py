@@ -27,7 +27,7 @@ if not DENO:
     pytest.skip("deno not found (PATH or FORAGING_DENO)", allow_module_level=True)
 
 import rundata
-import server_admin
+import database
 import server_client
 import trajectory_codec as codec
 from server_client import Client, ServerError, event_rows
@@ -69,12 +69,12 @@ def env(tmp_path_factory):
         proc.kill()
         raise RuntimeError("deno server did not start")
     admin = psycopg.connect(url, autocommit=True, row_factory=psycopg.rows.dict_row)
-    server_admin.register_experiment(admin, "TEST", "Test experiment")
-    server_admin.register_experiment(admin, "ONE", "First", sort_order=1, completion_code="CODE-ONE")
-    server_admin.register_experiment(admin, "TWO", "Second", requires=["ONE"], sort_order=2, completion_code="CODE-TWO")
-    server_admin.register_release(admin, COMMIT, {"TEST": 2})
-    server_admin.register_release(admin, MENU_COMMIT, {"ONE": 1, "TWO": 1})
-    server_admin.register_release(admin, DEV_COMMIT, {"TEST": 2}, development=True)
+    database.register_experiment(admin, "TEST", "Test experiment")
+    database.register_experiment(admin, "ONE", "First", sort_order=1, completion_code="CODE-ONE")
+    database.register_experiment(admin, "TWO", "Second", requires=["ONE"], sort_order=2, completion_code="CODE-TWO")
+    database.register_release(admin, COMMIT, {"TEST": 2})
+    database.register_release(admin, MENU_COMMIT, {"ONE": 1, "TWO": 1})
+    database.register_release(admin, DEV_COMMIT, {"TEST": 2}, development=True)
     admin.execute("insert into public.worlds (sha256, name) values (%s, 'S1_seed1.world')", (WORLD,))
     yield {"url": f"http://127.0.0.1:{port}", "db": admin, "dburl": url, "log": log}
     proc.terminate()
@@ -229,7 +229,7 @@ def test_resume_state_describes_where_the_session_stopped(env):
 
 
 def test_a_resume_on_a_newer_build_is_recorded(env):
-    server_admin.register_release(env["db"], "newer99", {"TEST": 2})
+    database.register_release(env["db"], "newer99", {"TEST": 2})
     c = client(env)
     c.start(prolific_pid="PID_build")
     newer = client(env, commit="newer99")
@@ -240,7 +240,7 @@ def test_a_resume_on_a_newer_build_is_recorded(env):
 
 def test_an_experiment_cannot_require_one_that_is_not_registered(env):
     with pytest.raises(ValueError, match="not registered"):
-        server_admin.register_experiment(env["db"], "BAD", "Bad", requires=["NOPE"])
+        database.register_experiment(env["db"], "BAD", "Bad", requires=["NOPE"])
 
 
 def test_a_run_whose_build_no_longer_lists_the_experiment_does_not_finish(env):
@@ -249,7 +249,7 @@ def test_a_run_whose_build_no_longer_lists_the_experiment_does_not_finish(env):
     c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start")]), frames=frames(20))
     env["db"].execute("delete from public.release_experiments where build_commit = %s and experiment = 'TEST'", (COMMIT,))
     result = c.finish()
-    server_admin.register_release(env["db"], COMMIT, {"TEST": 2})             # the database is shared by the tests
+    database.register_release(env["db"], COMMIT, {"TEST": 2})             # the database is shared by the tests
     assert result["ok"] is False and result["completion_code"] is None and any("no longer lists" in p for p in result["problems"])
     assert env["db"].execute("select status from public.runs where run_id = %s", (c.run_id,)).fetchone()["status"] != "finished"
 
@@ -368,7 +368,7 @@ def test_a_session_uploaded_in_batches_and_pulled_back_equals_the_original(env, 
     c.start()
     ack = server_client.upload_session(c, 0, data, frames_per_chunk=400, events_per_batch=15)
     assert ack["trajectory_next"] == 1500 and ack["events_next"] == len(events)
-    out = server_admin.pull_run(env["db"], c.run_id, tmp_path / "pulled")
+    out = database.pull_run(env["db"], c.run_id, tmp_path / "pulled")
     got = rundata.read_session(out / "00")
     assert np.array_equal(got["traj"], data["traj"]) and len(got["events"]) == len(events)
     assert [e["reward"] for e in got["events"] if e["type"] == "fruit"] == [e["reward"] for e in data["events"] if e["type"] == "fruit"]
@@ -562,7 +562,7 @@ def test_the_load_test_script_runs_clean_against_the_local_server(env):
     import hashlib
     world = ROOT / "Assets" / "StreamingAssets" / "Experiments" / "FOR" / "FOR_S1_seed7101.world"
     env["db"].execute("insert into public.worlds (sha256, name) values (%s, 'FOR_S1_seed7101.world') on conflict do nothing", (hashlib.sha256(world.read_bytes()).hexdigest(),))
-    server_admin.register_release(env["db"], "load-test", {"TEST": 1})
+    database.register_release(env["db"], "load-test", {"TEST": 1})
     done = subprocess.run([sys.executable, str(ROOT / "scripts" / "load_test.py"), "--url", env["url"], "--participants", "3", "--seconds", "6",
                            "--ramp", "1"], capture_output=True, text=True, env={**os.environ, "FORAGING_API_KEY": APIKEY}, timeout=120)
     assert done.returncode == 0, done.stdout + done.stderr

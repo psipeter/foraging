@@ -1,6 +1,6 @@
 """Smoke test of a deployed online data server: one throwaway run through every endpoint, with the checks the local tests make
 (idempotent repeat, 401/409/400 cases, resume state, finish) and the latency of each call. It writes rows under the build commit
-given by --commit, which must be registered as a release offering --experiment with one session (`server_admin.py register-release`) and be deleted afterwards (the printed SQL does it).
+given by --commit, which must be registered as a release offering --experiment with one session (`database.py register-release`) and be deleted afterwards (the printed SQL does it).
 
     FORAGING_API_KEY=<publishable key> ./venv/bin/python scripts/server_smoke.py --url https://<ref>.supabase.co/functions/v1 \\
         --commit smoke-test --world-sha <sha256 of a registered world file>

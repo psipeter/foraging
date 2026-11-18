@@ -2,7 +2,7 @@
 
 A session folder is the local layout of rundata.py (<run>/<session>/: session.json, events.csv, trajectory.csv; keys are
 1 = W, 2 = S, 4 = Space held). The world (bush positions and radii, per-fruit rewards, terrain) is found by the session row's
-sha256 in the `_worlds` folder next to the run's folder (where `server_admin.py pull` puts the files it takes from git at the run's
+sha256 in the `_worlds` folder next to the run's folder (where `database.py pull` puts the files it takes from git at the run's
 build commit), ForagingData/_worlds/ (archived by the Editor and standalone loggers) or, failing that, in Assets/StreamingAssets/Experiments/<code>/.
 
 A session that was interrupted and continued (docs/ONLINE_DATA_PLAN.md, section 4) has a `session_resume` event: the game restarted

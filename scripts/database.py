@@ -1,23 +1,30 @@
-"""Administration of the online data server: register releases and worlds, list runs, and pull a run's data into the local
-layout (rundata.py) so replay.py, visibility.py and the analyses read it like a local log. Talks to Postgres directly (the
-service connection string from the Supabase dashboard, in FORAGING_DB_URL or, so that nothing has to be exported, on the first line of
-~/.config/foraging/db_url (mode 600); never put it in the repo).
+"""The one script for the online database: every operation that needs the database owner's connection string goes through here, and the database password is pasted at a hidden prompt each time.
+It is held in this process's memory only: no environment variable, no file, nothing in the command line or the shell history, and the script refuses to run unless it has a terminal, so
+nothing can pipe it in. It never prints the string (errors are scrubbed of it), shows the project it connects to, reads in a read-only transaction, and for a write prints what it will
+do and asks you to type the project ref. Each run leaves `results/db_<operation>_<time>.log` (what was done, no secrets) for whoever you tell about it.
 
-    ./venv/bin/python scripts/server_admin.py publish --build Builds/web [--dry-run] [--completion-code FN=XXXX]   # everything below, from the catalog and the build
-    ./venv/bin/python scripts/server_admin.py register-experiment --code CF --title "Complex Features" [--requires TUT] [--order 2] [--completion-code XXXX] [--payout '{"..."}']
-    ./venv/bin/python scripts/server_admin.py register-release --commit <git hash> --experiment TUT --experiment CF [--note "..."]
-    ./venv/bin/python scripts/server_admin.py register-worlds            # hashes Assets/StreamingAssets/Experiments/*/*
-    ./venv/bin/python scripts/server_admin.py runs
-    ./venv/bin/python scripts/server_admin.py pull --run <run_id> --out ForagingData
+    ./venv/bin/python scripts/database.py publish --build Builds/web [--dry-run] [--completion-code FN=XXXX] [--note why]   # write: experiments, the build's world files, the release
+    ./venv/bin/python scripts/database.py register-experiment --code CF --title "Complex Features" [--requires TUT] [--order 2] [--completion-code XXXX] [--payout '{"..."}']   # write
+    ./venv/bin/python scripts/database.py register-release --commit <git hash> --experiment TUT --experiment CF [--note "..."]   # write
+    ./venv/bin/python scripts/database.py register-worlds            # write: hashes Assets/StreamingAssets/Experiments/*/*
+    ./venv/bin/python scripts/database.py runs                       # read
+    ./venv/bin/python scripts/database.py pull --run <run_id> --out ForagingData   # read: one run as the local layout (participant data: ForagingData is gitignored)
+    ./venv/bin/python scripts/database.py describe --build Builds/web [--reason why]   # connects to nothing: the commit message of a build's deploy
+
+Planned (docs/DECISIONS.md, "One database script"): download and backup (moved from human_data.py and db_backup.py), cleanup, migrate, and, with the Supabase access token pasted the same way,
+deploy-functions and set-secret.
 """
 
 import argparse
+import getpass
 import hashlib
 import json
-import os
+import re
 import subprocess
+import urllib.parse
 import uuid
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -73,21 +80,6 @@ def register_worlds(conn, directory=WORLD_DIR):
                          (hashlib.sha256(path.read_bytes()).hexdigest(), path.name))
             names.append(path.name)
     return names
-
-
-DB_URL_FILE = Path.home() / ".config" / "foraging" / "db_url"
-
-
-def db_url(environ=os.environ, path=DB_URL_FILE):
-    """The database connection string: FORAGING_DB_URL, else the first line of `path` (refused unless only its owner can read it). None when neither is there."""
-    if environ.get("FORAGING_DB_URL"):
-        return environ["FORAGING_DB_URL"]
-    if path.is_file():
-        if path.stat().st_mode & 0o077:
-            raise PermissionError(f"{path} can be read by others: chmod 600 it (it holds the database password)")
-        lines = path.read_text().strip().splitlines()
-        return lines[0].strip() if lines else None
-    return None
 
 
 def _guid_paths(root):
@@ -262,7 +254,117 @@ def pull_run(conn, run_id, out_root):
     return Path(out_root) / str(run_id)
 
 
-def main():
+# --------------------------------------------------------------------------------------------------
+# The connection: pasted, checked, scrubbed, logged
+# --------------------------------------------------------------------------------------------------
+
+ONLINE_JSON = PROJECT_ROOT / "Assets" / "StreamingAssets" / "online.json"
+LOG_DIR = PROJECT_ROOT / "results"
+WRITES = {"publish", "register-experiment", "register-release", "register-worlds"}      # the operations that change the database
+
+
+def expected_ref(path=ONLINE_JSON):
+    """The project ref the game's online.json points at (https://<ref>.supabase.co/...): the project this script is meant to reach."""
+    return (urllib.parse.urlparse(json.loads(Path(path).read_text())["url"]).hostname or "").split(".")[0]
+
+
+def project_ref(url):
+    """The Supabase project ref a connection string names: the user of a pooler string (postgres.<ref>) or the host of a direct one (db.<ref>.supabase.co); None for any other form."""
+    parts = urllib.parse.urlparse(url)
+    user = urllib.parse.unquote(parts.username or "")
+    if "." in user:
+        return user.split(".", 1)[1]
+    found = re.fullmatch(r"db\.([a-z0-9]+)\.supabase\.co", parts.hostname or "")
+    return found.group(1) if found else None
+
+
+def secrets_of(url):
+    """What must never appear in output: the string and its password (as typed and as decoded)."""
+    password = urllib.parse.urlparse(url).password or ""
+    return [s for s in (url, password, urllib.parse.unquote(password)) if s]
+
+
+def scrub(text, *secrets):
+    for secret in sorted(secrets, key=len, reverse=True):
+        text = text.replace(secret, "***")
+    return text
+
+
+def require_terminal(stdin=None, stdout=None):
+    """The secret is typed at a terminal: refuse to run with input from a pipe or a file, or with output that goes elsewhere (so nothing can feed it in and no log can hold the prompt)."""
+    stdin, stdout = stdin or sys.stdin, stdout or sys.stdout
+    if not (stdin.isatty() and stdout.isatty()):
+        raise SystemExit("database.py needs a terminal: run it yourself and paste the database password at the hidden prompt")
+
+
+POOLER_HOST = "aws-1-us-west-2.pooler.supabase.com"      # the project's session pooler (Connect > Session pooler; supabase/.temp/pooler-url): not a secret
+POOLER_PORT = 5432
+
+
+def url_from_password(password, ref, host=POOLER_HOST, port=POOLER_PORT):
+    """The connection string of project `ref` for a database password (any characters: it is percent-encoded). A pasted string that is already a full URL is kept."""
+    if "://" in password:
+        return password
+    return f"postgresql://postgres.{ref}:{urllib.parse.quote(password, safe='')}@{host}:{port}/postgres"
+
+
+def ask_secret(prompt="Database password (Supabase: Database settings; input hidden): "):
+    require_terminal()
+    value = getpass.getpass(prompt).strip()
+    if not value:
+        raise SystemExit("nothing entered")
+    return value
+
+
+def connect(url, expected=None):
+    """(connection, project ref) for the pasted string. Refuses a string for another project than `expected` (online.json's); a form that names no project is accepted and reported as `expected`.
+    Autocommit, no server-side prepared statements (the pooler hands queries to different server connections); a failure is reported without the string."""
+    ref = project_ref(url)
+    if ref is not None and expected and ref != expected:
+        raise SystemExit(f"the connection string is for project {ref}, but online.json points at {expected}: stopped")
+    import psycopg
+    try:
+        conn = psycopg.connect(url, row_factory=psycopg.rows.dict_row, autocommit=True, prepare_threshold=None, connect_timeout=20)
+    except Exception as e:
+        raise SystemExit("could not connect: " + scrub(str(e), *secrets_of(url)))
+    return conn, ref or expected
+
+
+@contextmanager
+def read_only(conn):
+    """One transaction in which nothing can be written (the server refuses it): what every read operation runs in."""
+    with conn.transaction():
+        conn.execute("set transaction read only")
+        yield
+
+
+def confirm_write(ref, ask=input):
+    """A write names the project and waits for its ref to be typed."""
+    if ask(f"This writes to project {ref}. Type the project ref to go on: ").strip() != ref:
+        raise SystemExit("stopped, nothing written")
+
+
+class Log:
+    """Prints what an operation reports and keeps it (scrubbed) for `results/db_<operation>_<time>.log`, which holds the operation, the project, the outcome and no secrets."""
+
+    def __init__(self, operation, argv, directory=LOG_DIR, now=None):
+        self.operation, self.argv, self.directory, self.lines, self.secrets, self.project = operation, list(argv), Path(directory), [], [], None
+        self.started = now or datetime.now(timezone.utc)
+
+    def __call__(self, *parts):
+        text = scrub(" ".join(str(p) for p in parts), *self.secrets)
+        print(text)
+        self.lines.append(text)
+
+    def save(self, outcome):
+        self.directory.mkdir(exist_ok=True)
+        path = self.directory / f"db_{self.operation}_{self.started.strftime('%Y%m%d-%H%M%S')}.log"
+        header = [f"operation: {self.operation}", f"arguments: {' '.join(self.argv)}", f"project: {self.project}", f"started: {self.started.isoformat()}", f"outcome: {outcome}", ""]
+        path.write_text(scrub("\n".join(header + self.lines), *self.secrets) + "\n")
+        return path
+
+
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     e = sub.add_parser("register-experiment")
@@ -290,45 +392,77 @@ def main():
     p = sub.add_parser("pull")
     p.add_argument("--run", required=True)
     p.add_argument("--out", default="ForagingData")
-    args = parser.parse_args()
+    return parser
+
+
+def run_operation(args, conn, log, plan=None):
+    """One operation on an open connection, in a read-only transaction or, for a write, in one transaction (all of it or none)."""
+    if args.command in WRITES:
+        with conn.transaction():
+            if args.command == "publish":
+                codes = dict(item.split("=", 1) for item in args.completion_code)
+                note = release_note(build_description(args.build, commit=args.commit)[0], args.note) if args.build else args.note
+                for line in publish(conn, plan, codes, note):
+                    log("registered", line)
+            elif args.command == "register-experiment":
+                register_experiment(conn, args.code, args.title, args.requires, args.order, args.completion_code, json.loads(args.payout) if args.payout else None)
+                log(f"registered {args.code}: {args.title}")
+            elif args.command == "register-release":
+                experiments = {code: sessions_in_build(args.commit, code) for code in args.experiment}
+                register_release(conn, args.commit, experiments, args.note)
+                log(f"registered {args.commit} with {experiments}")
+            else:
+                names = register_worlds(conn)
+                log(f"registered {len(names)} files: {', '.join(names)}")
+        return
+    with read_only(conn):
+        if args.command == "runs":
+            for run in conn.execute("select r.run_id, r.experiment, r.status, r.started_at, r.build_commit, r.build_dirty, count(s.*) as sessions "
+                                    "from public.runs r left join public.sessions s using (run_id) group by r.run_id order by r.started_at").fetchall():
+                log(json.dumps({k: _iso(v) if not isinstance(v, (int, bool, type(None))) else v for k, v in run.items()}, default=str))
+        else:
+            log("pulled into", pull_run(conn, args.run, args.out))
+
+
+def main(argv=None, secret=None, ask=input, expected=None, log_dir=LOG_DIR):
+    """`secret` (default: the hidden prompt), `ask` (the confirmation) and `expected` (the project ref) are replaced by the tests."""
+    args = build_parser().parse_args(argv)
     if args.command == "describe":
         subject, body = build_description(args.build, args.reason)
         print(subject + "\n\n" + body)
         return
+    log = Log(args.command, sys.argv[1:] if argv is None else argv, log_dir)
+    plan = None
     if args.command == "publish":
         plan = build_plan(args.build, args.commit)
-        print(f"commit {plan['commit']}; experiments {[(e['code'], e['order']) for e in plan['experiments']]}; sessions {plan['sessions']}; files from {plan['worlds']}")
+        log(f"commit {plan['commit']}; experiments {[(e['code'], e['order']) for e in plan['experiments']]}; sessions {plan['sessions']}; files from {plan['worlds']}")
         for line in plan["notes"]:
-            print("note:", line)
+            log("note:", line)
         if args.dry_run:
+            log("dry run: nothing connected, nothing written")
             return
-    import psycopg
-    url = db_url()
-    if not url:
-        sys.exit(f"no database connection string: set FORAGING_DB_URL or put it on the first line of {DB_URL_FILE} (chmod 600)")
-    conn = psycopg.connect(url, row_factory=psycopg.rows.dict_row, autocommit=True, prepare_threshold=None)      # (no server-side prepared statements: the pooler hands queries to different server connections)
-    if args.command == "publish":
-        codes = dict(item.split("=", 1) for item in args.completion_code)
-        note = release_note(build_description(args.build, commit=args.commit)[0], args.note) if args.build else args.note
-        for line in publish(conn, plan, codes, note):
-            print("registered", line)
-        return
-    if args.command == "register-experiment":
-        register_experiment(conn, args.code, args.title, args.requires, args.order, args.completion_code, json.loads(args.payout) if args.payout else None)
-        print(f"registered {args.code}: {args.title}")
-    elif args.command == "register-release":
-        experiments = {code: sessions_in_build(args.commit, code) for code in args.experiment}
-        register_release(conn, args.commit, experiments, args.note)
-        print(f"registered {args.commit} with {experiments}")
-    elif args.command == "register-worlds":
-        names = register_worlds(conn)
-        print(f"registered {len(names)} files: {', '.join(names)}")
-    elif args.command == "runs":
-        for run in conn.execute("select r.run_id, r.experiment, r.status, r.started_at, r.build_commit, r.build_dirty, count(s.*) as sessions "
-                                "from public.runs r left join public.sessions s using (run_id) group by r.run_id order by r.started_at"):
-            print(json.dumps({k: _iso(v) if not isinstance(v, (int, bool, type(None))) else v for k, v in run.items()}, default=str))
-    else:
-        print(pull_run(conn, args.run, args.out))
+    url = url_from_password((secret or ask_secret)(), expected_ref() if expected is None else expected)
+    log.secrets = secrets_of(url)
+    conn = None
+    outcome = "failed"
+    try:
+        conn, ref = connect(url, expected_ref() if expected is None else expected)
+        log.project = ref
+        log(f"project {ref}")
+        if args.command in WRITES:
+            confirm_write(ref, ask)
+        run_operation(args, conn, log, plan)
+        outcome = "done"
+    except SystemExit as e:
+        outcome = f"stopped: {e}"
+        raise
+    except Exception as e:
+        outcome = f"failed: {scrub(str(e), *log.secrets)}"
+        raise SystemExit(f"{args.command} failed: {scrub(str(e), *log.secrets)}")
+    finally:
+        if conn is not None:
+            conn.close()
+        print("log:", log.save(outcome))
 
 
 if __name__ == "__main__":

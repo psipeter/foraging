@@ -80,7 +80,7 @@ state), reached over a direct database connection (`SUPABASE_DB_URL`). Errors: 4
 - **Resume state** (`run-start`'s `resume`, from the rows): `session_index`, `name`, `completed`, `foraging_points`, `pose` (the last
   frame), `last_event_t`, `running_total`, `fruits_taken` (bush -> count), `open_bout_tree`, `held_seconds`, `breaks`, `sets_played`, `ranking_points` (the sum of the in-progress session's sets' points; each `previous` entry carries `foraging_points` and `ranking_points`) and the three `*_next` sequence numbers (`sets_next` for the ranking sets).
 - **Tools:** `scripts/server_client.py` (the reference client, and `upload_session` to push a local-layout session in batches),
-  `scripts/server_admin.py` (`register-release`, `register-worlds`, `runs`, `pull` = a run back into the local layout of section 2b). **Analysis download:** `scripts/human_data.py download` reads every run through the Supabase CLI (no `FORAGING_DB_URL`), writes the raw layout under `ForagingData/<run>/` and the tidy tables `ForagingData/humans.sqlite` (participants with Prolific ID, signed name and feedback; sessions; events and the `fruits` view; ranking sets); `load(exclude=[...])` filters participants by ID or name.
+  `scripts/database.py` (`register-release`, `register-worlds`, `runs`, `pull` = a run back into the local layout of section 2b). **Analysis download:** `scripts/human_data.py download` reads every run through the Supabase CLI (no `FORAGING_DB_URL`), writes the raw layout under `ForagingData/<run>/` and the tidy tables `ForagingData/humans.sqlite` (participants with Prolific ID, signed name and feedback; sessions; events and the `fruits` view; ranking sets); `load(exclude=[...])` filters participants by ID or name.
 
 Still the client's job (phase 3): an `IDataSink` with the three implementations, the in-memory queue with backoff and the
 pause-until-acknowledged overlay (grace window in `SessionConfig`), the cadence (events within about 1 s, trajectory every 5 s,
@@ -96,7 +96,7 @@ The CLI is the one in `evidence_integration/task_backend/node_modules/.bin/supab
 harmless "failed to cache migrations catalog ... Docker" warning. Edge Functions get `SUPABASE_DB_URL` and the publishable key from the
 platform (the direct connection and the `apikey` check both worked). `ALLOWED_ORIGIN` (optional secret) restricts CORS to the game's
 web origin. Worlds are registered by SQL (`db query --linked -f`, the hashes of `Assets/StreamingAssets/Experiments/*/*`) or with
-`server_admin.py register-worlds` (needs `FORAGING_DB_URL`); experiments with `register-experiment --code CF --title "Complex Features" --requires TUT [--completion-code ...]`;
+`database.py register-worlds` (asks for the database password at a hidden prompt); experiments with `register-experiment --code CF --title "Complex Features" --requires TUT [--completion-code ...]`;
 a release with `register-release --commit <hash> --experiment FOR` (each experiment's session count is read from its asset at that commit). **Re-register worlds after regenerating them.** The publishable key is in the
 dashboard (API Keys) or `supabase projects api-keys`: that listing also prints the secret keys, so do not paste its output anywhere.
 
@@ -109,7 +109,7 @@ checked (the remote migration history already lists both migrations, so a push s
 
 **Experiments (2026-11-06), what to run before a release works:** apply the migration `20261106000000_experiments.sql` (`supabase db push`), deploy the new
 function (`functions deploy participant-start --no-verify-jwt`, and the others, whose code changed), register the experiments
-(`server_admin.py register-experiment --code TUT --title Tutorial --order 1 --completion-code <code>`, then `--code CF --title "Complex Features" --requires TUT --order 2 --completion-code <code>`),
+(`database.py register-experiment --code TUT --title Tutorial --order 1 --completion-code <code>`, then `--code CF --title "Complex Features" --requires TUT --order 2 --completion-code <code>`),
 register the worlds (`register-worlds`: the files are now in `Assets/StreamingAssets/Experiments/<code>/`) and the build
 (`register-release --commit <hash> --experiment TUT --experiment CF`). The deployed old client stops working at the migration.
 
@@ -119,13 +119,13 @@ The Unity build is static files; a CI runner cannot make it (it needs your licen
 fresh commit to a separate Pages repository (`scripts/deploy_webgl.sh`; a build is tens of megabytes of binary that does not delta, so
 history would grow by that much per deploy).
 1. In `Assets/StreamingAssets/online.json` set `"enabled": true` (the URL and the publishable key are already there; the build refuses
-   to run in a browser without it). Registered worlds must match the ones in the build (`server_admin.py register-worlds` again if
+   to run in a browser without it). Registered worlds must match the ones in the build (`database.py register-worlds` again if
    they were regenerated).
-2. Commit the code (and push it), build (step 3), then register everything with one command: `./venv/bin/python scripts/server_admin.py publish --build Builds/web [--dry-run]`.
+2. Commit the code (and push it), build (step 3), then register everything with one command: `./venv/bin/python scripts/database.py publish --build Builds/web [--dry-run]`.
    It reads the experiments from the catalog (code, title, prerequisites, menu order), the commit from the build's own `StreamingAssets/build_info.json`, the number of sessions
    of each experiment from git at that commit, and registers the world and ranking pool files **of the build** (the files participants download). It keeps a completion code
    already registered (`--completion-code FN=XXXX` sets one) and can be repeated. A new experiment needs no registration step of its own: building it adds it to the catalog and
-   the next `publish` registers it. The connection string is read from `FORAGING_DB_URL` or the first line of `~/.config/foraging/db_url` (mode 600, outside the repository).
+   the next `publish` registers it. `database.py` is the one script for database operations: it asks for the database password at a hidden prompt every time (the host comes from `POOLER_HOST`, the user from online.json's project ref; a full pasted URL is still accepted), keeps it in memory only (no environment variable, no file), refuses to run without a terminal, shows the project and, for a write, asks for the project ref to be typed, and leaves `results/db_<operation>_<time>.log` without secrets (`docs/DECISIONS.md`, "One database script").
    The single commands (`register-experiment`, `register-worlds`, `register-release`) remain for odd cases. A build from a dirty tree is accepted but flagged.
 3. Unity: File > Build Profiles (or Build Settings) > WebGL, **not** a development build, scenes `Boot` then `SampleScene` (already the
    list), Player Settings > Publishing > Decompression Fallback **on** (already set in this project), output to e.g. `Builds/web`.

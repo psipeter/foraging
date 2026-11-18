@@ -3,7 +3,7 @@ and uploading the way the game does (events about every second, a trajectory chu
 finishing the run. It reports the latency of every call and how many calls were slower than the game's grace window
 (`SessionConfig.uploadGraceSeconds`, 4 s: past it a participant would see the game held still behind "Saving your data...").
 
-It writes rows under the build commit given by --commit, which must be registered as a release offering --experiment with one session (`server_admin.py register-release`;
+It writes rows under the build commit given by --commit, which must be registered as a release offering --experiment with one session (`database.py register-release`;
 the printed SQL deletes the rows afterwards) and uses a registered world's hash. Run it against a local server first (`supabase/local/serve.ts`,
 see docs/ONLINE_DATA_PLAN.md) and against the project only with a number of participants you are happy to load it with.
 

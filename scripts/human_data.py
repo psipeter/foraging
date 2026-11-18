@@ -43,7 +43,7 @@ from pathlib import Path
 import pandas as pd
 
 import rundata
-import server_admin
+import database
 from world import PROJECT_ROOT
 
 DATA_DIR = PROJECT_ROOT / "ForagingData"
@@ -142,7 +142,7 @@ def _store_run(con, out, run, sessions, events, chunks, sets):
     for s in sessions:
         index = s["session_index"]
         ev = events[index]
-        server_admin.write_session_rows(out, run_id, s, ev, [dict(c, data=base64.b64decode(c["data"])) for c in chunks[index]],
+        database.write_session_rows(out, run_id, s, ev, [dict(c, data=base64.b64decode(c["data"])) for c in chunks[index]],
                                         sets[index])
         con.execute("insert into sessions values (" + ",".join("?" * 23) + ")", _session_row(s, ev, sets[index], run.get("experiment")))
         con.executemany("insert into events values (?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -150,7 +150,7 @@ def _store_run(con, out, run, sessions, events, chunks, sets):
                           json.dumps(e["payload"], sort_keys=True) if e["payload"] else None, _utc(e["received_at"])) for e in ev])
         con.executemany(f"insert into ranking_sets values (?,?,{','.join('?' * len(columns))})",
                         [(run_id, index) + tuple(json.dumps(t[c], separators=(",", ":")) if isinstance(t[c], (list, dict)) else t[c] for c in columns) for t in sets[index]])
-    server_admin.archive_worlds(run["build_commit"], sessions, out)
+    database.archive_worlds(run["build_commit"], sessions, out)
     minutes = ((pd.Timestamp(_utc(run["finished_at"])) - pd.Timestamp(_utc(run["started_at"]))).total_seconds() / 60) if run["finished_at"] else None
     con.execute("insert or replace into participants values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)",
                 (run_id, run["participant"], run["signature"], run["consent_version"], run["status"], _utc(run["started_at"]),
