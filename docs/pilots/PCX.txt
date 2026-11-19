@@ -26,9 +26,14 @@ nearest, own world                                 843         930        1082
 learner, own world                                1094        1133        1194
 oracle, own world                                 1347        1452        1659
 anchor (learner)                                  1125        1125        1125
-PCX_S1 planner: planner takes 6.6 bushes per tile visit (73% of a visited tile's bushes; visits of 1: 1, 7: 3, 8: 3) and scores 1028: in the middle; against the planner: top-1 100%, top-9 82%, thr-90 99%, thr-10 94%, best simple policy thr-70 135%; WARNING, top-1, thr-90 reach 95% of the planner: that extreme is not clearly worse in this world; CAUTION: the best simple policy (thr-70, 1384) beats it by more than 3%, so the beam search (300 wide) did not find the best route: do not read its route as the optimum
-PCX_S2 planner: planner takes 6.9 bushes per tile visit (76% of a visited tile's bushes; visits of 2: 1, 7: 2, 8: 4) and scores 1113: in the middle; against the planner: top-1 106%, top-9 79%, thr-90 106%, thr-10 91%, best simple policy thr-70 132%; WARNING, top-1, thr-90 reach 95% of the planner: that extreme is not clearly worse in this world; CAUTION: the best simple policy (thr-70, 1465) beats it by more than 3%, so the beam search (300 wide) did not find the best route: do not read its route as the optimum
-PCX_S3 planner: planner takes 6.6 bushes per tile visit (73% of a visited tile's bushes; visits of 1: 1, 6: 1, 7: 2, 8: 2, 9: 1) and scores 1284: in the middle; against the planner: top-1 97%, top-9 79%, thr-90 89%, thr-10 89%, best simple policy thr-70 130%; WARNING, top-1 reaches 95% of the planner: that extreme is not clearly worse in this world; CAUTION: the best simple policy (thr-70, 1675) beats it by more than 3%, so the beam search (300 wide) did not find the best route: do not read its route as the optimum
+dp_finite (optimal stopping)                      1375        1495        1721
+dp_average (optimal rate)                         1344        1502        1691
+mvt (marginal value)                              1344        1502        1691
+mvt_running (experienced rate)                    1342        1469        1683
+bushes per patch, dp_finite                       2.38        2.46        2.83
+bushes per patch, dp_average                      2.31        2.38        2.83
+bushes per patch, mvt                             2.31        2.38        2.83
+bushes per patch, mvt_running                     2.58        2.67        3.09
 
 Span and hold (the knob must rise by its span; the rest stay within tolerance):
   vary  interaction           0.092     0.178     0.400   span +0.308      ok

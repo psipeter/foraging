@@ -6,7 +6,7 @@
 `preview` reads the table `design/tables/<code>.json` and needs no simulation: each cell's map is calibrated to its Gini, interaction and class (`value_maps.calibrate_map`), given the gain that makes the
 mean bush value `TARGET_MEAN` (the independence runs held the anchor with a mean bush value of 2.2, within about 12 percent over every class and Gini: an approximation, `cells.py realize` solves the real gain),
 and its world is generated (`factors.PLACEMENT`, the cell's world seed) and measured. `report` reads the realised file `design/realized/<code>.json` (gain, layout and world seed as realised) and measures
-its worlds. Agents (nearest, learner, oracle) run on the cell's own world only, one world each: a few percent of noise for the learner, no 40 world check.
+its worlds. Agents run on the cell's own world only, one world each: nearest, learner, oracle and the four patch-foraging benchmarks of `patch_foraging.py` (points and bushes taken per patch), a few percent of noise for the learner, no 40 world check.
 
 The figure has a panel per session: the map on the fixed 0 to 9 fruit scale (the world's bushes over it, a contour at half the peak). The table lists the map's descriptors (Gini, interaction, log interaction, nonlinearity, shape share, share of the plane above half the peak, peak, gain) and the world's (travel time, bush Gini,
 mean bush value, diversity within patches, contrast between them, the deviation of a patch total, agents' points), then the **span and hold** check of the pilot (`PILOTS`): the metrics the knob
@@ -22,13 +22,15 @@ import numpy as np
 
 import cells
 import factors
+import patch_foraging
+import tile_calibration
 import tiles
 import value_maps
 import world
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGET_MEAN = 2.2               # the mean bush value of a session at its realised gain, over the independence runs (2.1 to 2.3 in the means of every class)
-AGENTS = ("nearest", "learner", "oracle")
+AGENTS = ("nearest", "learner", "oracle", *patch_foraging.FACTORIES)
 
 # What a pilot's sessions must do, in session order: `vary` {metric: the least span, rising}; `hold` {metric: (kind, tolerance)} with kind "abs" (max - min), "rel" (that over the mean) or "max"; `limit` {metric: upper bound}.
 HOLD_ALL = {"mean_bush_value": ("rel", 0.10), "tile_sum_dev": ("max", 1.0), "learner": ("rel", 0.20)}
@@ -49,6 +51,8 @@ ROWS = (                         # (key, label, format); a key a record lacks is
     ("share_fruit_over_cap", "share of fruits paying over 9", "{:.4f}"), ("max_fruit", "largest fruit pay", "{:.0f}"),
     ("agents", None, None),
     ("nearest", "nearest, own world", "{:.0f}"), ("learner", "learner, own world", "{:.0f}"), ("oracle", "oracle, own world", "{:.0f}"), ("anchor", "anchor (learner)", "{:.0f}"),
+    ("dp_finite", "dp_finite (optimal stopping)", "{:.0f}"), ("dp_average", "dp_average (optimal rate)", "{:.0f}"), ("mvt", "mvt (marginal value)", "{:.0f}"), ("mvt_running", "mvt_running (experienced rate)", "{:.0f}"),
+    ("dp_finite_bushes", "bushes per patch, dp_finite", "{:.2f}"), ("dp_average_bushes", "bushes per patch, dp_average", "{:.2f}"), ("mvt_bushes", "bushes per patch, mvt", "{:.2f}"), ("mvt_running_bushes", "bushes per patch, mvt_running", "{:.2f}"),
 )
 
 
@@ -68,8 +72,13 @@ def session_metrics(valuemap, w, agents=()):
     if agents:
         import sim
         from agents import REGISTRY
+        tile_of, _ = tile_calibration.tile_of_world(w)
         for a in agents:
-            m[a] = float(sim.run_n(REGISTRY[a], worlds=[w]).totals[0])
+            if a in patch_foraging.FACTORIES:
+                run = patch_foraging.run(a, w)
+                m[a], m[f"{a}_bushes"] = float(run.total), tile_calibration.route_stats(run, tile_of, w.value)["per_visit"]
+            else:
+                m[a] = float(sim.run_n(REGISTRY[a], worlds=[w]).totals[0])
         m["anchor"] = factors.anchor_points(w.params.session_duration)
     return m
 
@@ -111,10 +120,8 @@ def _record(job):
             valuemap = value_maps.ValueMap(shaped.bumps, shaped.noise, {"type": "gain", "value": TARGET_MEAN / shaped.descriptors()["mean"]})
             settings = {**factors.calibrate(world.load_session(session, session_duration=float(duration), **valuemap.compile()), float(cell["travel_time"])), **factors.PLACEMENT}
             seed = int(cell.get("world_seed", cells.FIRST_WORLD_SEED + 100 * cid))
-            planner = None
         else:
             valuemap, settings, seed = _valuemap(realised["map"]), realised["settings"], int(realised["world_seed"])
-            planner = (realised.get("planner") or {}).get("text")
         w = world.generate_world(world.load_session(session, session_duration=float(duration), **settings, **valuemap.compile()), seed)
         metrics = session_metrics(valuemap, w, AGENTS if agents else ())
         ts = tiles.TileSet(w.terrain.tiles, w.pos)
@@ -122,7 +129,7 @@ def _record(job):
         sds = np.array([w.value[ts.tile_of == t].std(ddof=1) for t in range(ts.n_tiles)])
         axis, grid = valuemap.grid()
         return {"name": name, "knobs": cell, "world_seed": seed, "metrics": metrics, "grid": grid, "shape": np.asarray(w.shape), "color": np.asarray(w.color), "value": np.asarray(w.value),
-                "tile_means": means, "tile_sds": sds, "planner": planner}
+                "tile_means": means, "tile_sds": sds}
     except ValueError as e:
         return {"name": name, "knobs": cell, "error": str(e)[:300]}
 
@@ -158,8 +165,6 @@ def format_report(code, mode, recs):
     for r in recs:
         if "error" in r:
             lines.append(f"{r['name']}: INACCESSIBLE: {r['error']}")
-        elif r.get("planner"):
-            lines.append(f"{r['name']} planner: {r['planner']}")
     if spec and len(ok) == len(recs) and len(ok) > 1:
         lines += ["", "Span and hold (the knob must rise by its span; the rest stay within tolerance):"]
         for k, role, v, summary, flag in span_and_hold(spec, [r["metrics"] for r in ok]):
