@@ -51,10 +51,10 @@ def test_the_script_refuses_to_run_without_a_terminal():
             database.require_terminal(Stream(stdin), Stream(stdout))
 
 
-def test_a_write_waits_for_the_project_ref_to_be_typed():
-    database.confirm_write("abc", lambda prompt: "abc")
-    with pytest.raises(SystemExit, match="nothing written"):
-        database.confirm_write("abc", lambda prompt: "yes")
+def test_a_write_names_its_project_in_the_log_and_asks_nothing():
+    lines = []
+    database.announce_write("abc", lines.append)
+    assert lines == ["writing to project abc"]
 
 
 def test_no_credential_is_read_from_the_environment_or_a_file():
@@ -75,12 +75,12 @@ def test_the_log_keeps_what_was_reported_without_the_secret(tmp_path, capsys):
 def test_the_catalog_lists_the_experiments_in_menu_order_with_their_prerequisites():
     experiments = database.catalog_experiments()
     codes = [e["code"] for e in experiments]
-    assert codes == ["TUT", "FOR"] and [e["order"] for e in experiments] == list(range(1, len(codes) + 1))
+    assert codes == ["TUT", "PCX", "PSC", "PSP"] and [e["order"] for e in experiments] == list(range(1, len(codes) + 1))
     by = {e["code"]: e for e in experiments}
-    assert by["TUT"]["requires"] == [] and by["TUT"]["title"] == "Tutorial" and by["FOR"]["requires"] == ["TUT"] and by["FOR"]["title"] == "Foraging task"
+    assert by["TUT"]["requires"] == [] and by["TUT"]["title"] == "Tutorial" and by["PCX"]["requires"] == ["TUT"] and by["PCX"]["title"] == "Pilot: Complexity"
 
 
-def fake_build(tmp_path, commit, dirty=False, experiments=("FOR",), development=None):
+def fake_build(tmp_path, commit, dirty=False, experiments=("PCX",), development=None):
     build = tmp_path / "build"
     (build / "StreamingAssets").mkdir(parents=True)
     (build / "StreamingAssets" / "build_info.json").write_text(json.dumps({"commit": commit, "dirty": dirty, **({} if development is None else {"development": development})}))
@@ -95,8 +95,8 @@ def head():
 
 def test_a_builds_plan_takes_its_commit_and_experiments_from_the_build(tmp_path):
     plan = database.build_plan(fake_build(tmp_path, head(), dirty=True))
-    assert plan["commit"] == head() and [e["code"] for e in plan["experiments"]] == ["FOR"]
-    assert set(plan["sessions"]) == {"FOR"} and all(n > 0 for n in plan["sessions"].values())
+    assert plan["commit"] == head() and [e["code"] for e in plan["experiments"]] == ["PCX"]
+    assert set(plan["sessions"]) == {"PCX"} and all(n > 0 for n in plan["sessions"].values())
     assert plan["worlds"] == tmp_path / "build" / "StreamingAssets" / "Experiments"
     assert any("dirty" in note for note in plan["notes"])
 
@@ -123,7 +123,7 @@ def test_a_builds_description_names_its_kind_commit_size_and_parts_and_the_relea
     (build / "Build.bin").write_bytes(b"\0" * 3_000_000)
     now = datetime(2026, 11, 10, 17, 30, tzinfo=timezone.utc)
     subject, body = database.build_description(build, "reduced runs", now=now)
-    assert subject.startswith(f"Development build {head()[:7]} (dirty): 3 MB, parts FOR ")
+    assert subject.startswith(f"Development build {head()[:7]} (dirty): 3 MB, parts PCX ")
     assert body.splitlines()[0] == "Reason: reduced runs" and head() in body and "2026-11-10 17:30 UTC" in body and "uncommitted changes" in body
     assert database.release_note(subject, "reduced runs") == f"{subject} | reduced runs" and database.release_note(subject) == subject
     release, _ = database.build_description(fake_build(tmp_path / "r", head(), development=False))
@@ -149,8 +149,8 @@ class FakeResponse:
         return False
 
 
-def run_token(argv, tmp_path, answer="local", opener=None, runner=None, value=None, token="sbp_secrettoken"):
-    database.main(argv, secret=lambda: "dbpassword", ask=lambda prompt: answer, expected="local", log_dir=tmp_path, token=lambda: token, value=value,
+def run_token(argv, tmp_path, opener=None, runner=None, value=None, token="sbp_secrettoken"):
+    database.main(argv, secret=lambda: "dbpassword", expected="local", log_dir=tmp_path, token=lambda: token, value=value,
                   opener=opener or (lambda request, timeout: FakeResponse()), runner=runner)
     return sorted(tmp_path.glob("db_*.log"))[-1].read_text()
 
@@ -168,11 +168,7 @@ def test_set_secret_builds_the_pooler_url_from_the_password_sends_it_in_the_body
     assert "sbp_secrettoken" not in text and "p@ss/w" not in text and "p%40ss" not in text
 
 
-def test_set_secret_needs_the_typed_ref_and_refuses_reserved_names_and_api_errors(tmp_path):
-    called = []
-    with pytest.raises(SystemExit, match="nothing written"):
-        run_token(["set-secret", "--name", "ALLOWED_ORIGIN"], tmp_path, answer="no", opener=lambda r, timeout: called.append(r), value=lambda: "https://x")
-    assert called == []
+def test_set_secret_refuses_reserved_names_and_api_errors(tmp_path):
     with pytest.raises(SystemExit, match="not a settable"):
         run_token(["set-secret", "--name", "SUPABASE_URL"], tmp_path, value=lambda: "v")
 

@@ -71,7 +71,7 @@ Press [Enter] to continue
 Ranking
 
 You earn **points** for ranking bushes correctly
-These **hidden** points are added at session end
+These **hidden** points are added at the end of the session
 
 Press [Enter] to continue
 

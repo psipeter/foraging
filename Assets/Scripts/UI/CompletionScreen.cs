@@ -17,7 +17,7 @@ public class CompletionScreen : MonoBehaviour
     private TextMeshProUGUI _status;
     private Action<string> _onSend;
 
-    public static CompletionScreen Show(string title, float? points, string code, bool fromProlific, Action<string> onSend, Action onProlific, Action onMenu)
+    public static CompletionScreen Show(string title, float? points, string code, bool showCode, bool fromProlific, Action<string> onSend, Action onProlific, Action onMenu)
     {
         Canvas canvas = UiStyle.Canvas("CompletionScreen", null, 5500);
         canvas.gameObject.AddComponent<GraphicRaycaster>();
@@ -28,7 +28,7 @@ public class CompletionScreen : MonoBehaviour
 
         PointerLockGuard.Suspended = true;
         var screen = canvas.gameObject.AddComponent<CompletionScreen>();
-        screen.Build(title, points, code, fromProlific, onSend, onProlific, onMenu);
+        screen.Build(title, points, code, showCode, fromProlific, onSend, onProlific, onMenu);
         return screen;
     }
 
@@ -38,7 +38,7 @@ public class CompletionScreen : MonoBehaviour
         _send.interactable = !sending;
     }
 
-    private void Build(string title, float? points, string code, bool fromProlific, Action<string> onSend, Action onProlific, Action onMenu)
+    private void Build(string title, float? points, string code, bool showCode, bool fromProlific, Action<string> onSend, Action onProlific, Action onMenu)
     {
         _onSend = onSend;
         UiStyle.Backdrop(transform);
@@ -53,39 +53,44 @@ public class CompletionScreen : MonoBehaviour
             UiStyle.Text(panel, "Points", $"{points.Value:F0}", 76f, TextAlignmentOptions.Left, -300f, 110f, 560f, 90f);
         }
 
-        UiStyle.Text(panel, "CodeLabel", "Your completion code", UiStyle.Small, TextAlignmentOptions.Left, codeX, 178f, 560f, 36f, UiStyle.Muted);
-        Image codeBox = UiStyle.Rounded(panel, "CodeBox", UiStyle.FieldGlass, codeX - 70f, 112f, 420f, 88f, 18f);
-        bool noCode = string.IsNullOrEmpty(code);                              // withheld: the server could not confirm that everything was saved
-        var codeArea = new GameObject("Text Area", typeof(RectTransform), typeof(RectMask2D));
-        codeArea.transform.SetParent(codeBox.transform, false);
-        var codeAreaRect = codeArea.GetComponent<RectTransform>();
-        UiStyle.SetAnchors(codeAreaRect, Vector2.zero, Vector2.one, new Vector2(14f, 4f), new Vector2(-14f, -4f));
-        TextMeshProUGUI codeText = UiStyle.Label(codeArea.transform, "Code", noCode ? "Not available" : code, 48f, TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
-        codeText.characterSpacing = 3f;
-        codeText.enableAutoSizing = true;                                    // a long code shrinks to fit its box
-        codeText.fontSizeMin = 22f;
-        codeText.fontSizeMax = 48f;
-        codeText.textWrappingMode = TextWrappingModes.NoWrap;
-        // a read-only field, so the code can be selected (a click selects all of it) and copied with the keyboard
-        var codeField = codeBox.gameObject.AddComponent<TMP_InputField>();
-        codeField.textViewport = codeAreaRect;
-        codeField.textComponent = codeText;
-        codeField.targetGraphic = codeBox;
-        codeField.lineType = TMP_InputField.LineType.SingleLine;
-        codeField.readOnly = true;
-        codeField.text = codeText.text;
-        UiStyle.StyleInput(codeField, codeBox);
-        Button copy = UiStyle.Pill(panel, "Copy", "Copy", codeX + 215f, 112f, 130f, null, true, 68f);
-        copy.interactable = !noCode;
-        TextMeshProUGUI copyLabel = copy.GetComponentInChildren<TextMeshProUGUI>();
-        copy.onClick.AddListener(() =>
+        bool noCode = showCode && string.IsNullOrEmpty(code);                  // withheld: the server could not confirm that everything was saved
+        if (showCode)                                                          // a practice experiment has no code to show
         {
-            Clipboard.Copy(code);
-            copyLabel.text = "Copied";
-        });
+            UiStyle.Text(panel, "CodeLabel", "Your completion code", UiStyle.Small, TextAlignmentOptions.Left, codeX, 178f, 560f, 36f, UiStyle.Muted);
+            Image codeBox = UiStyle.Rounded(panel, "CodeBox", UiStyle.FieldGlass, codeX - 70f, 112f, 420f, 88f, 18f);
+            var codeArea = new GameObject("Text Area", typeof(RectTransform), typeof(RectMask2D));
+            codeArea.transform.SetParent(codeBox.transform, false);
+            var codeAreaRect = codeArea.GetComponent<RectTransform>();
+            UiStyle.SetAnchors(codeAreaRect, Vector2.zero, Vector2.one, new Vector2(14f, 4f), new Vector2(-14f, -4f));
+            TextMeshProUGUI codeText = UiStyle.Label(codeArea.transform, "Code", noCode ? "Not available" : code, 48f, TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
+            codeText.characterSpacing = 3f;
+            codeText.enableAutoSizing = true;                                    // a long code shrinks to fit its box
+            codeText.fontSizeMin = 22f;
+            codeText.fontSizeMax = 48f;
+            codeText.textWrappingMode = TextWrappingModes.NoWrap;
+            // a read-only field, so the code can be selected (a click selects all of it) and copied with the keyboard
+            var codeField = codeBox.gameObject.AddComponent<TMP_InputField>();
+            codeField.textViewport = codeAreaRect;
+            codeField.textComponent = codeText;
+            codeField.targetGraphic = codeBox;
+            codeField.lineType = TMP_InputField.LineType.SingleLine;
+            codeField.readOnly = true;
+            codeField.text = codeText.text;
+            UiStyle.StyleInput(codeField, codeBox);
+            Button copy = UiStyle.Pill(panel, "Copy", "Copy", codeX + 215f, 112f, 130f, null, true, 68f);
+            copy.interactable = !noCode;
+            TextMeshProUGUI copyLabel = copy.GetComponentInChildren<TextMeshProUGUI>();
+            copy.onClick.AddListener(() =>
+            {
+                Clipboard.Copy(code);
+                copyLabel.text = "Copied";
+            });
+        }
 
-        UiStyle.Text(panel, "Prompt", "Optional: tell us what you thought of the game", UiStyle.Small, TextAlignmentOptions.Left, 0f, 20f, 1180f, 36f, UiStyle.Muted);
-        Image box = UiStyle.Rounded(panel, "Box", UiStyle.FieldGlass, 0f, -80f, 1180f, 150f, 16f);
+        // without the code row the feedback box moves up and takes its room
+        float promptY = showCode ? 20f : 150f, boxY = showCode ? -80f : -10f, boxHeight = showCode ? 150f : 270f;
+        UiStyle.Text(panel, "Prompt", "Optional: tell us what you thought of the game", UiStyle.Small, TextAlignmentOptions.Left, 0f, promptY, 1180f, 36f, UiStyle.Muted);
+        Image box = UiStyle.Rounded(panel, "Box", UiStyle.FieldGlass, 0f, boxY, 1180f, boxHeight, 16f);
         var area = new GameObject("Text Area", typeof(RectTransform), typeof(RectMask2D));
         area.transform.SetParent(box.transform, false);
         var areaRect = area.GetComponent<RectTransform>();

@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
@@ -14,7 +13,19 @@ public class PointerLockGuard : MonoBehaviour
 #if UNITY_WEBGL && !UNITY_EDITOR
     [DllImport("__Internal")]
     private static extern int IsPointerLocked();
+
+    [DllImport("__Internal")]
+    private static extern void RequestPointerLock();
 #endif
+
+    // Asks the browser for the capture now: called in the frame of the click that starts an experiment (a browser build only), while that click still counts as a user gesture.
+    public static void Request()
+    {
+        Cursor.lockState = CursorLockMode.Locked;
+#if UNITY_WEBGL && !UNITY_EDITOR
+        RequestPointerLock();
+#endif
+    }
 
     // A capture request (the click in the Boot scene, or a scene that asks for the capture as it starts) is granted a few frames later; do not pause on that gap. The window
     // opens again whenever the guard stops being suspended (the click that begins an experiment) and whenever a scene loads.
@@ -30,9 +41,8 @@ public class PointerLockGuard : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void Reset() => Suspended = false;
 
-    private GameObject _overlay;
-    private TextMeshProUGUI _text;
-    private bool? _shownForReplay;                     // the wording on show (null: none yet)
+    private InstructionsScreen _screen;               // "Paused": the same screen as the instruction pages and hints
+    private bool _screenShown;
     private float _graceUntil;
     private float _unlockedAt = float.NegativeInfinity;
     private bool _wasHeld;
@@ -49,12 +59,8 @@ public class PointerLockGuard : MonoBehaviour
 
     private void Awake()
     {
-        // Overlay sort orders: this one (4900) sits below the data gate (5000) so that the completion code and errors stay readable;
-        // the consent screen (6000) is above both.
-        TextMeshProUGUI text = UiStyle.MessageScreen("PointerGate", transform, 4900, true);
-        _overlay = text.canvas.gameObject;
-        _text = text;
-        _overlay.SetActive(false);
+        // Sort order 4900: below the data gate (5000) so that the completion code and errors stay readable, above the instruction pages and hints (4000).
+        _screen = InstructionsScreen.Create(transform, 4900);
         _graceUntil = Time.unscaledTime + GraceSeconds;
         SceneManager.sceneLoaded += HandleSceneLoaded;
     }
@@ -79,19 +85,12 @@ public class PointerLockGuard : MonoBehaviour
         _wasSuspended = Suspended;
         if (Suspended)
         {
-            OverlayFade.SetShown(_overlay, false);
+            SetScreen(false);
             PauseGate.Pointer = false;
             AudioListener.pause = false;
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
             return;
-        }
-
-        if (_shownForReplay != DataPipeline.Replay)
-        {
-            _shownForReplay = DataPipeline.Replay;
-            // a replay of the tutorial can be left; Escape is the browser's key, so it counts only once the capture has been released
-            _text.text = UiStyle.Chips("Paused\n\n<size=65%>The timer is stopped. [Click] to continue.</size>" + (DataPipeline.Replay ? "\n<size=65%>[Escape] to exit to the menu</size>" : ""));
         }
 
         bool held = Held();
@@ -102,22 +101,35 @@ public class PointerLockGuard : MonoBehaviour
 
         _wasHeld = held;
         bool paused = !held && Time.unscaledTime > _graceUntil;
-        OverlayFade.SetShown(_overlay, paused);
+        SetScreen(paused);
         PauseGate.Pointer = paused;
         AudioListener.pause = paused;
         Cursor.visible = paused;
-        if (paused && DataPipeline.Replay && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame && Time.unscaledTime - _unlockedAt > 0.3f)
-        {
-            DataPipeline.ReturnToMenu();
-            return;
-        }
-
         if (!held && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
             Time.unscaledTime - _unlockedAt >= RelockCooldownSeconds)
         {
             // Ask for the capture and stay paused until the browser confirms it holds it (Held): resuming on the click itself, with a
             // grace period, let the game run for a moment when the browser refused the request and then pause again.
-            Cursor.lockState = CursorLockMode.Locked;
+            Request();
+        }
+    }
+
+    // The pause screen: shown while paused.
+    private void SetScreen(bool shown)
+    {
+        if (shown == _screenShown)
+        {
+            return;
+        }
+
+        _screenShown = shown;
+        if (shown)
+        {
+            _screen.Show(GameManager.SessionCount > 0 ? GameManager.PartLabel : "", "Paused", "", "[Click] to continue");
+        }
+        else
+        {
+            _screen.Hide();
         }
     }
 }

@@ -1,7 +1,7 @@
 """The one script for the online database: every operation that needs the database owner's connection string goes through here, and the database password is pasted at a hidden prompt each time.
 It is held in this process's memory only: no environment variable, no file, nothing in the command line or the shell history, and the script refuses to run unless it has a terminal, so
 nothing can pipe it in. It never prints the string (errors are scrubbed of it), shows the project it connects to, reads in a read-only transaction, and for a write prints what it will
-do and asks you to type the project ref. Each run leaves `results/db_<operation>_<time>.log` (what was done, no secrets) for whoever you tell about it.
+do and the project it goes to (the password already names the project, and a string for another project is refused). Each run leaves `results/db_<operation>_<time>.log` (what was done, no secrets) for whoever you tell about it.
 
     ./venv/bin/python scripts/database.py publish --build Builds/web [--dry-run] [--completion-code FN=XXXX] [--note why]   # write: experiments, the build's world files, the release
     ./venv/bin/python scripts/database.py register-experiment --code CF --title "Complex Features" [--requires TUT] [--order 2] [--completion-code XXXX] [--payout '{"..."}']   # write
@@ -351,10 +351,9 @@ def read_only(conn):
         yield
 
 
-def confirm_write(ref, ask=input):
-    """A write names the project and waits for its ref to be typed."""
-    if ask(f"This writes to project {ref}. Type the project ref to go on: ").strip() != ref:
-        raise SystemExit("stopped, nothing written")
+def announce_write(ref, log):
+    """A write names the project it goes to. It asks for nothing more: the password, pasted at a hidden prompt for this run, already names the project (a string for another one is refused)."""
+    log(f"writing to project {ref}")
 
 
 class Log:
@@ -522,8 +521,8 @@ def deploy_functions(token, ref, log, runner=subprocess.run):
         raise SystemExit(f"supabase functions deploy failed ({done.returncode})")
 
 
-def token_operation(args, log, ask, ref, token=None, value=None, opener=urllib.request.urlopen, runner=subprocess.run):
-    """`set-secret` and `deploy-functions`: no database connection, the access token pasted at a hidden prompt, the project confirmed by typing its ref.
+def token_operation(args, log, ref, token=None, value=None, opener=urllib.request.urlopen, runner=subprocess.run):
+    """`set-secret` and `deploy-functions`: no database connection, the access token pasted at a hidden prompt, the project named in the log.
     `FORAGING_POOLER_URL` is built from the database password (as `url_from_password`, on the transaction pooler's port), anything else is asked as a value."""
     log.project = ref
     log(f"project {ref}")
@@ -536,11 +535,11 @@ def token_operation(args, log, ask, ref, token=None, value=None, opener=urllib.r
         else:
             secret = (value or (lambda: ask_secret(f"Value of {args.name} (input hidden): ")))()
             log.secrets.append(secret)
-        confirm_write(ref, ask)
+        announce_write(ref, log)
         set_secret(token, ref, args.name, secret, opener)
         log(f"secret {args.name} set on project {ref}")
     else:
-        confirm_write(ref, ask)
+        announce_write(ref, log)
         deploy_functions(token, ref, log, runner)
         log(f"functions deployed to project {ref}")
 
@@ -628,8 +627,8 @@ def run_operation(args, conn, log, plan=None):
             log("pulled into", pull_run(conn, args.run, args.out))
 
 
-def main(argv=None, secret=None, ask=input, expected=None, log_dir=LOG_DIR, token=None, value=None, opener=urllib.request.urlopen, runner=subprocess.run):
-    """`secret` (default: the hidden prompt for the database password), `ask` (the confirmation), `expected` (the project ref), `token` and `value` (the access token and a secret's value
+def main(argv=None, secret=None, expected=None, log_dir=LOG_DIR, token=None, value=None, opener=urllib.request.urlopen, runner=subprocess.run):
+    """`secret` (default: the hidden prompt for the database password), `expected` (the project ref), `token` and `value` (the access token and a secret's value
     for `set-secret`), `opener` (the API) and `runner` (the CLI) are replaced by the tests."""
     args = build_parser().parse_args(argv)
     if args.command == "describe":
@@ -651,7 +650,7 @@ def main(argv=None, secret=None, ask=input, expected=None, log_dir=LOG_DIR, toke
     outcome = "failed"
     try:
         if args.command in TOKEN_OPERATIONS:
-            token_operation(args, log, ask, wanted, token, value or secret, opener, runner)
+            token_operation(args, log, wanted, token, value or secret, opener, runner)
         else:
             url = url_from_password((secret or ask_secret)(), wanted)
             log.secrets = secrets_of(url)
@@ -660,7 +659,7 @@ def main(argv=None, secret=None, ask=input, expected=None, log_dir=LOG_DIR, toke
             log(f"project {ref}")
             if args.command not in WRITES or preview(args, conn, log):
                 if args.command in WRITES:
-                    confirm_write(ref, ask)
+                    announce_write(ref, log)
                 run_operation(args, conn, log, plan)
         outcome = "done"
     except SystemExit as e:

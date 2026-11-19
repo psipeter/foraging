@@ -7,7 +7,7 @@ using UnityEngine.UI;
 
 // The experiment menu, shown by the Boot scene after the login and again whenever the participant comes back from an experiment: one row per
 // experiment on one line: its name, its length (sessions and minutes, or the progress and the time left), its prerequisite (the experiments to finish first) and a button
-// (Start, Continue, or View code for a finished one; Replay for a finished practice experiment); the ones whose prerequisites are not finished are locked. Near the bottom of the screen, a button opens
+// (Start, Continue, or View code for a finished one); the ones whose prerequisites are not finished are locked. Near the bottom of the screen, a button opens
 // the consent form again: it ends the menu with a ChosenCode that is not an experiment (ConsentCode) and the caller shows the page and the menu again.
 // A reduced run (RunModes) shows its own lengths.
 // Built at runtime like the other overlays. Without a data server (the Editor, a lab build) every experiment of the catalog is offered.
@@ -85,8 +85,8 @@ public class MenuScreen : MonoBehaviour
             switch (s.status)
             {
                 case "finished":
-                    row.Action = config != null && !config.CountsTowardTotal ? "Replay" : "View code";       // a practice experiment can be played again; nothing is recorded
-                    row.Enabled = true;
+                    row.Action = config != null && !config.CountsTowardTotal ? "Done" : "View code";             // a practice experiment has no code to view
+                    row.Enabled = row.Action == "View code";
                     row.Detail = "Completed";
                     row.Progress = 1f;
                     row.PillStyle = 1;
@@ -226,7 +226,7 @@ public class MenuScreen : MonoBehaviour
     private void BuildRow(Transform panel, Row row, float y, float height)
     {
         Transform r = UiStyle.Rounded(panel, "Row_" + row.Code, UiStyle.FieldGlass, 0f, y, RowWidth, height, 22f).transform;
-        bool dim = !row.Enabled && row.Action != "View code" && row.Action != "Replay";
+        bool dim = !row.Enabled && row.Action != "View code" && row.Action != "Done";
         TextMeshProUGUI name = UiStyle.Text(r, "Name", row.Title, 38f, TextAlignmentOptions.MidlineLeft, NameX, 0f, NameWidth, 56f, dim ? UiStyle.Muted : UiStyle.Ink);
         name.font = UiStyle.DisplayFont;
         name.enableAutoSizing = true;                                  // a long title shrinks to its column
@@ -258,7 +258,7 @@ public class MenuScreen : MonoBehaviour
         requires.textWrappingMode = TextWrappingModes.NoWrap;
 
         string code = row.Code;
-        Button button = UiStyle.Pill(r, "Button", row.Action, ButtonX, 0f, ButtonWidth, () => Choose(code), row.Action == "View code" || row.Action == "Replay", 64f);
+        Button button = UiStyle.Pill(r, "Button", row.Action, ButtonX, 0f, ButtonWidth, () => Choose(code), row.Action == "View code" || row.Action == "Done", 64f);
         button.interactable = row.Enabled;
     }
 }

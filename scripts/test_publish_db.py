@@ -36,19 +36,19 @@ def db(uri):
 
 def test_publish_registers_experiments_files_and_release_and_can_be_repeated_without_losing_a_completion_code(db, tmp_path):
     plan = {**database.build_plan(None, "HEAD"), "worlds": tmp_path}                 # the catalog of this repository, at HEAD
-    (tmp_path / "FOR").mkdir()
-    (tmp_path / "FOR" / "x_seed1.world").write_bytes(b"world bytes")
-    first = database.publish(db, plan, {"FOR": "KEEP-ME"})
+    (tmp_path / "PCX").mkdir()
+    (tmp_path / "PCX" / "x_seed1.world").write_bytes(b"world bytes")
+    first = database.publish(db, plan, {"PCX": "KEEP-ME"})
     assert any("release" in line for line in first) and any(line.startswith("1 world") for line in first)
-    row = db.execute("select title, requires, sort_order, completion_code from public.experiments where code = 'FOR'").fetchone()
-    assert row["title"] == next(e["title"] for e in plan["experiments"] if e["code"] == "FOR") and row["requires"] == ["TUT"] and row["completion_code"] == "KEEP-ME"
+    row = db.execute("select title, requires, sort_order, completion_code from public.experiments where code = 'PCX'").fetchone()
+    assert row["title"] == next(e["title"] for e in plan["experiments"] if e["code"] == "PCX") and row["requires"] == ["TUT"] and row["completion_code"] == "KEEP-ME"
     database.publish(db, plan)                                                        # again, no code given: the registered one stays
-    assert db.execute("select completion_code from public.experiments where code = 'FOR'").fetchone()["completion_code"] == "KEEP-ME"
+    assert db.execute("select completion_code from public.experiments where code = 'PCX'").fetchone()["completion_code"] == "KEEP-ME"
     offered = {r["experiment"]: r["n_sessions"] for r in db.execute("select experiment, n_sessions from public.release_experiments where build_commit = %s", (plan["commit"],))}
     assert offered == plan["sessions"]
     assert db.execute("select count(*) as n from public.worlds where name = 'x_seed1.world'").fetchone()["n"] == 1
-    database.register_experiment(db, "FOR", "Foraging in Tiles", ["TUT"], 2, "NEW-CODE")  # a code given later replaces it
-    assert db.execute("select completion_code from public.experiments where code = 'FOR'").fetchone()["completion_code"] == "NEW-CODE"
+    database.register_experiment(db, "PCX", "Pilot: Complexity", ["TUT"], 2, "NEW-CODE")  # a code given later replaces it
+    assert db.execute("select completion_code from public.experiments where code = 'PCX'").fetchone()["completion_code"] == "NEW-CODE"
 
 
 def test_a_read_only_operation_cannot_write(db):
@@ -58,16 +58,13 @@ def test_a_read_only_operation_cannot_write(db):
     assert db.execute("select count(*) as n from public.experiments where code = 'NOPE'").fetchone()["n"] == 0
 
 
-def run_main(argv, uri, tmp_path, answer):
-    database.main(argv, secret=lambda: uri, ask=lambda prompt: answer, expected="local", log_dir=tmp_path)
+def run_main(argv, uri, tmp_path):
+    database.main(argv, secret=lambda: uri, expected="local", log_dir=tmp_path)
     return sorted(tmp_path.glob("db_*.log"))
 
 
-def test_a_write_through_main_needs_the_typed_ref_registers_in_one_transaction_and_leaves_a_log_without_the_secret(uri, db, tmp_path):
-    with pytest.raises(SystemExit, match="nothing written"):
-        run_main(["register-experiment", "--code", "ZZ", "--title", "Zed"], uri, tmp_path, "no")
-    assert db.execute("select count(*) as n from public.experiments where code = 'ZZ'").fetchone()["n"] == 0
-    logs = run_main(["register-experiment", "--code", "ZZ", "--title", "Zed"], uri, tmp_path, "local")
+def test_a_write_through_main_registers_in_one_transaction_and_leaves_a_log_without_the_secret(uri, db, tmp_path):
+    logs = run_main(["register-experiment", "--code", "ZZ", "--title", "Zed"], uri, tmp_path)
     assert db.execute("select title from public.experiments where code = 'ZZ'").fetchone()["title"] == "Zed"
     text = logs[-1].read_text()
     assert "outcome: done" in text and "registered ZZ: Zed" in text and "project: local" in text and uri not in text
@@ -77,23 +74,23 @@ def test_a_write_through_main_needs_the_typed_ref_registers_in_one_transaction_a
 
 def test_a_failed_write_changes_nothing_and_a_read_runs_in_a_read_only_transaction(uri, db, tmp_path):
     with pytest.raises(SystemExit, match="requires NOPE"):
-        run_main(["register-experiment", "--code", "YY", "--title", "Why", "--requires", "NOPE"], uri, tmp_path, "local")
+        run_main(["register-experiment", "--code", "YY", "--title", "Why", "--requires", "NOPE"], uri, tmp_path)
     assert db.execute("select count(*) as n from public.experiments where code = 'YY'").fetchone()["n"] == 0
     assert "outcome: failed" in sorted(tmp_path.glob("db_*.log"))[-1].read_text()
-    logs = run_main(["runs"], uri, tmp_path, "unused")                                  # a read asks for no confirmation
+    logs = run_main(["runs"], uri, tmp_path)                                  # a read asks for no confirmation
     assert "outcome: done" in logs[-1].read_text()
 
 
 def test_backup_copies_every_table_with_its_counts_and_download_reads_a_database_without_runs(uri, db, tmp_path):
     out = tmp_path / "data"
     out.mkdir()
-    run_main(["backup", "--out", str(out), "--label", "t"], uri, tmp_path, "unused")
+    run_main(["backup", "--out", str(out), "--label", "t"], uri, tmp_path)
     folder = next(out.glob("_db_backup_t_*"))
     counts = json.loads((folder / "counts.json").read_text())
     assert counts["experiments"] == db.execute("select count(*) as n from public.experiments").fetchone()["n"] > 0
     assert len((folder / "experiments.jsonl").read_text().splitlines()) == counts["experiments"]
     assert "experiments" in json.loads((folder / "schema.json").read_text())["tables"]
-    logs = run_main(["download", "--out", str(out)], uri, tmp_path, "unused")
+    logs = run_main(["download", "--out", str(out)], uri, tmp_path)
     assert "0 run(s) downloaded" in logs[-1].read_text() and (out / "humans.sqlite").exists()
 
 
@@ -137,7 +134,7 @@ def fresh_uri(uri):
 
 
 def test_migrate_applies_every_file_in_one_transaction_records_them_and_then_has_nothing_to_do(fresh_uri, tmp_path):
-    logs = run_main(["migrate"], fresh_uri, tmp_path, "local")
+    logs = run_main(["migrate"], fresh_uri, tmp_path)
     text = logs[-1].read_text()
     files = [p.name for _, _, p in database.migration_files()]
     assert "outcome: done" in text and all(f"applied {f}" in text for f in files)
@@ -145,7 +142,7 @@ def test_migrate_applies_every_file_in_one_transaction_records_them_and_then_has
         recorded = c.execute("select version, name from supabase_migrations.schema_migrations order by version").fetchall()
         assert [r["version"] for r in recorded] == [f.split("_")[0] for f in files] and recorded[0]["name"] == files[0].split("_", 1)[1][:-4]
         assert c.execute("select to_regclass('public.runs') is not null as found").fetchone()["found"]
-    again = run_main(["migrate"], fresh_uri, tmp_path / "again", "no answer is asked")     # nothing pending: no confirmation
+    again = run_main(["migrate"], fresh_uri, tmp_path / "again")     # nothing pending: no confirmation
     assert "every migration is applied" in again[-1].read_text()
 
 
@@ -157,7 +154,7 @@ def test_a_failing_migration_leaves_nothing_applied(fresh_uri, tmp_path, monkeyp
     monkeypatch.setattr(database, "MIGRATIONS", tmp_path / "m")
     monkeypatch.setattr(database, "pending_migrations", lambda conn, directory=tmp_path / "m": original_pending(conn, directory))
     with pytest.raises(SystemExit, match="migrate failed"):
-        run_main(["migrate"], fresh_uri, tmp_path, "local")
+        run_main(["migrate"], fresh_uri, tmp_path)
     with psycopg.connect(fresh_uri, autocommit=True) as c:
         assert c.execute("select to_regclass('public.zz_good')").fetchone()[0] is None
         assert c.execute("select to_regclass('supabase_migrations.schema_migrations')").fetchone()[0] is None
@@ -173,8 +170,8 @@ def test_cleanup_deletes_a_throwaway_builds_runs_participants_and_release_and_no
         _insert(db, "runs", run_id=rid, participant_id=pid, experiment="CL", build_commit=commit)
         _insert(db, "sessions", run_id=rid, session_index=0)
     with pytest.raises(SystemExit, match="git commit"):
-        run_main(["cleanup", "--commit", "22f16b46f042459260ad70ceca206e60171d197e"], uri, tmp_path, "local")
-    run_main(["cleanup", "--commit", "smoke-test"], uri, tmp_path, "local")
+        run_main(["cleanup", "--commit", "22f16b46f042459260ad70ceca206e60171d197e"], uri, tmp_path)
+    run_main(["cleanup", "--commit", "smoke-test"], uri, tmp_path)
     left = {r["build_commit"] for r in db.execute("select build_commit from public.runs where experiment = 'CL'")}
     assert left == {"keep-me"} and db.execute("select count(*) as n from public.releases where build_commit = 'smoke-test'").fetchone()["n"] == 0
     assert db.execute("select count(*) as n from public.releases where build_commit = 'keep-me'").fetchone()["n"] == 1

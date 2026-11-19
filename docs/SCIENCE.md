@@ -67,7 +67,7 @@ fades in and out; every one carries a small blue "Tutorial" label. The popups, i
 | the first harvest ends (`@bout 1`) | Harvesting | Harvesting this bush earned {points} points. / You can **stop** harvesting a bush anytime, or **return** to a bush later / Try harvesting a different bush |
 | the second harvest ends (`@bout 2`) | Features | Harvesting this bush earned {points} points. / A bush's **shape** and/or **color** determine how many points you get / Try harvesting a few more bushes, then move to a new area |
 | 0.25 s after the first ranking's bushes have grown (`@ranking_start 1`) | Ranking | **Rank** these imaginary bushes based on what you learned / Do this by harvesting bushes from **most** to **least** valuable |
-| the first ranking ends (`@ranking_end 1`) | Ranking | You earn **points** for ranking bushes correctly / These **hidden** points are added at session end |
+| the first ranking ends (`@ranking_end 1`) | Ranking | You earn **points** for ranking bushes correctly / These **hidden** points are added at the end of the session |
 | the first moment 60 s or fewer of foraging time are left (`@time_left 60`; the session clock pulses yellow while the hint is up) | Scoring | You have a limited **time** in each session / Try to learn and harvest efficiently |
 | the first moment 30 s or fewer of foraging time are left (`@time_left 30`, after Scoring at 60) | Pausing | You can **pause** the game at any time / The timer stops while you are paused / Press [Escape] to pause (the hint ends when the participant has paused and, in a browser, clicked back in; the pause screen says "[Click] to continue") |
 

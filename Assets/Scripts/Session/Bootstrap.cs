@@ -110,14 +110,6 @@ public class Bootstrap : MonoBehaviour
                 yield break;
             }
 
-            // A finished practice experiment is played again without a run: nothing is started on the server or recorded (the finished run stays as it was).
-            if (experiment != null && !experiment.CountsTowardTotal && IsFinished(menu.ChosenCode))
-            {
-                DataPipeline.Replay = true;
-                yield return Begin(experiment);
-                yield break;
-            }
-
             _status.Set("Foraging study", "Connecting", "Reaching the server.");
             RunReply run = null;
             string error = null;
@@ -147,19 +139,6 @@ public class Bootstrap : MonoBehaviour
                 yield break;
             }
         }
-    }
-
-    private static bool IsFinished(string code)
-    {
-        foreach (ExperimentStanding s in ParticipantSession.Standings)
-        {
-            if (s.code == code)
-            {
-                return s.status == "finished";
-            }
-        }
-
-        return false;
     }
 
     // The ID screen, then (when the server has no signature of the consent text's version for that ID) the consent screen.
@@ -235,7 +214,7 @@ public class Bootstrap : MonoBehaviour
 
         bool back = false;
         CompletionScreen screen = null;
-        screen = CompletionScreen.Show(title, counts ? points : (float?)null, run.completion_code, OnlineSettings.UrlParameter("PROLIFIC_PID") != null,
+        screen = CompletionScreen.Show(title, counts ? points : (float?)null, run.completion_code, counts, counts && OnlineSettings.UrlParameter("PROLIFIC_PID") != null,
             text => StartCoroutine(ParticipantSession.SendFeedback(_settings, run.run_id, text, ok =>
                 screen.SetStatus(ok ? "Thank you, your feedback was saved." : "Your feedback could not be sent. You can try again.", false))),
             () => DataPipeline.OpenProlificCompletion(run.completion_code), () => back = true);
@@ -251,7 +230,7 @@ public class Bootstrap : MonoBehaviour
         if (StreamingData.NeedsPreload)
         {
             // The click that chose the experiment is the gesture that captures the mouse; the capture is asked for now and holds through the loading.
-            Cursor.lockState = CursorLockMode.Locked;
+            PointerLockGuard.Request();
             PointerLockGuard.Suspended = false;
             // The experiment's files (its worlds, ranking pools and instruction texts) are fetched now, not with the common ones at the start.
             string failure = null;

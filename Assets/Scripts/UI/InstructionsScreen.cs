@@ -27,9 +27,9 @@ public class InstructionsScreen : MonoBehaviour
     // False as soon as Hide is called (the screen is still fading out), so a caller can hand the game back and show the next screen at once.
     public bool Visible => _shown;
 
-    public static InstructionsScreen Create()
+    public static InstructionsScreen Create(Transform parent = null, int sortingOrder = 4000)
     {
-        Canvas canvas = UiStyle.Canvas("InstructionsScreen", null, 4000);
+        Canvas canvas = UiStyle.Canvas("InstructionsScreen", parent, sortingOrder);
         var screen = canvas.gameObject.AddComponent<InstructionsScreen>();
         screen._root = canvas.gameObject;
         canvas.gameObject.SetActive(false);
