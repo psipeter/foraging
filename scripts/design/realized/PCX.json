@@ -9,7 +9,7 @@
    "knobs": {
     "class": "additive",
     "gini": 0.55,
-    "travel_time": 3.0,
+    "travel_time": 5.0,
     "corner": [
      1,
      1
@@ -37,146 +37,143 @@
     },
     "equaliser": {
      "type": "gain",
-     "value": 1.454898157129001
+     "value": 1.6656384947563234
     }
    },
    "settings": {
-    "tile_radius": 36.80607966083864,
+    "tile_radius": 49.79646071760523,
     "tile_placement": "balanced",
     "tile_sum_tol": 1.0
    },
-   "peak": 5.819592628516004,
-   "feedback_max": 6,
+   "peak": 6.662553979025294,
+   "feedback_max": 7,
    "duration": 180.0,
    "anchor_points": 1125.0,
    "world_seed": 9201,
    "achieved": {
     "factors": {
      "travel_time": [
-      2.9999999999999996,
+      5.0,
       0.0
      ],
      "travel_time_nearest_bush": [
-      3.308937958689788,
-      0.0028633161423770757
+      5.297738866651505,
+      0.004049597787026247
      ],
      "travel_time_centres": [
-      5.666666666666666,
+      7.666666666666667,
       0.0
      ],
      "contrast": [
-      0.0006096460006531231,
-      3.2034908712434644e-05
+      0.0007335067105919942,
+      4.183513889119453e-05
      ],
      "neighbour_difference": [
-      0.0006924993267721184,
-      3.781912921285685e-05
+      0.0008300115788627551,
+      4.469587328396625e-05
      ],
      "diversity": [
-      1.688871873192042,
-      0.000366707969787963
+      1.933969936084982,
+      0.0007884677473114614
      ],
      "mean_bush_value": [
-      1.5698275841918572,
-      0.00041105325756579067
+      1.7974133726595067,
+      0.0007513995566561238
      ],
      "bush_gini": [
-      0.5480815360395849,
-      7.807670339665519e-05
+      0.54808833020218,
+      0.00011295667443780514
      ],
      "max_bush_value": [
-      5.802694070881353,
-      0.0016887593163680175
+      6.6297549046655915,
+      0.002806830576394835
      ],
      "noise_sd": [
-      0.6663666050037764,
-      0.0012595604152444053
+      0.6679770480383788,
+      0.0018107488997260162
      ],
      "max_fruit": [
-      7.25,
-      0.06933752452815363
+      8.0,
+      0.0
      ],
      "share_fruit_over_cap": [
       0.0,
       0.0
      ],
      "n_tiles": [
-      79.275,
-      0.3822797673338474
+      43.075,
+      0.16941641914797712
      ],
      "n_bushes": [
-      713.475,
-      3.4405179060046267
+      387.675,
+      1.524747772331794
      ],
      "walk_visits": [
-      60.000000000000014,
-      1.137778964768807e-15
+      36.0,
+      0.0
      ]
     },
     "points": {
      "nearest": [
-      808.925,
-      4.394983664390165
+      862.85,
+      3.688608590421777
      ],
      "oracle": [
-      1377.4,
-      4.360486917059395
+      1314.025,
+      5.783984020884406
      ],
      "learner": [
-      1141.55,
-      5.927873099787097
+      1118.15,
+      6.268209370940693
      ]
     }
    },
    "within_tolerance": true,
    "planner": {
     "flag": null,
-    "per_visit": 4.8,
+    "per_visit": 6.571428571428571,
     "sizes": {
      "1": 1,
-     "3": 1,
-     "4": 2,
-     "5": 1,
-     "6": 4,
-     "7": 1
+     "7": 3,
+     "8": 3
     },
-    "bushes": 48,
-    "visits": 10,
-    "tile_share": 0.5333333333333333,
-    "top_half": 0.8333333333333334,
-    "total": 1181.0,
-    "heuristic_best": "top-2",
-    "heuristic_total": 1402.0,
+    "bushes": 46,
+    "visits": 7,
+    "tile_share": 0.7301587301587301,
+    "top_half": 0.6739130434782609,
+    "total": 1028.0,
+    "heuristic_best": "thr-70",
+    "heuristic_total": 1384.0,
     "weak": true,
     "shares": {
-     "top-1": 1.0160880609652836,
-     "top-2": 1.187129551227773,
-     "top-3": 1.1380186282811178,
-     "top-4": 1.0279424216765454,
-     "top-5": 1.0076206604572395,
-     "top-6": 0.8983911939034717,
-     "top-7": 0.817104149026249,
-     "top-8": 0.7425910245554614,
-     "top-9": 0.6858594411515665,
-     "thr-10": 0.7146486028789162,
-     "thr-20": 0.8314987298899238,
-     "thr-30": 0.8899237933954276,
-     "thr-40": 0.9466553767993227,
-     "thr-50": 1.0245554614733277,
-     "thr-60": 1.1371718882303132,
-     "thr-70": 1.1710414902624895,
-     "thr-80": 1.0889077053344622,
-     "thr-90": 1.0474174428450467
+     "top-1": 0.9980544747081712,
+     "top-2": 1.3424124513618676,
+     "top-3": 1.3307392996108949,
+     "top-4": 1.2295719844357977,
+     "top-5": 1.166342412451362,
+     "top-6": 1.0671206225680934,
+     "top-7": 0.9649805447470817,
+     "top-8": 0.938715953307393,
+     "top-9": 0.8151750972762646,
+     "thr-10": 0.938715953307393,
+     "thr-20": 0.9309338521400778,
+     "thr-30": 1.0622568093385214,
+     "thr-40": 1.171206225680934,
+     "thr-50": 1.2412451361867705,
+     "thr-60": 1.3054474708171206,
+     "thr-70": 1.3463035019455254,
+     "thr-80": 1.2957198443579767,
+     "thr-90": 0.9931906614785992
     },
     "ends_near": [
      "top-1",
      "thr-90"
     ],
     "beam_width": 300,
-    "text": "planner takes 4.8 bushes per tile visit (53% of a visited tile's bushes; visits of 1: 1, 3: 1, 4: 2, 5: 1, 6: 4, 7: 1) and scores 1181: in the middle; against the planner: top-1 102%, top-9 69%, thr-90 105%, thr-10 71%, best simple policy top-2 119%; WARNING, top-1, thr-90 reach 95% of the planner: that extreme is not clearly worse in this world; CAUTION: the best simple policy (top-2, 1402) beats it by more than 3%, so the beam search (300 wide) did not find the best route: do not read its route as the optimum"
+    "text": "planner takes 6.6 bushes per tile visit (73% of a visited tile's bushes; visits of 1: 1, 7: 3, 8: 3) and scores 1028: in the middle; against the planner: top-1 100%, top-9 82%, thr-90 99%, thr-10 94%, best simple policy thr-70 135%; WARNING, top-1, thr-90 reach 95% of the planner: that extreme is not clearly worse in this world; CAUTION: the best simple policy (thr-70, 1384) beats it by more than 3%, so the beam search (300 wide) did not find the best route: do not read its route as the optimum"
    },
    "calibrator": 1,
-   "seconds": 400
+   "seconds": 271
   },
   {
    "id": 2,
@@ -184,7 +181,7 @@
    "knobs": {
     "class": "multiplicative",
     "gini": 0.55,
-    "travel_time": 3.0,
+    "travel_time": 5.0,
     "corner": [
      1,
      1
@@ -223,145 +220,143 @@
     },
     "equaliser": {
      "type": "gain",
-     "value": 1.4572538860103628
+     "value": 1.722158438576349
     }
    },
    "settings": {
-    "tile_radius": 36.80607966083864,
+    "tile_radius": 49.79646071760523,
     "tile_placement": "balanced",
     "tile_sum_tol": 1.0
    },
-   "peak": 5.829013905656748,
-   "feedback_max": 6,
+   "peak": 6.888631818089566,
+   "feedback_max": 7,
    "duration": 180.0,
    "anchor_points": 1125.0,
    "world_seed": 9202,
    "achieved": {
     "factors": {
      "travel_time": [
-      2.9999999999999996,
+      5.0,
       0.0
      ],
      "travel_time_nearest_bush": [
-      3.308937958689788,
-      0.0028633161423770757
+      5.297738866651505,
+      0.004049597787026247
      ],
      "travel_time_centres": [
-      5.666666666666666,
+      7.666666666666667,
       0.0
      ],
      "contrast": [
-      0.0014141447888332461,
-      6.410582296274707e-05
+      0.0017719553120799775,
+      9.887143851077113e-05
      ],
      "neighbour_difference": [
-      0.0015906579448684995,
-      7.449422547341694e-05
+      0.0020628836623261928,
+      0.00011948872853070041
      ],
      "diversity": [
-      1.7653917153114782,
-      0.0006548070536601462
+      2.0866028974405006,
+      0.0012955673047573813
      ],
      "mean_bush_value": [
-      1.6321549179214851,
-      0.0004710968295662301
+      1.9290752734243302,
+      0.0010510914584959021
      ],
      "bush_gini": [
-      0.5474678242507455,
-      8.784106259791044e-05
+      0.5474116036427011,
+      0.0001790022845524782
      ],
      "max_bush_value": [
-      5.815734548209917,
-      0.001336589106707043
+      6.857541468866335,
+      0.003675807007312208
      ],
      "noise_sd": [
-      0.6680813388057378,
-      0.0013280793671185721
+      0.6692485726400857,
+      0.001962058705451726
      ],
      "max_fruit": [
-      7.4,
-      0.07844645405527362
+      8.15,
+      0.05717718748968655
      ],
      "share_fruit_over_cap": [
       0.0,
       0.0
      ],
      "n_tiles": [
-      79.275,
-      0.3822797673338474
+      43.075,
+      0.16941641914797712
      ],
      "n_bushes": [
-      713.475,
-      3.4405179060046267
+      387.675,
+      1.524747772331794
      ],
      "walk_visits": [
-      60.000000000000014,
-      1.137778964768807e-15
+      36.0,
+      0.0
      ]
     },
     "points": {
      "nearest": [
-      855.45,
-      4.190029373864358
+      929.8,
+      4.55988641334015
      ],
      "oracle": [
-      1468.7,
-      4.482043947655796
+      1442.225,
+      5.639772624531085
      ],
      "learner": [
-      1140.6,
-      7.246113016380151
+      1145.3,
+      7.312458634553174
      ]
     }
    },
    "within_tolerance": true,
    "planner": {
     "flag": null,
-    "per_visit": 5.444444444444445,
+    "per_visit": 6.857142857142857,
     "sizes": {
-     "1": 1,
-     "4": 1,
-     "5": 2,
-     "6": 1,
-     "7": 4
+     "2": 1,
+     "7": 2,
+     "8": 4
     },
-    "bushes": 49,
-    "visits": 9,
-    "tile_share": 0.6049382716049383,
-    "top_half": 0.7959183673469388,
-    "total": 1177.0,
-    "heuristic_best": "greedy",
-    "heuristic_total": 1514.0,
+    "bushes": 48,
+    "visits": 7,
+    "tile_share": 0.7619047619047619,
+    "top_half": 0.6666666666666666,
+    "total": 1113.0,
+    "heuristic_best": "thr-70",
+    "heuristic_total": 1465.0,
     "weak": true,
     "shares": {
-     "top-1": 1.0628717077315208,
-     "top-2": 1.2429906542056075,
-     "top-3": 1.2234494477485132,
-     "top-4": 1.1495327102803738,
-     "top-5": 1.0509770603228548,
-     "top-6": 0.9643160577740016,
-     "top-7": 0.8249787595581988,
-     "top-8": 0.762107051826678,
-     "top-9": 0.723874256584537,
-     "thr-10": 0.7646559048428208,
-     "thr-20": 0.832625318606627,
-     "thr-30": 0.9388275276125744,
-     "thr-40": 1.005947323704333,
-     "thr-50": 1.0688190314358539,
-     "thr-60": 1.193712829226848,
-     "thr-70": 1.2370433305012745,
-     "thr-80": 1.2438402718776551,
-     "thr-90": 1.101104502973662
+     "top-1": 1.0584007187780773,
+     "top-2": 1.2812219227313566,
+     "top-3": 1.2902066486972148,
+     "top-4": 1.2875112309074572,
+     "top-5": 1.165318957771788,
+     "top-6": 1.0395327942497754,
+     "top-7": 0.9254267744833783,
+     "top-8": 0.9101527403414196,
+     "top-9": 0.793351302785265,
+     "thr-10": 0.9101527403414196,
+     "thr-20": 0.8885893980233602,
+     "thr-30": 1.0350404312668464,
+     "thr-40": 1.0781671159029649,
+     "thr-50": 1.2048517520215634,
+     "thr-60": 1.2300089847259659,
+     "thr-70": 1.316262353998203,
+     "thr-80": 1.2497753818508535,
+     "thr-90": 1.0584007187780773
     },
     "ends_near": [
      "top-1",
      "thr-90"
     ],
     "beam_width": 300,
-    "text": "planner takes 5.4 bushes per tile visit (60% of a visited tile's bushes; visits of 1: 1, 4: 1, 5: 2, 6: 1, 7: 4) and scores 1177: in the middle; against the planner: top-1 106%, top-9 72%, thr-90 110%, thr-10 76%, best simple policy greedy 129%; WARNING, top-1, thr-90 reach 95% of the planner: that extreme is not clearly worse in this world; CAUTION: the best simple policy (greedy, 1514) beats it by more than 3%, so the beam search (300 wide) did not find the best route: do not read its route as the optimum"
+    "text": "planner takes 6.9 bushes per tile visit (76% of a visited tile's bushes; visits of 2: 1, 7: 2, 8: 4) and scores 1113: in the middle; against the planner: top-1 106%, top-9 79%, thr-90 106%, thr-10 91%, best simple policy thr-70 132%; WARNING, top-1, thr-90 reach 95% of the planner: that extreme is not clearly worse in this world; CAUTION: the best simple policy (thr-70, 1465) beats it by more than 3%, so the beam search (300 wide) did not find the best route: do not read its route as the optimum"
    },
    "calibrator": 1,
-   "seconds": 494
+   "seconds": 353
   },
   {
    "id": 3,
@@ -369,7 +364,7 @@
    "knobs": {
     "class": "nonseparable",
     "gini": 0.55,
-    "travel_time": 3.0,
+    "travel_time": 5.0,
     "corner": [
      1,
      1
@@ -402,142 +397,144 @@
     },
     "equaliser": {
      "type": "gain",
-     "value": 1.468189233278956
+     "value": 1.6320116054158607
     }
    },
    "settings": {
-    "tile_radius": 36.80607966083864,
+    "tile_radius": 49.79646071760523,
     "tile_placement": "balanced",
     "tile_sum_tol": 1.0
    },
-   "peak": 5.872062484642988,
-   "feedback_max": 6,
+   "peak": 6.527274485770342,
+   "feedback_max": 7,
    "duration": 180.0,
    "anchor_points": 1125.0,
    "world_seed": 9203,
    "achieved": {
     "factors": {
      "travel_time": [
-      2.9999999999999996,
+      5.0,
       0.0
      ],
      "travel_time_nearest_bush": [
-      3.308937958689788,
-      0.0028633161423770757
+      5.297738866651505,
+      0.004049597787026247
      ],
      "travel_time_centres": [
-      5.666666666666666,
+      7.666666666666667,
       0.0
      ],
      "contrast": [
-      0.001503762698285634,
-      0.00011757920529017754
+      0.0018403314415603353,
+      0.00022684606222785487
      ],
      "neighbour_difference": [
-      0.0015457028373472759,
-      0.0001265631678456834
+      0.0019259174668269715,
+      0.000244408620303874
      ],
      "diversity": [
-      2.0790008989644138,
-      0.0007570541809533681
+      2.3101515698122075,
+      0.0018975642755361486
      ],
      "mean_bush_value": [
-      1.9881478798977856,
-      0.0008131059599211422
+      2.210581125277394,
+      0.001545014297439349
      ],
      "bush_gini": [
-      0.5460782073358326,
-      0.00013237927607219165
+      0.5457637878058367,
+      0.000236262670051496
      ],
      "max_bush_value": [
-      5.864209271343404,
-      0.001204550663832943
+      6.5085810431274975,
+      0.0025773014106033852
      ],
      "noise_sd": [
-      0.6669334753888554,
-      0.0013560917443774783
+      0.6693559396042655,
+      0.001834480233452581
      ],
      "max_fruit": [
-      7.5,
-      0.08006407690254357
+      8.025,
+      0.024999999999999998
      ],
      "share_fruit_over_cap": [
       0.0,
       0.0
      ],
      "n_tiles": [
-      79.275,
-      0.3822797673338474
+      43.075,
+      0.16941641914797712
      ],
      "n_bushes": [
-      713.475,
-      3.4405179060046267
+      387.675,
+      1.524747772331794
      ],
      "walk_visits": [
-      60.000000000000014,
-      1.137778964768807e-15
+      36.0,
+      0.0
      ]
     },
     "points": {
      "nearest": [
-      1025.65,
-      4.630383215021054
+      1070.525,
+      5.035258695261359
      ],
      "oracle": [
-      1721.275,
-      4.8122423340945
+      1643.525,
+      5.564423104615561
      ],
      "learner": [
-      1117.85,
-      9.391250019197493
+      1130.95,
+      8.354251949817268
      ]
     }
    },
    "within_tolerance": true,
    "planner": {
     "flag": null,
-    "per_visit": 5.222222222222222,
+    "per_visit": 6.571428571428571,
     "sizes": {
-     "3": 1,
-     "4": 3,
-     "5": 1,
+     "1": 1,
      "6": 1,
-     "7": 3
+     "7": 2,
+     "8": 2,
+     "9": 1
     },
-    "bushes": 47,
-    "visits": 9,
-    "tile_share": 0.5802469135802469,
-    "top_half": 0.851063829787234,
-    "total": 1489.0,
+    "bushes": 46,
+    "visits": 7,
+    "tile_share": 0.7301587301587301,
+    "top_half": 0.6739130434782609,
+    "total": 1284.0,
     "heuristic_best": "thr-70",
-    "heuristic_total": 1730.0,
+    "heuristic_total": 1675.0,
     "weak": true,
     "shares": {
-     "top-1": 0.8999328408327737,
-     "top-2": 1.089321692411014,
-     "top-3": 1.1464069845533915,
-     "top-4": 1.0873069173942242,
-     "top-5": 0.9872397582269979,
-     "top-6": 0.9288112827400941,
-     "top-7": 0.816655473472129,
-     "top-8": 0.7394224311618536,
-     "top-9": 0.6937541974479516,
-     "thr-10": 0.7266621893888516,
-     "thr-20": 0.816655473472129,
-     "thr-30": 0.9194089993284084,
-     "thr-40": 0.9469442578912022,
-     "thr-50": 1.0826057756883816,
-     "thr-60": 1.1336467427803896,
-     "thr-70": 1.1618535930154466,
-     "thr-80": 1.089321692411014,
-     "thr-90": 0.8750839489590329
+     "top-1": 0.9680685358255452,
+     "top-2": 1.2242990654205608,
+     "top-3": 1.2873831775700935,
+     "top-4": 1.2702492211838006,
+     "top-5": 1.1908099688473521,
+     "top-6": 1.0677570093457944,
+     "top-7": 0.9478193146417445,
+     "top-8": 0.8901869158878505,
+     "top-9": 0.7889408099688473,
+     "thr-10": 0.8901869158878505,
+     "thr-20": 0.9478193146417445,
+     "thr-30": 1.060747663551402,
+     "thr-40": 1.1876947040498442,
+     "thr-50": 1.22196261682243,
+     "thr-60": 1.3014018691588785,
+     "thr-70": 1.3045171339563864,
+     "thr-80": 1.1378504672897196,
+     "thr-90": 0.8933021806853583
     },
-    "ends_near": [],
+    "ends_near": [
+     "top-1"
+    ],
     "beam_width": 300,
-    "text": "planner takes 5.2 bushes per tile visit (58% of a visited tile's bushes; visits of 3: 1, 4: 3, 5: 1, 6: 1, 7: 3) and scores 1489: in the middle; against the planner: top-1 90%, top-9 69%, thr-90 88%, thr-10 73%, best simple policy thr-70 116%; CAUTION: the best simple policy (thr-70, 1730) beats it by more than 3%, so the beam search (300 wide) did not find the best route: do not read its route as the optimum"
+    "text": "planner takes 6.6 bushes per tile visit (73% of a visited tile's bushes; visits of 1: 1, 6: 1, 7: 2, 8: 2, 9: 1) and scores 1284: in the middle; against the planner: top-1 97%, top-9 79%, thr-90 89%, thr-10 89%, best simple policy thr-70 130%; WARNING, top-1 reaches 95% of the planner: that extreme is not clearly worse in this world; CAUTION: the best simple policy (thr-70, 1675) beats it by more than 3%, so the beam search (300 wide) did not find the best route: do not read its route as the optimum"
    },
    "calibrator": 1,
-   "seconds": 459
+   "seconds": 334
   }
  ]
 }

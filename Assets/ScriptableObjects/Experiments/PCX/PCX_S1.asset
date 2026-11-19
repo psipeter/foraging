@@ -18,7 +18,6 @@ MonoBehaviour:
   freezeSun: 0
   rankingEvery: 1
   rankingLeavings: 
-  rankingEstimate: 8
   rankingSets: 1
   rankingSeconds: 20
   rankingCooldown: 0
@@ -60,7 +59,7 @@ MonoBehaviour:
       width: 0.6207297
       widthColor: 0.31036484
       angle: 0
-      height: 5.8195925
+      height: 6.662554
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -93,7 +92,7 @@ MonoBehaviour:
   spentTint: {r: 0.55, g: 0.5, b: 0.42, a: 1}
   fruitPopDuration: 0.15
   showHarvestHint: 1
-  rewardFeedbackMax: 6
+  rewardFeedbackMax: 7
   rewardSizeScaling: 1
   popupScale: 1.7
   popupExtraScale: 0.9
@@ -141,18 +140,18 @@ MonoBehaviour:
   layout: tiles
   assignment: tiles
   rewardStage: 
-  designJson: '{"anchor": {"agent": "learner", "check_points": {"learner": 1142,
-    "nearest": 809, "oracle": 1377}, "duration": 180.0, "points": 1125.0, "rate":
+  designJson: '{"anchor": {"agent": "learner", "check_points": {"learner": 1118,
+    "nearest": 863, "oracle": 1314}, "duration": 180.0, "points": 1125.0, "rate":
     6.25}, "calibrator": 1, "cell": 1, "experiment": "PCX", "index": 1, "instance":
     "PCX_S1", "knobs": {"aspect": 2.0, "class": "additive", "corner": [1, 1], "gini":
-    0.55, "travel_time": 3.0, "world_seed": 9201}, "nuisance_draw": 0, "value_map":
+    0.55, "travel_time": 5.0, "world_seed": 9201}, "nuisance_draw": 0, "value_map":
     {"bumps": [{"angle": 0.0, "center_color": 1.0, "center_shape": 1.0, "height":
     4.0, "width": 0.6207296746436562, "width_color": 0.3103648373218281}], "equaliser":
-    {"type": "gain", "value": 1.454898157129001}, "noise": {"sd": 0.6, "type": "flat"}},
-    "value_map_descriptors": {"effective_weight_color": 3.9788, "effective_weight_shape":
-    1.6399, "effective_weight_total": 5.6187, "fraction_above_half_max": 0.2112,
-    "gini": 0.55, "interaction": 0.0925, "log_interaction": 0.0, "max": 5.8196, "mean":
-    1.5736, "min": 0.0089, "nonlinearity": 0.1447, "range": 5.8107, "shape_share":
+    {"type": "gain", "value": 1.6656384947563234}, "noise": {"sd": 0.6, "type": "flat"}},
+    "value_map_descriptors": {"effective_weight_color": 4.5552, "effective_weight_shape":
+    1.8774, "effective_weight_total": 6.4326, "fraction_above_half_max": 0.2112,
+    "gini": 0.55, "interaction": 0.0925, "log_interaction": 0.0, "max": 6.6626, "mean":
+    1.8016, "min": 0.0101, "nonlinearity": 0.1447, "range": 6.6524, "shape_share":
     0.2919}, "world_seed": 9201}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
@@ -168,7 +167,7 @@ MonoBehaviour:
   fruitExposureCompensation: 1
   canopyTintDark: {r: 0.55, g: 0.7, b: 0.65, a: 1}
   canopyTintLight: {r: 1.3, g: 1.2, b: 1.3, a: 1}
-  tileRadius: 36.80608
+  tileRadius: 49.79646
   tileRampWidth: 14
   tileMoistureLevels: 4
   tileBushes: 9

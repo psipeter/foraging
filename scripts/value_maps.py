@@ -188,7 +188,7 @@ SEARCH = {"de_maxiter": 60, "de_popsize": 12, "nm_maxiter": 150}        # the ef
 MULTIPLICATIVE_SHARE_OF_CAP = 0.9                       # the multiplicative rung asks for this share of the interaction an axis-aligned Gaussian of that Gini can reach: as interactive as that family gets
 ALIGNED_CAP = ((0.2, 0.06), (0.4, 0.12), (0.6, 0.21), (0.8, 0.37))        # what an axis-aligned Gaussian can reach, by Gini (docs/SESSION_FACTORS_PLAN.md, the reachable region)
 NONSEPARABLE_INTERACTION = 0.4                          # the interaction asked of the non-separable rung unless a cell says otherwise
-CLASS_KLASS = {"additive": "corner", "multiplicative": "aligned", "nonseparable": "rotated"}      # the family each rung of the ladder is searched in
+CLASS_KLASS = {"additive": "corner", "multiplicative": "aligned", "nonseparable": "rotated", "round": "round"}      # the family each rung of the ladder is searched in
 
 
 CORNER_STRETCHES = (1.0, 2.0, 3.0)                      # the additive rung's Gaussian is round or stretched 2:1 or 3:1 (PI, 2026-11-17); the long axis (shape or colour) is a nuisance
@@ -205,7 +205,7 @@ def aligned_cap(gini):
 
 def default_interaction(name, gini):
     """The interaction asked of a rung of the ladder at a Gini: additive None (the smallest its corner allows), multiplicative a share of what an aligned map can reach, non-separable 0.4."""
-    return {"additive": None, "multiplicative": MULTIPLICATIVE_SHARE_OF_CAP * aligned_cap(gini), "nonseparable": NONSEPARABLE_INTERACTION}[name]
+    return {"additive": None, "multiplicative": MULTIPLICATIVE_SHARE_OF_CAP * aligned_cap(gini), "nonseparable": NONSEPARABLE_INTERACTION, "round": None}[name]
 
 
 def _gaussian_from(x, rotated, scale, std):
@@ -213,13 +213,20 @@ def _gaussian_from(x, rotated, scale, std):
     return gaussian(float(centre_shape), float(centre_color), float(across), float(aspect), float(x[4]) if rotated else 0.0, scale, std)
 
 
-def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0.02, 0.02), share=(0.25, 0.75), seed=0, corner=(1.0, 1.0), aspect=1.0, center=(0.0, 1.0)):
+def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0.02, 0.02), share=(0.25, 0.75), seed=0, corner=(1.0, 1.0), aspect=1.0, center=(0.0, 1.0), at=(0.5, 0.5)):
     """The Gaussian map whose Gini is `gini` and raw interaction `interaction` (each within `tol`), found by a search over the family of `gaussian` (a centre anywhere (or within `center`: one (lowest, highest) for both coordinates, or one for shape and one for colour), a short axis 0.05 to 1.5,
     an aspect 1 to 6, and for `klass` "rotated" an angle of 15 to 75 degrees; "aligned" maps have axes along the features, a log interaction of 0, and are additive or multiplicative according to
     the interaction asked: near 0 additive, larger multiplicative). Both features must pay: the share of the slope on shape lies within `share`. Raises ValueError, naming the closest map found,
     when the pair is not reachable (`map_region.py` shows the region). `klass` "corner" is the additive rung proper: the Gaussian centred exactly on a corner of the plane (`corner`, each coordinate 0 or 1:
     that feature pays more when it is higher (1) or lower (0)), so both features pay monotonically; its widths have the ratio `aspect` (shape over colour; `corner_aspect`) and their size is solved for the Gini; the interaction and the shape share are what that gives (`interaction` is ignored). The gain is not touched: `scale` is the peak and the equaliser (`solve_gain`) sets the level afterwards."""
     from scipy.optimize import differential_evolution, minimize
+    if klass == "round":                                                          # a symmetric Gaussian (equal widths, axes along the features) centred exactly at `at` (shape, colour): its one width is solved for the Gini
+        from scipy.optimize import brentq
+        build = lambda w: ValueMap((Bump(float(at[0]), float(at[1]), float(w), float(w), 0.0, scale),), {"type": "flat", "sd": std})
+        best = build(brentq(lambda w: build(w).descriptors()["gini"] - gini, 0.05, 1.5, xtol=1e-5))
+        if abs(best.descriptors()["gini"] - gini) > tol[0]:
+            raise ValueError(f"no round Gaussian at {tuple(at)} with Gini {gini}: the closest has Gini {best.descriptors()['gini']:.3f}")
+        return best
     rotated = {"aligned": False, "rotated": True, "corner": False}[klass]
     at_corner = klass == "corner"
     if at_corner:

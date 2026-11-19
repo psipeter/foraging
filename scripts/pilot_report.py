@@ -116,7 +116,7 @@ def _record(job):
             corner = tuple(float(x) for x in cell["corner"]) if "corner" in cell else cells.corner_of(cid, 0)
             aspect = float(cell["aspect"]) if "aspect" in cell else cells.aspect_of(cid, 0)
             base = world.load_session(session, session_duration=float(duration))
-            shaped = value_maps.calibrate_map(gini, interaction, value_maps.CLASS_KLASS[kind], std=float(base.reward_std), corner=corner, aspect=aspect, center=cell.get("center", (0.0, 1.0)), seed=0)
+            shaped = value_maps.calibrate_map(gini, interaction, value_maps.CLASS_KLASS[kind], std=float(base.reward_std), corner=corner, aspect=aspect, center=cell.get("center", (0.0, 1.0)), at=tuple(cell.get("at", (0.5, 0.5))), seed=0)
             valuemap = value_maps.ValueMap(shaped.bumps, shaped.noise, {"type": "gain", "value": TARGET_MEAN / shaped.descriptors()["mean"]})
             settings = {**factors.calibrate(world.load_session(session, session_duration=float(duration), **valuemap.compile()), float(cell["travel_time"])), **factors.PLACEMENT}
             seed = int(cell.get("world_seed", cells.FIRST_WORLD_SEED + 100 * cid))

@@ -8,7 +8,7 @@
    "id": 1,
    "class": "additive",
    "gini": 0.55,
-   "travel_time": 3.0,
+   "travel_time": 5.0,
    "corner": [
     1,
     1
@@ -20,7 +20,7 @@
    "id": 2,
    "class": "multiplicative",
    "gini": 0.55,
-   "travel_time": 3.0,
+   "travel_time": 5.0,
    "corner": [
     1,
     1
@@ -43,7 +43,7 @@
    "id": 3,
    "class": "nonseparable",
    "gini": 0.55,
-   "travel_time": 3.0,
+   "travel_time": 5.0,
    "corner": [
     1,
     1

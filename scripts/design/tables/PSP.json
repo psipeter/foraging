@@ -2,42 +2,39 @@
  "code": "PSP",
  "session": "FOR_S1",
  "duration": 180,
- "note": "Pilot: Sparsity (draft): the Gini of an additive corner map, low to high, at one travel time.",
+ "note": "Pilot: Sparsity (draft): the Gini of a symmetric (round) Gaussian, 0.4, 0.5, 0.6, at one travel time; the centres are the corners of a rotated equilateral triangle around the middle of the plane, so no two sessions share a peak.",
  "cells": [
   {
    "id": 1,
-   "class": "additive",
-   "gini": 0.3,
+   "class": "round",
+   "gini": 0.4,
    "travel_time": 5.0,
-   "corner": [
-    1,
-    1
+   "at": [
+    0.456,
+    0.664
    ],
-   "aspect": 1.0,
    "world_seed": 9301
   },
   {
    "id": 2,
-   "class": "additive",
+   "class": "round",
    "gini": 0.5,
    "travel_time": 5.0,
-   "corner": [
-    1,
-    1
+   "at": [
+    0.38,
+    0.38
    ],
-   "aspect": 1.0,
    "world_seed": 9302
   },
   {
    "id": 3,
-   "class": "additive",
-   "gini": 0.7,
+   "class": "round",
+   "gini": 0.6,
    "travel_time": 5.0,
-   "corner": [
-    1,
-    1
+   "at": [
+    0.664,
+    0.456
    ],
-   "aspect": 1.0,
    "world_seed": 9303
   }
  ]

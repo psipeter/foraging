@@ -63,7 +63,7 @@ def realize_cell(cell, session="FOR_S1", draws=DRAWS, duration=120.0, **override
     failed = []
     for draw in range(draws):
         try:
-            r = factors.realize(session, gini, interaction, value_maps.CLASS_KLASS[name], float(cell["travel_time"]), corner=tuple(float(x) for x in cell["corner"]) if "corner" in cell else corner_of(cid, draw), aspect=float(cell["aspect"]) if "aspect" in cell else aspect_of(cid, draw), center=cell["center"] if "center" in cell else (0.0, 1.0), gain=float(cell["gain"]) if "gain" in cell else None, seed=draw, **overrides)
+            r = factors.realize(session, gini, interaction, value_maps.CLASS_KLASS[name], float(cell["travel_time"]), corner=tuple(float(x) for x in cell["corner"]) if "corner" in cell else corner_of(cid, draw), aspect=float(cell["aspect"]) if "aspect" in cell else aspect_of(cid, draw), center=cell["center"] if "center" in cell else (0.0, 1.0), gain=float(cell["gain"]) if "gain" in cell else None, at=tuple(float(x) for x in cell["at"]) if "at" in cell else (0.5, 0.5), seed=draw, **overrides)
         except ValueError as e:
             failed.append({"draw": draw, "error": str(e)[:220]})
             continue
