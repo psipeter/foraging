@@ -99,8 +99,8 @@ public class MenuScreen : MonoBehaviour
                     if (played != null)
                     {
                         float shortFactor = RunModes.Active ? RunModes.Short : 1f;
-                        row.Progress = ExperimentConfig.Progress(played, s.sessions_done, s.session_foraging_seconds, s.session_rankings, shortFactor);       // against the experiment's maximum time
-                        row.Detail = $"{CountSessions(played, s.sessions_done)} of {sessions} · {TimeLeftText(ExperimentConfig.SecondsLeft(played, s.sessions_done, s.session_foraging_seconds, s.session_rankings, shortFactor))}";
+                        row.Progress = ExperimentConfig.Progress(played, s.sessions_done, s.session_foraging_seconds, shortFactor);       // against the experiment's foraging time
+                        row.Detail = $"{CountSessions(played, s.sessions_done)} of {sessions} · {TimeLeftText(ExperimentConfig.SecondsLeft(played, s.sessions_done, s.session_foraging_seconds, shortFactor))}";
                     }
                     else
                     {

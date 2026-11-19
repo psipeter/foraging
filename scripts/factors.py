@@ -117,7 +117,7 @@ def check(session, valuemap, settings, seeds, agents=("nearest", "oracle"), leav
 PLACEMENT = {"tile_placement": "balanced", "tile_sum_tol": 1.0}      # how the pool is dealt in realised sessions (equal patch totals, PI 2026-11-18; the design modules' TILE_FIELDS say the same)
 
 
-def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=ANCHOR_AGENT, seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, max_peak=MAX_PEAK, corner=(1.0, 1.0), aspect=1.0, seed=0, center=(0.0, 1.0), **overrides):
+def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=ANCHOR_AGENT, seeds=range(12), check_seeds=range(1000, 1040), tolerance=0.05, steps=4, max_peak=MAX_PEAK, corner=(1.0, 1.0), aspect=1.0, seed=0, center=(0.0, 1.0), gain=None, **overrides):
     """A session from three knobs (milestone 3's calibrators together): the Gaussian with the stated sparsity (`gini`) and complexity (`klass`, `interaction`), the tile layout with the stated `travel_time`
     (the pool of bushes placed at random: no diversity knob since 2026-11-18), and the gain at which `agent` earns `anchor` points in a session (default: `ANCHOR_RATE` times the session's duration). Returns {"map": the ValueMap (gain included), "settings": the layout settings,
     "fields": the serialized SessionConfig fields of both, "achieved": `check` on fresh worlds, "within_tolerance": whether the anchor was met, "rounds": how many}.
@@ -125,11 +125,19 @@ def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=A
     The points depend on the layout (a longer walk earns less) and the gain is solved for the layout (the layout does not depend on the gain now; the rounds remain for the learner's jagged points) on the worlds of `seeds`, round after round until the gain changes by less than 5 percent (at most `steps`; ValueError if it does not settle). Those few worlds give
     the points a sampling error of several percent, so a correction pass follows: `check` on the fresh `check_seeds` (40 worlds, common to every session, so sessions are equal on the same worlds; the points of one world vary by a third under a high contrast, so against the population the standard error is about 5 percent), and while the points are off the
     `anchor` by more than `tolerance` (a share) the gain is scaled by anchor / points, the layout re-solved for it and the session checked again (at most twice). `overrides` are `load_session`
-    overrides (for example `session_duration`). `corner`, `aspect` and `seed` are the nuisance of the map (which corner an additive map sits in and how its Gaussian is stretched, the start of the search that places the other bumps)."""
+    overrides (for example `session_duration`). With a `gain` given the gain is not solved: the map takes it, the layout is calibrated for the travel time and the points are only measured (`within_tolerance` is then True, a pilot that varies the layout keeps the reward scale fixed). `corner`, `aspect` and `seed` are the nuisance of the map (which corner an additive map sits in and how its Gaussian is stretched, the start of the search that places the other bumps)."""
     base = load_session(session, **overrides)
     anchor = anchor_points(base.session_duration) if anchor is None else anchor
     shape_map = value_maps.calibrate_map(gini, interaction, klass, std=float(base.reward_std), corner=corner, aspect=aspect, seed=seed, center=center)
     with_gain = lambda g: value_maps.ValueMap(shape_map.bumps, shape_map.noise, {"type": "gain", "value": float(g)})
+    if gain is not None:
+        current = with_gain(gain)
+        settings = {**calibrate(load_session(session, **overrides, **current.compile()), travel_time), **PLACEMENT}
+        achieved = check(session, current, settings, check_seeds, agents=tuple(dict.fromkeys(("nearest", "oracle", agent))), **overrides)
+        peak = current.descriptors()["max"]
+        if max_peak is not None and peak > max_peak:
+            raise ValueError(f"the best bush would be worth {peak:.1f} points (gain {current.gain():.2f}), over the cap of {max_peak}")
+        return {"map": current, "settings": settings, "fields": {**current.fields(), **fields(settings)}, "achieved": achieved, "within_tolerance": True, "rounds": 0}
     current, rounds = shape_map, 0
     for rounds in range(1, steps + 1):
         settings = {**calibrate(load_session(session, **overrides, **current.compile()), travel_time), **PLACEMENT}

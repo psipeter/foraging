@@ -19,8 +19,6 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private int rankingEvery = 0;
     [Tooltip("The patch leavings (numbered from 1: a qualifying switch, see rankingCooldown / rankingMinBushes / rankingLastSeconds) after which a ranking is due, for example 1, 2, 4, 8. Empty = every 'rankingEvery'-th leaving. rankingEvery must still be above 0 to turn rankings on.")]
     [SerializeField] private int[] rankingLeavings = new int[0];
-    [Tooltip("An estimate of how many rankings a session holds when there is no schedule (every patch leaving asks for one): only the menu's length and the progress share use it, it is not a limit. 0 = none counted.")]
-    [SerializeField] private int rankingEstimate = 0;
     [Tooltip("Ranking sets played in one ranking.")]
     [SerializeField] private int rankingSets = 1;
     [Tooltip("Seconds of the countdown of one ranking set (the main clock is frozen meanwhile).")]
@@ -359,7 +357,6 @@ public class SessionConfig : ScriptableObject
     public bool FreezeSun => freezeSun;
     public int RankingEvery => rankingEvery;
     public int[] RankingLeavings => rankingLeavings ?? new int[0];
-    public int RankingEstimate => rankingEstimate;
     public int RankingSets => rankingSets;
     public float RankingSeconds => rankingSeconds;
     public float RankingCooldown => rankingCooldown;

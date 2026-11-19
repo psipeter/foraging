@@ -1,0 +1,44 @@
+Pilot: Spacing (report): the sessions of PSC in play order
+
+                                                PSC_S1      PSC_S2      PSC_S3
+-- map
+map Gini                                         0.550       0.550       0.550
+interaction                                      0.092       0.092       0.092
+log interaction                                  0.000       0.000       0.000
+nonlinearity                                     0.145       0.145       0.145
+shape share                                       0.29        0.29        0.29
+share above half peak                            0.211       0.211       0.211
+peak (bush)                                       5.72        5.72        5.72
+gain                                             1.431       1.431       1.431
+-- world
+travel time (s)                                   3.00        6.00        9.00
+walk visits ceiling                               60.0        30.0        20.0
+tiles                                               76          34          18
+bush Gini                                        0.548       0.549       0.548
+mean bush value                                  1.540       1.540       1.554
+diversity within patches (SD)                    1.658       1.663       1.673
+contrast between patches (SD of means)           0.001       0.001       0.001
+largest patch total deviation                     0.02        0.01        0.02
+share of fruits paying over 9                   0.0000      0.0000      0.0000
+largest fruit pay                                    7           7           7
+-- agents
+nearest, own world                                 770         720         722
+learner, own world                                1152         919         717
+oracle, own world                                 1360        1047         900
+anchor (learner)                                  1125        1125        1125
+dp_finite (optimal stopping)                      1354        1019         935
+dp_average (optimal rate)                         1380        1045         939
+mvt (marginal value)                              1380        1045         939
+mvt_running (experienced rate)                    1301        1049         923
+bushes per patch, dp_finite                       2.00        2.45        3.00
+bushes per patch, dp_average                      2.00        2.55        3.00
+bushes per patch, mvt                             2.00        2.55        3.00
+bushes per patch, mvt_running                     2.57        2.64        3.00
+
+Span and hold (the knob must rise by its span; the rest stay within tolerance):
+  vary  travel_time           3.000     6.000     9.000   span +6.000      ok
+  hold  gini                  0.550     0.550     0.550   spread 0.000     ok
+  hold  interaction           0.092     0.092     0.092   spread 0.000     ok
+  hold  mean_bush_value       1.540     1.540     1.554   spread 0.009     ok
+  hold  tile_sum_dev          0.017     0.012     0.020   max 0.020        ok
+  limit max                   5.723     5.723     5.723   max 5.723        ok

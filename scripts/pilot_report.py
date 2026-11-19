@@ -37,7 +37,7 @@ HOLD_ALL = {"mean_bush_value": ("rel", 0.10), "tile_sum_dev": ("max", 1.0), "lea
 PILOTS = {
     "PCX": {"title": "Pilot: Complexity", "vary": {"interaction": 0.30}, "hold": {"gini": ("abs", 0.03), "travel_time": ("abs", 0.5), **HOLD_ALL}, "limit": {"max": factors.MAX_PEAK}},
     "PSP": {"title": "Pilot: Sparsity", "vary": {"gini": 0.20}, "hold": {"travel_time": ("abs", 0.5), "interaction": ("abs", 0.15), **HOLD_ALL}, "limit": {"max": factors.MAX_PEAK}},
-    "PEF": {"title": "Pilot: Efficiency", "vary": {"travel_time": 3.0}, "hold": {"gini": ("abs", 0.03), "interaction": ("abs", 0.05), **HOLD_ALL}, "limit": {"max": factors.MAX_PEAK}},
+    "PSC": {"title": "Pilot: Spacing", "vary": {"travel_time": 5.0}, "hold": {"gini": ("abs", 0.03), "interaction": ("abs", 0.05), "mean_bush_value": ("rel", 0.10), "tile_sum_dev": ("max", 1.0)}, "limit": {"max": factors.MAX_PEAK}},
 }
 
 ROWS = (                         # (key, label, format); a key a record lacks is left out

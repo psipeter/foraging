@@ -1,11 +1,11 @@
-"""Pilot: Efficiency: three sessions of the foraging task, low, medium and high of one knob, in that order (`design/tables/PEF.json`, realised by `cells.py realize design/tables/PEF.json`; designed with
+"""Pilot: Spacing: three sessions of the foraging task, low, medium and high of one knob, in that order (`design/tables/PSC.json`, realised by `cells.py realize design/tables/PSC.json`; designed with
 `pilot_report.py`). The participants are told nothing of what varies. Built like FORX (`design/tabled.py`)."""
 
 from design import tabled
 from design.common import instruction_page
 
-CODE = "PEF"
-TITLE = "Pilot: Efficiency"
+CODE = "PSC"
+TITLE = "Pilot: Spacing"
 REQUIRES = ("TUT",)
 TEMPLATE_SESSION = "FOR_S1"
 

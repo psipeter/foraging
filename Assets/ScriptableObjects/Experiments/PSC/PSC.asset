@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c43e39085c865c34f80e232be22946f5, type: 3}
+  m_Name: PSC
+  m_EditorClassIdentifier: Assembly-CSharp::ExperimentConfig
+  code: PSC
+  title: 'Pilot: Spacing'
+  requires:
+  - TUT
+  sessions:
+  - {fileID: 11400000, guid: ce4a8ff1be13228428ba3ad2843c6465, type: 2}
+  - {fileID: 11400000, guid: 00b73e59e02626ec8a8bced711ead3bc, type: 2}
+  - {fileID: 11400000, guid: e95b9f6067e2af330b6931538cf15254, type: 2}
+  countsTowardTotal: 1
+  estimatedMinutes: 0
+  typicalPoints: 0

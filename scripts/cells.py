@@ -63,7 +63,7 @@ def realize_cell(cell, session="FOR_S1", draws=DRAWS, duration=120.0, **override
     failed = []
     for draw in range(draws):
         try:
-            r = factors.realize(session, gini, interaction, value_maps.CLASS_KLASS[name], float(cell["travel_time"]), corner=tuple(float(x) for x in cell["corner"]) if "corner" in cell else corner_of(cid, draw), aspect=float(cell["aspect"]) if "aspect" in cell else aspect_of(cid, draw), center=cell["center"] if "center" in cell else (0.0, 1.0), seed=draw, **overrides)
+            r = factors.realize(session, gini, interaction, value_maps.CLASS_KLASS[name], float(cell["travel_time"]), corner=tuple(float(x) for x in cell["corner"]) if "corner" in cell else corner_of(cid, draw), aspect=float(cell["aspect"]) if "aspect" in cell else aspect_of(cid, draw), center=cell["center"] if "center" in cell else (0.0, 1.0), gain=float(cell["gain"]) if "gain" in cell else None, seed=draw, **overrides)
         except ValueError as e:
             failed.append({"draw": draw, "error": str(e)[:220]})
             continue
@@ -94,13 +94,22 @@ def realize_table(table_path, workers=6):
     todo = [c for c in table["cells"] if c["id"] not in done]
     print(f"{len(todo)} of {len(table['cells'])} cells to realise for {code}, {workers} at a time", flush=True)
     REALIZED.mkdir(exist_ok=True)
+    # A cell with `gain_of` (another cell's id) takes that cell's realised gain, so the reward scale is fixed while the layout varies: those cells wait for it.
+    waves = [[c for c in todo if "gain_of" not in c], [c for c in todo if "gain_of" in c]]
     with mp.Pool(workers) as pool:
-        for record in pool.imap_unordered(_work, [(c, session, duration) for c in todo]):
-            data["cells"].append(record)
-            data["cells"].sort(key=lambda c: c["id"])
-            out.write_text(json.dumps(data, indent=1))
-            print(f"cell {record['id']}: {record['status']}" + (f", draw {record['draw']}, gain {record['map']['equaliser']['value']:.2f}, peak {record['peak']:.1f}, world seed {record['world_seed']}"
-                  if record["status"] == "ok" else "; " + "; ".join(f["error"][:80] for f in record["failed_draws"][:2])) + f" ({record['seconds']} s)", flush=True)
+        for wave in waves:
+            for c in wave:
+                if "gain_of" in c:
+                    ref = next(r for r in data["cells"] if r["id"] == int(c["gain_of"]))
+                    if ref["status"] != "ok":
+                        raise ValueError(f"cell {c['id']} takes the gain of cell {c['gain_of']}, which is inaccessible")
+                    c["gain"] = ref["map"]["equaliser"]["value"]
+            for record in pool.imap_unordered(_work, [(c, session, duration) for c in wave]):
+                data["cells"].append(record)
+                data["cells"].sort(key=lambda c: c["id"])
+                out.write_text(json.dumps(data, indent=1))
+                print(f"cell {record['id']}: {record['status']}" + (f", draw {record['draw']}, gain {record['map']['equaliser']['value']:.2f}, peak {record['peak']:.1f}, world seed {record['world_seed']}"
+                      if record["status"] == "ok" else "; " + "; ".join(f["error"][:80] for f in record["failed_draws"][:2])) + f" ({record['seconds']} s)", flush=True)
     return out
 
 

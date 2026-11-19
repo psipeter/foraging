@@ -1,0 +1,7 @@
+Foraging task
+
+Harvest bushes to collect **points**
+**Rank** bushes when prompted
+Note: this is a **new** area with new **rules**
+
+Press [Enter] to begin

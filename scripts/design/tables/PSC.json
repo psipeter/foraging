@@ -1,0 +1,46 @@
+{
+ "code": "PSC",
+ "session": "FOR_S1",
+ "duration": 180,
+ "note": "Pilot: Spacing: the travel time between patches, 3, 6 and 9 s, on one additive map (the corner where shape pays more when higher and colour when lower, so the rule differs from PCX and TUT); the gain is fixed at the 3 s cell's, so the points fall with travel. The participants are not told what varies.",
+ "cells": [
+  {
+   "id": 1,
+   "class": "additive",
+   "gini": 0.55,
+   "travel_time": 3.0,
+   "corner": [
+    1,
+    0
+   ],
+   "aspect": 2.0,
+   "world_seed": 9401
+  },
+  {
+   "id": 2,
+   "class": "additive",
+   "gini": 0.55,
+   "travel_time": 6.0,
+   "corner": [
+    1,
+    0
+   ],
+   "aspect": 2.0,
+   "world_seed": 9402,
+   "gain_of": 1
+  },
+  {
+   "id": 3,
+   "class": "additive",
+   "gini": 0.55,
+   "travel_time": 9.0,
+   "corner": [
+    1,
+    0
+   ],
+   "aspect": 2.0,
+   "world_seed": 9403,
+   "gain_of": 1
+  }
+ ]
+}

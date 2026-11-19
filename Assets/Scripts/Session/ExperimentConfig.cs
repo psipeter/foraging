@@ -38,61 +38,41 @@ public class ExperimentConfig : ScriptableObject
     // The minutes the menu quotes: the stated estimate, else MinutesOf the sessions.
     public float EstimatedMinutes => estimatedMinutes > 0f ? estimatedMinutes : MinutesOf(sessions, 1f);
 
-    // The time the sessions take at most (SessionSecondsAtMost: foraging time plus the rankings), `shortFactor` as RunModes.Short applies it, rounded to the nearest minute (at least 1).
+    // The foraging time of the sessions, `shortFactor` as RunModes.Short applies it, rounded to the nearest minute (at least 1). Ranking time is left out (PI, 2026-11-19): how many
+    // patch leavings there are and how fast the participant ranks is too variable to estimate, so the quote undershoots the true time a little.
     public static float MinutesOf(IList<SessionConfig> list, float shortFactor)
     {
         float seconds = 0f;
         foreach (SessionConfig session in list)
         {
-            seconds += SessionSecondsAtMost(session, shortFactor);
+            seconds += SessionSeconds(session, shortFactor);
         }
 
         return Mathf.Max(1f, Mathf.Round(seconds / 60f));
     }
 
-    // A session's time at most: its foraging time plus its rankings at their longest. The menu's bar and time left are measured against it.
-    public static float SessionSecondsAtMost(SessionConfig session, float shortFactor)
+    // A session's foraging time. The menu's bar and time left are measured against it.
+    private static float SessionSeconds(SessionConfig session, float shortFactor)
     {
-        return session == null ? 0f : RunModes.SessionSeconds(session, shortFactor) + RankingSecondsAtMost(session);
+        return session == null ? 0f : RunModes.SessionSeconds(session, shortFactor);
     }
 
-    // The ranking sets of a session at their longest: every ranking on the schedule (SessionConfig.rankingLeavings; with no schedule the estimate `rankingEstimate`, since how many
-    // leavings there will be is not known), each set its full countdown. The breaks hold the session clock, so they come on top of the session's length.
-    public static float RankingSecondsAtMost(SessionConfig session)
-    {
-        if (session == null || session.RankingEvery <= 0)
-        {
-            return 0f;
-        }
-
-        int rankings = session.RankingLeavings.Length > 0 ? session.RankingLeavings.Length : session.RankingEstimate;
-        return rankings * session.RankingSets * session.RankingSeconds;
-    }
-
-    // How much of a session's maximum time is behind a participant who has `foragingSeconds` on the foraging clock and `rankings` rankings ended: the foraging seconds (at most the
-    // session's length) plus each ranking at its full countdown (RankingSets x RankingSeconds; the time of a ranking is counted when it ends).
-    private static float SecondsDone(SessionConfig session, float shortFactor, float foragingSeconds, int rankings)
-    {
-        float ranking = session.RankingEvery > 0 ? Mathf.Min(rankings * session.RankingSets * session.RankingSeconds, RankingSecondsAtMost(session)) : 0f;
-        return Mathf.Min(Mathf.Max(foragingSeconds, 0f), RunModes.SessionSeconds(session, shortFactor)) + ranking;
-    }
-
-    // The share of an experiment's maximum time (the sum of SessionSecondsAtMost) a run has behind it: its finished sessions in full, and the session under way as SecondsDone.
-    public static float Progress(IList<SessionConfig> list, int sessionsDone, float foragingSeconds, int rankings, float shortFactor)
+    // The share of an experiment's foraging time a run has behind it: its finished sessions in full, and the session under way by its foraging clock.
+    public static float Progress(IList<SessionConfig> list, int sessionsDone, float foragingSeconds, float shortFactor)
     {
         float total = 0f, done = 0f;
         for (int i = 0; i < list.Count; i++)
         {
-            float most = SessionSecondsAtMost(list[i], shortFactor);
+            float most = SessionSeconds(list[i], shortFactor);
             total += most;
-            done += i < sessionsDone ? most : i == sessionsDone && list[i] != null ? Mathf.Min(SecondsDone(list[i], shortFactor, foragingSeconds, rankings), most) : 0f;
+            done += i < sessionsDone ? most : i == sessionsDone && list[i] != null ? Mathf.Min(Mathf.Max(foragingSeconds, 0f), most) : 0f;
         }
 
         return total > 0f ? Mathf.Clamp01(done / total) : 0f;
     }
 
-    // The seconds a run still needs at most, for the menu's "time left": the maximum time of every session not finished, less what the session under way has behind it.
-    public static float SecondsLeft(IList<SessionConfig> list, int sessionsDone, float foragingSeconds, int rankings, float shortFactor)
+    // The foraging seconds a run still needs, for the menu's "time left": the foraging time of every session not finished, less what the session under way has behind it.
+    public static float SecondsLeft(IList<SessionConfig> list, int sessionsDone, float foragingSeconds, float shortFactor)
     {
         float seconds = 0f;
         for (int i = Mathf.Max(sessionsDone, 0); i < list.Count; i++)
@@ -102,8 +82,8 @@ public class ExperimentConfig : ScriptableObject
                 continue;
             }
 
-            float most = SessionSecondsAtMost(list[i], shortFactor);
-            seconds += i == sessionsDone ? Mathf.Max(most - SecondsDone(list[i], shortFactor, foragingSeconds, rankings), 0f) : most;
+            float most = SessionSeconds(list[i], shortFactor);
+            seconds += i == sessionsDone ? Mathf.Max(most - Mathf.Max(foragingSeconds, 0f), 0f) : most;
         }
 
         return seconds;

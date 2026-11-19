@@ -1,0 +1,528 @@
+{
+ "code": "PSC",
+ "session": "FOR_S1",
+ "duration": 180.0,
+ "cells": [
+  {
+   "id": 1,
+   "status": "ok",
+   "knobs": {
+    "class": "additive",
+    "gini": 0.55,
+    "travel_time": 3.0,
+    "corner": [
+     1,
+     0
+    ],
+    "aspect": 2.0,
+    "world_seed": 9401
+   },
+   "interaction": null,
+   "draw": 0,
+   "failed_draws": [],
+   "map": {
+    "bumps": [
+     {
+      "center_shape": 1.0,
+      "center_color": 0.0,
+      "width": 0.6207296746436562,
+      "width_color": 0.31036483732182807,
+      "angle": 0.0,
+      "height": 4.0
+     }
+    ],
+    "noise": {
+     "type": "flat",
+     "sd": 0.6
+    },
+    "equaliser": {
+     "type": "gain",
+     "value": 1.430690970750318
+    }
+   },
+   "settings": {
+    "tile_radius": 36.80607966083864,
+    "tile_placement": "balanced",
+    "tile_sum_tol": 1.0
+   },
+   "peak": 5.722763883001272,
+   "feedback_max": 6,
+   "duration": 180.0,
+   "anchor_points": 1125.0,
+   "world_seed": 9401,
+   "achieved": {
+    "factors": {
+     "travel_time": [
+      2.9999999999999996,
+      0.0
+     ],
+     "travel_time_nearest_bush": [
+      3.308937958689788,
+      0.0028633161423770757
+     ],
+     "travel_time_centres": [
+      5.666666666666666,
+      0.0
+     ],
+     "contrast": [
+      0.0005083870317933172,
+      2.854254188078404e-05
+     ],
+     "neighbour_difference": [
+      0.0005710226202151191,
+      3.279594520342595e-05
+     ],
+     "diversity": [
+      1.6614804944537553,
+      0.00037056918654251707
+     ],
+     "mean_bush_value": [
+      1.544409883781979,
+      0.00040563895459150317
+     ],
+     "bush_gini": [
+      0.5480563715790889,
+      6.116627508168999e-05
+     ],
+     "max_bush_value": [
+      5.703781472600248,
+      0.00194017132643097
+     ],
+     "noise_sd": [
+      0.6670256771185503,
+      0.0013579304465614367
+     ],
+     "max_fruit": [
+      7.125,
+      0.05295740910852021
+     ],
+     "share_fruit_over_cap": [
+      0.0,
+      0.0
+     ],
+     "n_tiles": [
+      79.275,
+      0.3822797673338474
+     ],
+     "n_bushes": [
+      713.475,
+      3.4405179060046267
+     ],
+     "walk_visits": [
+      60.000000000000014,
+      1.137778964768807e-15
+     ]
+    },
+    "points": {
+     "nearest": [
+      802.425,
+      3.8209757614032007
+     ],
+     "oracle": [
+      1354.2,
+      4.615775624462763
+     ],
+     "learner": [
+      1122.35,
+      5.151120117172425
+     ]
+    }
+   },
+   "within_tolerance": true,
+   "planner": {
+    "flag": null,
+    "per_visit": 4.7,
+    "sizes": {
+     "1": 1,
+     "2": 2,
+     "4": 2,
+     "5": 1,
+     "6": 1,
+     "7": 2,
+     "9": 1
+    },
+    "bushes": 47,
+    "visits": 10,
+    "tile_share": 0.5222222222222223,
+    "top_half": 0.7872340425531915,
+    "total": 1127.0,
+    "heuristic_best": "greedy",
+    "heuristic_total": 1392.0,
+    "weak": true,
+    "shares": {
+     "top-1": 1.0656610470275067,
+     "top-2": 1.2244897959183674,
+     "top-3": 1.1464063886424134,
+     "top-4": 1.1064773735581188,
+     "top-5": 0.9982253771073647,
+     "top-6": 0.9050576752440106,
+     "top-7": 0.8509316770186336,
+     "top-8": 0.7204968944099379,
+     "top-9": 0.738243123336291,
+     "thr-10": 0.7204968944099379,
+     "thr-20": 0.8509316770186336,
+     "thr-30": 0.9210292812777284,
+     "thr-40": 0.9724933451641526,
+     "thr-50": 1.093167701863354,
+     "thr-60": 1.1535048802129548,
+     "thr-70": 1.1721384205856256,
+     "thr-80": 1.194321206743567,
+     "thr-90": 1.0789707187222715
+    },
+    "ends_near": [
+     "top-1",
+     "thr-90"
+    ],
+    "beam_width": 300,
+    "text": "planner takes 4.7 bushes per tile visit (52% of a visited tile's bushes; visits of 1: 1, 2: 2, 4: 2, 5: 1, 6: 1, 7: 2, 9: 1) and scores 1127: in the middle; against the planner: top-1 107%, top-9 74%, thr-90 108%, thr-10 72%, best simple policy greedy 124%; WARNING, top-1, thr-90 reach 95% of the planner: that extreme is not clearly worse in this world; CAUTION: the best simple policy (greedy, 1392) beats it by more than 3%, so the beam search (300 wide) did not find the best route: do not read its route as the optimum"
+   },
+   "calibrator": 1,
+   "seconds": 261
+  },
+  {
+   "id": 2,
+   "status": "ok",
+   "knobs": {
+    "class": "additive",
+    "gini": 0.55,
+    "travel_time": 6.0,
+    "corner": [
+     1,
+     0
+    ],
+    "aspect": 2.0,
+    "world_seed": 9402,
+    "gain_of": 1,
+    "gain": 1.430690970750318
+   },
+   "interaction": null,
+   "draw": 0,
+   "failed_draws": [],
+   "map": {
+    "bumps": [
+     {
+      "center_shape": 1.0,
+      "center_color": 0.0,
+      "width": 0.6207296746436562,
+      "width_color": 0.31036483732182807,
+      "angle": 0.0,
+      "height": 4.0
+     }
+    ],
+    "noise": {
+     "type": "flat",
+     "sd": 0.6
+    },
+    "equaliser": {
+     "type": "gain",
+     "value": 1.430690970750318
+    }
+   },
+   "settings": {
+    "tile_radius": 56.29165124598852,
+    "tile_placement": "balanced",
+    "tile_sum_tol": 1.0
+   },
+   "peak": 5.722763883001272,
+   "feedback_max": 6,
+   "duration": 180.0,
+   "anchor_points": 1125.0,
+   "world_seed": 9402,
+   "achieved": {
+    "factors": {
+     "travel_time": [
+      6.0,
+      0.0
+     ],
+     "travel_time_nearest_bush": [
+      6.290929280061738,
+      0.0040749355282881485
+     ],
+     "travel_time_centres": [
+      8.666666666666666,
+      0.0
+     ],
+     "contrast": [
+      0.0006485219710088688,
+      3.7693647258599914e-05
+     ],
+     "neighbour_difference": [
+      0.000736858485007445,
+      4.01925075800118e-05
+     ],
+     "diversity": [
+      1.6614206898669521,
+      0.0010517063039744879
+     ],
+     "mean_bush_value": [
+      1.5448934421372464,
+      0.001081874649940381
+     ],
+     "bush_gini": [
+      0.5478942356962163,
+      0.00013259666844644646
+     ],
+     "max_bush_value": [
+      5.675609953235918,
+      0.005299946959112212
+     ],
+     "noise_sd": [
+      0.6690781405248216,
+      0.0019953483263329018
+     ],
+     "max_fruit": [
+      7.05,
+      0.03489912202260564
+     ],
+     "share_fruit_over_cap": [
+      0.0,
+      0.0
+     ],
+     "n_tiles": [
+      33.125,
+      0.10853039276555738
+     ],
+     "n_bushes": [
+      298.125,
+      0.9767735348900165
+     ],
+     "walk_visits": [
+      30.0,
+      0.0
+     ]
+    },
+    "points": {
+     "nearest": [
+      727.35,
+      2.369288002971703
+     ],
+     "oracle": [
+      1069.875,
+      5.396721167428827
+     ],
+     "learner": [
+      906.425,
+      4.571215332423601
+     ]
+    }
+   },
+   "within_tolerance": true,
+   "planner": {
+    "flag": null,
+    "per_visit": 6.285714285714286,
+    "sizes": {
+     "1": 1,
+     "5": 1,
+     "7": 2,
+     "8": 3
+    },
+    "bushes": 44,
+    "visits": 7,
+    "tile_share": 0.6984126984126984,
+    "top_half": 0.7045454545454546,
+    "total": 857.0,
+    "heuristic_best": "greedy",
+    "heuristic_total": 1091.0,
+    "weak": true,
+    "shares": {
+     "top-1": 0.9323220536756126,
+     "top-2": 1.1271878646441074,
+     "top-3": 1.2543757292882147,
+     "top-4": 1.2333722287047841,
+     "top-5": 1.177362893815636,
+     "top-6": 1.0560093348891482,
+     "top-7": 0.9451575262543758,
+     "top-8": 0.9311551925320887,
+     "top-9": 0.823803967327888,
+     "thr-10": 0.8856476079346558,
+     "thr-20": 0.9451575262543758,
+     "thr-30": 1.0746791131855309,
+     "thr-40": 1.105017502917153,
+     "thr-50": 1.1376896149358227,
+     "thr-60": 1.2613768961493583,
+     "thr-70": 1.220536756126021,
+     "thr-80": 1.1248541423570595,
+     "thr-90": 0.926487747957993
+    },
+    "ends_near": [],
+    "beam_width": 300,
+    "text": "planner takes 6.3 bushes per tile visit (70% of a visited tile's bushes; visits of 1: 1, 5: 1, 7: 2, 8: 3) and scores 857: in the middle; against the planner: top-1 93%, top-9 82%, thr-90 93%, thr-10 89%, best simple policy greedy 127%; CAUTION: the best simple policy (greedy, 1091) beats it by more than 3%, so the beam search (300 wide) did not find the best route: do not read its route as the optimum"
+   },
+   "calibrator": 1,
+   "seconds": 92
+  },
+  {
+   "id": 3,
+   "status": "ok",
+   "knobs": {
+    "class": "additive",
+    "gini": 0.55,
+    "travel_time": 9.0,
+    "corner": [
+     1,
+     0
+    ],
+    "aspect": 2.0,
+    "world_seed": 9403,
+    "gain_of": 1,
+    "gain": 1.430690970750318
+   },
+   "interaction": null,
+   "draw": 0,
+   "failed_draws": [],
+   "map": {
+    "bumps": [
+     {
+      "center_shape": 1.0,
+      "center_color": 0.0,
+      "width": 0.6207296746436562,
+      "width_color": 0.31036483732182807,
+      "angle": 0.0,
+      "height": 4.0
+     }
+    ],
+    "noise": {
+     "type": "flat",
+     "sd": 0.6
+    },
+    "equaliser": {
+     "type": "gain",
+     "value": 1.430690970750318
+    }
+   },
+   "settings": {
+    "tile_radius": 75.77722283113839,
+    "tile_placement": "balanced",
+    "tile_sum_tol": 1.0
+   },
+   "peak": 5.722763883001272,
+   "feedback_max": 6,
+   "duration": 180.0,
+   "anchor_points": 1125.0,
+   "world_seed": 9403,
+   "achieved": {
+    "factors": {
+     "travel_time": [
+      9.0,
+      0.0
+     ],
+     "travel_time_nearest_bush": [
+      9.294182085342225,
+      0.006169799509834534
+     ],
+     "travel_time_centres": [
+      11.666666666666666,
+      0.0
+     ],
+     "contrast": [
+      0.0006754303102297637,
+      4.633929354711188e-05
+     ],
+     "neighbour_difference": [
+      0.0008009917071506979,
+      5.880104600795197e-05
+     ],
+     "diversity": [
+      1.6627560020151315,
+      0.0013869624195293185
+     ],
+     "mean_bush_value": [
+      1.5460674852235574,
+      0.0017282613322802992
+     ],
+     "bush_gini": [
+      0.5478841100994887,
+      0.00026387801330149765
+     ],
+     "max_bush_value": [
+      5.638793931467069,
+      0.008230799292552892
+     ],
+     "noise_sd": [
+      0.6723292190171255,
+      0.003299021906402094
+     ],
+     "max_fruit": [
+      6.925,
+      0.05532537786493134
+     ],
+     "share_fruit_over_cap": [
+      0.0,
+      0.0
+     ],
+     "n_tiles": [
+      17.575,
+      0.17862544970426605
+     ],
+     "n_bushes": [
+      158.175,
+      1.6076290473383943
+     ],
+     "walk_visits": [
+      20.0,
+      0.0
+     ]
+    },
+    "points": {
+     "nearest": [
+      677.9,
+      4.016280968820884
+     ],
+     "oracle": [
+      894.9,
+      7.291266289374164
+     ],
+     "learner": [
+      788.775,
+      4.702084575906133
+     ]
+    }
+   },
+   "within_tolerance": true,
+   "planner": {
+    "flag": null,
+    "per_visit": 7.0,
+    "sizes": {
+     "4": 1,
+     "6": 1,
+     "7": 1,
+     "8": 2,
+     "9": 1
+    },
+    "bushes": 42,
+    "visits": 6,
+    "tile_share": 0.7777777777777778,
+    "top_half": 0.6904761904761905,
+    "total": 818.0,
+    "heuristic_best": "top-3",
+    "heuristic_total": 939.0,
+    "weak": true,
+    "shares": {
+     "top-1": 0.7946210268948656,
+     "top-2": 0.9621026894865525,
+     "top-3": 1.147921760391198,
+     "top-4": 1.1002444987775062,
+     "top-5": 1.0855745721271393,
+     "top-6": 0.9657701711491442,
+     "top-7": 0.9168704156479217,
+     "top-8": 0.8814180929095354,
+     "top-9": 0.8679706601466992,
+     "thr-10": 0.8740831295843521,
+     "thr-20": 0.863080684596577,
+     "thr-30": 0.9657701711491442,
+     "thr-40": 1.033007334963325,
+     "thr-50": 1.075794621026895,
+     "thr-60": 1.1161369193154034,
+     "thr-70": 1.1185819070904646,
+     "thr-80": 0.9706601466992665,
+     "thr-90": 0.7946210268948656
+    },
+    "ends_near": [],
+    "beam_width": 300,
+    "text": "planner takes 7.0 bushes per tile visit (78% of a visited tile's bushes; visits of 4: 1, 6: 1, 7: 1, 8: 2, 9: 1) and scores 818: in the middle; against the planner: top-1 79%, top-9 87%, thr-90 79%, thr-10 87%, best simple policy top-3 115%; CAUTION: the best simple policy (top-3, 939) beats it by more than 3%, so the beam search (300 wide) did not find the best route: do not read its route as the optimum"
+   },
+   "calibrator": 1,
+   "seconds": 54
+  }
+ ]
+}
