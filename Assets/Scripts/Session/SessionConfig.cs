@@ -94,7 +94,7 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float rewardStd = 1.0f;
 
     [Header("Display")]
-    [Tooltip("Frame rate cap (vsync is turned off so the cap applies). 120 matches common VR headset refresh rates and bounds the size of the per-frame trajectory log.")]
+    [Tooltip("Frame rate cap (vsync is turned off so the cap applies). 120 matches common VR headset refresh rates and bounds the size of the per-frame trajectory log. Not used in a browser (WebGL), which follows the display's refresh rate: see docs/DECISIONS.md, WebGL frame pacing.")]
     [SerializeField] private int targetFrameRate = 120;
 
     [Header("Data upload")]

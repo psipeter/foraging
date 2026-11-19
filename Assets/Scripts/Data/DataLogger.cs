@@ -471,7 +471,7 @@ public class DataLogger : MonoBehaviour
             ("nearClipPlane", mainCamera.nearClipPlane), ("farClipPlane", mainCamera.farClipPlane));
         string display = Json.Obj(("width", Screen.width), ("height", Screen.height), ("fullscreen", Screen.fullScreen),
             ("targetFrameRate", Application.targetFrameRate), ("vSyncCount", QualitySettings.vSyncCount),
-            ("platform", Application.platform.ToString()), ("unityVersion", Application.unityVersion),
+            ("platform", Application.platform.ToString()), ("unityVersion", Application.unityVersion), ("refreshHz", Screen.currentResolution.refreshRateRatio.value),
             ("buildCommit", build?.commit), ("buildDirty", build != null ? (object)build.dirty : null));
         string frameStats = Json.Obj(("count", _frames), ("meanMs", _frames > 0 ? _dtSum / _frames * 1000.0 : 0.0), ("maxMs", _dtMax * 1000f),
             ("fixedDeltaTime", Time.fixedDeltaTime));

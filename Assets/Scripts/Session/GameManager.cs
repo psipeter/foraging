@@ -115,7 +115,8 @@ public class GameManager : MonoBehaviour
             RenderSettings.fogEndDistance = Mathf.Max(activeConfig.FogEndDistance, activeConfig.FogStartDistance + 1f);
         }
         QualitySettings.vSyncCount = 0;
-        Application.targetFrameRate = activeConfig.TargetFrameRate;
+        // In a browser any rate but -1 is paced by a timer, which gave frames of uneven length (measured 2026-11-19: 10.7 ms mean, p95 19, against 4 ms of work); -1 follows the display's own refresh (docs/DECISIONS.md, "WebGL frame pacing").
+        Application.targetFrameRate = Application.platform == RuntimePlatform.WebGLPlayer ? -1 : activeConfig.TargetFrameRate;
 
         if (sunController != null)
         {

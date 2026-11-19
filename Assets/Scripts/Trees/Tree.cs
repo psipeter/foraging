@@ -320,6 +320,7 @@ public class Tree : MonoBehaviour
             if (renderer != null)
             {
                 renderer.sharedMaterial = FruitMaterialManager.GetMaterial(fruitColor);
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;      // ~2000 tiny casters per world for shadows too small to see; fruits still receive them
             }
 
             _fruits.Add(fruit);
@@ -344,6 +345,7 @@ public class Tree : MonoBehaviour
             if (renderer != null)
             {
                 renderer.sharedMaterial = FruitMaterialManager.GetMaterial(fruitColor);
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;      // ~2000 tiny casters per world for shadows too small to see; fruits still receive them
             }
 
             _fruits.Add(fruit);

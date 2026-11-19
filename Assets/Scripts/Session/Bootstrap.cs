@@ -276,6 +276,11 @@ public class Bootstrap : MonoBehaviour
             return code;
         }
 #endif
+        if (Debug.isDebugBuild && Application.platform == RuntimePlatform.WebGLPlayer)
+        {
+            return OnlineSettings.UrlParameter("experiment");     // a development build in a browser: ?experiment=<code> skips the menu
+        }
+
         string[] args = System.Environment.GetCommandLineArgs();
         for (int i = 0; i + 1 < args.Length; i++)
         {
