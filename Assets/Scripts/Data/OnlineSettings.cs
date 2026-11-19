@@ -86,8 +86,8 @@ public class OnlineSettings
             settings.enabled = true;
         }
 
-        // Development builds only: ?offline=1 never talks to a server, whatever online.json says (the performance benchmark must not write runs into a real database).
-        if (Debug.isDebugBuild && UrlParameter("offline") != null)
+        // Development builds only: ?offline=1 (or ?perf=1) never talks to a server, whatever online.json says (the performance benchmark must not write runs into a real database).
+        if (Debug.isDebugBuild && (UrlParameter("offline") != null || UrlParameter("perf") != null))
         {
             settings.enabled = false;
         }

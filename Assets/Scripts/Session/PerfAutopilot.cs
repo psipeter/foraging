@@ -36,7 +36,7 @@ public class PerfAutopilot : MonoBehaviour
 
     private void Update()
     {
-        if (Keyboard.current == null || Mouse.current == null || !PerfProbe.Recording || SceneManager.GetActiveScene().name != "SampleScene" || Time.timeScale <= 0f)
+        if (Keyboard.current == null || Mouse.current == null || !PerfProbe.Recording || SceneManager.GetActiveScene().name != PerfProbe.GameScene || Time.timeScale <= 0f)
         {
             SetKey(false);
             return;

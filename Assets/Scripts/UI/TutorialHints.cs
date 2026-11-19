@@ -18,6 +18,7 @@ using UnityEngine.InputSystem;
 //                       seconds); needs a session with rankings
 //   ranking_start       the nth ranking break, a quarter second after the bushes of its first set have grown (the hint pauses the set's countdown)
 //   ranking_end         the nth ranking break, as it ends
+//                       A hint whose prompt line names [Escape] ("Press [Escape] to pause") ends when the participant pauses: in a browser, when they have clicked back in after the pause; elsewhere, at the key.
 //   time_left           `@time_left 60`: the first moment 60 foraging seconds or fewer are left (not during a ranking break); the session clock pulses yellow while the hint is up
 // Foraging triggers (`bout`, `patch_switch`) are ignored while a ranking break is running. A foraging hint waiting in the queue holds back a ranking hint behind it (the queue is in order).
 // Each shown and dismissed hint is logged (`hint_shown`, `hint_dismissed`: id `trigger:n`, trigger, n). A resumed session skips the hints already shown (the server's `hints_shown`), and a trigger's
@@ -32,6 +33,7 @@ public class TutorialHints : MonoBehaviour
         public int n = 1;
         public string text;
         public bool shown;
+        public bool waitsForEscape;        // the prompt asks for [Escape]: the hint ends when the participant pauses, not on Enter
 
         public string Id => $"{trigger}:{n}";
     }
@@ -46,6 +48,14 @@ public class TutorialHints : MonoBehaviour
     private InstructionsScreen _screen;
     private Hint _current;
     private string _placeholder = "";
+    private bool _released;                // a hint that waits for Escape: the participant has paused (in a browser it ends when they click back in)
+
+    // True while a hint waits for Escape: QuitHandler leaves the key alone (outside a browser it would end the session).
+    public static bool AwaitingEscape { get; private set; }
+
+    // When a hint took Escape: QuitHandler (which runs after this script) leaves the key alone for a moment, so that the press that ended the hint, or its repeat, does not end the session too.
+    public static bool EscapeJustTaken => Time.unscaledTime - _escapeTakenAt < 0.75f;
+    private static float _escapeTakenAt = float.NegativeInfinity;
 
     public static TutorialHints Create(SessionConfig config, DataLogger log, SunController sun, SessionTimerUI timer)
     {
@@ -160,6 +170,7 @@ public class TutorialHints : MonoBehaviour
 
     private void OnDisable()
     {
+        AwaitingEscape = false;
         HarvestManager.OnHarvestBoutEnded -= HandleBout;
         RankingBreak.OnSetReady -= HandleSetReady;
         RankingBreak.OnLeaving -= HandleLeaving;
@@ -239,6 +250,12 @@ public class TutorialHints : MonoBehaviour
             }
         }
 
+        if (_current != null && _current.waitsForEscape)
+        {
+            WaitForEscape();
+            return;
+        }
+
         if (_screen.Visible)
         {
             if (Keyboard.current != null && !PauseGate.Pointer && (Keyboard.current.enterKey.wasPressedThisFrame || Keyboard.current.numpadEnterKey.wasPressedThisFrame))
@@ -252,6 +269,28 @@ public class TutorialHints : MonoBehaviour
         if (_queue.Count > 0 && (!RankingBreak.Active || _queue.Peek().trigger.StartsWith("ranking")))       // only the ranking popups may appear during a ranking break
         {
             Show(_queue.Dequeue());
+        }
+    }
+
+    // A hint that asks for [Escape] (its prompt names it). In a browser the key is the browser's and releases the mouse capture, so the pause (PauseGate.Pointer, the "click to continue" screen) is the
+    // sign that it was pressed; the popup then gives way to that screen and ends when the participant has clicked back in. Elsewhere the key itself ends the hint.
+    private void WaitForEscape()
+    {
+        bool browser = Application.platform == RuntimePlatform.WebGLPlayer;
+        if (!_released)
+        {
+            bool pressed = browser ? PauseGate.Pointer : Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
+            if (pressed)
+            {
+                _escapeTakenAt = Time.unscaledTime;
+                _released = true;
+                _screen.Hide();
+            }
+        }
+
+        if (_released && (!browser || !PauseGate.Pointer))
+        {
+            Dismiss();
         }
     }
 
@@ -269,6 +308,9 @@ public class TutorialHints : MonoBehaviour
         }
 
         string body = string.Join("\n", lines, 1, Mathf.Max(0, last)).Trim();
+        _released = false;
+        hint.waitsForEscape = prompt.IndexOf("[Escape]", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        AwaitingEscape = hint.waitsForEscape;
         _screen.Show(GameManager.PartLabel, title, body, prompt);
         PauseGate.Instructions = true;
         _timer?.SetPulse(hint.trigger == "time_left");
@@ -281,6 +323,7 @@ public class TutorialHints : MonoBehaviour
         _screen.Hide();
         _timer?.SetPulse(false);
         _current = null;
+        AwaitingEscape = false;
         if (_queue.Count > 0)
         {
             Show(_queue.Dequeue());

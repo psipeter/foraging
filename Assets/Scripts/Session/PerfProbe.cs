@@ -10,43 +10,43 @@ using UnityEngine.SceneManagement;
 
 // Development builds only (a release build does nothing, so a link cannot change what a participant sees). Measures the frame time of the game scene and can
 // change graphics settings from the address, so that scripts/perf_browser.mjs can compare settings in a real browser without a rebuild.
-//   ?perf=1             record every frame of the game scene (time held by a screen or an unreleased mouse is left out) and print one line to the console:
-//                       PERF_JSON {...} (settings applied, the machine, summary, one-second series, every frame's milliseconds)
+//   ?perf=1             record every frame of the game scene (time held by a screen or an unreleased mouse is left out) and print the result to the console as
+//                       PERF_PART lines (one JSON: settings applied, the machine, summary, one-second series, every frame's milliseconds)
 //   ?perfSeconds=60     how long to record before printing (default 60); PerfProbe.Mark("label") tags the frames that follow (the benchmark autopilot uses it)
 // Settings (each only with perf=1; ignored in the Editor, where they would be saved into the shared assets):
 //   renderScale=0.8  shadows=0  shadowDistance=60  shadowCascades=1  shadowRes=1024  softShadows=0  msaa=1|2|4  hdr=0
 //   ssao=0  bloom=0  vignette=0  post=0 (all post-processing)  fruitShadows=1|0 (fruits cast shadows or not; the game now has them off)  fps=-1|0|60|120 (Application.targetFrameRate; -1 = the
-//   browser's own refresh rate, 0 is not "uncapped" in a browser)  quality=<n> (also LightingDebug)
+//   browser's own refresh rate, 0 is not "uncapped" in a browser)
 public class PerfProbe : MonoBehaviour
 {
-    private const string GameScene = "SampleScene";
+    public const string GameScene = "SampleScene";
     private const float Warmup = 2f;                  // seconds after the game scene's first frame that are not recorded (shader compiles, first allocations)
 
     private static PerfProbe _instance;
     private readonly List<float> _frameMs = new List<float>();
-    private readonly List<int> _frameMark = new List<int>();
     private readonly List<string> _marks = new List<string>();
     private readonly List<string> _applied = new List<string>();
-    private readonly List<SecondSample> _seconds = new List<SecondSample>();
+    private readonly List<float[]> _seconds = new List<float[]>();      // fps, p99Ms, maxMs, then the Counters' means
 
-    private ProfilerRecorder _draw, _batches, _tris, _setPass, _casters, _mainThread;
+    // Unity's per-frame counters, averaged per second; the last is the main thread's time (nanoseconds).
+    private static readonly (ProfilerCategory category, string name)[] Counters =
+    {
+        (ProfilerCategory.Render, "Draw Calls Count"), (ProfilerCategory.Render, "Batches Count"), (ProfilerCategory.Render, "Triangles Count"),
+        (ProfilerCategory.Render, "SetPass Calls Count"), (ProfilerCategory.Render, "Shadow Casters Count"), (ProfilerCategory.Internal, "Main Thread"),
+    };
+
+    private readonly ProfilerRecorder[] _counters = new ProfilerRecorder[Counters.Length];
     private float _sceneStart;
     private float _recorded;
     private float _target = 60f;
     private bool _delayedDone;
     private bool _reported;
     private int _gc0;
-    private int _currentMark;
     private int? _fps;
 
-    private struct SecondSample
-    {
-        public float fps, p99Ms, maxMs, draws, batches, tris, setPass, casters, mainMs;
-    }
-
     private readonly List<float> _secFrames = new List<float>();
-    private double _secDraws, _secBatches, _secTris, _secSetPass, _secCasters, _secMain;
-    private int _secN;
+    private readonly double[] _secSums = new double[Counters.Length];
+    private float _secMs;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Begin()
@@ -68,7 +68,6 @@ public class PerfProbe : MonoBehaviour
         {
             Debug.Log("PERF_MARK " + label);
             _instance._marks.Add(label + "@" + _instance._frameMs.Count);
-            _instance._currentMark = _instance._marks.Count;
         }
     }
 
@@ -94,12 +93,10 @@ public class PerfProbe : MonoBehaviour
             _target = seconds;
         }
 
-        _draw = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Draw Calls Count");
-        _batches = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Batches Count");
-        _tris = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Triangles Count");
-        _setPass = ProfilerRecorder.StartNew(ProfilerCategory.Render, "SetPass Calls Count");
-        _casters = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Shadow Casters Count");
-        _mainThread = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "Main Thread", 1);
+        for (int i = 0; i < Counters.Length; i++)
+        {
+            _counters[i] = ProfilerRecorder.StartNew(Counters[i].category, Counters[i].name, 1);
+        }
 
         if (Application.isEditor)
         {
@@ -121,12 +118,7 @@ public class PerfProbe : MonoBehaviour
     private void OnDestroy()
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
-        _draw.Dispose();
-        _batches.Dispose();
-        _tris.Dispose();
-        _setPass.Dispose();
-        _casters.Dispose();
-        _mainThread.Dispose();
+        foreach (ProfilerRecorder r in _counters) { r.Dispose(); }
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -265,18 +257,16 @@ public class PerfProbe : MonoBehaviour
 
         float dt = Time.unscaledDeltaTime;
         _frameMs.Add(dt * 1000f);
-        _frameMark.Add(_currentMark);
         _recorded += dt;
 
         _secFrames.Add(dt * 1000f);
-        _secDraws += Last(_draw);
-        _secBatches += Last(_batches);
-        _secTris += Last(_tris);
-        _secSetPass += Last(_setPass);
-        _secCasters += Last(_casters);
-        _secMain += Last(_mainThread) / 1e6;
-        _secN++;
-        if (_secFrames.Count > 0 && SecondsSum(_secFrames) >= 1000f)
+        _secMs += dt * 1000f;
+        for (int i = 0; i < _counters.Length; i++)
+        {
+            _secSums[i] += _counters[i].Valid && _counters[i].Count > 0 ? _counters[i].LastValue : 0.0;
+        }
+
+        if (_secMs >= 1000f)
         {
             FlushSecond();
         }
@@ -286,8 +276,6 @@ public class PerfProbe : MonoBehaviour
             Report();
         }
     }
-
-    private static double Last(ProfilerRecorder r) => r.Valid && r.Count > 0 ? r.LastValue : 0.0;
 
     private static float SecondsSum(List<float> ms)
     {
@@ -300,18 +288,21 @@ public class PerfProbe : MonoBehaviour
     {
         var sorted = new List<float>(_secFrames);
         sorted.Sort();
-        float sum = SecondsSum(_secFrames);
-        _seconds.Add(new SecondSample
+        int n = _secFrames.Count;
+        var row = new float[3 + Counters.Length];
+        row[0] = n * 1000f / _secMs;
+        row[1] = Percentile(sorted, 0.99f);
+        row[2] = sorted[n - 1];
+        for (int i = 0; i < Counters.Length; i++)
         {
-            fps = _secFrames.Count * 1000f / sum,
-            p99Ms = sorted[Mathf.Min(sorted.Count - 1, (int)(sorted.Count * 0.99f))],
-            maxMs = sorted[sorted.Count - 1],
-            draws = (float)(_secDraws / _secN), batches = (float)(_secBatches / _secN), tris = (float)(_secTris / _secN),
-            setPass = (float)(_secSetPass / _secN), casters = (float)(_secCasters / _secN), mainMs = (float)(_secMain / _secN)
-        });
+            row[3 + i] = (float)(_secSums[i] / n);
+            _secSums[i] = 0.0;
+        }
+
+        row[row.Length - 1] /= 1e6f;                    // the main thread's nanoseconds to milliseconds
+        _seconds.Add(row);
         _secFrames.Clear();
-        _secDraws = _secBatches = _secTris = _secSetPass = _secCasters = _secMain = 0.0;
-        _secN = 0;
+        _secMs = 0f;
     }
 
     private static string F(float v) => v.ToString("0.##", CultureInfo.InvariantCulture);
@@ -355,10 +346,7 @@ public class PerfProbe : MonoBehaviour
         sb.Append("],\"seconds\":[");
         for (int i = 0; i < _seconds.Count; i++)
         {
-            SecondSample s = _seconds[i];
-            sb.Append(i > 0 ? "," : "").Append('[').Append(F(s.fps)).Append(',').Append(F(s.p99Ms)).Append(',').Append(F(s.maxMs)).Append(',')
-              .Append(F(s.draws)).Append(',').Append(F(s.batches)).Append(',').Append(F(s.tris)).Append(',').Append(F(s.setPass)).Append(',')
-              .Append(F(s.casters)).Append(',').Append(F(s.mainMs)).Append(']');
+            sb.Append(i > 0 ? "," : "").Append('[').Append(string.Join(",", Array.ConvertAll(_seconds[i], F))).Append(']');
         }
 
         sb.Append("],\"secondsColumns\":\"fps,p99Ms,maxMs,draws,batches,tris,setPass,shadowCasters,mainThreadMs\",\"frames\":[");

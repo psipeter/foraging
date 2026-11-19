@@ -102,7 +102,7 @@ async function runOnce(name, query, n) {
   await browser.close();
   if (!json) {
     fs.writeFileSync(path.join(outRoot, `${name}_${n}.fail.log`), lines.join('\n'));
-    console.log(`  ${name} run ${n}: no PERF_JSON (see ${name}_${n}.fail.log)`);
+    console.log(`  ${name} run ${n}: no PERF_PART result (see ${name}_${n}.fail.log)`);
     return null;
   }
   const result = JSON.parse(json);

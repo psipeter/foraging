@@ -42,9 +42,12 @@ class ValueMap:
         return json.dumps(self.to_dict(), sort_keys=True)
 
     @classmethod
-    def from_json(cls, text):
-        d = json.loads(text)
+    def from_dict(cls, d):
         return cls(tuple(Bump(**b) for b in d["bumps"]), d["noise"], d["equaliser"])
+
+    @classmethod
+    def from_json(cls, text):
+        return cls.from_dict(json.loads(text))
 
     def gain(self):
         if self.equaliser["type"] != "gain":
@@ -220,18 +223,12 @@ def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0
     when the pair is not reachable (`map_region.py` shows the region). `klass` "corner" is the additive rung proper: the Gaussian centred exactly on a corner of the plane (`corner`, each coordinate 0 or 1:
     that feature pays more when it is higher (1) or lower (0)), so both features pay monotonically; its widths have the ratio `aspect` (shape over colour; `corner_aspect`) and their size is solved for the Gini; the interaction and the shape share are what that gives (`interaction` is ignored). The gain is not touched: `scale` is the peak and the equaliser (`solve_gain`) sets the level afterwards."""
     from scipy.optimize import differential_evolution, minimize
-    if klass == "round":                                                          # a symmetric Gaussian (equal widths, axes along the features) centred exactly at `at` (shape, colour): its one width is solved for the Gini
-        from scipy.optimize import brentq
-        build = lambda w: ValueMap((Bump(float(at[0]), float(at[1]), float(w), float(w), 0.0, scale),), {"type": "flat", "sd": std})
-        best = build(brentq(lambda w: build(w).descriptors()["gini"] - gini, 0.05, 1.5, xtol=1e-5))
-        if abs(best.descriptors()["gini"] - gini) > tol[0]:
-            raise ValueError(f"no round Gaussian at {tuple(at)} with Gini {gini}: the closest has Gini {best.descriptors()['gini']:.3f}")
-        return best
-    rotated = {"aligned": False, "rotated": True, "corner": False}[klass]
-    at_corner = klass == "corner"
-    if at_corner:
-        build = lambda x: ValueMap((Bump(float(corner[0]), float(corner[1]), float(x[0]) * aspect ** 0.5, float(x[0]) / aspect ** 0.5, 0.0, scale),), {"type": "flat", "sd": std})
-        bounds = [(0.08, 3.0)]
+    rotated = klass == "rotated"
+    at_corner = klass in ("corner", "round")
+    if at_corner:                                                                 # "round": a symmetric Gaussian centred exactly at `at` (shape, colour)
+        centre, aspect = (corner, aspect) if klass == "corner" else (at, 1.0)
+        build = lambda x: ValueMap((Bump(float(centre[0]), float(centre[1]), float(x[0]) * aspect ** 0.5, float(x[0]) / aspect ** 0.5, 0.0, scale),), {"type": "flat", "sd": std})
+        bounds = [(0.08, 3.0)] if klass == "corner" else [(0.05, 1.5)]
     else:
         build = lambda x: _gaussian_from(x, rotated, scale, std)
         ranges = (center, center) if np.ndim(center) == 1 else center
@@ -241,7 +238,7 @@ def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0
         best = build([brentq(lambda w: build([w]).descriptors()["gini"] - gini, *bounds[0], xtol=1e-5)])
         d = best.descriptors()
         if abs(d["gini"] - gini) > tol[0]:
-            raise ValueError(f"no corner Gaussian of aspect {aspect:.2f} with Gini {gini}: the closest has Gini {d['gini']:.3f}")
+            raise ValueError(f"no {klass} Gaussian at {tuple(centre)} of aspect {aspect:.2f} with Gini {gini}: the closest has Gini {d['gini']:.3f}")
         return best
 
     def loss(x, n):

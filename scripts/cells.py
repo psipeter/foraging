@@ -24,7 +24,6 @@ from pathlib import Path
 import numpy as np
 
 import factors
-import tile_calibration
 import value_maps
 import world
 
@@ -48,13 +47,6 @@ def aspect_of(cell_id, draw):
     return value_maps.corner_aspect(rng.choice(value_maps.CORNER_STRETCHES), bool(rng.integers(2)))
 
 
-def planner_record(session, valuemap, settings, world_seed, **overrides):
-    """The second patch-leaving check, on the cell's own world: how many bushes per tile visit the beam planner takes (`tile_calibration.planner_check`, a warning when it sits within one bush of 1 or of
-    the tile's bushes). About 20 to 30 seconds."""
-    params = world.load_session(session, **overrides, **settings, **valuemap.compile())
-    return tile_calibration.planner_check(world.generate_world(params, world_seed))
-
-
 def realize_cell(cell, session="FOR_S1", draws=DRAWS, duration=120.0, **overrides):
     """The realised session of one cell (at `duration` seconds), or an `inaccessible` record naming why each draw failed. A cell may fix the nuisance of an additive map: `corner` ([shape, colour], each 0 or 1) and `aspect` (shape width over colour width), else they are drawn, and limit the centre of any other map to `center` ([lowest, highest] of both coordinates, or [[shape lowest, highest], [colour lowest, highest]], default [0, 1]); `world_candidates` sets how many worlds are searched."""
     overrides = {**overrides, "session_duration": float(duration)}
@@ -63,7 +55,7 @@ def realize_cell(cell, session="FOR_S1", draws=DRAWS, duration=120.0, **override
     failed = []
     for draw in range(draws):
         try:
-            r = factors.realize(session, gini, interaction, value_maps.CLASS_KLASS[name], float(cell["travel_time"]), corner=tuple(float(x) for x in cell["corner"]) if "corner" in cell else corner_of(cid, draw), aspect=float(cell["aspect"]) if "aspect" in cell else aspect_of(cid, draw), center=cell["center"] if "center" in cell else (0.0, 1.0), gain=float(cell["gain"]) if "gain" in cell else None, at=tuple(float(x) for x in cell["at"]) if "at" in cell else (0.5, 0.5), seed=draw, **overrides)
+            r = factors.realize(session, gini, interaction, value_maps.CLASS_KLASS[name], float(cell["travel_time"]), corner=tuple(float(x) for x in cell["corner"]) if "corner" in cell else corner_of(cid, draw), aspect=float(cell["aspect"]) if "aspect" in cell else aspect_of(cid, draw), gain=float(cell["gain"]) if "gain" in cell else None, seed=draw, **{k: cell[k] for k in ("center", "at") if k in cell}, **overrides)
         except ValueError as e:
             failed.append({"draw": draw, "error": str(e)[:220]})
             continue
@@ -73,7 +65,7 @@ def realize_cell(cell, session="FOR_S1", draws=DRAWS, duration=120.0, **override
         world_seed = int(cell.get("world_seed", FIRST_WORLD_SEED + 100 * cid))
         return {"id": cid, "status": "ok", "knobs": {k: cell[k] for k in cell if k != "id"}, "interaction": interaction, "draw": draw, "failed_draws": failed, "map": valuemap.to_dict(), "settings": settings,
                 "peak": peak, "feedback_max": min(factors.FRUIT_CAP, math.ceil(peak)), "duration": float(duration), "anchor_points": anchor, "world_seed": world_seed, "achieved": r["achieved"], "within_tolerance": r["within_tolerance"],
-                "planner": planner_record(session, valuemap, settings, world_seed, **overrides), "calibrator": CALIBRATOR}
+                "calibrator": CALIBRATOR}
     return {"id": cid, "status": "inaccessible", "knobs": {k: cell[k] for k in cell if k != "id"}, "failed_draws": failed, "duration": float(duration), "calibrator": CALIBRATOR}
 
 
@@ -92,6 +84,8 @@ def realize_table(table_path, workers=6):
     data = json.loads(out.read_text()) if out.exists() else {"code": code, "session": session, "duration": duration, "cells": []}
     done = {c["id"] for c in data["cells"]}
     todo = [c for c in table["cells"] if c["id"] not in done]
+    todo += [c for c in table["cells"] if "gain_of" in c and c["id"] in done and int(c["gain_of"]) in {t["id"] for t in todo}]       # a re-realised cell moves the gain of those that copy it
+    data["cells"] = [r for r in data["cells"] if r["id"] not in {t["id"] for t in todo}]
     print(f"{len(todo)} of {len(table['cells'])} cells to realise for {code}, {workers} at a time", flush=True)
     REALIZED.mkdir(exist_ok=True)
     # A cell with `gain_of` (another cell's id) takes that cell's realised gain, so the reward scale is fixed while the layout varies: those cells wait for it.
@@ -100,7 +94,9 @@ def realize_table(table_path, workers=6):
         for wave in waves:
             for c in wave:
                 if "gain_of" in c:
-                    ref = next(r for r in data["cells"] if r["id"] == int(c["gain_of"]))
+                    ref = next((r for r in data["cells"] if r["id"] == int(c["gain_of"])), None)
+                    if ref is None:
+                        raise ValueError(f"cell {c['id']} takes the gain of cell {c['gain_of']}, which is not a realised cell without a gain_of of its own")
                     if ref["status"] != "ok":
                         raise ValueError(f"cell {c['id']} takes the gain of cell {c['gain_of']}, which is inaccessible")
                     c["gain"] = ref["map"]["equaliser"]["value"]
@@ -121,8 +117,6 @@ def show(code):
             a = c["achieved"]["points"]
             print(f"{c['id']:3d} {k['class']:15s} gini {k['gini']:.2f} travel {k['travel_time']:4.1f}: draw {c['draw']}, peak {c['peak']:.1f} (feedback maximum {c['feedback_max']}), "
                   f"learner {a[factors.ANCHOR_AGENT][0]:.0f} (anchor {c.get('anchor_points', factors.anchor_points(120.0)):.0f}) and oracle {a['oracle'][0]:.0f} on the check worlds, world {c['world_seed']}")
-            if c.get("planner"):
-                print(f"      leaving, planner (the cell's world {c['world_seed']}): {c['planner']['text']}")
             leaving = c["achieved"].get("leaving")
             if leaving:
                 for family, label in (("top_k", "top-k"), ("thr_q", "thr-q")):

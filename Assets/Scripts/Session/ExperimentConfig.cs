@@ -60,15 +60,13 @@ public class ExperimentConfig : ScriptableObject
     // The share of an experiment's foraging time a run has behind it: its finished sessions in full, and the session under way by its foraging clock.
     public static float Progress(IList<SessionConfig> list, int sessionsDone, float foragingSeconds, float shortFactor)
     {
-        float total = 0f, done = 0f;
-        for (int i = 0; i < list.Count; i++)
+        float total = 0f;
+        foreach (SessionConfig session in list)
         {
-            float most = SessionSeconds(list[i], shortFactor);
-            total += most;
-            done += i < sessionsDone ? most : i == sessionsDone && list[i] != null ? Mathf.Min(Mathf.Max(foragingSeconds, 0f), most) : 0f;
+            total += SessionSeconds(session, shortFactor);
         }
 
-        return total > 0f ? Mathf.Clamp01(done / total) : 0f;
+        return total > 0f ? Mathf.Clamp01(1f - SecondsLeft(list, sessionsDone, foragingSeconds, shortFactor) / total) : 0f;
     }
 
     // The foraging seconds a run still needs, for the menu's "time left": the foraging time of every session not finished, less what the session under way has behind it.

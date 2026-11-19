@@ -130,17 +130,20 @@ def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=A
     anchor = anchor_points(base.session_duration) if anchor is None else anchor
     shape_map = value_maps.calibrate_map(gini, interaction, klass, std=float(base.reward_std), corner=corner, aspect=aspect, seed=seed, center=center, at=at)
     with_gain = lambda g: value_maps.ValueMap(shape_map.bumps, shape_map.noise, {"type": "gain", "value": float(g)})
+    layout = lambda m: {**calibrate(load_session(session, **overrides, **m.compile()), travel_time), **PLACEMENT}
+    measured = lambda m, s: check(session, m, s, check_seeds, agents=tuple(dict.fromkeys(("nearest", "oracle", agent))), **overrides)
+    off = lambda a: abs(a["points"][agent][0] / anchor - 1.0)
     if gain is not None:
         current = with_gain(gain)
-        settings = {**calibrate(load_session(session, **overrides, **current.compile()), travel_time), **PLACEMENT}
-        achieved = check(session, current, settings, check_seeds, agents=tuple(dict.fromkeys(("nearest", "oracle", agent))), **overrides)
+        settings = layout(current)
+        achieved = measured(current, settings)
         peak = current.descriptors()["max"]
         if max_peak is not None and peak > max_peak:
             raise ValueError(f"the best bush would be worth {peak:.1f} points (gain {current.gain():.2f}), over the cap of {max_peak}")
         return {"map": current, "settings": settings, "fields": {**current.fields(), **fields(settings)}, "achieved": achieved, "within_tolerance": True, "rounds": 0}
     current, rounds = shape_map, 0
     for rounds in range(1, steps + 1):
-        settings = {**calibrate(load_session(session, **overrides, **current.compile()), travel_time), **PLACEMENT}
+        settings = layout(current)
         solved = value_maps.solve_gain(shape_map, policy_points(session, agent, seeds, **overrides, **settings), anchor, rel_tol=0.03)
         settled = abs(solved.gain() / current.gain() - 1.0) < 0.05
         current = with_gain(solved.gain())
@@ -150,20 +153,19 @@ def realize(session, gini, interaction, klass, travel_time, anchor=None, agent=A
             break
     else:
         raise ValueError(f"the gain and the layout did not settle in {steps} rounds (gain {current.gain():.3f}); change the travel time or raise `steps`")
-    achieved = check(session, current, settings, check_seeds, agents=tuple(dict.fromkeys(("nearest", "oracle", agent))), **overrides)
+    achieved = measured(current, settings)
     for _ in range(2):
-        points = achieved["points"][agent][0]
-        if abs(points / anchor - 1.0) <= tolerance:
+        if off(achieved) <= tolerance:
             break
-        current = with_gain(current.gain() * anchor / points)
-        settings = {**calibrate(load_session(session, **overrides, **current.compile()), travel_time), **PLACEMENT}
-        achieved = check(session, current, settings, check_seeds, agents=tuple(dict.fromkeys(("nearest", "oracle", agent))), **overrides)
-    within = abs(achieved["points"][agent][0] / anchor - 1.0) <= tolerance
+        current = with_gain(current.gain() * anchor / achieved["points"][agent][0])
+        settings = layout(current)
+        achieved = measured(current, settings)
+    within = off(achieved) <= tolerance
     peak = current.descriptors()["max"]
     if max_peak is not None and peak > max_peak:                      # the anchor needs a peak over the cap: take the gain that puts the best bush at the cap, and keep it if the anchor still holds within the tolerance
         clamped = with_gain(current.gain() * max_peak / peak)
-        achieved_clamped = check(session, clamped, settings, check_seeds, agents=tuple(dict.fromkeys(("nearest", "oracle", agent))), **overrides)
-        if abs(achieved_clamped["points"][agent][0] / anchor - 1.0) > tolerance:
+        achieved_clamped = measured(clamped, settings)
+        if off(achieved_clamped) > tolerance:
             raise ValueError(f"the best bush would be worth {peak:.1f} points (gain {current.gain():.2f}), over the cap of {max_peak}: this sparsity cannot hold the anchor of {anchor:.0f} points within the per-fruit range of 0 to {FRUIT_CAP}, nor within {tolerance:.0%} of it at the cap")
         current, achieved, within = clamped, achieved_clamped, True
     return {"map": current, "settings": settings, "fields": {**current.fields(), **fields(settings)}, "achieved": achieved, "within_tolerance": within, "rounds": rounds}

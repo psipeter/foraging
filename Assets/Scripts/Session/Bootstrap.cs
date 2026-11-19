@@ -16,7 +16,6 @@ public class Bootstrap : MonoBehaviour
     [SerializeField] private string gameScene = "SampleScene";
 
     private static bool _directPlayed;
-    private static bool _introShown;                                        // the introduction after the login is shown once per run of the game (or page load)
     private StatusScreen _status;
     private OnlineSettings _settings;
     private ExperimentCatalog _catalog;
@@ -88,14 +87,6 @@ public class Bootstrap : MonoBehaviour
             }
         }
 
-        if (_settings.Active && !_introShown)
-        {
-            _status.Hide();
-            IntroScreen intro = IntroScreen.Show("Continue");
-            yield return new WaitUntil(() => intro.Done);
-            _introShown = true;
-        }
-
         while (true)
         {
             _status.Hide();
@@ -104,13 +95,6 @@ public class Bootstrap : MonoBehaviour
                 ? MenuScreen.Show(MenuScreen.OnlineRows(ParticipantSession.Standings, _catalog), "Signed in as " + ParticipantSession.ProlificId, "", consentLink)
                 : MenuScreen.Show(MenuScreen.OfflineRows(_catalog), "No data server: the data is saved on this computer only.", "", consentLink);
             yield return new WaitUntil(() => menu.Done);
-            if (menu.ChosenCode == MenuScreen.IntroductionCode)
-            {
-                IntroScreen again = IntroScreen.Show("Back to the menu");
-                yield return new WaitUntil(() => again.Done);
-                continue;
-            }
-
             if (menu.ChosenCode == MenuScreen.ConsentCode)
             {
                 ConsentScreen consent = ConsentScreen.ShowView(_settings.Active);
@@ -122,6 +106,14 @@ public class Bootstrap : MonoBehaviour
 
             if (!_settings.Active)
             {
+                yield return Begin(experiment);
+                yield break;
+            }
+
+            // A finished practice experiment is played again without a run: nothing is started on the server or recorded (the finished run stays as it was).
+            if (experiment != null && !experiment.CountsTowardTotal && IsFinished(menu.ChosenCode))
+            {
+                DataPipeline.Replay = true;
                 yield return Begin(experiment);
                 yield break;
             }
@@ -155,6 +147,19 @@ public class Bootstrap : MonoBehaviour
                 yield break;
             }
         }
+    }
+
+    private static bool IsFinished(string code)
+    {
+        foreach (ExperimentStanding s in ParticipantSession.Standings)
+        {
+            if (s.code == code)
+            {
+                return s.status == "finished";
+            }
+        }
+
+        return false;
     }
 
     // The ID screen, then (when the server has no signature of the consent text's version for that ID) the consent screen.
@@ -238,29 +243,26 @@ public class Bootstrap : MonoBehaviour
         Destroy(screen.gameObject);
     }
 
-    // The game scene with the experiment's sessions. In a browser, first a click: pointer lock and audio need a user gesture, and this is the one that starts them.
+    // The game scene with the experiment's sessions. In a browser the menu click is the user gesture that pointer lock and audio need, so it captures the mouse here.
     private IEnumerator Begin(ExperimentConfig experiment)
     {
         GameManager.BeginExperiment(experiment);
         Music.Stop();
         if (StreamingData.NeedsPreload)
         {
+            // The click that chose the experiment is the gesture that captures the mouse; the capture is asked for now and holds through the loading.
+            Cursor.lockState = CursorLockMode.Locked;
+            PointerLockGuard.Suspended = false;
             // The experiment's files (its worlds, ranking pools and instruction texts) are fetched now, not with the common ones at the start.
             string failure = null;
             _status.Set("Getting ready", experiment.Title, "Loading the worlds for this experiment.", 0f);
             yield return StreamingData.Fetch(experiment.FilesToStart(), p => _status.Set("Getting ready", experiment.Title, "Loading the worlds for this experiment.", p), reason => failure = reason);
             if (failure != null)
             {
+                PointerLockGuard.Suspended = true;          // the error screen needs the mouse
                 Fail(failure);
                 yield break;
             }
-
-            _status.Set("Ready", experiment.Title, "The mouse will be captured by the game. Press [Escape] to release it.".Replace("[Escape]", UiStyle.Chip("Escape")), -1f, "[Click] to begin");
-            yield return null;
-            yield return new WaitUntil(() => Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame);
-
-            Cursor.lockState = CursorLockMode.Locked;
-            PointerLockGuard.Suspended = false;
         }
 
         SceneManager.LoadScene(gameScene);

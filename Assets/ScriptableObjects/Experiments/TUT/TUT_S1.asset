@@ -18,7 +18,6 @@ MonoBehaviour:
   freezeSun: 0
   rankingEvery: 1
   rankingLeavings: 
-  rankingEstimate: 8
   rankingSets: 1
   rankingSeconds: 20
   rankingCooldown: 0
@@ -51,7 +50,7 @@ MonoBehaviour:
   scoreCaptionForaging: points earned from harvesting bushes
   scoreCaptionRanking: points earned from ranking bushes
   scoreNote: '**Payment** is based on total points earned'
-  controlsReminder: 'Mouse: look. W / S: walk. Space: hold to harvest'
+  controlsReminder: 'Mouse: look. W / S: walk. Space: hold to harvest. Escape: pause'
   controlsReminderOpacity: 0.35
   rewardFunction:
     bumps:

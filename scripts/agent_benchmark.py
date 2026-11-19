@@ -41,7 +41,7 @@ EXTRA_SEEDS = 1000
 def play(job):
     """One session: {agent: (points per world, bushes per patch per world)} and the chosen k and q per world."""
     code, name, session, duration, cell, n_worlds = job
-    valuemap = value_maps.ValueMap(tuple(value_maps.Bump(**b) for b in cell["map"]["bumps"]), cell["map"]["noise"], cell["map"]["equaliser"])
+    valuemap = value_maps.ValueMap.from_dict(cell["map"])
     params = world.load_session(session, session_duration=float(duration), **cell["settings"], **valuemap.compile())
     seeds = [int(cell["world_seed"])] + [EXTRA_SEEDS + i for i in range(n_worlds - 1)]
     points = {a: [] for a in AGENTS}
@@ -49,21 +49,18 @@ def play(job):
     chosen = {"top-k": [], "thr-q": []}
     for seed in seeds:
         w = world.generate_world(params, seed)
-        tile_of, _ = tc.tile_of_world(w)
-        for a in ("nearest", "learner"):
-            r = sim.run_episode(REGISTRY[a](), w)
+        tile_of, tile_ids = tc.tile_of_world(w)
+        for a in ("nearest", "learner", "mvt"):
+            r = patch_foraging.run(a, w) if a == "mvt" else sim.run_episode(REGISTRY[a](), w)
             points[a].append(r.total)
             bushes[a].append(tc.route_stats(r, tile_of, w.value)["per_visit"])
-        r = patch_foraging.run("mvt", w)
-        points["mvt"].append(r.total)
-        bushes["mvt"].append(tc.route_stats(r, tile_of, w.value)["per_visit"])
         table = tc.calibrate_world(w, list(KS), QUANTILES)
         for a, prefix in (("top-k", "top-"), ("thr-q", "thr-")):
             best = max((n for n in table if n.startswith(prefix)), key=lambda n: table[n][0])
             points[a].append(table[best][0])
             bushes[a].append(table[best][1]["per_visit"])
             chosen[a].append(int(best[len(prefix):]))
-    return {"code": code, "session": name, "knobs": cell["knobs"], "points": points, "bushes": bushes, "chosen": chosen, "n_worlds": len(seeds), "n_tiles": int(tc.tile_of_world(w)[1].size)}
+    return {"code": code, "session": name, "knobs": cell["knobs"], "points": points, "bushes": bushes, "chosen": chosen, "n_worlds": len(seeds), "n_tiles": int(tile_ids.size)}
 
 
 def jobs_of(code, n_worlds):

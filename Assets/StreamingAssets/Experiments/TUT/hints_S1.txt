@@ -53,3 +53,11 @@ You have a limited **time** in each session
 Try to learn and harvest efficiently
 
 Press [Enter] to continue
+
+@time_left 30
+Pausing
+
+You can **pause** the game at any time
+The timer stops while you are paused
+
+Press [Escape] to pause

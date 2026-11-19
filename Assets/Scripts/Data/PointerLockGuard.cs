@@ -31,6 +31,8 @@ public class PointerLockGuard : MonoBehaviour
     private static void Reset() => Suspended = false;
 
     private GameObject _overlay;
+    private TextMeshProUGUI _text;
+    private bool? _shownForReplay;                     // the wording on show (null: none yet)
     private float _graceUntil;
     private float _unlockedAt = float.NegativeInfinity;
     private bool _wasHeld;
@@ -51,7 +53,7 @@ public class PointerLockGuard : MonoBehaviour
         // the consent screen (6000) is above both.
         TextMeshProUGUI text = UiStyle.MessageScreen("PointerGate", transform, 4900, true);
         _overlay = text.canvas.gameObject;
-        text.text = "Paused\n\n<size=65%>The timer is stopped. Click to continue.</size>";
+        _text = text;
         _overlay.SetActive(false);
         _graceUntil = Time.unscaledTime + GraceSeconds;
         SceneManager.sceneLoaded += HandleSceneLoaded;
@@ -85,6 +87,13 @@ public class PointerLockGuard : MonoBehaviour
             return;
         }
 
+        if (_shownForReplay != DataPipeline.Replay)
+        {
+            _shownForReplay = DataPipeline.Replay;
+            // a replay of the tutorial can be left; Escape is the browser's key, so it counts only once the capture has been released
+            _text.text = UiStyle.Chips("Paused\n\n<size=65%>The timer is stopped. [Click] to continue.</size>" + (DataPipeline.Replay ? "\n<size=65%>[Escape] to exit to the menu</size>" : ""));
+        }
+
         bool held = Held();
         if (_wasHeld && !held)
         {
@@ -97,6 +106,12 @@ public class PointerLockGuard : MonoBehaviour
         PauseGate.Pointer = paused;
         AudioListener.pause = paused;
         Cursor.visible = paused;
+        if (paused && DataPipeline.Replay && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame && Time.unscaledTime - _unlockedAt > 0.3f)
+        {
+            DataPipeline.ReturnToMenu();
+            return;
+        }
+
         if (!held && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
             Time.unscaledTime - _unlockedAt >= RelockCooldownSeconds)
         {

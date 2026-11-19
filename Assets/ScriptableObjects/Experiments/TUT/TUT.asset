@@ -18,5 +18,5 @@ MonoBehaviour:
   sessions:
   - {fileID: 11400000, guid: 33e50ca446530b3bf9f41b36b6c8312e, type: 2}
   countsTowardTotal: 0
-  estimatedMinutes: 0
+  estimatedMinutes: 4
   typicalPoints: 0

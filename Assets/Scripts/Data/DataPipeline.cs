@@ -50,6 +50,9 @@ public class DataPipeline : MonoBehaviour
     public static bool IsReady => Instance._ready;
     public static string RunId { get; private set; }
 
+    // A replay of a finished practice experiment: no run on the server, nothing uploaded and no local copy; the game plays as offline and returns to the menu at its end.
+    public static bool Replay { get; set; }
+
     // True from the moment the pipeline decides the loaded scene is not the one to record (it reloads the scene to continue an
     // interrupted run, or the run is already complete) until a new scene's logger starts: the old scene's logger must not send
     // what it recorded for the wrong session.
@@ -103,6 +106,12 @@ public class DataPipeline : MonoBehaviour
 
     private void ShowComplete()
     {
+        if (Replay)
+        {
+            ReturnToMenu();
+            return;
+        }
+
         SceneSuperseded = true;
         Music.PlayScore();
         _notice = null;
@@ -149,6 +158,7 @@ public class DataPipeline : MonoBehaviour
         }
 
         RunId = null;
+        Replay = false;
         SceneSuperseded = false;
         ResumeInfo.Pending = null;
         ParticipantSession.PendingRun = null;
@@ -181,6 +191,7 @@ public class DataPipeline : MonoBehaviour
     {
         _instance = null;
         RunId = null;
+        Replay = false;
         SceneSuperseded = false;
     }
 
@@ -191,12 +202,12 @@ public class DataPipeline : MonoBehaviour
     {
         _settings = OnlineSettings.Load();
         _build = BuildInfo.Read();
-        _online = _settings.Active;
+        _online = _settings.Active && !Replay;
         _message = UiStyle.MessageScreen("DataGate", transform, 5000, true);
         _overlay = _message.canvas.gameObject;
         _overlay.SetActive(false);
         Application.wantsToQuit += OnWantsToQuit;
-        if (StreamingData.NeedsPreload && !_online && !(Debug.isDebugBuild && OnlineSettings.UrlParameter("offline") != null))
+        if (StreamingData.NeedsPreload && !_online && !Replay && !(Debug.isDebugBuild && OnlineSettings.UrlParameter("offline") != null))
         {
             // A browser has no file to keep the data in: without a server it would be lost. (A development build with ?offline=1 plays anyway, to look at the game
             // without a server; its data is lost.)
@@ -252,7 +263,7 @@ public class DataPipeline : MonoBehaviour
             ("experiment", GameManager.ActiveExperiment != null ? GameManager.ActiveExperiment.Code : null));
         try
         {
-            _file = StreamingData.NeedsPreload ? null : new FileSink(root, runId, runJson);      // a browser has no file system
+            _file = StreamingData.NeedsPreload || Replay ? null : new FileSink(root, runId, runJson);      // a browser has no file system
         }
         catch (Exception e)
         {

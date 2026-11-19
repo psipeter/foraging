@@ -2505,3 +2505,31 @@ The scene-built leftovers of the first UI (`/HarvestCanvas/InstructionPanel` wit
 **Not yet verified.** `replay.verify` / `validate_run.py` on sessions logged at the new pacing (60 Hz and 144 Hz or more), in particular the fruit-timer ties (browsers give whole-millisecond frame times). Do this before trusting the first data.
 
 **Rejected / open:** a cap implemented by skipping frames at 120 (it would restore the old uniformity, at the cost of code that fights the browser's pacing); not tested.
+
+## The browser's Web quality level uses the PC render pipeline asset (PI, 2026-11-19)
+
+**Decision.** `ProjectSettings/QualitySettings.asset`: the `Web` level (the WebGL default) points at `Assets/Settings/PC_RPAsset.asset`, so the browser renders with the Editor's settings. Against the old Web asset that means shadow distance 150 to 300, shadow cascades 2 to 4 and the opaque texture on, for every participant.
+**Why kept.** The frame-pacing measurements (see the entry above) were taken with it; the PI kept it after the review (RT-6). **Caveat.** Measured only on an RTX 4060 Ti, vsync off; slower GPUs may pay for the longer shadow range. If participants report stutter, `shadowDistance=150&shadowCascades=2` is the variant to try first (`perf_browser.mjs --variant`). `Web_RPAsset` stays unused.
+
+## The menu's time quote is set by hand (PI, 2026-11-19)
+
+The quote is `ExperimentConfig.estimatedMinutes` when it is above 0 (the Inspector or `set_serialized_field`; a rebuild with `build_experiment.py` leaves it alone), else the foraging seconds of the sessions. Set for now: TUT 4 min, the three pilots 12 min each. Reason: the foraging-only sum undershoots by 26 to 57 percent per session once ranking breaks are counted (8 to 12 breaks of 6 to 8.5 s in a 180 s session at 3 s travel), more than "a little". Replace the numbers by the measured medians once pilot data exist.
+
+## Removed (adversarial review, 2026-11-19)
+
+`scripts/travel_scan.py` (a travel-time sweep nothing referenced; PSC and `agent_benchmark` cover it). `cells.realize_cell` no longer runs the retired beam planner (25 to 35 s per cell; the `planner` key of old realised records stays, `cells.py show` no longer prints it).
+
+## The introduction page and its menu button are gone (PI, 2026-11-19)
+
+`IntroScreen` and `StreamingAssets/introduction.txt` (a placeholder sentence under a few headings: pay, timing, sound) said nothing a participant needs; the page after the login and the "Introduction" button of the menu were removed, the consent button stays (centred). The pay is explained on Prolific's page; if text is needed before the menu again, put it in the consent form or an experiment's first instruction screen rather than reviving a page of its own. This supersedes the introduction part of "The menu row is one line; the introduction explains the pay" (2026-11-10).
+
+## The mouse is captured by the menu click; Escape is taught once, in the tutorial (PI, 2026-11-19)
+
+**Decision.** In a browser the click on Start / Continue captures the mouse (`Bootstrap.Begin`) and the "Ready ... [Click] to begin" screen is gone: the loading screen is followed by the game. The explanation of Escape moved from that screen to one tutorial popup, `@time_left 30` "Pausing" in `design/TUT.py`, whose prompt "Press [Escape] to pause" asks for the key: it ends when the participant has paused and clicked back in (browser: the capture was released, then held again; elsewhere: the key itself, and `QuitHandler` leaves Escape alone while the hint is up). Every ask for a click is written `[Click]`, the key-chip style (the pause screen).
+**Trigger.** `@time_left 30` (the PI tried 120, which fires at the first frame over the Controls screen, then 60, which is Scoring's moment; 30 keeps the two apart). **Risks accepted.** A participant who forgets Escape still meets "Paused: [Click] to continue", which explains itself; a browser that refuses the capture request made at the menu click (it needs a user gesture; Unity defers the request to the next input event) shows that pause screen during loading and a click fixes it. **Not verified:** all of this in a browser (only the Editor compile has been checked); the hint's browser path (release, then click back) needs a development WebGL build.
+
+## The tutorial can be replayed, and nothing is recorded (PI, 2026-11-19)
+
+**Decision.** A finished experiment that does not count toward the total (`ExperimentConfig.countsTowardTotal` off: TUT) shows "Replay" on the menu instead of "View code" and plays again from its first session. No run is started (`run-start` is not called), nothing is uploaded and no local copy is written (`DataPipeline.Replay`: the pipeline runs as offline without a file sink; the browser's "no data server" error is skipped); the finished run on the server is untouched, so the completion stays recorded. At the end screen Enter returns to the menu (no completion code, no feedback box). **Leaving early:** in a replay the pause screen ("Paused: [Click] to continue") adds "[Escape] to exit to the menu"; in a browser Escape first releases the capture (the pause screen), a second press leaves (`PointerLockGuard`, ignored for 0.3 s after the release). The Editor and standalone builds have no exit path in a replay (Escape quits there; the menu offers a replay only online anyway).
+**Rejected.** Recording replays as new runs (a server and schema change for data nobody analyses); a clickable "Exit" button on the pause screen (the screen is buttonless: a click resumes).
+**Not verified.** Everything above beyond the Editor compile; it needs a development WebGL build and a participant who has finished TUT.

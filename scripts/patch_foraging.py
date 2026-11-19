@@ -17,7 +17,6 @@ most per second, the bushes in a tile best rate first).
 
 import numpy as np
 
-import agents
 import costs
 import sim
 import tile_calibration as tc
@@ -133,11 +132,6 @@ class PatchModel:
             self._rho = (rho, self._stationary(rho)[1])
         return self._rho
 
-    def average_bush_rate(self):
-        """The points per second of an average bush taken one after another: what a forager knowing only the bushes' average would expect."""
-        mean = float(self.fruits * self.values[self.values > 0].mean())
-        return mean / (self.c_in + self.harvest)
-
 
 class PatchActor(tc.TilePolicy):
     """A tile policy that decides how many bushes of a tile to take with the model of its world, built at the first decision from what the agent was granted (every bush's value and tile, average costs)."""
@@ -174,7 +168,7 @@ class DPFinite(PatchActor):
     def count(self, t, offset, order, mean):
         _, cont = self.model.finite_horizon()
         m = self.model
-        k = min(int(max(self.view.body.time_left - m.c_travel, 0.0) / m.dt), cont.shape[1] - 1)
+        k = min(int(max(self.view.body.time_left - m.c_travel, 0.0) / m.dt), cont.shape[1] - 1)      # the DP is indexed at arrival: the walk to the patch comes out of the time left (without it dp_finite earns 2 to 6 percent less)
         taken = 0
         for j in range(len(order)):
             if not cont[t, k, j + offset]:
@@ -219,33 +213,29 @@ class MVTRunning(MVT):
     """The marginal value rule with the rate experienced so far: its points over the session time, with a prior of `PRIOR_SECONDS` at the rate of an average bush."""
 
     def rate(self):
-        elapsed = self.view.time_elapsed
-        return (self.view.body.total + PRIOR_SECONDS * self.model.average_bush_rate()) / (elapsed + PRIOR_SECONDS)
+        m = self.model
+        average_bush = m.fruits * m.values[np.arange(m.width) < m.size[:, None]].mean() / (m.c_in + m.harvest)          # the rate of an average bush taken one after another
+        return (self.view.body.total + PRIOR_SECONDS * average_bush) / (self.view.time_elapsed + PRIOR_SECONDS)
 
 
 FACTORIES = {"dp_finite": DPFinite, "dp_average": DPAverage, "mvt": MVT, "mvt_running": MVTRunning}
 
 
-def make_agent(name, world, rounds=1):
-    """The agent `name` of `FACTORIES` for a tiles world: an oracle (every bush's value) bound to the world's tiles. The step between patches is the average of one rollout of the agent itself (`rounds` times
-    over; 0 keeps the analytic estimate of `average_costs`): where the next patch lies depends on which are left, and the first bush of a patch is the best one, not the nearest, so the walk between patches is
+def make_agent(name, world):
+    """The agent `name` of `FACTORIES` for a tiles world: an oracle (every bush's value) bound to the world's tiles. The step between patches is the average of one rollout of the agent itself (the
+    analytic estimate of `average_costs` when it visits no patch): where the next patch lies depends on which are left, and the first bush of a patch is the best one, not the nearest, so the walk between patches is
     longer than the nearest neighbour's. The cost is taken from the seconds that were not harvesting, less the steps inside the patches, over the patches visited."""
     tile_of, _ = tc.tile_of_world(world)
-    c_travel = None
-    for _ in range(rounds):
-        actor = FACTORIES[name]().bind(tile_of)
-        actor.c_travel = c_travel
-        result = sim.run_episode(tc.oracle(actor), world)
-        stats = tc.route_stats(result, tile_of, world.value)
-        if stats["visits"] == 0:
-            break
-        used = result.walk_time + result.look_time + result.press_time
-        c_travel = max((used - (stats["bushes"] - stats["visits"]) * actor.costs["c_in"]) / stats["visits"], 0.0)
+    actor = FACTORIES[name]().bind(tile_of)
+    result = sim.run_episode(tc.oracle(actor), world)
+    stats = tc.route_stats(result, tile_of, world.value)
+    used = result.walk_time + result.look_time + result.press_time
+    c_travel = max((used - (stats["bushes"] - stats["visits"]) * actor.costs["c_in"]) / stats["visits"], 0.0) if stats["visits"] else None
     actor = FACTORIES[name]().bind(tile_of)
     actor.c_travel = c_travel
     return tc.oracle(actor)
 
 
-def run(name, world, rounds=1):
+def run(name, world):
     """The episode of agent `name` on `world` (`sim.run_episode`)."""
-    return sim.run_episode(make_agent(name, world, rounds), world)
+    return sim.run_episode(make_agent(name, world), world)

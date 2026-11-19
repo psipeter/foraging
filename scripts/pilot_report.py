@@ -56,10 +56,6 @@ ROWS = (                         # (key, label, format); a key a record lacks is
 )
 
 
-def _valuemap(d):
-    return value_maps.ValueMap(tuple(value_maps.Bump(**b) for b in d["bumps"]), d["noise"], d["equaliser"])
-
-
 def session_metrics(valuemap, w, agents=()):
     """The metrics of one session: the map's descriptors at its gain, the world's measured factors and patch statistics, and the points of the registry agents `agents` on this one world."""
     d = valuemap.descriptors()
@@ -116,12 +112,12 @@ def _record(job):
             corner = tuple(float(x) for x in cell["corner"]) if "corner" in cell else cells.corner_of(cid, 0)
             aspect = float(cell["aspect"]) if "aspect" in cell else cells.aspect_of(cid, 0)
             base = world.load_session(session, session_duration=float(duration))
-            shaped = value_maps.calibrate_map(gini, interaction, value_maps.CLASS_KLASS[kind], std=float(base.reward_std), corner=corner, aspect=aspect, center=cell.get("center", (0.0, 1.0)), at=tuple(cell.get("at", (0.5, 0.5))), seed=0)
+            shaped = value_maps.calibrate_map(gini, interaction, value_maps.CLASS_KLASS[kind], std=float(base.reward_std), corner=corner, aspect=aspect, seed=0, **{k: cell[k] for k in ("center", "at") if k in cell})
             valuemap = value_maps.ValueMap(shaped.bumps, shaped.noise, {"type": "gain", "value": TARGET_MEAN / shaped.descriptors()["mean"]})
             settings = {**factors.calibrate(world.load_session(session, session_duration=float(duration), **valuemap.compile()), float(cell["travel_time"])), **factors.PLACEMENT}
             seed = int(cell.get("world_seed", cells.FIRST_WORLD_SEED + 100 * cid))
         else:
-            valuemap, settings, seed = _valuemap(realised["map"]), realised["settings"], int(realised["world_seed"])
+            valuemap, settings, seed = value_maps.ValueMap.from_dict(realised["map"]), realised["settings"], int(realised["world_seed"])
         w = world.generate_world(world.load_session(session, session_duration=float(duration), **settings, **valuemap.compile()), seed)
         metrics = session_metrics(valuemap, w, AGENTS if agents else ())
         ts = tiles.TileSet(w.terrain.tiles, w.pos)

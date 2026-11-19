@@ -15,7 +15,7 @@ COUNTS_TOWARD_TOTAL = False
 TEMPLATE_SESSION = "FOR_S1"             # copied only when the session has no asset yet (the lighting, camera and so on come from it)
 
 SECONDS = 120
-CONTROLS_REMINDER = "Mouse: look. W / S: walk. Space: hold to harvest"      # the bar at the bottom of the screen for the whole tutorial ("Key: action" pairs, `InstructionsPanel.FormatControls`)
+CONTROLS_REMINDER = "Mouse: look. W / S: walk. Space: hold to harvest. Escape: pause"      # the bar at the bottom of the screen for the whole tutorial ("Key: action" pairs, `InstructionsPanel.FormatControls`)
 LABEL = "Tutorial"                      # the small blue line over every instruction screen and popup, and on the end screen
 
 INSTRUCTIONS = """Controls
@@ -82,6 +82,14 @@ You have a limited **time** in each session
 Try to learn and harvest efficiently
 
 Press [Enter] to continue
+
+@time_left 30
+Pausing
+
+You can **pause** the game at any time
+The timer stops while you are paused
+
+Press [Escape] to pause
 """
 
 

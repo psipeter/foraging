@@ -7,8 +7,8 @@ using UnityEngine.UI;
 
 // The experiment menu, shown by the Boot scene after the login and again whenever the participant comes back from an experiment: one row per
 // experiment on one line: its name, its length (sessions and minutes, or the progress and the time left), its prerequisite (the experiments to finish first) and a button
-// (Start, Continue, or View code for a finished one); the ones whose prerequisites are not finished are locked. Near the bottom of the screen, buttons open the introduction
-// and the consent form again: they end the menu with a ChosenCode that is not an experiment (IntroductionCode, ConsentCode) and the caller shows the page and the menu again.
+// (Start, Continue, or View code for a finished one; Replay for a finished practice experiment); the ones whose prerequisites are not finished are locked. Near the bottom of the screen, a button opens
+// the consent form again: it ends the menu with a ChosenCode that is not an experiment (ConsentCode) and the caller shows the page and the menu again.
 // A reduced run (RunModes) shows its own lengths.
 // Built at runtime like the other overlays. Without a data server (the Editor, a lab build) every experiment of the catalog is offered.
 public class MenuScreen : MonoBehaviour
@@ -28,7 +28,6 @@ public class MenuScreen : MonoBehaviour
 
     private const int MaxRows = 6;
 
-    public const string IntroductionCode = "@introduction";
     public const string ConsentCode = "@consent";
 
     public string ChosenCode { get; private set; }
@@ -86,7 +85,7 @@ public class MenuScreen : MonoBehaviour
             switch (s.status)
             {
                 case "finished":
-                    row.Action = "View code";
+                    row.Action = config != null && !config.CountsTowardTotal ? "Replay" : "View code";       // a practice experiment can be played again; nothing is recorded
                     row.Enabled = true;
                     row.Detail = "Completed";
                     row.Progress = 1f;
@@ -200,14 +199,11 @@ public class MenuScreen : MonoBehaviour
 
         UiStyle.Text(transform, "Title", MenuTitle, UiStyle.Title, TextAlignmentOptions.Center, 0f, height / 2f + 84f, 1288f, 100f).font = UiStyle.DisplayFont;
 
-        // near the bottom of the screen: the pages the participant may open again (the consent form to the left of the introduction)
+        // near the bottom of the screen: the consent form, which the participant may open again
         float buttonsY = -UiStyle.ReferenceResolution.y / 2f + 130f;
-        const float spacing = 290f;
-        float x = consentLink ? spacing / 2f : 0f;
-        UiStyle.Pill(transform, "Introduction", "Introduction", x, buttonsY, 260f, () => Choose(IntroductionCode), true, 64f);
         if (consentLink)
         {
-            UiStyle.Pill(transform, "Consent", "Consent form", x - spacing, buttonsY, 260f, () => Choose(ConsentCode), true, 64f);
+            UiStyle.Pill(transform, "Consent", "Consent form", 0f, buttonsY, 260f, () => Choose(ConsentCode), true, 64f);
         }
 
         if (!string.IsNullOrEmpty(footer))
@@ -230,7 +226,7 @@ public class MenuScreen : MonoBehaviour
     private void BuildRow(Transform panel, Row row, float y, float height)
     {
         Transform r = UiStyle.Rounded(panel, "Row_" + row.Code, UiStyle.FieldGlass, 0f, y, RowWidth, height, 22f).transform;
-        bool dim = !row.Enabled && row.Action != "View code";
+        bool dim = !row.Enabled && row.Action != "View code" && row.Action != "Replay";
         TextMeshProUGUI name = UiStyle.Text(r, "Name", row.Title, 38f, TextAlignmentOptions.MidlineLeft, NameX, 0f, NameWidth, 56f, dim ? UiStyle.Muted : UiStyle.Ink);
         name.font = UiStyle.DisplayFont;
         name.enableAutoSizing = true;                                  // a long title shrinks to its column
@@ -262,7 +258,7 @@ public class MenuScreen : MonoBehaviour
         requires.textWrappingMode = TextWrappingModes.NoWrap;
 
         string code = row.Code;
-        Button button = UiStyle.Pill(r, "Button", row.Action, ButtonX, 0f, ButtonWidth, () => Choose(code), row.Action == "View code", 64f);
+        Button button = UiStyle.Pill(r, "Button", row.Action, ButtonX, 0f, ButtonWidth, () => Choose(code), row.Action == "View code" || row.Action == "Replay", 64f);
         button.interactable = row.Enabled;
     }
 }
