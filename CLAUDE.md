@@ -1,10 +1,11 @@
 # CLAUDE.md — foraging
 
 Source of truth for conventions and workflow. For the scientific goals,
-task design, and open questions, see `docs/SCIENCE.md`. The old planned
-experiments (FN, RW, FI, PL, PA; history, nothing in the game) are in `docs/EXPERIMENTS.md`. For why past design choices were
-made (including rejected alternatives), see `docs/DECISIONS.md`. `README.md` is a short
-human-facing description only. Read this file fully before making changes.
+task design, and open questions, see `docs/SCIENCE.md`. For why past design choices were
+made (including rejected alternatives, and the old planned experiments FN, RW, FI, PL, PA and the 2026-11-14 cleanup: historical entries), see `docs/DECISIONS.md`. `README.md` is a short
+human-facing description only. Read this file fully before making changes. Reference detail lives elsewhere:
+`docs/CODEMAP.md` (every file), `docs/SIMULATION.md` (results database, battery, agents), `docs/ONLINE_DATA_PLAN.md` (online data, "Data logging (as built)"),
+`docs/REGENERATING.md` (regeneration recipes).
 
 ---
 
@@ -28,8 +29,8 @@ human-facing description only. Read this file fully before making changes.
   git. Once real collection starts, treat it as read-only participant data.
 - Ignore `Library/`, `Builds/`, `Logs/`, `diagnostic.log`, and the
   generated `*.csproj`/`*.slnx` files when searching.
-- **Two experiments: `TUT` (the tutorial, one practice session) and `FOR`** (foraging in hexagonal tiles; each session alternates foraging with ranking phases, "ranking breaks"; `docs/SCIENCE.md` "Current design"). TUT must be
-  finished before FOR unlocks. The old tutorials, experiments (the old TUT, FN, RW, FI) and the Interlude were removed on 2026-11-14 (`docs/DECISIONS.md`, "Cleanup: everything is FOR", has the glossary of old to new names; tag `pre-cleanup` holds the old code); the present TUT is the new tutorial built on 2026-11-14 to 16. Nothing is called an Interlude.
+- **The menu offers `TUT` (the tutorial, one practice session) and the pilots `PCX`, `PSC` and `PSP`** (foraging in hexagonal tiles; each session alternates foraging with ranking phases, "ranking breaks"; `docs/SCIENCE.md` "Current design"). TUT must be
+  finished before a pilot unlocks. `FOR` (`FOR_S1`) is only the template session the designs copy; it is not in the catalog. The old tutorials, experiments (the old TUT, FN, RW, FI) and the Interlude were removed on 2026-11-14 (`docs/DECISIONS.md`, "Cleanup: everything is FOR", has the glossary of old to new names; tag `pre-cleanup` holds the old code); the present TUT is the new tutorial built on 2026-11-14 to 16. Nothing is called an Interlude.
 
 ---
 
@@ -146,84 +147,26 @@ Facts learned: harvest starts within `harvestRangeGapBase` (7) of the canopy edg
 radius from the tree's center (wide canopies block the player earlier); Enter on the last session's end screen
 returns to the experiment menu (after an experiment played directly, the offline menu).
 
----
 
 ## Repository structure
 
-```
-Assets/
-  Scripts/
-    Player/    PlayerController (non-kinematic Rigidbody, W/S movement along
-               the camera heading, raycast terrain following, trigger harvest
-               detection), CameraController (first-person yaw/pitch, eye
-               height, FOV), ILookInput + MouseLookInput (look input source)
-    Trees/     Tree (applies attributes, generates fruits/colliders,
-               rim-light highlight), TreeAttributes (shape/color/
-               moisture, floats 0-1), FruitMaterialManager (static unlit
-               fruit material cache), CanopyGrayscale (desaturated copies of the canopy texture, for `Tree.SetGray`: the world's bushes fade to grey in a ranking break)
-    World/     WorldData (loads StreamingAssets/Experiments/<code>/<session>_seed<N>.world:
-               bush table + terrain grids + per-fruit rewards), TerrainManager (builds the
-               valley + mountain-band mesh from the world's grids; sampling, walkable mask),
-               TreeGenerator (instantiates bushes from the world file)
-    Session/   SessionConfig (ScriptableObject — ALL parameters), RunModes (development only: `short` and `repeats` make a reduced run; the server lets it finish, see "Data logging"),
-               GameManager (plays the chosen ExperimentConfig's session list), ExperimentConfig / ExperimentCatalog (an experiment: code, title, prerequisites, sessions; every experiment of the build, Resources/ExperimentCatalog.asset), Bootstrap (the Boot scene: login, the experiment menu, then the game scene), MenuScreen (the experiment menu: one line per experiment: length (ExperimentConfig's estimatedMinutes, else computed), prerequisite, a button; a button near the bottom for the consent form; ExperimentConfig.typicalPoints is a placeholder the menu does not show yet), ConsentScreen (ID, consent, read-only view), RankingBreak (a ranking set played on the stage after patch switches of a tiles session, `SessionConfig.ranking*`: created at runtime by GameManager, holds the session clock, hides outcomes through `RankingBreak.Active`; replay, visibility and resume handle its windows; no wait for flat ground, PI 2026-11-13) and RankingSets (the scoring and `ranking_sets` row of a set), HarvestManager, SunController, QuitHandler, PerfProbe and PerfAutopilot (development builds only: `?perf=1` records frame times and prints them to the browser console, with graphics settings from the address; `?autopilot=1` plays a fixed route; see `scripts/perf_browser.mjs`),
-               RewardFunction (the value map: a sum of `RewardBump`s, each a Gaussian over (shape, colour), optionally stretched and turned by `angle`; the only reward primitive since 2026-11-17)
-    UI/        HarvestUI (+X popups, score, the bottom hint pill), SessionTimerUI (timer, bar, end screen), InstructionsPanel (a session's first instruction screen after a 1 s wait, and the controls reminder pill on a canvas of its own; every instruction screen, hint and welcome-back is an InstructionsScreen popup; `DataPipeline`'s own notices (connecting, saving, finishing, errors, already completed) sit on its black gate, not in a popup), TutorialHints (popup hints fired by what the participant does in a tutorial session: a text file `SessionConfig.hintsFile` of `@trigger n` blocks; triggers `bout`, `patch_switch`, `ranking_start`, `ranking_end`, `time_left s` (the seven others were removed 2026-11-16, DECISIONS; `time_left` added 2026-11-18, it pulses the session clock yellow); a resume skips the hints already shown; created by GameManager; each shown hint is a pause popup logged as `hint_shown` / `hint_dismissed`), AimCrosshair (the thin grey crosshair, always on: `SessionConfig.crosshairAlpha`; on a harvestable bush its bars fade into the harvest ring, the fraction left of that bush, `HarvestManager.FocusFill`; built by GameManager), FeedbackScreen (browser final screen: optional feedback box), UiStyle (typeface, sizes, the rounded panel and pill helpers), StatusScreen / CompletionScreen / InstructionsScreen / ScoreScreen / Music (the study's screens and sound, built in code),
-               Clipboard (copy text: through Assets/Plugins/WebGL/Clipboard.jslib in a browser), FeedbackAudio (synthesized sound cues), AmbientAudio (footsteps, cicada bed, birds) (HUD plates and bars are built by UiStyle)
-    Data/      StreamingData (reads StreamingAssets; in a browser from memory: the common files at the start, an experiment's files when it is chosen), DataLogger (the recorder: rows per frame/event/trial, batched), ParticipantSession (the logged-in participant, the menu's standings and the run the menu started: login, run-start, feedback), DataPipeline (DontDestroyOnLoad: adopts that run, owns the
-               sinks, the "saving" gate and the quit/leave drain), FileSink (local copy) and HttpSink (upload), TrajectoryCodec (chunk format),
-               PauseGate (the only writer of Time.timeScale), StreamingData (reads StreamingAssets; in a browser from memory, filled by the Boot scene), PointerLockGuard (browser: hold the game while the mouse capture is released), OnlineSettings (StreamingAssets/online.json + command line), DataRows, Json;
-               see "Data logging"
-  ScriptableObjects/Experiments/<code>/   one folder per experiment: `<code>.asset` (ExperimentConfig: code, title, prerequisites, the ordered session list) and its sessions `<code>_S<n>.asset`.
-                                     FOR (Foraging task: FOR_S1, made by `scripts/build_experiment.py` from `scripts/design/FOR.py`; FOR_PREVIEW is a gitignored throwaway copy made by `TerrainPreview`; if one exists at build time its world ships). The old experiments FN, RW and FI and the old tutorial were removed 2026-11-14 (git tag `pre-cleanup`); the new tutorial `TUT` (TUT_S1, from `scripts/design/TUT.py`) sits beside FOR; the old Complex Features experiment CF was removed 2026-11-09, its ladder script is in `archive/cf_ladder/` and its sessions are in git history (only `FIX_T0` is frozen in `scripts/fixtures/sessions/`). The code is the asset prefix
-                                     and the database key, the title is data (renaming a code means renaming the assets and generated files by hand and updating the database; see DECISIONS "Experiments").
-  Audio/Ambient/                     CC0 recordings: Footsteps/ (Kenney Impact Sounds grass steps), Cicadas/ (BigSoundBank
-                                     loop); each folder has licence/source notes
-  StreamingAssets/Experiments/<code>/  everything one experiment downloads: its instruction texts (instructions_S<n>.txt; placeholders
-                                     {part} {total}; file chosen per session by SessionConfig.instructionsFile, a path under StreamingAssets),
-                                     generated <session>_seed<N>.world files (scripts/world.py) and <session>_seed<N>.ranking.json (the ranking pool, scripts/ranking.py pool).
-                                     Shared texts stay at the root: consent.txt, instructions_resume.txt.
-  Scenes/SampleScene.unity           the single scene
-  Editor/    BuildInfoWriter (writes the gitignored StreamingAssets/build_info.json: git commit + dirty flag + whether it is a development build; the TextMeshPro font atlases under Assets/Resources/Fonts never count as dirty), ExperimentBuilder (creates an experiment's session assets, ExperimentConfig and catalog entry from the spec `scripts/build_experiment.py` writes; run through the CLI `eval`), ExperimentPlayer (Foraging > Experiments: play an experiment without the menu; the Short and Repeats fields of a reduced run), SessionPreview (builds the world of the GameManager's defaultExperiment, its last session, in the open game scene in edit mode, unsaved and cleared before Play; Foraging > Session preview, Clear session preview, Preview on scene open)
-  Shaders/   VertexColor (terrain: moisture textures + mountain rock/snow; ignores
-             mesh vertex colors), VertexColorUnlit, FruitUnlit, CanopyRim (additive
-             fresnel highlight overlay); the old HarvestRing shader and material were deleted when the ring moved to the crosshair (2026-11-16)
-  Materials/ Prefabs/ Resources/Textures
-supabase/    migrations/ (online database), functions/ (Edge Functions participant-start, run-start, append, run-finish, feedback; _shared/), local/serve.ts (runs them
-             without Docker); deployed to the Supabase project emdgczidpqdhftzujyte; deploy with the CLI, see docs/ONLINE_DATA_PLAN.md
-docs/        SCIENCE.md, DECISIONS.md, EXPERIMENTS.md (history: the planned experiments FN, RW, FI, PL, PA; not in the game, nothing built), ONLINE_DATA_PLAN.md (planned online data collection: schema, upload protocol, resume, build
-             phases; nothing built yet, the "Data logging" section below still describes the current logger), REVIEW_POLICY.md (what
-             code review optimizes; see "Adversarial review")
-.claude/     agents/ (simplifier, red-team, arbiter) and skills/adversarial-review/
-scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):
-             world.py (reads SessionConfig .asset YAML; generates worlds from one seed, mirrors the C# placement/attribute/reward rules; exports the Unity .world and .npz), tiles.py (the tiles world of FOR: hexagonal plateaus as the terrain, a cluster of bushes in the middle of each tile,
-             features in two steps: the pool (`bush_pool`, an even cover of the (shape, colour) plane, one point per bush site) and a placement of the pool over the tiles (`PLACEMENTS`: `random` and `balanced`, equal tile totals, checked by `tile_sum_tol`), redraw checks, `stats`; tests in test_tiles.py), tiles_preview.py (a PNG of a tiles world), tile_calibration.py (is leaving a tile early the right policy: oracle top-k-per-tile policies,
-             the greedy rate actor on tile worlds, a shape check of the top-1 to top-n and thr-q families against the best of them (`profile_check`, `leaving_summary`), `factors.check(leaving=True)` runs the families on the 40 check worlds (off by default); **the default check is the beam planner on the cell's own world as an approximate upper bound** (`planner_check`, `--planner`; `cells.realize_cell` records it as `planner`: its bushes per tile visit, and the points of top-1 to top-n and thr-q as shares of its own; about 25 to 35 s a cell), shown by `cells.py show` as warnings, a `--sweep` over layout parameters; tests in test_tile_calibration.py),
-             ranking.py (the ranking pool: the arc geometry of k bushes, `generate_pool` / `ranking.py pool <session>` writes `<session>_seed<N>.ranking.json` with sets chosen jointly, positions relative to the player; the scores of a ranking from its raw picks; tests in test_ranking.py),
-             design/ (one module per experiment: its instances and texts, see design/__init__.py; `design/FOR.py` and `design/TUT.py`, `design/PCX.py`, `design/PSP.py` and `design/PSC.py` (the pilots Complexity, Sparsity and Spacing, three sessions each from a table of cells, low to high, built like FORX; built and in the menu (TUT, PCX, PSC, PSP; FOR is only the template session); the participants are not told what varies), `design/FORX.py` (the foraging task with sessions from knob settings: `design/tabled.py` builds one session per realised cell of `design/realized/FORX.json`, from the table `design/tables/FORX.json`; examples, not a design; not in the build until the PI asks), `design/common.py` the seeded play order, world-seed search and instruction page) and build_experiment.py (an experiment's assets through the Editor, texts, worlds and ranking pools from its design module),
-             replay.py (loads a logged session of the online layout, replays its harvests including the ranking-break windows and the crosshair rule, resamples for agents), visibility.py (which bushes were in view per step, with egocentric coordinates), rundata.py (the online data layout: local mirror of the database tables, reader and writer),
-             trajectory_codec.py (compact chunk format; see docs/ONLINE_DATA_PLAN.md), fruit_ramp.py (how the fruit colour ramp was chosen; `--stops` regenerates the SessionConfig stops),
-             sim.py (fast session engine: actions, cone percept; run_n / compare), perception.py (the sensor model: what the simulated observer sees; `ConePercept` is the default, `OccludedConePercept` adds terrain and bush occlusion), costs.py (turning and key-press time costs and the `approach` arithmetic),
-             agents.py (agent components memory / critic / actor, ComposedAgent, registry), specs.py (agent specs: `Component` base, `spec()`, `spec_hash`, `build`, `flatten`, `labels`), battery.py (the assessment battery: reward and advantage of populations of agents on the labels T1-T4 of the frozen tiles session FIX_T0, a serial runner and command line),
-             results.py (the results database: schema v4, `Store`, `record_run`, `lookup`, `delete_run`), analysis.py (queries over the results database), plots.py (matplotlib/seaborn figures into `results/`: cumulative reward and advantage, colour-blind-safe `glasbey` colours plus a linestyle per agent),
-             fingerprint.py (environment hash over the session parameters the simulator reads, engine-code and agents-code hashes, git commit and dirty flag),
-             cells.py (sessions from a table of knob settings: `realize <table>` turns each cell of `design/tables/<code>.json` into a realised session with `factors.realize`, trying nuisance draws (an additive map's corner and its stretch 1:1, 2:1 or 3:1; a cell may fix them with `corner` and `aspect`) until the cap on the best bush and the anchor hold (a cell none holds is inaccessible), taking the session's world from the cell's `world_seed` (else its first seed; there is no search among worlds, 2026-11-18), and writes `design/realized/<code>.json`; `show <code>`; tests in test_cells.py),
-             map_gallery.py (a figure of value maps by class and Gini on the fixed 0 to 9 scale, `docs/value_map_gallery.png`; calibrated maps cached in `results/map_gallery_maps_v3.json`),
-             agent_benchmark.py (five agents, nearest, learner, best top-k, best thr-q (the last two tuned with hindsight per world) and mvt, on the realised sessions of experiments: mean points and bushes per patch with standard errors over worlds as a Markdown table `docs/pilots/agents.md` and a CSV; `agent_benchmark.py PCX FOR TUT --worlds 20`; test in test_agent_benchmark.py), patch_foraging.py (the patch-foraging benchmarks, 2026-11-18: four oracle agents with average costs on the tiles world, `dp_finite` (optimal stopping by dynamic programming over the time left), `dp_average` (the optimal long-run rate), `mvt` (the marginal value theorem at that rate) and `mvt_running` (at the rate experienced so far); `PatchModel`, `average_costs`, `make_agent` (the step between patches is calibrated from one rollout), `run`; tests in test_patch_foraging.py), pilot_report.py (what a set of sessions looks like, to design a pilot before it is built: `preview <code>` calibrates each cell of `design/tables/<code>.json` (map, mean-bush-value gain, world; no simulation), `report <code>` reads the realised file and runs nearest, learner and oracle on each cell's own world; a figure per experiment (the maps on the fixed 0 to 9 scale with the bushes over them) and a table of the map's and the world's metrics (agents' points on the cell's own world, the four patch-foraging benchmarks and their bushes per patch included; no planner warnings) with the span-and-hold check of the pilot (`PILOTS`: the knob must rise, the rest stay within tolerance); tests in test_pilot_report.py), independence.py (the independence test of the session knobs: `run --tag T` realises sessions at a space-filling set of knob settings (Gini, class and interaction, travel time) into `results/independence_<tag>.jsonl`, `report` prints the failures and the correlation matrix of the realised factors, `plot` draws it; tests in test_independence.py),
-             map_region.py (which (Gini, interaction) pairs the Gaussian family can make: samples the family, summarises the reachable interaction per Gini bin and draws `docs/value_map_region.png`; tests in test_map_region.py),
-             factors.py (what a session's factors are in a generated world: `measure(world)` gives the realised travel time, contrast between tiles, diversity within a tile, mean bush value, bush Gini and noise, `map_descriptors(params)` the reward map's; `policy_points` (the points a registry agent earns, a proxy for `solve_gain`), the calibrators `travel_time_settings` (`tile_radius`, closed form), `calibrate` (no diversity setting since 2026-11-18: the pool is placed at random, so diversity is the map's own and only measured), `fields`, `verify`; `factors.py measure|calibrate <session> [--seeds]`; docs/SESSION_FACTORS_PLAN.md; tests in test_factors.py),
-             value_maps.py (a session's reward as a specification over the (shape, colour) plane: the one primitive `Bump` (a placeable, stretchable, rotatable Gaussian; `gaussian(...)`, `wide_corner(...)`), a noise map and an equaliser (a gain), JSON, descriptors (Gini, effective weights, interaction, log_interaction, nonlinearity), `compile()` to the reward fields `world.py` reads, `fields()` to the SessionConfig field settings a design module passes on, `describe()` for the logged design, `calibrate_map` (the Gaussian with a stated Gini, interaction and class, or the closest it can name), `map_proxies` (mean, median, mean fruit pay, top quantile of the map) and `solve_gain` (the gain that makes a proxy hit a target), and the reward-complexity ladder `additive` (a wide corner Gaussian), `multiplicative`, `nonseparable` (docs/SCIENCE.md "Reward complexity ladder"); docs/SESSION_FACTORS_PLAN.md; `value_map_examples.py` (one reference example per rung and the figure `docs/value_map_examples.png`); tests in test_value_maps.py and test_bump.py (the bump's formula against values read from C#)),
-             synthetic.py (tiles sessions built from a stated configuration on FIX_T0, for the tests), fixtures/sessions/FIX_T0.asset (the one frozen tiles session of the engine tests, a copy of FOR_S1 with a 60 s duration and no ranking; never regenerated from a design, its reward block was replaced by FOR_S1's bump on 2026-11-17 when the ramp components were removed),
-             human_data.py (the analysis half of the participants' data: `database.py download` writes `ForagingData/<run>/` plus the tidy `ForagingData/humans.sqlite`: participants, sessions, events, ranking_sets; `load(exclude=("peter",))` returns DataFrames),
-             database.py (`publish --build <dir> [--note reason]` registers the catalog's experiments, the build's files and the release; the single register commands, list runs, pull a run into the local layout; the one script for database operations (2026-11-18): the database password is pasted at a hidden prompt every time (the connection string is built from online.json's project ref and `POOLER_HOST`) and kept in memory only (no environment variable, no file; it refuses to run without a terminal; reads in a read-only transaction; a write prints the project it goes to and asks for nothing more; `results/db_<operation>_<time>.log` records each run without secrets); `describe` connects to nothing; `download` (new or changed runs into `ForagingData/`) and `backup` (every table as JSON lines, before a migration) read in a read-only transaction; `migrate` (the unapplied files of `supabase/migrations/`, one transaction, recorded in the CLI's table), `cleanup` (what the smoke and load tests left under a throwaway build name) and, with the Supabase access token pasted the same way, `set-secret` and `deploy-functions` (the CLI as a child with the token in its environment only), the last two without a database connection; Claude edits and tests it but never holds the string, you run it),
-             server_client.py (reference client of the online server's protocol), server_smoke.py (one throwaway run through the deployed endpoints), load_test.py (N simulated participants uploading at the game's cadence),
-             webgl_smoke.mjs (a WebGL build in headless Chromium: loads, logs in, picks an experiment, plays, uploads), deploy_webgl.sh and patch_webgl_page.py (a WebGL build as one fresh commit in a GitHub Pages repository; never pushes),
-             perf_browser.mjs and perf_report.py (frame-time benchmark of a WebGL development build in headless Chromium on the real GPU: variants of graphics settings through the address, runs into `results/perf/<tag>/`, a table with the spread of the runs; `?offline=1` keeps it from uploading; `node scripts/perf_browser.mjs <build> --tag T --variant name="k=v&k=v"`),
-             mutation_check.py (mutation testing of the changed lines in a scratch copy; see "Adversarial review"), conftest.py (tests run with motor costs off unless marked `motor_costs`),
-             validate_run.py and test_validate_run.py (the run validator: `validate_run.py <session folder | run folder | run id | --all> [--json]` checks scoring, integrity and the ranking-break rules of logged sessions, PASS/WARN/FAIL, exit 1 on a FAIL; golden sessions with one injected fault each, and the two real browser runs of 2026-11-13 in `scripts/fixtures/runs/`), test_*.py (pytest; run them with `scripts/run_tests.py`, which runs only the test files the changed files can affect, or `--all` before committing; `--fast` skips `slow`-marked tests)
-```
+One line per directory; the file-by-file description is `docs/CODEMAP.md`. **Keep `docs/CODEMAP.md` in sync when files are added, moved, or retired.**
 
-Keep this tree in sync when files are added, moved, or retired.
+- `Assets/Scripts/Player|Trees|World|Session|UI|Data/` — the game: player and camera; bushes and fruit; world loading and terrain; `SessionConfig` (ALL parameters), `GameManager`, `RankingBreak`, menu, `HarvestManager`; HUD, popups, tutorial hints, crosshair; `DataLogger`, `DataPipeline`, sinks, `PauseGate`.
+- `Assets/ScriptableObjects/Experiments/<code>/` — one folder per experiment (`<code>.asset` and `<code>_S<n>.asset`); `FOR_S1` is the template session, `TUT`, `PCX`, `PSC`, `PSP` are in the menu. Made by `scripts/build_experiment.py` from `scripts/design/<code>.py`.
+- `Assets/StreamingAssets/Experiments/<code>/` — what one experiment downloads: instruction texts, generated `<session>_seed<N>.world` and `.ranking.json`. Shared texts (consent, introduction, resume) at the root.
+- `Assets/Editor/` — `BuildInfoWriter`, `ExperimentBuilder`, `ExperimentPlayer`, `SessionPreview`; `Assets/Shaders/`, `Materials/`, `Prefabs/`, `Audio/Ambient/`, `Scenes/SampleScene.unity` (the single scene).
+- `supabase/` — migrations, Edge Functions, local server (deploy: `docs/ONLINE_DATA_PLAN.md`).
+- `docs/` — `SCIENCE.md`, `DECISIONS.md`, `ONLINE_DATA_PLAN.md`, `SIMULATION.md`, `REGENERATING.md`, `CODEMAP.md`, `REVIEW_POLICY.md`, `SESSION_FACTORS_PLAN.md`, `pilots/`.
+- `.claude/` — agents (simplifier, red-team, arbiter) and the adversarial-review skill.
+- `scripts/` (Python, `./venv/bin/python`; `venv/` and `worlds/` gitignored) in groups:
+  worlds (`world.py`, `tiles.py`, `ranking.py`, `value_maps.py`, `factors.py`, `cells.py`, `design/`, `build_experiment.py`);
+  logged data (`replay.py`, `visibility.py`, `rundata.py`, `human_data.py`, `validate_run.py`, `trajectory_codec.py`);
+  simulator and agents (`sim.py`, `perception.py`, `costs.py`, `agents.py`, `specs.py`, `battery.py`, `results.py`, `analysis.py`, `plots.py`, `fingerprint.py`, `patch_foraging.py`, `agent_benchmark.py`, `pilot_report.py`);
+  online and deployment (`database.py`, `server_*.py`, `load_test.py`, `webgl_smoke.mjs`, `deploy_webgl.sh`, `perf_*`);
+  tests and review (`test_*.py`, `run_tests.py`, `conftest.py`, `synthetic.py`, `fixtures/`, `mutation_check.py`).
+- **Hash-sensitive files:** `ENGINE_FILES` (`sim.py`, `costs.py`, `perception.py`, `world.py`, `tiles.py`) and `AGENT_FILES` (`agents.py`, `specs.py`) are hashed into every recorded simulation result: even a comment edit moves the hashes. Edit them only when needed and batch the edits (`docs/SIMULATION.md`).
+- **Mirrored pairs (change both):** `HarvestManager` range/bearing/timer rules with `replay.py` (camera, canopy and terrain sampling also with `visibility.py`); `RankingBreak` timing, blocks and events with `replay.py` and `visibility.py`; `RankingSets.ScorePairs` / `PairWeight` with `ranking.rankings_to_points`; `scripts/world.py`'s placement, attribute and reward rules with the C# generator-side rules `WorldData` reads.
 
 ---
 
@@ -259,7 +202,7 @@ Keep this tree in sync when files are added, moved, or retired.
   and the pool file exists; every parameter is a `SessionConfig.ranking*` field. The set always stands on a floating disc drawn by an overlay camera (`RankingDisc`, `docs/DECISIONS.md` "The ranking stage"; the old on-terrain ranking was removed 2026-11-16) and its bushes log a ground height `y` that replay and visibility use (a log without it, from before the stage, falls back to the terrain). A break never sets the camera, writes no shared
   material, moves no score (its bushes pay 0) and holds the session clock through `SunController.ClockHeld`. Outcomes are hidden through `RankingBreak.Active`. **Change `RankingBreak`'s timing, blocks and events
   together with `replay.py` and `visibility.py`.**
-- **The harvest rule** is the range plus the crosshair's hidden circle (see "Data logging"); `HarvestManager.Aimed` and `replay.py`'s `_aimed` are one rule in two languages.
+- **The harvest rule** is the range plus the crosshair's hidden circle (see "Data logging" below); `HarvestManager.Aimed` and `replay.py`'s `_aimed` are one rule in two languages.
 - The reward function is modular and defined entirely in `SessionConfig`
   (per-attribute basis function + weight/peak/width), never hardcoded.
 - Layers: `Default` (misc), `Terrain` (ground), `Tree`, `Player`. Collision
@@ -284,26 +227,15 @@ rewardStd)))`, sampled independently per fruit and pre-drawn in the world file
 (the k-th fruit taken from a bush pays `fruit_reward[bush][k]`); harvest total is the sum.
 
 ### Data logging
-**The online database is the default** (`docs/ONLINE_DATA_PLAN.md`, `docs/DECISIONS.md` "Online data collection"). `DataLogger` records
-rows (a trajectory frame per rendered frame: `t, x, z, yaw, pitch, keys`, the state `HarvestManager` reads that frame, quantized by
-`TrajectoryCodec`; events: pause/resume with a `reason`, harvest press/release/pause/resume, every fruit, teleports, ranking breaks and their sets,
-focus changes, tutorial hints (`hint_shown` / `hint_dismissed`), session start/end, each with a JSON `payload`; the session row: the full `SessionConfig`, world hashes, camera, display,
-frame statistics, build; one `ranking_sets` row per ranking set) and hands them in batches to `DataPipeline`.
-The pipeline always writes the **local copy** under `<project root>/ForagingData/<run id>/<session:00>/` (`events.csv`, `trajectory.csv`,
-`ranking_sets.csv`, `session.json`, and `run.json` above them: the database's tables as files (a ranking set is one `ranking_sets` row with its bushes as JSON in the last column), read by
-`scripts/rundata.py`) and, when `StreamingAssets/online.json` is enabled (or `-onlineUrl`/`-onlineKey` are given), uploads the same rows to
-the Supabase project (off in the Editor unless `uploadInEditor`). Uploads are acknowledged: if the server leaves data unacknowledged
-longer than `SessionConfig.uploadGraceSeconds`, or cannot be reached, the game holds still behind a message (`PauseGate`; a `pause`
-event with reason `upload`) until it has stored everything; leaving a session or quitting waits for the drain. Only `PauseGate` may set
-`Time.timeScale`. The harvest rule is the range plus the crosshair's hidden circle (`SessionConfig.crosshairRadius`, degrees; the view ray from the camera must touch the canopy's ellipsoid grown by the circle, so pitch counts; `crosshairReleaseScale` widens it for a harvest under way; `rankingCrosshairRadius` (1 degree) replaces it during a ranking, so that two bushes of a set (at least 2 degrees apart in the view) are never both touched; 0 = the old 35 degree cone of yaw; `crosshairAlpha` is the drawn crosshair's opacity, `UI/AimCrosshair`). `scripts/replay.py` loads a session folder, re-derives the harvests from the trajectory (mirroring `HarvestManager`)
-and checks them against the log: **change `HarvestManager`'s range/bearing/timer rules and `replay.py` together** (and the camera,
-canopy or terrain-sampling rules with `visibility.py`). The clock `t` is unpaused session seconds. Trajectory time is quantized to a
-microsecond because replay sums frame times (DECISIONS has the measurement). World files are archived once by hash in
-`ForagingData/_worlds/` by the Editor and standalone loggers (a browser never archives; `database.py pull` writes the worlds a pulled run
-used, taken from git at its build commit, into `<out>/_worlds/`, where replay looks). **The table columns and their meaning are fixed once real data exists — changing them breaks downstream
-analysis and comparability.** Add columns only at the end, and say so. `Assets/Editor/BuildInfoWriter.cs` writes the gitignored
-`StreamingAssets/build_info.json` (git commit, dirty flag) that the session row and `run-start` read; the server refuses a commit that
-is not registered (`database.py register-release`). **Experiments (2026-11-06):** the Boot scene is the experiment menu. A participant logs in once (`participant-start`: Prolific ID on the ID screen, then the consent screen with a typed signature only when the server holds none of this text's version) and gets the menu of the experiments the build offers (`MenuScreen`: Start, Continue, or View code for a finished one, locked ones greyed); choosing one calls `run-start` and loads the game scene with that experiment's sessions (`GameManager.BeginExperiment`); at its end the completion screen (code, feedback, back to the menu) returns to the Boot scene (`DataPipeline.ReturnToMenu`). Without a server the menu offers every experiment of the catalog; the Editor's Foraging > Experiments window (or `-experiment <code>`) plays one without the menu. Each experiment is its own run (`run-start` with the participant token; prerequisites between experiments are enforced by the server; a finished experiment is not rerun but answers with its completion code). `run-finish` returns the experiment's `completion_code` (the `experiments` table, set by `database.py register-experiment`), which the last screen shows before redirecting Prolific participants. **Ranking breaks** (`RankingBreak`): a foraging session can contain ranking sets played in place; the log's `t` runs through them (the session clock is held), `rank_break_start` (with `leaving`) / `rank_break_end` bound a break, `rank_leaving` marks each qualifying patch leaving (a resume continues the count from the log) (a break cut short by a reload is closed with an `aborted` `rank_break_end` at the resume and played again from its first unscored set as a `rank_break_start` with `resumed`), (`SessionConfig.rankingLeavings` when set; none in FOR and TUT since 2026-11-18: every qualifying leaving, `rankingEvery` 1, after at least `rankingMinBushes` bushes harvested since the last ranking, no cooldown), `rank_set` carries the arc's bush table, each set is a `ranking_sets` row of the session (its `points`: 0 in a practice session); a session's points are two columns of the `sessions` row, `foraging_points` (the harvest points) and `ranking_points` (the sum of its sets' `points`), written at the session's end with the `session_end` payload, the total is their sum; resume restores the foraging clock as `clock - held_seconds` (`docs/ONLINE_DATA_PLAN.md`, "Ranking breaks"). **Resume:** a participant who returns with the same Prolific ID (`-pid`) continues the unfinished run of an experiment: `DataPipeline` reloads the scene for the session to continue and `DataLogger` restores the clock, pose, score and fruits taken (`ResumeInfo`; `docs/ONLINE_DATA_PLAN.md`, section 4); the log gets a `session_resume` event, which `replay.py` treats as a discontinuity.
+Full text: `docs/ONLINE_DATA_PLAN.md`, "Data logging (as built)". The invariants:
+- **The online database is the default** (`docs/DECISIONS.md` "Online data collection"). `DataLogger` records trajectory frames, events (JSON `payload`), the session row (full `SessionConfig`, world hashes, build) and one `ranking_sets` row per ranking set, and hands them in batches to `DataPipeline`.
+- The pipeline **always writes a local copy** under `<project root>/ForagingData/<run id>/<session:00>/` (read by `scripts/rundata.py`) and, when `StreamingAssets/online.json` is enabled, uploads the same rows to Supabase. Uploads are acknowledged; unacknowledged data holds the game behind a message (`PauseGate`). **Only `PauseGate` may set `Time.timeScale`.**
+- **The harvest rule** (range plus the crosshair's hidden circle, `SessionConfig.crosshairRadius`) is mirrored by `scripts/replay.py`: **change `HarvestManager`'s range/bearing/timer rules and `replay.py` together** (and the camera, canopy or terrain-sampling rules with `visibility.py`).
+- **The table columns and their meaning are fixed once real data exists — changing them breaks downstream analysis and comparability.** Add columns only at the end, and say so.
+- The clock `t` is unpaused session seconds; trajectory time is quantized to a microsecond because replay sums frame times.
+- **Ranking breaks** hold the session clock; **change `RankingBreak`'s timing, blocks and events together with `replay.py` and `visibility.py`** (a log has `rank_break_start`/`rank_break_end`, `rank_set`, `rank_leaving`; points are `foraging_points` + `ranking_points`).
+- **Resume:** a participant returning with the same Prolific ID continues the unfinished run (`DataLogger` restores clock, pose, score, fruits; the log gets `session_resume`, a discontinuity for `replay.py`).
+- `BuildInfoWriter` writes the gitignored `StreamingAssets/build_info.json`; the server refuses a commit not registered (`database.py register-release`).
 
 ---
 
@@ -357,20 +289,12 @@ design rationale, conclusions reached before code existed. Commit before
 starting a large Claude task so the diff is reviewable.
 
 ### What to regenerate after a change
-The generated files are manual steps (nothing runs them at build time):
-- **Session world** (terrain, seed, tile fields, mountains, canopy width/shape ranges,
-  the value map and reward std, fruit count): `./venv/bin/python scripts/world.py <sessions> --unity`.
-  Unity warns at startup when a session world is stale.
-- **An experiment's sessions** (a session's reward function, which features vary, terrain, duration, instruction file, hints): edit the design table in `scripts/design/<code>.py`, then
-  `./venv/bin/python scripts/build_experiment.py <code>` (an open Editor; it makes or updates the assets, writes the instruction texts and regenerates the worlds and ranking pools; `--no-generate` skips those,
-  `--remove-stale` deletes assets the design no longer lists). The engine tests use the frozen `FIX_T0` in `scripts/fixtures/sessions/` (a session name starting FIX_ is read from there). (The ABAB design is archived in `archive/abab/`, the CF ladder script in `archive/cf_ladder/`; the old experiments TUT, FN, RW and FI are in git at tag `pre-cleanup`.)
-- **Tutorial** (`design/TUT.py`: `TUTORIAL_*`, `INSTRUCTIONS`, `HINTS`): its own experiment `TUT` of one practice session `TUT_S1` (120 s, a world chosen by `cells.py` from the realised cell, ranking breaks on) that must be finished before FOR unlocks (`FOR.REQUIRES`), with `instructions_S1.txt` and `hints_S1.txt` in `StreamingAssets/Experiments/TUT/` (written by `build_experiment.py TUT` from the design file; a hints file needs no regeneration). **Reward and layout** (2026-11-17): TUT's and FOR's one session are realised cells (`design/tables/TUT.json`, `design/tables/FOR.json`, realised by `cells.py realize <table>` into `design/realized/`; the baseline: additive rung, round corner Gaussian, Gini 0.4, travel time 8 s for FOR and 5 s for TUT, the pool of bushes placed `balanced` (equal patch totals, 2026-11-18); FOR 180 s with the corner where both features pay more when higher, TUT 120 s with the corner where **shape pays more when lower** and colour when higher, so the practice does not teach FOR's rule). The map, gain, tile layout, world seed (searched among 100) and feedback maximum come from the realised file. Each session's logged `designJson` carries its map and descriptors. **Texts, in order** (every popup carries the small blue "Tutorial" label, `SessionConfig.sessionLabel`, in place of "Session n of m"): the Controls screen (1 s after the session starts, the game held), then pause popups from `TutorialHints` (`@bout 1` Harvesting, `@bout 2` Features, `@ranking_start 1` Ranking, 0.25 s after the first set's bushes have grown, `@ranking_end 1` Ranking, `@time_left 60` Scoring, `@time_left 30` Pausing (asks for [Escape]), with 60 s of foraging time left, the clock pulsing yellow), then the end screen "Tutorial complete" with the captions and note of `SessionConfig.scoreCaptionForaging` / `scoreCaptionRanking` / `scoreNote`. The full wording is in `design/TUT.py` and `docs/SCIENCE.md` ("The tutorial"). Rebuild with `build_experiment.py TUT`.
-- **Ranking pool** (`rankingEvery`, `rankingLeavings` (no regeneration for the schedule), `rankingPoolSets`, `rankingSetSize`, `rankingArcSpan`, `rankingDistance`, `rankingTieGap` or the reward function of a session that has rankings): `./venv/bin/python scripts/ranking.py pool <session>` (`build_experiment.py` does it for a session with `rankingEvery` > 0). A tiles world file also carries `tileCentres`, `tileRadius`, `tileRamp` in its header (regenerate the world).
-- **Tiles world** (`layout`/`assignment` `tiles`, `tileRadius`, `tileRampWidth`, `tileMoistureLevels`, `tileBushes`, `tileClusterRadius`, `tileClusterSpacing`, `tileArrangement`, `tilePlacement`, `tileCoverageMin`, `tileStartSpreadMin`, `tileSumTol`): regenerate the world as for a session world; Unity warns when a tiles file is stale (the numeric tile fields).
-- **Fields only the removed generator read** (`spatialBalance`, `featureBalance*`, `featureCoverage`, `treeSpacing`, `placementJitter`, `startClearingRadius`, `terrainNoise*`, `moistureTerrace*`, `terrace*`): no Python generator or the simulator reads them now (a world file's header still echoes the terrace and `CHECK_KEYS` ones, which the game compares); changing them regenerates nothing and moves no environment hash.
-- **No regeneration needed:** `targetFrameRate`, `sessionDuration`, `fruitHarvestDuration`, `playerMoveSpeed`,
-  `rankingSeconds`, `rankingBonusPerPair`,
-  audio volumes, instruction text.
+The generated files are manual steps (nothing runs them at build time); the recipes and the per-field lists are in `docs/REGENERATING.md`.
+- **World-shaping SessionConfig value** (tile fields, terrain, mountains, canopy ranges, value map, reward std, fruit count): `./venv/bin/python scripts/world.py <sessions> --unity`. Unity warns at startup when a world file is stale.
+- **An experiment's sessions** (reward function, features, terrain, duration, instruction file, hints): edit `scripts/design/<code>.py`, then `./venv/bin/python scripts/build_experiment.py <code>` (open Editor; `--no-generate`, `--remove-stale`). The engine tests use the frozen `FIX_T0`.
+- **Tutorial** (`design/TUT.py`): `build_experiment.py TUT`; a hints file needs no regeneration.
+- **Ranking pool** (`ranking*` fields that shape it, or the reward function of a session with rankings): `./venv/bin/python scripts/ranking.py pool <session>`.
+- **No regeneration needed:** `targetFrameRate`, `sessionDuration`, `fruitHarvestDuration`, `playerMoveSpeed`, `rankingSeconds`, `rankingBonusPerPair`, audio volumes, instruction text.
 
 ### Long-running commands (experiments, regeneration, builds)
 Run the real command once with `run_in_background: true` and its output redirected to a log (`... > "$SCRATCH/x.log" 2>&1`); the harness
@@ -380,168 +304,22 @@ command line matches the pattern, so it never ends). To see progress, read the l
 results table as its last output, which is the completion marker. This went wrong twice in one session; see the memory note.
 
 ### Testing
-During a long change (several milestones), run `run_tests.py --fast` and leave the full run (`--all`, about 13 minutes: world and ranking pool freshness, the fingerprint field check, the simulator, agent, battery and
-results runs) for the end of the work (PI, 2026-11-05); the slow checks to confirm then are listed in DECISIONS ("Test policy during the new-ladder milestones"). Tests of the old-ladder generators (lattice placement,
-terraces, spatial balance, feature balance) were deleted with them (2026-11-13); git history keeps them.
-**Tests state their configuration; they do not name a shipped session** (PI, 2026-11-09). Generator tests build sessions with `scripts/synthetic.py`
-(which features are visible, what each pays and in which direction, the noise) on the frozen tiles session `FIX_T0` (tile fields stated in `synthetic.TILES`); `scripts/test_realization.py` checks that
-what a configuration intends is what the generators produce (visible features vary, hidden ones do not, the value slopes equal the weights and
-directions, the noise is the stated size, the session declares its features). The engine-level test modules
-(simulator, agents, battery, results, analysis, fingerprint, replay, rundata) use `FIX_T0` as an arbitrary environment (several worlds through the world seed),
-so changing or deleting a live experiment cannot move them. Only tests of the live files (freshness and the design tests) read the real assets.
-**Slow tests (`slow` marker, `--all`) run only when the PI approves, after a major change and before a commit.**
-`./venv/bin/python scripts/run_tests.py` runs only the Python test files the changed
-files can affect (`--all` before committing; `--dry-run` shows the decision). `--fast`
-additionally skips tests marked `slow` (freshness checks of committed generated files, long
-planner searches): a few seconds vs about 35 s for everything, so use it while iterating, but run
-the plain command after touching a session asset, `world.py`, `ranking.py` or the
-planner. The tests call the real generators in memory and write nothing into the project. There
-are no Unity-side tests.
+Full text (policy, what the engine tests use, validator details): `docs/REGENERATING.md`, "Testing (full text)". The rules:
+- While iterating run `./venv/bin/python scripts/run_tests.py --fast` (it runs only the test files the changed files can affect; `--dry-run` shows the decision). Run the plain command after touching a session asset, `world.py`, `ranking.py` or the planner, and `--all` (about 13 minutes) before committing.
+- **Slow tests (`slow` marker, `--all`) run only when the PI approves, after a major change and before a commit.**
+- **Tests state their configuration; they do not name a shipped session** (PI, 2026-11-09): generator tests build sessions with `scripts/synthetic.py` on the frozen tiles session `FIX_T0`; engine-level tests use `FIX_T0` as an arbitrary environment. Only freshness and design tests read the real assets. Tests write nothing into the project. There are no Unity-side tests.
+- **Validate a pilot run before trusting it:** `./venv/bin/python scripts/validate_run.py <run id or folder>` (read-only; `--all`, `--json`). It recomputes scoring independently of the C# code and checks the log's integrity and the ranking-break rules. FAIL = the data or scoring is wrong; WARN = undecidable; old log formats are unsupported (FAIL with "unsupported log format").
 
-**Validate a pilot run before trusting it:** `./venv/bin/python scripts/validate_run.py <run id or folder>` (read-only; `--all` for every run under `ForagingData/`, `--json`
-for scripts). It recomputes the scoring independently of the C# code (foraging points against the fruit events and the world's pre-drawn rewards; each ranking set's pairs
-and points against `ranking.rankings_to_points` (the payout rule: `SessionConfig.rankingPointsMode`, `pair` or `pair_mean_value`; the C# mirror is `RankingSets.ScorePairs` / `PairWeight`), its `rank_set_end` event and `session_end`), checks the log's integrity (event seq and clock, one start and end, frame count, break
-and set events and rows, the world file's hash) and the design's break rules (a patch switch before each break, cooldown, minimum bushes, last seconds, player still, no
-foraging fruit and the foraging clock lasting `sessionDuration`, the pool in order). FAIL = the data or scoring is wrong; WARN = undecidable. Old log formats (Interlude sessions, breaks of the early prototype, the `final_score` column, old column layouts) are unsupported:
-they FAIL with one "unsupported log format" line (git history at b7e1895 has the code that handled them).
-
-### Results database (`results/results.sqlite`, schema v4; specs, fingerprints, recording and query helpers are built)
-A SQLite file of every simulated-agent run, so previous runs can be queried instead of re-run. `results/` is at the repo root,
-flat (no subfolders), gitignored, and separate from `ForagingData/` (participant data). Humans use a separate scheme, not this
-database. Design rationale and rejected alternatives: `docs/DECISIONS.md` ("Results database").
-
-**Identity and names**
-- An agent's identity is the first 12 hex characters of the SHA-256 of its canonical spec JSON (sorted keys, defaults
-  resolved; numbers by value, so `10` and `10.0` agree). Every component derives from `specs.Component` and reports `{"type": ClassName,
-  <parameter>: <value>, ...}` through `spec()` (nested components are nested specs; a class that replaces `None` by a default overrides
-  `params()` to report the effective value); `ComposedAgent.spec()` joins the four and `agents.build_agent(spec)` rebuilds the agent.
-  Only library classes (`agents.py`, `perception.py`) build from a spec by name; a component defined elsewhere is passed in `extra`.
-- **Names are labels, not data.** Never use a name as a key. When reporting, build the label from the spec showing only the fields
-  that differ among the agents in the table (`alpha=0.2` vs `alpha=0.5`; `rbf` vs `ssp`). Old registry names (`nearest`,
-  `greedy_rate_15`) stay as aliases that build the *current* spec of that name: `nearest` is now the view-cone agent and `delta_rate_10`
-  has the ConstantPrior default, so results recorded under their old definitions are selected by agent id, not by alias.
-- An experiment is referred to by its `tag` (free text, e.g. `alpha-sweep-1`). In docs, describe an agent in words (components and
-  parameters) plus the tag; a hash appears only where a result must be re-found.
-
-**What is stored** (one row per world seed in `episodes`; no traces; no derived metrics)
-- `agents` (hash, component names, spec JSON) and `agent_params` (one row per component/key/value, to query by parameter).
-- `environments` (`fingerprint.environment`): session, a hash of the resolved session parameters the simulator reads
-  (`fingerprint.SIM_FIELDS`; audio, visuals and the world seed are excluded, so a temporary 15 s duration is visible and an
-  Inspector tweak of a volume is not), overrides,
-  percept, kind (always `session` since the cleanup of 2026-11-14), motor-cost constants. `code_versions`: a hash of the engine files
-  (`sim.py`, `costs.py`, `perception.py`, `world.py`, `tiles.py`), a separate hash of `agents.py`, git commit and dirty flag.
-- Schema v4 (2026-11-14) only adds a `schema_notes` table: the Interlude's `episode_checkpoints` table and the Interlude columns of `episodes` stay in old files, unused (a migration never drops data; the old file is copied to `.bak-v<old>` first). Every environment and engine hash changed with the cleanup, so results recorded before it are stale.
-- `episode_fruits` (schema v2): one row per fruit taken in the session (`t` in session seconds, `bush`, `k`, `reward`, `running_total`),
-  the agent's counterpart of the human `fruit` events in `events.csv`; read with `Store.fruits(episode_id)` or
-  `analysis.fruit_events(store, sel, agent, seed)`. No positions, headings or other actions.
-- `runs` (agent, environment, code version, tag, time) and `episodes` (total, visits, fruits, walk/harvest/idle/look/press
-  time). Unique on (agent, environment, code version, seed).
-- A stochastic agent's own seed is part of its record, since results are only reproducible given it.
-
-**Using it**
-```bash
-./venv/bin/python scripts/sim.py FIX_T0 --seeds 0-99 --agents nearest,delta_rate_10 --record --tag my-experiment [--note "..."] [--set session_duration=90] [--db PATH]
-```
-`record_run(agent, session, seeds, tag, note=, percept=, overrides=, store=)` in `scripts/results.py` does the same from
-Python (`agent` = factory, registry name or spec dict). It looks every seed up by (agent, environment, code version) and
-computes only the missing ones; a cut-short run (Ctrl-C, an exception) keeps what it computed, links it to the run and notes
-`[interrupted]`. `Store(path, readonly=True)` opens the file for analysis (`select(sql, params)` returns dicts). The agent's own
-random stream comes from the world seed, so a result is reproducible from its key; a custom `agent_rng` cannot be recorded.
-
-**Querying with `scripts/analysis.py`** (read-only; open with `Store(path, readonly=True)`)
-```bash
-./venv/bin/python scripts/analysis.py runs [--tag T]
-./venv/bin/python scripts/analysis.py table  --tag T [--baseline nearest] [--metric total] [--engine current|any|HASH]
-./venv/bin/python scripts/analysis.py effect --tag T --factor critic.alpha [--reference 0.5]
-```
-- `select(store, tag=, session=, kind=, env_id=, overrides=, agents=, engine=)` returns one comparable set: exactly one environment and
-  one code version per episode, or it raises `SelectionError` saying what to narrow. Only the current engine code is searched by
-  default; an older or mixed selection carries `notes` ("stale", "agents.py changed", "dirty tree") that a report must repeat.
-  `describe`/`format_table` print the header a report needs (session, overrides, sensor, seeds, metric, tag, environment, engine,
-  agents hash, commit, dirty).
-- `table` gives mean, std, se per agent and, against a `baseline` (id, registry name, spec or agent), the paired difference with its
-  standard error and number of pairs (only seeds both agents have). Labels come from `specs.labels`: only the fields that differ.
-- `component_effect(sel, factor)`: `factor` is a path into the spec (`critic.alpha`, `critic.features`, `actor.choice`, `critic`);
-  everything under the path is the factor, agents are matched on every parameter outside it, and each matched group gives paired
-  differences to its reference level; the summary averages over groups (standard error across groups, so it needs two or more).
-  Agents that differ in anything else are never compared by it. Use it instead of eyeballing a table when more than one thing varies.
-- `cumulative_curve(store, sel, step=1, baseline=None)`: reward collected so far against session time (ends at the episode's total; the
-  default of `analysis.py curve`), mean and 95% t-interval across seeds. With a `baseline` (`curve --baseline nearest`) each agent's curve is
-  the paired difference to the baseline's cumulative reward in the same worlds (the baseline is left out): flat at zero until an agent
-  starts beating it, then rising. (A reward-rate curve with binning or low-pass smoothing was built and removed: too hard to read, flat and
-  wiggly with the world's layout; see DECISIONS.)
-- **Figures are grids of panels, one per session** (2 x 2 for the battery's T1-T4): `plots.plot_cumulative_reward(panels, path, names=, order=)`
-  takes `{session: curves}` (or one curves object) and draw each agent with `seaborn.lineplot` from the per-seed
-  curves (`plots.long_form`): mean and 95% bootstrap interval across seeds, `hue` = agent name, the same colour for the same agent in every
-  panel, one shared legend, one linestyle per agent as well as one colour (`plots.SERIES`, `plots.STYLES`), at most 8 agents per figure (the palette) and a warning above 5 (`plots.MAX_DISTINCT`). The advantage figure uses the **lowest-performing agent of each session**
-  as its baseline (`cumulative_curve(..., baseline="lowest")`, `curve --baseline lowest`). For the battery, `battery.py plot --tag T --population P [--kinds reward,advantage]` saves one figure per kind as
-  `results/<tag>_<population>_<kind>.png`; each population (all including `nearest`; more than 5 agents warns) is one figure group, except that the `scan-*`, `explore-*`, `delta-*` and `learners` figures leave out `nearest` and `oracle` (`battery.FIGURE_OMITS`; the figure then holds up to 6 or 7 agents, past the 5-agent warning and within the palette's 8; they stay in the population for `scores`), so their advantage baseline is the lowest learner.
-- **Figure size and font conventions** (`plots.MODES`, from the evidence_integration project's `utils/plot_style.py` / `make_figures.py`): `mode="paper"`
-  (default; `battery.py plot --mode`) is 6.5 in wide (a letter-page `\textwidth`) with 9 pt text (axis titles 10, ticks and legend 8, axes 0.8 pt,
-  lines 2 pt, 300 dpi); `mode="presentation"` is 10.6 in wide with 15 pt text (labels 17, titles 18, ticks 13, legend 14, axes 1.2 pt, 200 dpi). Height is
-  `rows * panel_height + extra_height` (foraging's own values), and the title, subtitle, legend and footer are placed from the font sizes (`plots._margins`).
-  Seaborn's `ticks` theme, no gridlines, shared x axes across panels (the reward and advantage panels have their own y axes, since sessions differ in maximum reward). Battery figures are saved as `<tag>_<population>_{reward,advantage}.png`. Unlike evidence_integration, figures are PNG, not SVG.
-- **Figure colour conventions** (`plots.SERIES`, `plots.STYLES`, `plots.MAX_DISTINCT`; rationale and the recipe that generated the palette in
-  `docs/DECISIONS.md`, "Figure colours"): at most **5 agents per figure** (a warning above that; the palette holds 8 as a hard limit), each agent keeps one colour **and**
-  one linestyle in every panel and figure; a new plot type must take its colours from `plots.SERIES` in order (lines also `STYLES`; scatter
-  adds a marker per agent) and never hard-code colours. Colour is never the only channel for line or scatter plots. Check a new figure under simulated
-  colour-blindness (deuteranopia, protanopia, tritanopia) before relying on it, and do not change the palette without re-measuring the worst pair.
-
-**The assessment battery** (`scripts/battery.py`; "battery" because "test suite" already means pytest). One definition of how agents are compared:
-the labels T1 to T4 of the one frozen tiles session `FIX_T0`, at the durations of the default `long` battery (60, 90, 120, 120 s, passed as `session_duration` overrides; `--battery standard` is the shorter 45, 60, 60, 90 s one), each label on its own worlds (world seeds shifted by 100 per label); reward only since the cleanup of 2026-11-14 (the
-Interlude half and the checkpoint scores are gone, and no ranking evaluation exists yet; the environment is a frozen tiles session); 10 seeds by default; each agent starts fresh in every session.
-```bash
-./venv/bin/python scripts/battery.py list
-./venv/bin/python scripts/battery.py run --population main --tag <name> [--agents a,b,...] [--seeds 0-9] [--db PATH]   # records <name>/<session> runs
-```
-It is just `record_run` per agent per session, sessions as the outer loop. Populations (`POPULATIONS`: `main` = `nearest`, `oracle`, `learner`, the standard agents; the GP critic (`gp_mean`) and the exploration policies are in `learners`, `explore-noise`, `explore-bonus` and `explore-posterior` (GP critic), `delta-noise` and `delta-bonus` (the same actors on the delta-rule critic) and the one-parameter `scan-*` populations (each includes `gp_mean` as its reference); `learner-parameters`, `choice-noise` and `knowledge` are
-the investigations; names are labels, identity is the spec hash) live in `battery.py`, not `agents.py`, so editing them does not move the agents-code hash.
-**Standard agents:** the actor is the rate utility within 15 s of walking and the map comes from the view cone (`FullMemory`); `whole_map=True` gives the
-full-information variant, and the registry's `greedy_*` entries stay full-information benchmarks. **Scores and plots are deliberately not part of the run**: they are
-computed from the database afterwards: `battery.py scores --tag T --population P` prints, per session and agent, the paired reward lead over `nearest`
-(in reward points, with its standard error), its split into **quality** (picks better bushes) and **efficiency** (takes more fruits) with fruits and reward per fruit,
-there is no
-normalised score (no share of a floor-to-ceiling gap): see DECISIONS, "What a score is for".
-
-**Adding things**
-- *A parameter on a component:* give it a default and include its resolved value in `spec()`. This changes the hash of every agent
-  using the component, so run the re-hash migration (it recomputes ids from the stored spec JSON; nothing is lost). Never edit
-  `spec_json` or `agent_params` rows by hand.
-- *A new kind of component:* a new `type` string. Never reuse a type name for different behavior; if behavior changes under an
-  unchanged spec, the `agents.py` hash will differ, so say so in the commit message and rename the type if old results should not be
-  pooled with new ones.
-- *A new `episodes` column:* add at the end, nullable; old rows stay NULL (not 0). Never change what an existing column means. Prefer
-  a metric computed at query time to a stored one (the performance metric is still a TODO(PI)).
-- *Schema changes:* bump `schema_version`, write the migration in `scripts/results.py`, never drop data, and copy the file before
-  migrating (it is not in git).
-- *Environment changes* (session assets, reward function, terrain) change the environment hash on their own; nothing needs
-  invalidating by hand.
-- *The simulator starts reading another SessionConfig field:* add it to `fingerprint.SIM_FIELDS` (every environment hash then changes).
-  `test_sim_fields_cover_every_session_parameter_the_simulator_reads` traces a run and fails until you do.
-- *Code hashes* are of file bytes (`ENGINE_FILES`: sim, costs, perception, world, tiles; `AGENT_FILES`: agents, specs), so even a
-  comment edit moves them (a false alarm is the safe error); `dirty` means a hashed file differs from HEAD or is untracked.
-
-**Querying**
-- Use the helpers in `scripts/results.py` or parameterized SQL, and open the file read-only for analysis. Never UPDATE or
-  DELETE `episodes` by hand; remove a bad run by `run_id` through the helper and say you did.
-- **Look up before running.** A lookup of an existing (agent, environment, code version, seed) is free. Do not re-run baselines
-  unprompted (see above); run new agents or new conditions when asked.
-- Compare agents on identical environment and seeds and pair on seed: report the paired mean difference with its standard error,
-  not two unpaired means.
-- Default to results from the current engine hash; when citing older ones, say so. Treat a different engine hash as stale, not as
-  wrong.
-- A report states: session and duration (check for temporary overrides), number of seeds, tag, short engine hash, and whether the
-  tree was dirty. Prefer a clean-tree run before a result goes into a doc.
-- Compare components by holding the others fixed (agents that differ in exactly one parameter or component), via `agent_params`.
-- The agent/human performance metric is not decided: store raw scores, compute any metric at query time, and name it in the report.
+### Results database and simulator
+`results/results.sqlite` holds every simulated-agent run; the full rules (agent identity, what is stored, `record_run`, querying, the battery, figure conventions, adding things) are in `docs/SIMULATION.md`. The short version:
+- Names are labels, never keys; identity is the spec hash. **Look up before running; never re-run baselines unprompted.** Never UPDATE or DELETE `episodes` by hand.
+- Compare agents on identical environments and seeds and report the paired difference with its standard error; a report states session, duration, seeds, tag, short engine hash and dirty flag.
+- Figures: at most 5 agents, colours and linestyles from `plots.SERIES` / `plots.STYLES`, never hard-coded.
+- A schema change bumps `schema_version` with a migration and copies the file first; a new `episodes` column goes at the end, nullable.
+- If the simulator starts reading another SessionConfig field, add it to `fingerprint.SIM_FIELDS`.
 
 ### Simplifier agent
-`.claude/agents/simplifier.md` reviews code for needless complexity: it strips comments from a scratch copy, has a cold reader describe
-what the code does, and treats whatever is hard to follow as a finding. Run on its own, it applies small behavior-preserving fixes itself (verified by
-`recompile` / `run_tests.py`) and proposes anything larger. Invoke it after a feature works and before the person commits, and for an
-occasional module sweep, not during exploration. It does not hunt bugs (the Red-team session does). It also runs a compactness pass (the five
-largest simplifications) and a readability pass (how easy a newcomer or a naive agent would find the code). It does not weigh the hash
-cost of editing `ENGINE_FILES` / `AGENT_FILES` (even a comment edit moves the code hashes): the caller batches those and says so.
+`.claude/agents/simplifier.md` reviews code for needless complexity (strips comments from a scratch copy, has a cold reader describe the code, treats whatever is hard to follow as a finding); run on its own it applies small behavior-preserving fixes (verified by `recompile` / `run_tests.py`) and proposes larger ones. Invoke it after a feature works and before the person commits, not during exploration; it does not hunt bugs (the red-team does). It also runs a compactness pass (the five largest simplifications) and a readability pass (how easy a newcomer or a naive agent would find the code). It does not weigh the hash cost of editing `ENGINE_FILES` / `AGENT_FILES`: the caller batches those and says so.
 
 ### Adversarial review (red-team, simplifier, arbiter)
 `/adversarial-review [--since REF] [--no-rebuttal] [--save] [paths]` reviews a diff before the person commits: the **red-team**
@@ -573,3 +351,4 @@ design choice future-us might be tempted to "fix". Keep the README minimal.
   the terrain geometry (see `docs/DECISIONS.md`).
 - Do not vary fruit count per bush, cap or rescale rewards inside a session, or hand-edit the fruit colour ramp.
 - Do not change the `ForagingData/` output location.
+

@@ -11,7 +11,7 @@ the range evenly and the bushes fill the feature plane; within a set the values 
 
 The module holds the generator (`generate_pool`), the geometry checks (`check_arc`) and the scores a ranking can be given from its picks
 (`pair_scores` (the payout rule), `implied_pair_scores`, `kendall_tau`, `first_pick_regret`, `rank_gain`: all are computed from the raw order and the true values, so the metric
-can be chosen at analysis time). Scoring is not part of a run (see CLAUDE.md, "Results database").
+can be chosen at analysis time). Scoring is not part of a run (see docs/SIMULATION.md).
 """
 
 import argparse

@@ -17,6 +17,200 @@ ladder, the experiments TUT, FN, RW and FI, or their tools are history: what the
 
 ---
 
+## Index of entries
+
+Every `##` entry below, in file order (the file is chronological within each group, newest at the end; the 'Historical' entries at the very end hold what was moved out of SCIENCE.md and the old plan documents on 2026-11-19). Find one with `grep -n '^## ' docs/DECISIONS.md`. Entries marked superseded or removed describe code or designs that no longer exist: read them for the reasoning, not for the current state.
+
+- Research-tool-first design priority
+- Attribute channels: shape / fruit color / moisture, with prior management
+- Unlit fruits, double-sided lit canopy
+- Reward function: weighted basis functions, no normalization; integer, noisy per-fruit rewards
+- Trees: half-buried spheres, not hemispheres
+- Tree highlight: canopy emission pulse replaces the terrain-projected disc
+- Border: four solid walls, not scattered border objects (superseded by mountains, below) (superseded or removed)
+- Player: non-kinematic Rigidbody, raycast terrain following, layer-based collision
+- Camera: exploration (follow, forward-only) used for S1–S3 (superseded by first person, below) (superseded or removed)
+- Camera: first person only; avatar, animations, and Isometric mode removed (superseded or removed)
+- Session flow: multiple sessions per participant via scene reload
+- Data output: `ForagingData/` in the project root, three files per session
+- Tooling: Cursor-prompt workflow replaced by direct Claude Code
+- Git: single `main` branch
+- Editor automation: official Unity CLI + Pipeline package, not mcp-unity
+- Harvest range: gap grows with canopy radius, smaller than the old constant (superseded by first-person harvesting, below) (superseded or removed)
+- Border walls: flat top just above the highest possible eye level (superseded by mountains, below) (superseded or removed)
+- Time of day: sessions start part-way through the day
+- Border: mountains in the terrain geometry replace the walls
+- Fog: off by default, toggled per session (`fogEnabled`)
+- Harvesting in first person: graded directional glow, distance + bearing threshold, hold Space
+- Highlight look: rim light replaces the whole-canopy emission wash (switchable)
+- Harvest progress ring, selected rim color, exhausted bushes stay as "spent" landmarks
+- Bush placement: jittered hex lattice (replaces random + minimum distance)
+- Python world generation and strategy simulator (scripts/)
+- Unity loads Python-generated worlds (stage 3)
+- Cleanup: single highlight style, ground-ring shader and template leftovers removed (superseded or removed)
+- Reward feedback: gamified popups, score/timer plates, synthesized audio
+- Session progression: P, S1–S5, one new concept per step (planned)
+- P–S4 implemented: practice flag, per-session instruction files, feature rotation
+- Faster play (speed 7.5, 0.25 s per fruit) and a much larger map (`worldHalfExtent` 350)
+- Terraced moisture in S3/S4; near-flat terrain in P/S1/S2
+- S3: moisture (terrain) is the highest-weighted feature
+- Ambient audio: synthesized in code, strictly uninformative
+- Interlude: a forced-choice block after each session, in the session's own world (choice mode first)
+- Interlude length and speed: 20 trials, walking at 15 (2026-11-02)
+- Interlude gap modes: trials spread over reward gap and feature gap (2026-11-02)
+- S5: two Gaussian bumps over shape x colour plus linear moisture (2026-11-02)
+- Feedback box on the final screen; scoreboard left as a TODO (2026-11-02)
+- Per-fruit harvest time: 0.2 s in sessions, 0.05 s in Interludes
+- Interlude: terrain must not hide the bushes; 10 s trials; 15 s sessions for testing
+- Reward popups: fixed cycle of free slots in a central row
+- Interlude: per-Interlude score screen (correct x/n and bonus), no per-trial feedback
+- Interlude instruction text: terse, no controls or time limit in the text
+- Python tests: cached Interlude generation and changed-file selection
+- Sun and sky: the same arc every session; the sky is driven on a runtime material copy
+- Sun trajectory: a real solar arc from mid-morning to 10 degrees at dusk
+- Lighting: physics for hue, curves of elevation for brightness, an exposure ramp (SolarHybrid)
+- Lighting performance: ambient rebuilds in steps, terrain tint uploaded only on change
+- Lighting cleanup: the LegacyClock model and the terrain vertex tint were removed (superseded or removed)
+- Sun start and end are both elevations
+- Logging redesigned for exact replay: per-frame trajectory, event log, manifest (replaces `movement.csv` / `session_metadata.json`)
+- Frame rate capped at 120 (`SessionConfig.targetFrameRate`), vsync off
+- Interludes cut to 5 trials; the time limit removed from the instructions (superseded or removed)
+- Start clearing 31 -> 8; Interlude trials aim the camera at the pair vertically
+- Visibility is reconstructed offline (`scripts/visibility.py`), not logged; Interlude freshness test
+- Agents are actor x critic x memory with the percept in the engine (v1 framework)
+- Perception belongs to the environment (`scripts/perception.py`), not to the agent
+- Agent boundaries tightened: a narrow `Body`, explicit grants of world knowledge, the Interlude through the agent
+- Interlude commitment: the first bush harvested is the choice, and the other bush is hidden
+- Motor costs: turning and key presses cost time, and every action must cost some
+- The first learner: a delta rule on swappable features, with a swappable prior
+- Results database: hash identity, labels at report time
+- Interlude random mode (humans and simulation), 50-trial agent Interludes
+- Adversarial review: red-team against simplifier, an arbiter for disagreements, mutation testing as the evidence
+- An in-range harvest no longer turns the simulated view for free
+- Review of the engine-agent boundary (unit A): what changed and what was left
+- The assessment battery (`scripts/battery.py`)
+- One actor default: rate utility within 15 s (PI)
+- Figure colours: a colour-blind-safe glasbey palette, a linestyle per agent, at most 5 agents per figure (PI)
+- Figure size and fonts follow evidence_integration (PI)
+- Learner parameter scans: learning rate, RBF width, number of centers (100 seeds, S1-S4, dirty tree, tags `scan-alpha`, `scan-length`, `scan-centers`)
+- What a score is for: leads and diagnostics, no normalised ratios (PI)
+- Why the S3 learner knows the ranking and still earns little: the online delta rule under-scales values (40 worlds, standard learner)
+- Gain scan: calibration is a bottleneck in S3, but the best gain differs by session (100 seeds, tag `scan-gain`)
+- Baseline scan: a fixed baseline beats the running mean (100 seeds, tag `scan-prior`)
+- The learner's default prior is a fixed 0.1 (PI), and a 10-seed check of the new default
+- S3 patch size: smaller terraces make S3 learnable (100 seeds, S3 at 180 s, terraces kept, new default learner; tags `s3patch-freq0.6/1/1.5/2`)
+- Online data collection: one row-oriented schema, uploaded to Supabase (PI decisions, 2026-10-29)
+- Reward scale: best bush 4, `rewardFeedbackMax` 4, `rewardStd` 0.6 (PI, 2026-10-30)
+- Review of replay and offline tooling: legacy loader removed, ties, world archive, resumed Interludes (2026-10-31) (superseded or removed)
+- S5: equal bump heights (2026-11-02)
+- Fruit colour ramp: plasma replaces viridis, and speed 11.25 everywhere (PI, 2026-11-04)
+- Fruit colour ramp: viridis, equal perceptual steps (2026-11-02)
+- S5: one bump (2026-11-02)
+- Downloading participant data for analysis (2026-11-04)
+- Interlude design: trial count, repeats and gap windows (agent test bed, PI, 2026-11-04)
+- Custom practice feature set: cube bushes, black-to-white fruit (2026-11-05; REMOVED the same day) (superseded or removed)
+- Hue-arc colour sets for alternating sessions (2026-11-05)
+- Height-only and width-only shape sets (2026-11-05)
+- Session structure revised (PI, 2026-11-05)
+- ABAB feature sets: machinery (2026-11-05)
+- New-ladder plumbing: constant features, random bush value, decoration moisture (2026-11-05)
+- Sessions P, S1, S2 of the new ladder (2026-11-05)
+- Playtest tweaks to the ABAB sets (PI, 2026-11-05)
+- Capsule canopies for the ABAB shape sets (PI, 2026-11-05)
+- ABAB is generated and not committed (PI, 2026-11-05)
+- ABAB feature sets: the exploration in one place (2026-11-05)
+- Sessions S3, S4, S5 of the new ladder (2026-11-05)
+- Sessions S6 and S7, and the two new reward terms (2026-11-05)
+- Terraced terrain with less relief for every session, and new durations (PI, 2026-11-05)
+- Spatial evenness of the reward: tile balancing and swaps (PI, 2026-11-05)
+- ABAB archived; adversarial review clean-up (PI, 2026-11-06)
+- Experiments: a run per (participant, experiment) (PI, 2026-11-06; server side, milestone 1)
+- Experiment assets and the naming scheme (PI, 2026-11-06; milestone 2)
+- The experiment menu and login (PI, 2026-11-06; milestone 3, with the client half of milestone 4)
+- Session preview in the Editor (PI, 2026-11-06)
+- Light fog in the ladder's sessions (PI, 2026-11-06)
+- A little more light (PI, 2026-11-06)
+- Per-experiment downloads (PI, 2026-11-06; milestone 5)
+- Analysis tooling and experiments (PI, 2026-11-06; milestone 6)
+- First browser test of the experiments, checked in the database (2026-11-06)
+- Totals and points in the menu (PI, 2026-11-06)
+- Typography and music (PI, 2026-11-06)
+- The study screens restyled (PI, 2026-11-06)
+- Review of the experiments work (PI, 2026-11-06)
+- Experiments split by question (2026-11-06)
+- Generators split into stages; Designed Interludes removed (2026-11-09) (superseded or removed)
+- FN built on the new generators (2026-11-09)
+- FN progression: a grid of baseline cells (PI, 2026-11-09)
+- Tests state a configuration (PI, 2026-11-09)
+- CF removed (PI, 2026-11-09) (superseded or removed)
+- Publishing is one command (2026-11-09)
+- Terrace modes without a level count; FN's ground is diffusion (PI, 2026-11-09)
+- Reward balancing leaks which feature pays; each feature is balanced on its own instead (PI, 2026-11-09)
+- World files: quantized and compressed grids, format version 2 (PI, 2026-11-10)
+- The menu row is one line; the introduction explains the pay (PI, 2026-11-10)
+- Hints bold their essential words (PI, 2026-11-10)
+- Reduced runs: `short` and `repeats` (PI, 2026-11-10)
+- Deploy commit messages come from the build, and the release keeps the record (PI, 2026-11-10)
+- Font atlas churn does not make a build dirty (PI, 2026-11-10)
+- The moisture feature is called "elevation" in the hints (PI, 2026-11-10)
+- RW peak model (PI, 2026-11-10)
+- RW plane coverage (PI, 2026-11-10)
+- RW screening (PI, 2026-11-10)
+- RW built: Interlude trials, margin, ground (PI, 2026-11-10 and 11)
+- FI: three Gaussians, not sigmoid and saddle rules (PI, 2026-11-11)
+- The ranking Interlude replaces the forced-choice pair (PI, 2026-11-12)
+- Reward complexity ladder: one Gaussian primitive (PI, 2026-11-17)
+- Reward function: the Gaussian bump is the only term (PI, 2026-11-17)
+- Reward scale per session: equalise the points earnable, no cap, the feedback follows the points (PI, 2026-11-17)
+- The anchor is a mid-quality learner; every fruit stays in 0 to 9; the worst sparsity cells go (PI, 2026-11-17)
+- Sessions from knob settings live in a new experiment, FORX; each session's world is searched for (2026-11-17)
+- The anchor is a rate; FORX sessions are 180 s; the world is chosen on two criteria (PI, 2026-11-17)
+- The additive rung is a corner Gaussian stretched 1:1, 2:1 or 3:1; FOR is 180 s, TUT 120 s (PI, 2026-11-17)
+- Bush generation: a pool of bushes, then a placement; only random placement for now (PI, 2026-11-18)
+- One database script, a pasted secret (PI, 2026-11-18)
+- Ranking points: a mode, and the mean value of the pair (PI, 2026-11-18)
+- The patch-leaving shape check in the session pipeline (PI, 2026-11-18)
+- The `balanced` placement: equal patch totals (PI, 2026-11-18)
+- A ranking after every patch transition (PI, 2026-11-18)
+- Pilot experiments: three sessions of one knob (PI, 2026-11-18)
+- Patch-foraging benchmarks replace the beam planner as the upper bound (PI, 2026-11-18)
+- The menu's time counts foraging time only (PI, 2026-11-19)
+- Pilot Spacing (PSC): fixed gain, fixed world size (PI, 2026-11-19)
+- The gain is clamped at the peak cap (PI, 2026-11-19)
+- WebGL frame pacing: the browser's own refresh rate, not a 120 fps timer (PI, 2026-11-19)
+- The browser's Web quality level uses the PC render pipeline asset (PI, 2026-11-19)
+- The menu's time quote is set by hand (PI, 2026-11-19)
+- Removed (adversarial review, 2026-11-19) (superseded or removed)
+- The introduction page and its menu button are gone (PI, 2026-11-19)
+- The mouse is captured by the menu click; Escape is taught once, in the tutorial (PI, 2026-11-19)
+- The tutorial replay was built and removed (PI, 2026-11-19) (superseded or removed)
+- `database.py` no longer asks for the project ref to be typed (PI, 2026-11-19)
+- The pause screen is an instruction screen; the menu click asks for the capture itself (PI, 2026-11-19)
+- A practice experiment shows no completion code (PI, 2026-11-19)
+- Historical: the Interlude, the between-session forced choice (old S1-S7 ladder) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: the S1-S7 era task design (session durations, harvest cone, lattice world, session sequence, instructions) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: earlier session configurations P to S4 (superseded 2026-11-05) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: terrain by session (S1-S7 era) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: session structure of the Complex Features ladder P, S1 to S7 (built 2026-11-05) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: planned experiments FN, RW, FI, PL, PA (2026-11-06) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: earlier session progression P to S5 (superseded 2026-11-05) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: the tile-leaving calibration of the early FOR layout (tile radius 45) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: the direction paragraph and the built-and-not list of FOR (2026-11-13/14) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: the first study's hypothesis and the first-study framing of the goal (2026-11-05) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: the first two rows of the table of four features of "naturalistic" (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: the Interlude's data tables and the trial and teleport events (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: recorded simulation runs on the S1-S4 environments (results database, 2026-10 and earlier) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Findings and current thread
+- Historical: simulated agent baselines (preliminary, STALE) and the old next-steps list (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: the Interlude parts of the agent ladder (evaluation of a frozen critic on forced-choice trials) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: open questions of the S1-S7 era (spatial balancing, ABAB, ladder items, legacy machinery, Interlude parameters, moisture) (moved from SCIENCE.md, 2026-11-19) (historical: retired design or plan)
+- Historical: the planned experiments FN, RW, FI, PL, PA (moved from docs/EXPERIMENTS.md, 2026-11-19) (historical: retired design or plan)
+- Historical: the cleanup plan "everything becomes FOR" (moved from docs/CLEANUP_PLAN.md, 2026-11-19) (historical: retired design or plan)
+- Historical: the validation plan (moved from docs/VALIDATION_PLAN.md, 2026-11-14 plan, moved 2026-11-19) (historical: retired design or plan)
+- Historical: adversarial review rounds of 2026-10-30 (moved from docs/reviews/2026-10-30-review-rounds.md, 2026-11-19) (historical: retired design or plan)
+- Historical: adversarial review 5792605 to b7e1895, 2026-11-06 to 2026-11-16 (moved from docs/reviews/2026-11-16-since-5792605.md, 2026-11-19) (historical: retired design or plan)
+- Historical: adversarial review 2026-11-17, the reward function is a sum of Gaussian bumps (moved from docs/reviews/2026-11-17-reward-bumps-only.md, 2026-11-19) (historical: retired design or plan)
+
 ## Research-tool-first design priority
 
 **Decision:** design choices favor ecological validity, perceptual clarity
@@ -1869,7 +2063,7 @@ Adversarial review of everything since `8b25ee0` in the server, the experiment f
 ## Experiments split by question (2026-11-06)
 
 **What was decided (PI, with a design discussion; nothing built).** The single Complex Features ladder (CF_S1 to CF_S7) is to be split, and
-extended, into experiments that each vary one family of things; the designs are in `docs/EXPERIMENTS.md`, the summary in `docs/SCIENCE.md`
+extended, into experiments that each vary one family of things; the designs are in DECISIONS, "Historical: the planned experiments FN, RW, FI, PL, PA", the summary in `docs/SCIENCE.md`
 ("Planned experiments"). **Why:** the ladder changes the number of rewarded features, the nonlinearity and the interaction together (S5 goes back
 to linear after S4's peaks, S6 adds nonlinearity and interaction at once), and duration, order and practice grow with the session number, so a
 difference between two sessions cannot be assigned to one cause; each cell was also a single world with a single draw of weights and centres,
@@ -1902,12 +2096,12 @@ assume the next session is harder (for example that three visible features mean 
 the assistant's addition, with no basis in the PI's design or a clean literature prediction, and was removed. `spatialBalance` evens the reward over
 the map and conflicts with the patch experiments (off, or inside tiles); a moisture-paying reward conflicts with spatial balancing too, which bears
 on FN's third feature; the Interlude's pair choice by reward gap does not cover typed pairs (RW), per-feature pairs (FN) or flat regions (FI). All are
-listed as open items in `docs/EXPERIMENTS.md`.
+listed as open items in DECISIONS, "Historical: the planned experiments FN, RW, FI, PL, PA".
 
 
 ## Generators split into stages; Designed Interludes removed (2026-11-09)
 
-Phase 0 of building the five planned experiments (`docs/EXPERIMENTS.md`). The world generator and the Interlude designer were written for the CF ladder: one lattice
+Phase 0 of building the five planned experiments (DECISIONS, "Historical: the planned experiments FN, RW, FI, PL, PA"). The world generator and the Interlude designer were written for the CF ladder: one lattice
 placement, three attributes, a reward summed from per-bush terms, an Interlude built from three designed trial kinds.
 
 - **Three stages in `world.py`: layout, assignment, reward.** Each is a table of functions chosen per session (`layout`, `assignment`, `rewardStage` in `SessionConfig`; empty = the lattice, the independent draw, the summed terms, which is
@@ -2037,7 +2231,7 @@ FN's hints named the third feature "ground moisture", which a participant sees a
 
 
 ## RW peak model (PI, 2026-11-10)
-`scripts/rw_peaks.py` (phase 2 of the RW build plan, `docs/EXPERIMENTS.md`): an instance's reward is one Gaussian peak or two over the one or two features that pay, a `bump` of the existing reward function (a one-feature peak is a bump with a spread of 1000 along the other axis, which then does not change the reward). Choices made: **the margin** is the operationalisation of "a noticeable decline between the peak and the extreme": a peak's centre is at least sqrt(2 ln 3) = 1.48 spreads from each end, so the reward at the nearer extreme is at most a third of the peak's height; **the least separation** of two peaks is 3 spreads (nearer, and the two hills merge into one for most height ratios: `draw_peaks` refuses what is not two hills along the line through them); **the height ratio** is the ratio of the bumps' heights, and the realised ratio (the maxima of the sum) differs by a little (under 0.03 at 3 spreads apart, tested), as does the realised separation (about 0.1 spreads nearer at 3 apart, the hills pull each other inward); **sparsity** at x = 10, 20 and 30 is measured on a grid over the interval or plane (the top x% of the reward range from its minimum to its maximum), with a closed form for a single peak (`spread_for_sparsity`) to put one-feature and two-feature instances on one scale.
+`scripts/rw_peaks.py` (phase 2 of the RW build plan, DECISIONS, "Historical: the planned experiments FN, RW, FI, PL, PA"): an instance's reward is one Gaussian peak or two over the one or two features that pay, a `bump` of the existing reward function (a one-feature peak is a bump with a spread of 1000 along the other axis, which then does not change the reward). Choices made: **the margin** is the operationalisation of "a noticeable decline between the peak and the extreme": a peak's centre is at least sqrt(2 ln 3) = 1.48 spreads from each end, so the reward at the nearer extreme is at most a third of the peak's height; **the least separation** of two peaks is 3 spreads (nearer, and the two hills merge into one for most height ratios: `draw_peaks` refuses what is not two hills along the line through them); **the height ratio** is the ratio of the bumps' heights, and the realised ratio (the maxima of the sum) differs by a little (under 0.03 at 3 spreads apart, tested), as does the realised separation (about 0.1 spreads nearer at 3 apart, the hills pull each other inward); **sparsity** at x = 10, 20 and 30 is measured on a grid over the interval or plane (the top x% of the reward range from its minimum to its maximum), with a closed form for a single peak (`spread_for_sparsity`) to put one-feature and two-feature instances on one scale.
 - **The margin caps the sparsity** that a single peak can have: the spread is below 1 / (2 * 1.48) = 0.337, which allows at most 0.31 of an interval and 0.075 of a plane at x = 10 (0.57 and 0.25 at x = 30). So the "dense" end of the sparsity range is limited by the margin, not by the model, and a plane instance cannot be as dense as an interval one at the same x. The ranges of the pool (phase 4, screening with the simulated agents) have to be chosen inside these caps.
 - The global peak's height is 4, as in every built experiment (REWARD_SCALE), and `rewardStd` is constant (0.6) for now. Plane coverage of the bushes, the minimum bushes in the narrowest peak and the typed Interlude trials are the next phases.
 
@@ -2367,7 +2561,7 @@ The scene-built leftovers of the first UI (`/HarvestCanvas/InstructionPanel` wit
 
 **Left as it was.** The `reward_stage` machinery (`REWARDS`, one entry) stays for path B of `docs/SESSION_FACTORS_PLAN.md`; the ranking pool file still records each bush's moisture; `moistureVaries` / `moistureWhenFixed` (the ground) are unchanged. Saving the assets through the Editor dropped the old serialized fields (and `rankingStage`, removed earlier) from the session assets.
 
-**Review of this change (2026-11-17, `docs/reviews/2026-11-17-reward-bumps-only.md`): applied and declined.** Applied: the stale comments and tooltips, `synthetic.py` without its unused parameters (`DEFAULT_MAP`, `feature_only(feature, high)`), two duplicate tests deleted, `generate_world` refuses a reward function with no bumps (a session saved before the change would otherwise give an all-zero world), a fast test that every committed ranking pool pays its session's value map (`test_ranking.py`; before it nothing noticed a pool made for an older reward), Unity's stale-world check also flags a bump the world file has none of (a config bump added at angle 0 and widthColor 0 was missed), `ValueMap.describe()` (was `design/FOR.py`'s `value_map_design`), `gaussian()`'s `width` renamed `across` (it is the short axis; `Bump.width` is the long one), `test_reward_terms.py` renamed `test_bump.py` with the bump-formula tests collected there, and the wording "about 0.71 of the slope" for the tutorial (the quarter-power recipe of `wide_corner` measures 0.71 for a request of 0.75). **Declined, so that future-us is not tempted:** (SM-1) `ValueMap(bumps, sd)` in place of the `noise` and `equaliser` dicts: the dicts hold the planned slots (noise as a second map, the equaliser as a transform, `docs/SESSION_FACTORS_PLAN.md` 7.3) and are one type each only until M3; (SM-2) removing the reward-stage table (`REWARDS` and `reward_stage`): it is the hook for path B (a `map` stage); (SM-3) the symmetric stale check (always write every header field): the one-clause fix covers the gap without changing the world header. Left to taste: SM-7 (rename the stage key "terms"), SM-8 (`design/FOR.py`'s constants and nested spread). Marked stale: the tile-radius calibration (above, A-1).
+**Review of this change (2026-11-17, DECISIONS, "Historical: adversarial review 2026-11-17"): applied and declined.** Applied: the stale comments and tooltips, `synthetic.py` without its unused parameters (`DEFAULT_MAP`, `feature_only(feature, high)`), two duplicate tests deleted, `generate_world` refuses a reward function with no bumps (a session saved before the change would otherwise give an all-zero world), a fast test that every committed ranking pool pays its session's value map (`test_ranking.py`; before it nothing noticed a pool made for an older reward), Unity's stale-world check also flags a bump the world file has none of (a config bump added at angle 0 and widthColor 0 was missed), `ValueMap.describe()` (was `design/FOR.py`'s `value_map_design`), `gaussian()`'s `width` renamed `across` (it is the short axis; `Bump.width` is the long one), `test_reward_terms.py` renamed `test_bump.py` with the bump-formula tests collected there, and the wording "about 0.71 of the slope" for the tutorial (the quarter-power recipe of `wide_corner` measures 0.71 for a request of 0.75). **Declined, so that future-us is not tempted:** (SM-1) `ValueMap(bumps, sd)` in place of the `noise` and `equaliser` dicts: the dicts hold the planned slots (noise as a second map, the equaliser as a transform, `docs/SESSION_FACTORS_PLAN.md` 7.3) and are one type each only until M3; (SM-2) removing the reward-stage table (`REWARDS` and `reward_stage`): it is the hook for path B (a `map` stage); (SM-3) the symmetric stale check (always write every header field): the one-clause fix covers the gap without changing the world header. Left to taste: SM-7 (rename the stage key "terms"), SM-8 (`design/FOR.py`'s constants and nested spread). Marked stale: the tile-radius calibration (above, A-1).
 
 ## Reward scale per session: equalise the points earnable, no cap, the feedback follows the points (PI, 2026-11-17)
 
@@ -2545,3 +2739,1226 @@ The browser's "Paused: [Click] to continue" is now an `InstructionsScreen` (the 
 ## A practice experiment shows no completion code (PI, 2026-11-19)
 
 The completion screen of an experiment that does not count toward the total (TUT) has no code box, no Copy button and no "Return to Prolific" (`CompletionScreen.Show(..., showCode, ...)`; the server's code for TUT was a placeholder). Leaving the since-removed replay mid-session threw "No experiment was started": the scene being left still held a logger, whose last flush asked `DataPipeline.IsReady` / `Submit`, which created a new pipeline after `ReturnToMenu` had destroyed it, and that one found no run. `IsOnline`, `IsReady` and `Submit` now leave a missing pipeline alone (a batch for a closed pipeline is dropped, which is what a replay wants). Not verified in a browser.
+
+
+<!-- Ready to append to docs/DECISIONS.md. Moved from docs/SCIENCE.md on 2026-11-19; the text is the original, lightly edited to stand alone. -->
+
+## Historical: the Interlude, the between-session forced choice (old S1-S7 ladder) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the cleanup of 2026-11-14 (everything is FOR, no Interlude: DECISIONS, "Cleanup: everything is FOR") and, as the readout of learning, by the ranking breaks inside a foraging session (DECISIONS, "The ranking Interlude replaces the forced-choice pair", "Ranking breaks inside the session"). The text below is the Interlude as it stood on 2026-11-14; its code (`interlude.py`, `InterludeManager`, the Interlude assets) is gone (git tag `pre-cleanup`).
+
+
+
+> **Ranking format, in development (2026-11-12).** The forced-choice pair below is to be replaced by a ranking: sets of 4 to 6 bushes in view at once, harvested from best to worst without walking, about 3 sets, on a flat stage with one moisture (only shape and colour can vary or pay). A pair is the k = 2 case. So far only the Python side exists (`scripts/ranking.py`, the simulator's `evaluate_ranking` (removed with the Interlude, 2026-11-14), and a pairs-against-rankings comparison in `scripts/ranking_design.py`: 3 sets of 6 recovered a learned value function better than 20 pairs at matched harvests); the game, the data tables and the experiments' set designs are not built. The rationale, geometry and scores are in `docs/DECISIONS.md` ("The ranking Interlude replaces the forced-choice pair"); this section still describes what the shipped Interludes do.
+
+> **Generator changes, 2026-11-09 (Phase 0 of building the planned experiments).** The Designed mode (contrast, graded and extrapolation trials) and everything
+> built for it were removed from `scripts/interlude.py`: the stimulus types, the moisture placement relations (*same*, *one level apart*, *two or more levels apart*,
+> and the 500 000-placement search for them) and the elevation floor `interludeMinElevationDifference` (the field still exists in `SessionConfig` and is ignored). The default mode is
+> Hybrid, over the features the session declares visible (`world.session_features`, removed 2026-11-17); a moisture that pays nothing is not a feature of the gap unless the asset declares it. An experiment that needs
+> a designed kind adds it to `TRIAL_KINDS` (none yet). The shipped Interlude files were unchanged by this (they are all Hybrid or Random). The bullets below that describe Designed mode,
+> the stimulus types, the moisture relations or the elevation floor describe the removed generator and are kept as the record of what past data saw.
+
+A short block after every session that reads out what the participant learned, separated from how well they
+explored and planned. Flow: P → Interlude (practice) → S1 → Interlude 1 → … → S7 → Interlude 7 → final screen (16 entries in all, 7 sessions analyzed). The practice session's reward is a random value per bush that no
+feature predicts, so its Interlude has no correct side (every trial's `correct` is "either"; no bonus is awarded).
+
+- **It looks like the session.** An Interlude runs in the probed session's own world: the same terrain (plateaus,
+  ground colour, mountains), sun and fog, loaded from that session's world file. Only two bushes are present at a
+  time, so there are only two choices; the participant is teleported to a different part of the valley for each trial.
+- **Trial:** the two bushes are on opposite sides of the starting heading, equal in the terms the harvest rules use
+  (see Geometry): the same distance from the spawn point to each canopy's edge, and the same bearing of each canopy's
+  inner edge from the heading. The participant turns toward the bush they think pays more, walks to it and harvests it: same
+  fruit-pop animation as the main task but a faster per-fruit speed (0.05 s, versus 0.2 s in sessions), whole bush
+  (10 fruits, `interludeHarvestFruits`), so the harvest takes about 0.5 s on top of a walk of about 2 s. **Commitment:** the bush whose harvest the participant starts is the choice from that
+  moment, and the other bush shrinks away (`interludeSwitchPolicy`, default Hide; Exhaust gives it the spent look, Lock leaves it untouched but unharvestable,
+  Allow keeps the old behavior where the bush whose last fruit is taken first is the choice), so there is no switching. The participant still holds Space until the
+  chosen bush is finished and the trial ends then; releasing mid-bush just pauses on that bush. No instruction sentence announces the rule.
+  Controls are the main task's. No outcome is shown: no +X popups and no score (the score slot shows trial progress).
+  The exhaustion chime still plays. Each fruit makes a different, neutral pick sound (a very short, soft, low falling
+  "bloop") instead of the main task's pick blip, whose pitch rises with the reward: reusing that blip, even at a fixed
+  pitch, would pair the harvest with the low-versus-high-reward cue. The reward is still logged. The practice session's
+  "Harvesting this bush earned X points" message never appears in an Interlude.
+- **Timer and progress:** a 10 s countdown (`interludeTrialSeconds`, was 7 s) in the upper left (the session-timer slot); when it runs out the trial ends
+  with no choice. Progress "X/n" sits in the upper right (the score slot). Trials are separated by a short fade to black.
+  Every participant sees the trials in the file's order (since 2026-11-02; the order was shuffled per participant before, and is still logged in `interlude_plan`); each trial's placement, and so which bush is on which side, is fixed
+  in the file, with the correct side balanced across trials.
+- **View at each trial start:** the player is placed at the stage spawn facing the pair (yaw from the trial file) with the pitch
+  set at run time so the middle of the two bushes' visible canopies (a quarter of each canopy's height above its base, averaged)
+  is on the view's horizontal centre line, instead of looking level at the horizon (which showed mostly sky). Pitch is clamped to
+  `lookPitchLimit`; the teleport event in `events.csv` records it.
+- **Length:** 3 trials in the practice Interlude, 20 in each of the seven others (hybrid mode with 2 repeats; was 5, 10 before that). The sessions' Interludes walk at `playerMoveSpeed` 15 (the sessions' own speed is 11.25 since 2026-11-04); the bush distance stays 22.6. The feature gap of a pair counts only the channels that vary and pay (a feature that does not vary, or moisture when it is decoration, is left out).
+- **Stimulus types** (generated by `scripts/interlude.py` from the probed session's reward function; the same set
+  for every participant):
+
+  | Type | What it is | S1–S2 (one relevant feature) | S3–S4 (several) |
+  |---|---|---|---|
+  | contrast | two bushes differing in one feature, others equal | 3: every relevant feature (cycled) plus one ignored-feature check | 3: one per feature (S3 includes the irrelevant shape) |
+  | graded | two bushes with a chosen true-reward difference (0.15–1.2 × the spread of R across typical bushes, geometric steps) | 6 | 4 |
+  | extrapolation | extreme-valued bushes: with several relevant features a genuine trade-off (each bush wins a feature by ≥ 20% of its weight) with a moderate reward difference; with one, opposed tails | 1 | 3 |
+
+  The table's counts are for 10 trials. At the current 5 trials the mix is S1–S2: 2 contrasts (the relevant feature plus the
+  ignored-feature check), 2 graded, 1 extrapolation; S3–S4: 2 contrasts, 1 graded, 2 extrapolation. So S3 (relevant color +
+  moisture) loses its ignored-shape check, and S4 (all three relevant) has no moisture contrast (shape and color only).
+  Moisture still enters through the extrapolation trade-offs.
+
+  The practice Interlude has 2 easy contrasts on the relevant feature and 1 large graded pair. Which exact stimuli to
+  show per session is still to be refined.
+- **Gap modes** (`interludeMode: RewardGap`, `FeatureGap`, `Hybrid`; **S1_Interlude to S4_Interlude are set to Hybrid since 2026-11-02**, the
+  practice Interlude stays Random). Random pairs are mostly easy (the reward gap of two independent bushes is triangular: many large gaps,
+  few near zero), so a gap mode chooses the 20 trials to be spread evenly over how different the two bushes are. Two measures: the **reward
+  gap** `|R_left - R_right|` (true points per fruit) and the **feature gap**, the root mean square of the shape, colour and moisture
+  differences each on its 0-1 scale (0 identical, 1 opposite ends of every channel; all three channels count whether or not they pay, because the
+  participant sees them all; `interlude.feature_gap`, with equal channel weights since no discrimination thresholds are measured). The generator draws
+  `GAP_PAIRS` (150) random pairs on each of `GAP_SITES` (60) placements in view, drops those in the tie tolerance, and picks 20 on distinct placements
+  (half with the left bush better) by hill climbing so that the sorted gaps on the mode's axis (both axes in Hybrid, jointly) are as close as possible to
+  20 evenly spaced values from the minimum (`interludeMinRewardGap` 0.25 points, about one standard error of a 10-fruit harvest mean;
+  `interludeMinFeatureGap` 0.1) to the 98th percentile of the candidates' gaps (the largest the world offers: about 3.5 points in S1, 2.6 in S3, 2.2 in S4; feature gap about 0.6 to 0.65).
+  The achieved spread is within 5% of the range of the even targets. Reward gap and feature gap rise together (r about 1 in the Hybrid trials) because reward is a function of the features; that is accepted, since the reward mapping still has
+  to be learned. **The stimuli are the same for every participant** (a function of the world seed), **and so is their order**. The order is one seeded shuffle, the best of 3000 for the gap modes: no more than 3 trials in a row with the same correct side, no strict left-right alternation, and no trend or lag-1 autocorrelation in either gap (so no run of ever-harder or ever-easier pairs); the achieved trends and autocorrelations are within about 0.1. The elevation floor is not
+  used: moisture is one of the feature channels and a reward feature in S3/S4, so spreading the gaps spreads the elevation differences too (in S3
+  reward-gap mode about 8 of 20 pairs differ by 5 or more world units of elevation, in S4 about 5), but not per pair: a pair can differ greatly in
+  reward through colour alone. Each trial records `rewardGap` and `featureGap` in the `.interlude.json` (not in `interlude_trials.csv`; recompute from the bush table), the file records `gapSpan`, and the trial `type` in the data is the mode name.
+  Generation takes about 3 s per world (the line-of-sight check, the slow part, runs only on the 20 chosen pairs).
+- **Hybrid design since 2026-11-04 (S1_Interlude to S5_Interlude; chosen with the agent test bed `scripts/interlude_design.py`, numbers in `docs/DECISIONS.md`,
+  "Interlude design: trial count, repeats and gap windows").** The 20 trials are **18 distinct pairs plus 2 exact repeats**. The distinct pairs are spread evenly over
+  two windows: feature gap 0.15 to 0.55 (`interludeMinFeatureGap`, `interludeMaxFeatureGap`) and reward gap 0.25 to 1.5 spreads of the session's reward over typical bushes
+  (`interludeMinRewardGap`, `interludeMaxRewardGap`, in raw points per fruit and so different per session: S1 0.286 to 1.713, S2 0.358 to 2.148, S3 0.214 to 1.283, S4 0.179 to 1.077, S5 0.227 to 1.362). Pairs
+  that are close to ties are left out (little information about the value function when choices are noisy) and so are the very easiest (the generator no longer spreads up to the 98th percentile of
+  what the world offers). A repeat (`interludeRepeatCount` 2, at least `interludeRepeatSeparation` 8 trials apart) is the same place, spawn point, heading, bushes and sides as its source, with bush entries of its own in the file (the game
+  does not refill a harvested bush between trials); it repeats the pairs whose reward gap is nearest the median, one with the left bush correct and one with the right, so the sides stay balanced (10 and 10). The later trial of a pair carries `repeatOf` in the
+  `.interlude.json` (the data has equal attributes and different bush ids; no new column). **Purpose of the repeats:** how consistent a participant's choices are (two agreements out of two per participant: a screen, not a noise estimate, and memory of the first pick adds to it).
+  Participants who played before 2026-11-04 saw the earlier 20 distinct pairs: their Interludes are not comparable trial for trial.
+- **Random mode** (`interludeMode: Random`; the field's default is now Hybrid; the practice Interlude uses it). The practice Interlude is then three random pairs, not easy contrasts. Instead of the three designed stimulus types, every
+  trial is a pair of bushes with independent uniform random shape and colour (moisture is still the terrain's at the final positions, so
+  relevant-moisture sessions still see moisture differences; roughly a quarter to a half of random pairs differ by more than 0.2). Pairs whose
+  true rewards are within the tie tolerance are redrawn, so every trial has a definite correct side, half of them on the left; the geometry
+  rules (equal edge distance and bearing, clear view, no hump) are unchanged. **Elevation floor (S3 and S4 only):** `interludeMinElevationDifference` is 3 world
+  units on `S3_Interlude` and `S4_Interlude` (0 = off, the default and the value on the others): the two bushes of every trial stand on ground whose
+  elevation, `(1 - moisture) * terrainMaxElevation`, differs by at least that (moisture difference 0.25 at elevation 12, about one terrace step),
+  so the terrain difference is clearly visible. Placements that fail it are discarded (about 43% of random placements on the S3/S4 terrain),
+  which also makes moisture more informative about the correct side than the unconstrained 60% (S3) and 51% (S4). S1 and S2 are unconstrained
+  because moisture does not affect their reward. All trials have type `random` in `interlude.csv`; scoring
+  is accuracy only (small gaps are hard on purpose: they probe the resolution of the learned value function). The trial count is
+  `interludeTrialCount`: the human assets keep their small counts, and the simulator can use another (`interlude_trial_count=50` as a
+  session override, recorded in the environment) because 50 trials is a measurement of a model, not a block a person sits through.
+  Generation takes about 1 s per world (a 40 000-placement pool; designed mode searches 500 000). Both modes are generated by
+  the same function, so what an agent is scored on is what a human could be shown.
+- **Moisture comes from the terrain.** There is no Interlude-specific terrain logic: a bush's moisture and elevation are
+  those of the session's terrain where it stands, as in the main task. The generator therefore searches half a million
+  (spawn point, heading) placements for ones where the two bush positions have the moisture relation a trial needs, then
+  chooses shape and colour: *same* (|Δ| ≤ 0.02, used for contrasts on shape and colour), *one plateau level apart*
+  (0.20–0.34), or *two or more levels apart* (≥ 0.45, used for the moisture contrast). Placements also must not let the
+  terrain hide a bush: the eye line from the spawn point clears the ground to a point 1 unit above each bush's base, and the ground
+  does not rise and then fall (by more than 0.5 units) on the way to either bush; the spawn slope is gentle, and trial spawn
+  points are at least 80 units apart (relaxed if the pool is thin). In the generated files the largest rise-then-fall is 0.4 units.
+  With bushes 28 apart, two-level pairs are about 0.5% of placements and the full 0.1-versus-0.9 range is essentially
+  unavailable (terrace levels change one step at a time), so the largest moisture contrast is about 0.5 (about 10 units
+  of height). In S1/S2/P (moisture irrelevant) moisture is whatever the placement gives, matched only in contrasts.
+- **Geometry:** the harvest rules refer to the canopy edge (the range is the distance to the edge, and the cone uses the
+  bearing minus the canopy's angular radius), and canopy radius depends on shape (0.5–3 units), so placing the bush
+  *centres* symmetrically made the bushes unequal: the wide one was closer by its edge and looked closer, and the tall narrow
+  one looked further (size cue). Each bush is now placed from its own radius so that **its edge is `interludeBushDistance`
+  (22.6) from the spawn point and its inner edge is `interludeBushBearing` (31.5°) off the heading, on opposite sides**:
+  the heading bisects the pair (it points at the midpoint between the two inner edges, not exactly between the centres, which
+  differ when the radii differ), and the turn and walk to start harvesting either bush are the same by the game's own rules.
+  The generator checks this exactly in every trial. What cannot be equalized: apparent size (a narrow canopy looks smaller, part
+  of the shape channel), the 3D distance when the bushes stand at different elevations (up to about 4 units), and, because
+  each bush's final position shifts a little with its radius, the terrain moisture under it (the design re-checks the
+  moisture relation at the final positions). The lateral clearance must stay ≥ the harvest range (7) + the canopy radius, otherwise a bush
+  could be harvested by walking straight ahead and the game's selection (smallest bearing) would default to the widest canopy,
+  biasing the choice by shape. The wide separation (bushes about 28 apart, a walk of about 2 s) is what makes two-level
+  moisture differences available.
+- **Scoring:** a choice is correct if it is the bush with the higher true reward, or if the true rewards are
+  within 0.05 (either answer). Each correct choice adds hidden points (`interludeBonusPerCorrect`, 5 points); trials with no
+  commitment before the time limit, and practice-Interlude trials, earn none (a committed choice still counts if the limit runs out before the bush is finished). Only the practice Interlude's end screen shows points (what its choices would have earned; it pays nothing); the other Interludes show none until the final screen ("This interlude: +y points"; never which trials were correct, nor anything about the reward function), which adds the total ("Total: +n points" = sessions +
+  Interlude points). Practice sessions are excluded from the total. Participants only ever see "points" (never "reward" or "bonus") and "bushes" (never "trees"). Instruction text: `instructions_interlude_P.txt` (practice) and `instructions_interlude.txt` (1-4), terse, saying that correct choices earn hidden points.
+- **Data:** `interlude_trials.csv` in the Interlude's own folder (it also writes trajectory.csv, events.csv and
+  session.json like any session, with `trial_start`/`teleport`/`trial_end`/`trial_go` events (`trial_go` ends the harvest block that starts at `trial_end`: no bout can start in between), with `name` e.g. `S1_Interlude` and `is_interlude`; `world_file` in session.json is the
+  session world file whose terrain was used): one row per trial with presented order, the design id, type, varied feature,
+  both bushes' attributes and true reward, the correct side, choice (left/right/none), correct, timed_out, response_time
+  (to the last fruit), first_harvest_time and side (first bush started), fruits taken from each bush, the bonus, and `locked_at` (appended: the trial
+  clock when the commitment happened; empty under Allow or with no commitment). The matching `choice_lock` event in `events.csv` names the committed and the locked bush and the policy.
+- **Generating the files:** `./venv/bin/python scripts/interlude.py P_Interlude S1_Interlude S2_Interlude S3_Interlude S4_Interlude`
+  writes one small `<name>_seed<N>.interlude.json` each (3–9 KB: the bush table and trial list; no terrain). Each Interlude is a
+  `SessionConfig` copy of the session it probes with `isInterlude` on, `interludeFor`, `interludeTrialCount`, a `worldSeed` equal to
+  that session's, and the bush geometry; the script checks that its reward function and terrain parameters match the session's.
+  Re-run it after changing the session's terrain, reward function or the Interlude geometry. The instructions are
+  `instructions_interlude_P.txt` and `instructions_interlude.txt` (first drafts; the 1–4 text no longer mentions the time limit, the countdown shows it; a
+  `{trial_seconds}` placeholder, filled from `interludeTrialSeconds`, is still supported).
+- **Not built:** the prediction (reward-estimate) mode, analysis code, and a simulated learner. Design rationale and
+  rejected alternatives: DECISIONS ("Interlude").
+
+## Historical: the S1-S7 era task design (session durations, harvest cone, lattice world, session sequence, instructions) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** "Current design" in SCIENCE.md: FOR and TUT are tiles worlds, the harvest rule is the range plus the crosshair's hidden circle (no 35 degree cone, no progress ring above bushes), there are no Interludes, and the instruction texts and hints are the tutorial's. The facts of this text that still hold (the sun path, speed, the glow, the harvest keys) were carried into SCIENCE.md's "Task design".
+
+- **Session:** fixed duration per session (P 30 s, S1 and S2 90 s, S3 and S4 120 s, S5 to S7 180 s; PI, 2026-11-05), the
+  second part of a day cycle: the session starts when the sun is `sunStartElevation` (30°) above the horizon on the morning
+  side and ends at dusk, when it is `sunEndElevation` (10°) on the afternoon side (same calculation for both; the mountain
+  skyline is about 3–22° from the valley, median 9°; the 30°/10° pair is a tuned-by-eye trial, since equal values did not look symmetric). The sun follows a real solar path (`sunLatitude` 40°,
+  `sunDeclination` +12°: a start at 30° elevation, a peak of about 62°, rising toward the east-south-east and
+  setting toward the west-north-west, moving faster near the horizon; `sunAzimuthOffset` rotates the path). Every session
+  plays this same path, mapped onto its length, so a shorter session plays it faster; Interludes hold the sun still
+  (at noon, from the south). Light and sky take hue from
+  physics (the sun's colour is its transmittance through the atmosphere, warm white at noon and orange near the horizon; the procedural
+  sky reddens from the sun's direction with a constant neutral tint) and brightness from curves of the sun's elevation (light intensity,
+  ambient-probe multiplier, sky exposure), plus an exposure ramp (post-exposure, in stops) that darkens everything on screen toward
+  dusk. Important:
+  the terrain and fruit shaders ignore the sun's colour and intensity (terrain lighting is `0.15 + 0.85 * shadow * N.L`, with white light
+  and a black ambient term; fruit has an ambient floor), so the hue and intensity curves act on the canopy, the sky and the ambient
+  probe, and the terrain darkens through the sun's direction plus the exposure ramp. Movement costs time (fixed player speed); harvesting costs
+  `fruitHarvestDuration` seconds per fruit (0.2 s in sessions, so 10 fruits = 2 s per bush; 0.05 s in Interludes,
+  0.5 s per bush); player speed 11.25 (the same in every session and Interlude; was 7.5 in sessions and 15 in the S1-S5 Interludes until 2026-11-04). The progress ring is computed from this value, so it adapts.
+  Goal: maximize total reward.
+  **Harvesting (first person):** bushes glow gradually as you approach them, in
+  proportion to horizontal distance from the canopy edge (glow begins 20 units out,
+  full at 7) and to how directly they are in front of you (full within 25° of straight
+  ahead, none past 45°; yaw only, after subtracting the bush's angular radius). The glow
+  never reveals reward. A bush becomes harvestable within 7 units of its
+  canopy edge and within 35° of straight ahead; the best such bush (closest to
+  center) is shown as selected, and a "Hold [Space] to harvest" hint (Space on a key chip) appears.
+  A clock-style progress ring floats above every bush in harvest range (constant
+  apparent size, camera-facing): a faint full track with the bright arc erased clockwise
+  from 12 o'clock as fruits are collected, so you can see how much is left even if
+  the fruits are on the far side, or on returning to a bush; progress through the fruit
+  in hand is kept on the bush. An exhausted bush stays as a landmark and obstacle but
+  eases into a "spent" look (uniformly shrunk to 70%, drab canopy tint), so depleted bushes are
+  distinguishable from afar; there is no external record of which bushes are left beyond that.
+  Highlight: a soft glow on the bush's edge that grows as you approach, plus a thin crisp edge line on the
+  selected bush, in a slightly different rim color once selected. Holding Space collects one fruit every `fruitHarvestDuration` (the fruit
+  nearest the camera first); walking is locked while Space is held, looking stays free.
+  Looking more than 35° away pauses the harvest (hint: look back); releasing Space
+  ends the bout, and a fresh press starts the next one. +X popups appear in a central row of slots (a fixed
+  cycle, so concurrent popups never overlap), and the score updates per fruit. Optional `harvestLookResistance`
+  (default 0, off) slows mouse yaw to zero as you turn away from the bush.
+- **World:** ~685–700 trees (P, S1–S7; the count follows from the valley area; `worldHalfExtent` 350, valley
+  about 580 units across) placed on a
+  jittered hexagonal lattice (`treeSpacing` 23, `placementJitter` 0.5; nearest-neighbour
+  distance ≈ 18.6, CV ≈ 0.13, no pair closer than 11.5, so ≈ 2.5 s walk to the
+  nearest bush at speed 7.5; `startClearingRadius` 8 keeps only the spawn point itself clear, so the nearest bush at the start is
+  17–23 away), on Perlin-noise terrain, in a valley enclosed by an
+  unclimbable rocky/snowy mountain band built into the terrain (no trees on it).
+  A per-session `worldSeed` fixes the terrain, the mountain skyline, the tree
+  layout/attributes, and every per-fruit reward (all generated by `scripts/world.py`
+  and loaded by Unity from `StreamingAssets/Worlds`).
+- **A participant plays a sequence of sessions** (`P`, `S1`–`S7`, each followed by its Interlude), each with
+  a different world seed and reward function. `P` is an unanalyzed practice
+  session (`SessionConfig.isPractice`): its end screen says "Practice session complete" and it
+  is not counted in "Session x/7". Between sessions the player sees a score screen and
+  continues with Enter (Space is reserved for harvesting). After every session, including the practice
+  one, comes its Interlude, a short forced-choice block (see "Interlude" below).
+- **Instructions:** the file shown before each session is `SessionConfig.instructionsFile`
+  (`{session}`/`{total}` placeholders count non-practice sessions). Practice
+  (`instructions.txt`) gives the goal and controls ("different bushes give different points";
+  walk next to a bush and hold SPACE), keeps a faint controls reminder on screen all session
+  (`controlsReminder`, `controlsReminderOpacity`), and after the first harvest that collects fruit
+  pauses on a one-time message (`firstHarvestMessage`: "This harvest earned X points"; Enter resumes).
+  S1–S7 each have their own file (`instructions_S1.txt`–`instructions_S7.txt`; the files of S5, S6 and S7 are copies of each other): "This is a new
+  area. The features that determine points are now different (S1) / more complicated (S2) /
+  even more complicated (S3 to S7). Collect as many points as you can." These are the old texts and are provisional.
+  The wording never says "higher is better" and does not describe the structure of the
+  mapping. The hint texts of the session table below ("Fruit colour determines points.", ...) are drafts and are not in the game; whether to use them is decided after pilots.
+
+## Historical: earlier session configurations P to S4 (superseded 2026-11-05) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the 2026-11-05 redesign, "Session structure" (below), itself superseded by the cleanup of 2026-11-14 and the realised cells of FOR/TUT/the pilots. The reward-scale history here (best bush 3, then 4, `rewardStd` 0.3 to 0.6) led to the rule now in DECISIONS "Reward scale per session".
+
+*The current sessions are in "Session structure" below; this section and "Terrain by session"'s old table describe the earlier build and are kept for the record.*
+
+`sessionDuration` is the design value on P and S1–S5 (the table below; restored from a temporary 15 s on 2026-10-31). The Interlude assets' `sessionDuration` is only a cap (they end when the
+trials are done; 150 s, 60 s for the practice one). The simulated battery still runs S1–S4 at 120, 120, 180, 180 s (`--battery long`), longer than the participants' sessions.
+
+All five sessions: `rewardStd` 0.6 (was 0.3 until 2026-10-30), 10 fruit/tree, speed 11.25, `fruitHarvestDuration` 0.2 (0.05 in the Interludes), first-person camera, `worldHalfExtent` 350,
+`terrainMeshResolution` 449, ~685–695 trees
+(seed-dependent: P 686, S1 700, S2 694, S3 691, S4 701). Weights apply to (shape, color, moisture).
+
+| Session | Seed | Duration | Shape | Color | Moisture | Character |
+|---|---|---|---|---|---|---|
+| P (practice) | 100 | 60 s | Linear, w=4 | w=0 | w=0 | one feature, linear (mechanics) |
+| S1 | 1 | 90 s | (redrawn 2026-11-02: see the asset) | | | one relevant feature of three |
+| S2 | 2 | 120 s | (redrawn 2026-11-02: see the asset) | | | one feature, non-monotonic |
+| S3 | 3 | 120 s | (redrawn 2026-11-02: see the asset) | | | two features, monotonic; moisture (terrain) dominant |
+| S4 | 4 | 150 s | (redrawn 2026-11-02: see the asset) | | | all three, additive, monotonic, one inverted |
+
+**Reward functions redrawn (2026-11-02, so the PI learns something new in a live test after earlier runs):** the structure of each session is kept (S1 one feature, S2 one feature with a peak, S3 moisture dominant at 2.67 plus one of shape/colour at 1.33 with the third irrelevant, S4 all three features, unequal weights summing to 3.9 in any order across the features (the first redraw kept moisture weakest to protect the terrain's role in S4; the PI dropped that), exactly one inverted; the best bush still pays about 4) but the details were drawn at random and differ from the earlier functions, twice (the PI asked to not be told which features, weights and orders until after the test). The draw is in the assets and in `results/reward_key_2026-11-02.json` (gitignored); this table does not repeat it. Worlds and Interludes were regenerated; every earlier simulation of S1-S4 and its baselines is stale (environment hash changed), as are weight-specific numbers quoted below.
+
+**Reward scale, second step (2026-10-30):** all sessions were then rescaled so the best bush pays 4 per fruit (P, S1, S2 weight 3→4; S3 1.33/2.67; S4 1.2/1.8/0.9) and `rewardFeedbackMax` is 4 (was 6), so per-fruit rewards 0–4 span the full range of popup size and pitch. Means of R are now 2.0 (S1), 2.0 (S2), 2.0 (S3), 1.95 (S4); max 4.0, 4.0, 3.9, 3.7; share with R < 0.5: 13%, 23%, 4%, 1%. `rewardStd` was then raised from 0.3 to 0.6 (the weights' 4/3 scaling alone would give 0.4; 0.6 was chosen so that bushes at every R show visible fruit-to-fruit variation after integer rounding: a bush at a whole-number R pays a different integer 40% of the time, versus 10% at 0.3; mean std of the paid reward 0.67 vs 0.40). Consequences: the standard error of a 10-fruit bush mean is about 0.2, so neighbours 0.3–0.5 apart are not separable from one harvest; the `max(0, ...)` clamp bites at the bottom (share of fruits paying 0: S1 14%, S2 21%, S3 8%, S4 6%; a bush with R = 0.3 pays 0 in about 63% of draws and on average slightly above its R); and about 1–3% of fruits in S1/S2 and under 1% in S3/S4 pay more than 4 (maximum 6), which popup size and pitch show as 4 (the clamp at `rewardFeedbackMax`) while the displayed number and score are exact. Rewards are not capped at 4 (no per-fruit cap on purpose). The figures in the paragraph that follows are from the first step (best bush 3). All simulated baselines and the tests with weight-specific constants (test_world S4, test_interlude) are stale.
+
+**Reward scale, first step (2026-10-30):** S3/S4 weights were 1.5+3 and 2+3+1.5 (best bush 4.3 and 6.2, mean 2.3 and 3.3, vs best 3.0 and mean 1.5 in S1/S2; playtesters found every bush good). They are now scaled by 2/3 and 1/2 (ratios kept) so the best bush is 2.9 (S3) and 3.1 (S4), means 1.5 and 1.6; share of bushes with R < 0.5: S1 17%, S2 26%, S3 7%, S4 2% (a sum of several features concentrates near its mean, so S3/S4 have fewer poor bushes; std of R 0.66 and 0.57 vs 0.87). Moisture's reward spread in S3 is therefore ≈ 0.6 (was 0.89) and 0.22 in S4 (was 0.44); the notes below quote the old values. Simulated baselines for S3/S4 are stale.
+
+(Read from `Assets/ScriptableObjects/SessionConfig/*.asset`; the assets are the source of
+truth and may have moved on — re-check before citing.) The relevant feature rotates
+across sessions so a "it's always shape" rule can't carry over. The S2 peak is off-centre
+(0.65) so it is not just "avoid the extremes". Earlier designs explored five configs, then
+a 60 s S1–S3 (one linear; three linear; mixed), replaced by this progression; see DECISIONS.
+
+## Historical: terrain by session (S1-S7 era) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the tiles world (hexagonal plateaus, `scripts/tiles.py`; moisture is decoration, `terrainMaxElevation` 9 in FOR and TUT). The terracing rules of `world.py` still apply to the plateaus' construction in a general way, but the numbers below describe the terraced S3/S4 worlds and the continuous P/S1/S2 worlds.
+
+**Current (PI, 2026-11-05):** with moisture out of the reward function every session has the same terrain: the terraced moisture field of the old S3 and S4 (4 plateau
+levels, sharpness 0.3, residual 0.1, noise frequency 2) with a lower relief, `terrainMaxElevation` 6 (the old terraced sessions used 12 and hid 65-68% of the bushes near the start
+from the player). The plateaus, their ground colours and their heights are decoration; they are set by `scripts/ladder.py` (`TERRAIN`) on every template session and the worlds and
+Interludes were regenerated. The rest of this section (the table and the terracing notes) describes the earlier build (continuous in P, S1 and S2, terraced in S3 and S4, where moisture paid); the terracing rules themselves
+still apply.
+
+Terrain only matters for reward in S3 (moisture weight 2.67, the dominant feature) and S4 (since 2026-11-02 moisture may carry any of S4's three weights; it was 0.9), so it is deliberately
+different there. All values are `SessionConfig` fields; the field is built in `scripts/world.py`.
+
+| Sessions | `terrainMaxElevation` | Moisture field |
+|---|---|---|
+| P, S1, S2 (moisture irrelevant) | 12 (snow line kept by `snowLineFraction` 0.564) | continuous, wavelength ~50 units (`terrainNoiseFrequency` 2), range up to ≈ 12 units of relief (bushes span about 0–12) |
+| S3, S4 (moisture rewarded) | 12 (as P, S1, S2; was 20) | **terraced**: `moistureTerraceLevels` 4, `moistureTerraceSharpness` 0.3, `moistureTerraceResidual` 0.1, `terrainNoiseFrequency` 2 (wavelength ~50 units, as the other sessions; was 0.6, ~165 units) |
+
+Terracing: the continuous field is rank-normalised over the valley (so each level covers about the
+same area), snapped to 4 evenly spaced moisture levels with ramps between plateaus, and given a small
+undulation (±0.1) on plateau tops; levels are inset by that amplitude so the full 0–1 range is used
+without clipping. Elevation and ground colour follow moisture, so there are 4 ground colours and
+4 height tiers. **Patch size (PI, 2026-10-26):** S3 and S4 use the same noise frequency (2) and elevation (12) as the other sessions; the earlier
+long patches (frequency 0.6, about 165 units, elevation 20) kept a learner from using what it knew (S3: its share of the oracle's lead 0.31, against 0.65 at
+frequency 2; DECISIONS, "S3 patch size"). On the S3 and S4 worlds now: about 165–190 bushes per moisture level, valley slope median 7.6–7.7° and 99th percentile
+49–50°, and 65–68% of the bushes within 150 units of the start hidden from it by terrain (the old terrain: 4.6°, 37°, 41% for S3); the simulator's view cone ignores
+that occlusion. Earlier figures for the old terrain: ~6–7 large patches holding
+~80% of bushes (median ~65 bushes per patch), p99 slope ≈ 31° (the old terrain: 27°), bush moisture
+std ≈ 0.30 (old continuum: 0.16, so moisture's reward spread is ≈ 0.44 at weight 1.5 (S4) and ≈ 0.89 at weight 3 (S3), vs 0.24 at 1.5 on the old terrain; in S3 colour's spread is 0.43, so moisture contributes about twice as much).
+On the old S3 terrain the start region had few of the wettest (level 3) bushes nearby (16 within 160
+units against 72 of level 0), so reaching them took travel (not rechecked on the new terrain). The moisture–height coupling is
+likely to be revisited (TODO below). Design decision and alternatives: DECISIONS ("Terraced moisture").
+
+## Historical: session structure of the Complex Features ladder P, S1 to S7 (built 2026-11-05) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the removal of CF (2026-11-09), the cleanup of 2026-11-14 and the single FOR template (DECISIONS, "Cleanup: everything is FOR"; the ladder's sessions are frozen only as test fixtures). The reward ladder survives as positions in the Gaussian bump's parameters (SCIENCE.md, "Reward complexity ladder").
+
+**Experiments (2026-11-06).** The sessions below belong to experiments, each a titled progression with its own assets and downloads: **Tutorial** (`TUT`: `TUT_S1`, the practice session with random reward, and its Interlude `TUT_I1`) and **Complex Features** (`CF`: `CF_S1` to `CF_S7` with `CF_I1` to `CF_I7`, the ladder below; this is what the tables and "S1" to "S7" in this section mean). A participant completes the Tutorial first (a prerequisite the server enforces), then Complex Features; each experiment has its own run, completion code, points and payout, and later experiments will add their own. The old names (P, S1 to S7) are used in this section and in the older notes; the mapping is in `world.LEGACY_NAMES`. See DECISIONS, "Experiments" and "Experiment assets and the naming scheme".
+
+**Hypothesis:** adding more features, feature nonlinearity and feature interaction to the reward function makes the mapping harder to learn, so learning is slower and the ceiling lower. **Why this ladder:** each
+step adds one thing, and the jump into the last sessions is smaller than the old one (a pilot found the two-bump S5 too large a step from S4: Interlude accuracy 75% and then 55%, chance 50%). Moisture is
+not a reward feature: it was the regional, position-confounded one (patches, hidden bushes, a prior of its own), and patch structure belongs to the patch experiments (patch leaving and patch assessment, "Planned experiments" below), with priors and unlearning a further one not yet designed. Rationale and rejected alternatives: DECISIONS, "Session structure revised (2026-11-05)".
+
+**Environment (all sessions).** Bushes on the jittered hexagonal lattice, a terraced decorative terrain of relief 6, moisture weight 0, and the reward spread evenly over the map by tile balancing and
+swaps (`spatialBalance` TilesAndSwaps; "Open questions"). Reward features are shape (the canopy aspect ratio) and fruit colour (the plasma ramp). A feature that "does not vary" gives every bush the middle
+value of it (identical canopies, or one fruit colour). Every session's best bush pays about 4 per fruit; `rewardStd` 0.6; 10 fruit per bush.
+
+| Session | Seed | Duration | Features that vary | Reward | Goal | Draft hint (not in the game) |
+|---|---|---|---|---|---|---|
+| P (practice) | 200 | 30 s | shape and colour | a random value per bush, uniform 0 to 4, that no feature predicts | learn the controls and the harvest | tutorial text |
+| S1 | 201 | 90 s | colour (shapes identical) | linear in colour, weight 4 | find the better end of the colour spectrum | "Fruit colour determines points." |
+| S2 | 202 | 90 s | shape (colours identical) | a peak on shape at 0.65, width 0.2, weight 4 | find the best spot on the shape spectrum | "Bush shape determines points." |
+| S3 | 203 | 120 s | shape and colour | only colour pays: reversed linear, weight 4 | find which feature matters and its better end | "Only one feature matters." |
+| S4 | 204 | 120 s | shape and colour | only shape pays: a peak at 0.30, width 0.2, weight 4 | find which feature matters and the best spot | "Only one feature matters." |
+| S5 | 205 | 180 s | shape and colour | both pay: shape up (weight 2.4) and colour down (weight 1.6) | find the relative weights | "Both features matter, to different degrees." |
+| S6 | 206 | 180 s | shape and colour | an interaction: `4 * shape * exp(-(colour - 0.6)^2 / (2 * 0.25^2))` | find the interaction rule | "The two features interact." |
+| S7 | 207 | 180 s | shape and colour | a 2-D Gaussian at (shape 0.30, colour 0.70), spreads 0.25 and 0.15, height 4 (about 16% of bushes pay over half the best) | find the interaction rule | "The two features interact." |
+
+S3 repeats S1's feature and function class with shape as a distractor, and S4 repeats S2's with colour as one; the direction (S3) and the peak position (S4) differ so that the earlier answer does not carry over (a
+draw, not a design requirement; counterbalancing it is later work). Each session is followed by an Interlude (20 hybrid trials with 2 repeats; the practice one 3 random trials with no correct side). Source of truth:
+the assets; the table of the ladder is `scripts/ladder.py`, which writes it (and the terrain, the durations and the spatial switch) onto the template assets.
+
+**Contrasts the ladder supports:** S1 against S2 (a linear against a nonlinear single feature), S1 against S3 and S2 against S4 (adding the question of which feature matters), S3 against S4 (nonlinearity under
+that question), S4 against S5 (integrating two relevant features), S5 against S6 and S6 against S7 (interaction, first partial, then full). The core analysis compares rewards over time and the Interlude's
+picture of the learned value function across these sessions, within and across participants:
+1. Point trajectories in each session: the rate and curvature of increase show the quality of performance, the periods of learning and the trade-off between exploring and exploiting.
+2. Interlude performance assesses the learned value function and how well it approximates the true mapping.
+3. The comparison of both across sessions addresses the hypothesis.
+
+**Decisions taken** (PI, 2026-11-05):
+- **S1 is colour, S2 is shape.** A nonlinear (peaked) mapping is easier to identify on shape, whose ends are clear, than on colour, which is a wheel. Whether the order of colour and shape is counterbalanced across
+  participants is left for later.
+- **Reward matching is a tuning problem, not a design problem:** the sessions' reward scale, the spread of the reward over bushes, the share of bushes near the top, the peak widths and the noise are to be set
+  parametrically so that the sessions differ in structure and not in signal strength. How the ceiling is measured (a fraction of an oracle forager's score, or a plateau of the participant's own reward rate) is open;
+  no normalised score is decided. Not done yet.
+- **Hints may be removed.** The draft hints state the class of rule and make the task parameter learning within a known family; they depart from the instruction principle (the wording never says "higher is
+  better" and does not describe the mapping). Pilots decide whether the progression is as clean without them. "Colour" in a hint means the fruit colour, not the ground.
+- **Durations** are practice 30 s, S1 and S2 90 s, S3 and S4 2 minutes, S5 to S7 3 minutes, adjusted as needed; the Interlude analysis, and whether 20 trials suffice for the 2-D sessions, come later.
+- **S7 does the old S5's job** (one bump over shape and colour); the two-bump version stays rejected.
+
+**Where it lives.** Reward terms: `RewardFunction` with `RewardBump` (a spread along each axis: `width` along shape, `widthColor` along colour, 0 = the same) and `RewardProduct` (C#; removed 2026-11-17), mirrored by `world.bush_value`
+(C# and Python agree to 1e-6, pinned in `test_world.py`); a random per-bush value `randomBushValueRange` (removed 2026-11-17); constant features `shapeVaries` / `colorVaries` with `shapeWhenFixed` / `colorWhenFixed`; moisture as decoration
+(`world.moisture_matters`: out of the Interlude's feature gap only; the simulated agents sense moisture like participants do); `ladder.py` (the table of the ladder, `--recreate` copies S2 into a new session), `spatial.py`. The generator tests that need the old moisture-paying or bump sessions use `legacy_sessions.py`.
+
+**Provisional, not done:** the durations are first values; the reward spread across sessions is not matched; the instruction files are the old texts (S6 and S7 copies of S5's); the carry-over scripts
+(`prior_carryover.py`, `carryover_decay.py`) summarise a session's rules as a count of bumps and do not know products, and the human analyses still use moisture as a choice regressor (useful for testing whether the
+decoration steers choices); the simulated agents' critics are unchanged (an additive critic cannot represent either interaction; the joint-kernel GP can); the ABAB design (archived, below) is not part of it.
+
+## Historical: planned experiments FN, RW, FI, PL, PA (2026-11-06) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the single experiment FOR (2026-11-13), the pilots PCX/PSP/PSC and the cleanup of 2026-11-14. DECISIONS, "Historical: the planned experiments FN, RW, FI, PL, PA" (the full designs) is history too.
+
+The single Complex Features ladder above changes the number of rewarded features, the nonlinearity and the feature interaction together, and
+duration and practice with them. The plan is to split it into experiments that each vary one family of things, and to add experiments on
+foraging policy. **FN is built (2026-11-09, provisional numbers; see `scripts/design/FN.py`); the others are not**; the game plays `TUT` and `FN` (the CF experiment, the ladder described above, was removed 2026-11-09; its sessions are kept as frozen test and simulation environments `S1` to `S7` in `scripts/fixtures/sessions/`, and in git). The full designs (hypotheses, session types, order and hints, open
+items, analyses) are in **DECISIONS, "Historical: the planned experiments FN, RW, FI, PL, PA"**; the reasoning and rejected alternatives in DECISIONS, "Experiments split by question (2026-11-06)".
+
+| Experiment | Hypothesis in one line | Sessions |
+|---|---|---|
+| Learning with more rewarded features (FN) | Visible but unrewarded features slow discovery a little; more rewarded features slow learning much more and lower the probability of learning the true value function; the probability of learning a rewarded feature rises with its weight against the other weights and the per-fruit noise | short baselines (one feature pays, one to three visible), intermediate sessions (two of two or three visible features pay equally), then long sessions with three visible features and varied weights; each baseline cell three times |
+| Learning with sparse rewards (RW) | Narrower (sparser) peaks mean more exploration and fewer points; with a local and a global maximum people settle on the local one more when peaks are narrow, far apart, close in height or noisy | one 1D peak, one 2D peak, two 1D peaks, two 2D peaks (short to quite long), the last two with varied sparsity, separation, height ratio and noise |
+| Learning with feature interactions (FI) | The more the reward depends on the combination of shape and color, the slower the learning and the lower the ceiling; sharper sigmoids at matched sparsity are harder | additive, sigmoid × sigmoid, sigmoid × Gaussian, tilted 2D Gaussian, at matched sparsity |
+| Patch leaving (PL) | People take a cluster down and move to another, staying longer when the walk is longer and leaving sooner when others are richer; efficiency improves over sessions | easy (linear, one feature) reward; travel cost × patch contrast |
+| Patch assessment (PA) | When a patch's value is hard to judge, people are less efficient but improve their explore/exploit policy over sessions, with heuristics that never reach the optimum | two-feature additive reward; patch size × diversity; contrast high early, low later |
+
+**Shared rules.** Each session is an instance drawn from a pool (own world seed, own draw of features, directions, weights and positions); an
+ease-in of the simplest cases comes first, the later instances are intermixed in random order; hints say which features matter in the early
+sessions and are dropped later (the patch experiments give none); the knowledge state in PL and PA is inferred from a participant's choices,
+not told. **Sparsity** is defined in feature space (the fraction of the interval or plane whose reward is in the top x% of the range) so one-
+and two-feature sessions are on one scale. **Efficiency** is the reward relative to an oracle following the marginal value theorem in the
+same world. **FN's balancing (2026-11-09):** the old reward balancing made the rewarded feature conspicuously regular (a cue to which feature pays) and coupled shape and colour to moisture; FN balances each visible feature on its own instead (DECISIONS, "Reward balancing leaks which feature pays"). **FN's ground (2026-11-09):** moisture, which sets ground colour and height, is the Diffusion terrace mode (flat regions with soft slopes and steps, plateaus of varied size and height, no level count; DECISIONS, "Terrace modes without a level count"). **Open:** the distribution of FN's weak weights and of RW's peak parameters (TODO in DECISIONS, "Historical: the planned experiments FN, RW, FI, PL, PA"), durations and
+Interlude trial counts (they wait for measured timing), moisture as FN's third feature (built: spatial balancing now evens the totals including a moisture term; `moistureVaries` gives a flat valley), typed Interlude trials for RW and FI (FN's per-feature trials exist), and a clustered placement mode with `spatialBalance` off or within
+tiles for the patch experiments.
+
+## Historical: earlier session progression P to S5 (superseded 2026-11-05) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the 2026-11-05 redesign, "Session structure" (above), then by the cleanup of 2026-11-14.
+
+Goal: each session is long enough for a participant to sample many bushes and
+learn the reward mapping, but not so long that most of it is spent exploiting a
+fully learned rule; and complexity increases across sessions so learning takes
+progressively more stops. Rationale and rejected alternatives: DECISIONS
+("Session progression").
+
+**Time budget logic.** The first sizing assumed player speed 5 and 0.5 s per fruit:
+~9 s per full-harvest stop (5 s harvest + ~3.7 s walk), so 60 s held only ~7 stops, too few to
+learn and then exploit anything beyond one feature. Speed was then raised to 7.5 and harvesting
+doubled to 0.25 s per fruit (later 0.2 s in sessions and 0.05 s in Interludes), so a stop was ~5 s (2.5 s harvest + ~2.5 s walk): roughly 1.8×
+the stops per session at the same duration (about 12 / 18 / 24 / 24 / 30 stops for
+P / S1 / S2 / S3 / S4 if full-harvesting). **The durations in the table below were sized for the old
+~9 s stop and have not been retuned: TODO(PI) shorten them (≈ 50 / 70 / 70 / 85 s keeps the
+original stop counts) or keep them and accept longer exploitation phases.**
+With `rewardStd` 0.3 (as of 2026-10-30 it is 0.6, which makes a bush's mean about 0.2 uncertain after 10 fruits and a one-fruit peek clearly noisy, so the following no longer holds as written) a bush has 10 fruits and its value was known almost exactly after
+1–2 fruits: **each visited bush is roughly one clean (attributes → reward) data point**, and the
+difficulty is credit assignment, not noise. A one-fruit "peek" now costs ~0.25 s + walk (~2.5 s)
+versus ~5 s for a full-harvest stop, so peeking is cheaper in absolute terms but saves about half
+a stop rather than ~90%; whether participants discover this is itself a measurable behavior.
+Session lengths target learning taking ~35–50% of the stops.
+
+| Session | Reward structure (shape, color, moisture) | New concept | Duration (~stops) | Expected learn point (stops) |
+|---|---|---|---|---|
+| P (practice, unanalyzed) | shape linear, others 0 | controls, harvest mechanic | 60–90 s | n/a |
+| S1 | one feature linear, two distractors | credit assignment | 90 s (~10) | 4–6 |
+| S2 | one feature Gaussian peak, others 0 | non-monotonic value | 120 s (~13) | 7–10 |
+| S3 | two features linear, third irrelevant | integrating two features, relative weights | 120 s (~13) | 7–10 |
+| S4 | all three non-zero, additive, monotonic, unequal weights, at least one inverted | integration over all three; "higher is better" is not a safe default | 150 s (~16) | 10–14 |
+| S5 | one Gaussian bump over (shape, colour) plus one linear moisture term | an interaction no sum of one-feature terms can express (a nonlinear peak, learned by trial and error) | 180 s | not estimated |
+
+Stops-to-learn figures are guesses, to be calibrated by a model-based learner
+agent and then by pilots. Durations are likewise provisional. P–S4 are implemented as
+the table above (P is 60 s); S5 is 180 s.
+
+- **S2 before S3.** S2 isolates one new idea (non-monotonic value) while one
+  feature is relevant. It also tests whether the linear prior built in S1
+  carries over (choosing extreme attribute values). S3 → S4 then adds one
+  feature at a time, with no step back in function complexity.
+- **S4 is the first all-three-relevant session** and is deliberately additive
+  and monotonic. It may already be hard enough; S5 should not be committed until
+  S4 pilot data exist.
+- **S5 (built 2026-11-02, in the game's session sequence since the same day): one bump plus moisture.** `R = H·G(shape, colour; c) + w·f(moisture)`,
+  `G` a circular Gaussian (the same width σ on both axes). σ 0.2, height 3.0, moisture weight 1.2 (linear or inverted, drawn), so the best bush pays
+  about 4. The centre is drawn at random inside [0.2, 0.8]² and is in the assets and the gitignored `results/reward_key_S5_2026-11-02.json`, not here.
+  History: S5 began as two bumps (heights 2.8 and 1.8, then both 2.8). In two pilots (one participant, the PI) the learner found only one of the two
+  bumps each time (the other got 9% and then under 3% of the fruits) and the S5 Interlude was at 75% and then 55% (chance is 50%), so S5 was too large a step
+  from S4; it became a single bump plus moisture, a smaller step (see DECISIONS, "S5: one bump"). About 17% of random bushes lie above half the bump's
+  height at σ 0.2, so trial and error can find the centre. Shape and colour are the interacting pair because moisture is harder to judge visually.
+  Additive learners (the delta-rule critic and the GP critic's additive kernel) cannot represent the bump; the joint-kernel GP can. Code: `RewardBump`
+  (C#), the `bumps` list of the reward function in `SessionConfig`, `bush_value` and `check_values` in `world.py` (a test pins the formula; C# and Python
+  agree to 1e-7 on sample points), `relevant_features` in `interlude.py` (a bump makes shape and colour relevant; designed-mode Interludes are refused
+  for a reward function with bumps). The Interlude is Hybrid like the others (20 trials). Wired into the `GameManager` list (12 entries: P, its Interlude,
+  S1-S5 with theirs). Not done: the simulated battery for the single-bump S5; play-testing of the single bump with people.
+- **Instructions must not imply monotonicity** ("reward depends on the tree's
+  features", not "higher is better").
+- **Extra difficulty knobs:** raising `rewardStd` further (≈1.0) in later sessions slows
+  per-bush estimates without touching the visual channels; a moisture-driven
+  reward adds regional structure (and the spatial-autocorrelation confound
+  noted under open questions).
+- **Calibration metrics for pilots:** predicted R of the bush chosen at stop k
+  vs. k; the stop where choices first exceed a rank-correlation threshold with
+  true R; fraction of the session left after that stop (target median ≈ 50%).
+- **Alternative left open:** counterbalancing S2/S3 across participants (similar
+  expected difficulty; would allow comparing learning a nonlinearity with
+  learning feature integration, at the cost of sample size and an order factor).
+
+## Historical: the tile-leaving calibration of the early FOR layout (tile radius 45) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the re-measurement on the pool-and-placement worlds (2026-11-18), which is kept in SCIENCE.md ("Current design"). The first paragraph here was measured on the layouts of before 2026-11-18 with patch centres and scatter; the last sentence is review item A-1 saying its numbers no longer reproduce.
+
+**Is leaving a tile early the right policy?** (measured on the layouts of before 2026-11-18, with patch centres and scatter; the pool-and-placement layout has not been re-measured) `scripts/tile_calibration.py` (an oracle forager through the simulator on tile worlds; 8 seeds, 180 s): the incentive to leave comes from the within-tile decline
+relative to the differences between tiles. At tile radius 45 with 9 bushes the best partial policy takes the bushes at or above the 60th percentile of the world's values, about 4 to 6 bushes per visit,
+**+9 to +11% over exhausting every tile**; larger radii (55 to 90) favour taking most of the tile (6 to 7 bushes), bimodal worlds favour exhausting. The optimum is flat (top-6 to top-9 differ by a few percent)
+and the forager is an oracle, so these are provisional; radius 45 and 9 bushes are the tentative choice (DECISIONS, "FOR: tentative tile radius and bushes per tile"). **Re-measured on the pool-and-placement worlds (2026-11-18, 20 seeds, `tile_calibration.py FOR_S1|TUT_S1 --seeds 0-19`):** FOR_S1 (180 s, 8 s travel): the best top-k is top-5 (1372 points; top-4 to top-6 within 3%), top-1 loses 42% and top-9 13%; the best threshold is thr-60 (1421, 4.4 bushes per visit, +19.7% over exhausting every tile), thr-90 loses 33% and thr-10 11%. TUT_S1 (120 s, 5 s travel): top-4 is best (top-3 to top-5 within 3%), top-1 loses 35% and top-9 17%; thr-70 is best (+25.6% over exhaust), thr-90 loses 24% and thr-10 17%. Both shapes are an inverted U with a clear loss at each end (the shape check, `tile_calibration.profile_check`; the best policy is the best of the heuristics, a lower bound on the optimum). **Superseded (2026-11-17, review item A-1):** `tile_calibration.py FOR_S1 --seeds 0-7 --set session_duration=180` now gives, at the commit before the value-map change, thr-40 / 6.1 bushes per visit / +9.2% and, with the wide corner Gaussian reward, thr-50 / 5.3 bushes / +8.6%, both verdict TOO MANY; the numbers above no longer reproduce and the radius has not been re-opened.
+
+## Historical: the direction paragraph and the built-and-not list of FOR (2026-11-13/14) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the current-design text of SCIENCE.md (FOR, TUT and the pilots built; the tutorial since 2026-11-16; the session tools of 2026-11-17 and 18). The "not built" items (parameter samplers, simulated agents on the break schedule, a difficulty score) are covered by the knob tables and the patch-foraging benchmarks.
+
+**Direction.** After PI discussions the five planned experiments (FN, RW, FI, PL, PA; DECISIONS, "Historical: the planned experiments FN, RW, FI, PL, PA") are replaced by **one experiment, FOR**, in which the reward function (number, form and sparsity of
+features) and the spatial arrangement (tile value, distance, heterogeneity) vary from session to session, and a **ranking** of a few bushes is asked for periodically *inside* the session. Harvesting earns the
+main points; the rankings add a bonus per correct pair. The old tutorials, sessions and Interludes (the old TUT, FN, RW, FI, the P to S7 ladder) were removed in the cleanup of 2026-11-14 (the tutorial was then rebuilt as the present `TUT`, below) (DECISIONS, "Cleanup: everything is FOR");
+the sections below that describe them are history, kept for the reasoning, and where they disagree with this section, this section is current. DECISIONS ("FOR ...", "The crosshair harvest rule", "Ranking breaks inside the session") hold the reasoning and the rejected alternatives.
+
+[...]
+
+**Built and not.** Built: the tiles world and assignment modes, the calibration, the crosshair rule, ranking breaks (trigger, arc, clocks, fade, scoring, logging, replay, resume, pool), the single prototype session
+`FOR_S1` (`scripts/design/FOR.py`). Built since: the tutorial `TUT` (below). Not built: any further session (FOR_S1 is the only FOR session), the parameter specification and samplers that swap reward and spatial settings from session to session (phase 3 of the plan), simulated agents on the break schedule,
+a difficulty score, instructions text for the rankings. Not play-tested since the cleanup: the Unity side (it compiles; the Editor did not advance frames when driven from the CLI).
+
+## Historical: the first study's hypothesis and the first-study framing of the goal (2026-11-05) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the reward complexity ladder and the pilots (SCIENCE.md, "Scientific rationale" and "Current design"); the three-attribute reward and the S1-S7 sessions no longer exist.
+
+The first study within that program asks how people learn a reward function
+defined over continuous tree attributes (see "Task design"). Participants
+harvest trees whose reward depends on three attributes; the
+researcher-defined reward function is the independent variable, and the
+dependent variable is which trees participants harvest and in what order
+(plus movement/visibility data from the logs). The platform is meant to
+outlast any single question.
+
+**Hypothesis (first study, PI, 2026-11-05):** adding more features, feature nonlinearity and feature interaction to the reward function makes the
+mapping harder to learn: learning is slower and the performance ceiling lower. The session structure that tests it is "Session structure" (built 2026-11-05; practice and S1 to S7). The ladder is planned to be split into experiments that each vary one thing, and followed by experiments on reward sparsity, patch leaving and patch assessment ("Planned experiments", DECISIONS, "Historical: the planned experiments FN, RW, FI, PL, PA"); priors and unlearning is a further experiment not yet designed. The later experiments have their own designs (they will use the terrain and spatial reward structure that the first study
+leaves decorative, and the switch that evens the reward over the map, `spatialBalance`, which they can turn off).
+
+[...]
+
+  al., 2018; Wu et al., 2018). Our reward function over continuous
+  attributes (linear and Gaussian-peak basis functions over one to three
+  features) sits directly in this line, moved into an embodied,
+  continuous-time setting.
+
+## Historical: the first two rows of the table of four features of "naturalistic" (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the updated rows in SCIENCE.md (two reward features, a tiles world).
+
+| 1 | **Multidimensional, continuous-valued features** | Each tree has three continuous attributes (shape, fruit color, moisture), each on its own visual channel; reward is a function over all three |
+| 2 | **Multiple potential actions at every timestep** | ~150 trees in the world at all times; the participant can approach any, harvest any in range, or keep exploring |
+
+## Historical: the Interlude's data tables and the trial and teleport events (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the cleanup of 2026-11-14: no `interlude_plan` / `interlude_trials` tables, and `trial_start`, `trial_end`, `trial_go`, `choice_lock` and `teleport` events are no longer logged (the ranking breaks log `rank_*` events and a `ranking_sets` table; SCIENCE.md, "Data").
+
+| `events` (`events.csv`) | `seq, t, real, type, tree_id, k, reward, running_total, payload` (JSON; `tree_id` is the bush's id). `real` is unscaled seconds. Types: `session_start`/`session_end`, `pause`/`resume` (payload `reason`: instructions, upload or pointer), `focus_lost`/`focus_gained`, `harvest_press`, `harvest_pause`/`harvest_resume` (target left/re-entered the range-and-cone mid-bout), `fruit` (one per fruit: bush, `k` = its index among the fruits taken from that bush, reward, running total), `harvest_release`, `teleport` (Interlude trial change), `trial_start`/`trial_end`, `trial_go`, `choice_lock`, `session_resume` (the participant came back to an interrupted session). |
+
+[...]
+
+| `interlude_plan`, `interlude_trials` (`interlude_plan.json`, `interlude_trials.csv`) | The trial order (the file's, the same for everyone), and one row per trial (columns in the "Interlude" section, plus `paused_seconds`: real seconds the game was held still while the trial was live). |
+
+## Historical: recorded simulation runs on the S1-S4 environments (results database, 2026-10 and earlier) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the cleanup of 2026-11-14: every environment and engine hash changed, so these results are stale (CLAUDE.md, "Results database"); no S1-S4 sessions or Interludes exist. The tables kept their numbers because they are the only record of the Interlude-based learner readout.
+
+## Findings and current thread
+
+**No analyses of human data are recorded in this repo.** The only results are
+the simulated agent baselines below (code in `scripts/`).
+
+#### Recorded simulation runs (results database)
+
+Runs are recorded in `results/results.sqlite` (gitignored; conventions in CLAUDE.md, "Results database") and queried with
+`scripts/analysis.py`. They supersede the stale table below as it is re-run.
+
+**Current baselines: the `long` battery** (tag `newterrain-floor-100`: seeds 0-99, engine `9c6f77c2dcd0`, commit `3891865` plus uncommitted edits (dirty tree);
+S1 120 s, S2 120 s, S3 180 s, S4 180 s, motor costs on, default view cone; each followed by its random Interlude of 50 trials, one pick per trial, with the
+S3 and S4 pairs at least 3 elevation units apart (`interludeMinElevationDifference`); the agent scored on a copy at 0, 0.1, 0.2, 0.35, 0.5, 0.75 and 1.0 of the session).
+Agents: `nearest` (rate utility within 15 s, no value knowledge), `oracle` (the same actor with the true values) and `learner` (delta-rule critic on additive
+RBF features, `ConstantPrior(0.1)`). Lead = paired mean difference to `nearest` in reward points ± se, split into quality (better bushes) and efficiency
+(more fruits); accuracy is the final Interlude accuracy; `auc` is the chance-corrected area under the learning curve (1 = perfect from the start) and `t80` the
+fraction of the session at which accuracy first reaches 0.8:
+
+| Session | `nearest` total | Oracle lead | Learner lead | Learner quality / efficiency | Learner final accuracy | Learner `auc` | Learner `t80` |
+|---|---|---|---|---|---|---|---|
+| S1 (120 s) | 383 | +141.3 ± 4.6 | +80.0 ± 4.9 | +102.3 / -22.3 | 0.90 | 0.60 | 0.36 |
+| S2 (120 s) | 353 | +209.2 ± 5.7 | +91.9 ± 5.8 | +108.2 / -16.3 | 0.83 | 0.54 | 0.47 |
+| S3 (180 s) | 860 | +223.4 ± 8.1 | +145.4 ± 9.6 | +181.8 / -36.5 | 0.86 | 0.50 | 0.55 |
+| S4 (180 s) | 1260 | +188.5 ± 8.6 | +109.5 ± 8.9 | +164.7 / -55.2 | 0.88 | 0.51 | 0.55 |
+
+`nearest` stays at chance in every Interlude (0.49-0.51); the oracle is at 1.00. Both agents earn their lead through quality; they take fewer fruits
+than `nearest` (the oracle gives up 89-155 points of efficiency, the learner 16-55). Reading it: S3 and S4 are the slowest to be learned (`t80` 0.55 against 0.36 and 0.47). **What changed against the earlier record
+`newterrain-long-100`** (engine `b53c58237da4`, S3/S4 Interlude pairs unconstrained): the reward columns are identical (the floor only changes the Interlude
+pairs, and the same worlds and seeds were used); S1 and S2 Interlude numbers are identical; S3 `t80` 0.59 to 0.55 with accuracy 0.86 unchanged; S4 accuracy 0.90 to 0.88,
+`auc` 0.57 to 0.51 and `t80` 0.42 to 0.55, so the floored S4 pairs are a little harder for this learner (the cause is untested: a pair that differs in height need not differ much in reward, since moisture is the weaker weight there). Figures: `results/newterrain-floor-100_main_{reward,advantage,interlude}.png` (gitignored). **These supersede the
+old S3/S4 numbers anywhere in this file or the database: every S3 and S4 record made before the terrain change (frequency 0.6, elevation 20) or before the
+floor has a different environment hash and is not comparable.** The two earlier 100-seed S3/S4 battery records (`newterrain-long-30`, `newterrain-long-100`)
+are kept in the database for comparison.
+
+**`s1-90s-learning`** (first 100-seed run on a clean tree: commit `f3f5606`, engine `282a3fe3d692`; S1 at its design 90 s, motor costs on,
+default view cone, seeds 0-99; random Interlude with 50 trials and 20 samples per trial; Interlude scored on copies of each agent at
+0, 10, 20, 30, 45, 60, 75 and 90 s). Total reward, mean ± se, paired difference to `nearest` ± se, and Interlude accuracy at the end of the session:
+
+(In this table `nearest` is the old full-map agent (`ec2396541b09`) and `delta_rate_10` has the old neutral prior: both names now build different specs, so select them by id.)
+
+| Agent | Total | vs nearest | Interlude accuracy at 90 s |
+|---|---|---|---|
+| `nearest` | 289.6 ± 3.7 | , | 0.50 |
+| `delta_rate_10` (delta-rule critic, additive RBF features, neutral prior, full memory) | 335.2 ± 3.4 | +45.6 ± 4.1 | 0.91 |
+| `greedy_rate_10` (oracle) | 399.8 ± 2.3 | +110.2 ± 3.9 | 1.00 |
+
+Learning curve (STALE: taken before the mid-visit checkpoint fix, which moves checkpoints up by about 0.4 points on average, and before bush ids were shuffled; re-run to refresh) (Interlude accuracy of the learner against training time; the 95% interval is about ±0.01 to ±0.03): 0.50 at 0 s, 0.62 at 10 s,
+0.76 at 20 s, 0.82 at 30 s, 0.86 at 45 s, 0.89 at 60 s, 0.90 at 75 s, 0.91 at 90 s; `nearest` stays at chance and the oracle at 1.00 throughout.
+The learner closes 0.39 ± 0.04 of the nearest-to-oracle gap per seed in total reward. Its reward lead over `nearest` (cumulative-reward advantage)
+is about zero until roughly 28 s and then grows at close to the oracle's slope, so the Interlude shows it knowing the value function (0.76 at 20 s)
+before the reward shows it. Figures:
+`results/s1-90s-learning_{learning,cumulative,advantage}.png` (gitignored). With one relevant feature (S1) a good learner
+should reach the oracle's accuracy, so 0.91 leaves room for stronger critics. The earlier 10-seed and dirty-tree trials (`first-s1-90s`,
+`rate-trial`, `learning-trial`) are superseded by this run.
+
+## Historical: simulated agent baselines (preliminary, STALE) and the old next-steps list (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the patch-foraging benchmarks on the tiles world (`scripts/patch_foraging.py`, `docs/pilots/agents.md`, SCIENCE.md "Pilot experiments") and by the removal of the S-sessions. These numbers were already stale when written (speed 5, 0.5 s per fruit, 140 trees).
+
+**Superseded by the battery table above** (view-cone agents, the current terrain, motor costs, the speed and harvest rate of the current build). The table below is kept only for the full-information reference agents (`greedy_rate_15`, `plan_beam`), which the battery does not run; its `nearest` is the old full-map agent and its S3/S4 columns are for the old terrain.
+
+**These numbers were computed before the speed, harvest-rate and map-size changes** (speed 5,
+0.5 s per fruit, `worldHalfExtent` 200 with ~140 trees; session durations as in the table below). Player speed is
+now 7.5, fruit harvest 0.25 s (since 0.2 s; 0.05 s in Interludes), and the map ~5× larger in tree count, so the table, the
+percentages and the "stops per session" notes do not describe the current build. Baselines are
+re-run on request only, not after every change.
+
+Reward per session for three reference agents with a known map, run on
+the same worlds (seeds 0–99, `python scripts/sim.py <S> --seeds 0-99 --agents
+nearest,greedy_rate_15,plan_beam --baseline nearest`) at each session's own
+duration. Mean ± standard deviation across seeds; "vs nearest" is the paired
+difference ± SE. Rewards include the fruit noise (`rewardStd` 0.3 when these were run; now 0.6 and the rewards rescaled, so they are stale).
+
+| Agent | What it knows / does | P (60 s) | S1 (90 s) | S2 (120 s) | S3 (120 s) | S4 (150 s) |
+|---|---|---|---|---|---|---|
+| `nearest` | nothing about value; walks to the quickest-to-reach bush, harvests it empty, repeats | 95.4 ± 25.0 | 167.7 ± 32.8 | 202.8 ± 42.4 | 332.3 ± 38.9 | 608.9 ± 48.9 |
+| `greedy_rate_15` | full map and true `R_bush`; goes to the bush with the best expected reward per second (walk + harvest) among those within 15 s of walking; no planning | 152.4 ± 12.8 (+57.0 ± 2.8) | 231.3 ± 16.2 (+63.6 ± 3.5) | 328.5 ± 22.6 (+125.8 ± 4.6) | 402.9 ± 25.1 (+70.6 ± 3.8) | 687.6 ± 38.3 (+78.7 ± 5.7) |
+| `plan_beam` | full map and true `R_bush`; plans the whole route (beam search, width 300), whole-bush harvesting, no reward noise in the plan | 166.5 ± 9.1 (+71.1 ± 2.6) | 251.3 ± 12.1 (+83.5 ± 3.3) | 354.5 ± 15.9 (+151.7 ± 4.4) | 438.3 ± 17.6 (+106.0 ± 3.8) | 748.4 ± 29.9 (+139.5 ± 4.9) |
+
+Relative to `plan_beam`: greedy gets 91.5% / 92.0% / 92.7% / 91.9% / 91.9%
+(P/S1/S2/S3/S4) and nearest gets 57% / 67% / 57% / 76% / 81%. **The value of
+knowing the reward function shrinks in S3 and S4**: with more relevant features
+and larger summed weights, even a blind nearest-bush forager reaches 76–81% of
+the ceiling, so the incentive to learn the mapping is weakest in the sessions
+that are hardest to learn. Worth watching in pilots (a lower-weight or
+higher-contrast design, or steeper reward dependence, would restore it).
+
+Notes for reading these numbers:
+- **`plan_beam` is a near-optimal ceiling for expected reward, not the strict
+  optimum.** The exact branch-and-bound planner (`plan_exact`, 11–28 s per
+  world, 1.3–3.0M search nodes) proved optimality in 23 of 24 worlds tested
+  (12 seeds each of the earlier 60 s S1 and S2 — the former S1 is now P; the other hit its 3M-node cap). The beam planner
+  was within 0.05% (S1) and 0.13% (S2) of the exact planner's expected reward,
+  found the exact optimum in 19 of those 24 worlds, and never beat it. Neither
+  uses partial harvesting (leaving a bush early) or the realized fruit rewards,
+  so a clairvoyant agent could still do slightly better.
+- **Stops per session.** In the 60 s practice session the best route visits 6–7
+  bushes (5 s to harvest each, ~3.4 s average walk between neighbours), so the
+  choice is which few bushes to spend the session on, not a long tour; the
+  longer sessions scale roughly with duration (~10 stops at 90 s, ~16 at 150 s).
+- **Greedy is sensitive to its scoring rule.** Value-only greedy (best
+  expected reward within a walking-time radius, ignoring harvest and travel
+  time) beat `nearest` at a 5–10 s radius but fell below it at 20–30 s;
+  rate scoring is insensitive to the radius from 10 s up (it is worse at 5 s).
+- **These are full-information agents.** None learns the reward function, so
+  they bound what a learner could earn but are not models of participants.
+- **Engine assumptions** (see `docs/DECISIONS.md`): straight-line walking to
+  the edge of harvest range, no regrowth, facing time and canopy collisions
+  ignored, decisions at fruit boundaries, per-fruit rewards pre-drawn from the
+  seed. Re-run the baselines after changing spacing, jitter, speed, session
+  length, fruit count or reward weights; all of these move them.
+
+The project is at the platform-building stage: hypotheses are unwritten, no
+pilot has been run, and no analyses exist. When analyses exist, reference
+them here (path to code/notebooks; abandoned analyses with a pointer to an
+`archive/HISTORY_*.md`-style entry, as in evidence_integration).
+
+Next steps and open TODOs (details in the sections they live in): **re-run every peek-and-leave result (`peek`, `curious_peek`, `gp_peek`,
+`gp_curious_peek`, the `scan-peek` and `scan-delta-peek-margin` populations) on the fixed code: the first version walked back to the bush it had left, so the
+recorded results measured that loop and are invalid (DECISIONS, "Exploration policies"); re-record the roster, the scans and the matched-critic comparison on a clean
+tree and then write the results into this file;** restore the design session durations
+(temporarily 15 s) and retune them for the faster pace; rebalance rewards/world/timing so the blind `nearest` agent stays
+clearly worse than `greedy`/`plan_beam` in S3–S4; re-run the full-information reference baselines (the battery table above covers `nearest`, `oracle` and `learner`); revisit the moisture-to-height
+coupling; decide and build S5 (interacting pair plus additive feature); for the Interlude, the prediction (reward-estimate)
+mode, analysis code, a simulated-learner agent to calibrate stops-to-learn and Interlude length, and a freshness check on
+its generated files; a participant-ID screen; and writing the hypotheses down.
+
+## Historical: the Interlude parts of the agent ladder (evaluation of a frozen critic on forced-choice trials) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the cleanup of 2026-11-14: the simulator's Interlude evaluation (`evaluate_ranking`, `evaluate_interlude`) and the checkpoint scores were removed with the Interlude; the battery is reward only and no ranking evaluation of agents exists yet.
+
+- **Evaluation:** the assessment battery (`scripts/battery.py`; the `long` session durations are the default) records populations of agents, with their
+  paired reward lead over `nearest`, final Interlude accuracy and learning-curve area; the Interlude choice is greedy for every actor, and a checkpoint is
+  the agent as it stood at that time of a full-length session. **Not built:** SSP features, a recency-weighted replay (it needs the memory to record the order
+  of visits), limited or forgetful memories, and the agent list. Agreed design:
+
+[...]
+
+- **Interludes:** after a session the critic is frozen and carried over (no outcomes are shown in an Interlude, so humans do not learn there either), the
+  agent starts a fresh memory for the Interlude's own bushes, and both bushes of each trial are shown to it as observed, whatever its sensor (the trials are
+  built so both are in view; the Interlude tests what was learned, not perception). The actor then picks between them greedily by its own utility (whatever its choice rule), repeated enough times to
+  estimate accuracy; scored by a separate function (correct choices
+  overall and by trial type, and the hidden bonus). The Interlude an agent faces is generated by `scripts/interlude.py` for the same world seed
+  (`generate_interlude(..., seed=)`), with the same search and trials the game uses, so it is what a human sees on that world; if more or different
+  trials are needed to separate agents, the change belongs in the human Interludes as well, not in a simulation-only variant.
+
+## Historical: open questions of the S1-S7 era (spatial balancing, ABAB, ladder items, legacy machinery, Interlude parameters, moisture) (moved from SCIENCE.md, 2026-11-19)
+
+**Superseded by:** the spatial balancing (`spatialBalance`, `spatial.py`) was replaced by the pool-and-placement worlds (DECISIONS, "Bush generation: a pool of bushes, then a placement", "The `balanced` placement"); the ABAB alternation is archived (`archive/abab/`); the ladder, the Interlude and the moisture-paying sessions were removed on 2026-11-14; participant IDs exist since the online database (`docs/ONLINE_DATA_PLAN.md`). The "Reward-noise stream" bullet that sat between these (resolved) is kept in SCIENCE.md, "Data".
+
+**Status (2026-11-05):** the sessions, terrain, durations and spatial balancing described under "Session structure" replace the earlier S1-S5 build. Several items below refer to that earlier build (the old S5 structure,
+moisture as a reward feature in S3 and S4, the terraced-terrain TODO, the baselines "STALE" above and in the agent ladder) and are kept as history; they have not been re-checked against the new sessions.
+
+[...]
+
+- **Spatial evenness of the reward (built 2026-11-05, on for the ladder).** *Problem:* attributes are drawn independently of position, so with about 700 bushes the rewarding ones cluster by chance and a
+  lucky participant can find a rich cluster and exhaust it; the later explore/exploit and patch-foraging experiments need that to be a design variable, not luck. *Method* (`scripts/spatial.py`,
+  `SessionConfig.spatialBalance` Off / Tiles / TilesAndSwaps; `ladder.py` sets TilesAndSwaps on every session): the (shape, colour, random value) records are dealt to other positions (the marginal
+  distribution of every attribute and of the reward is unchanged), coarse tiles first and each tile an even interleave of the reward quantiles, then swapped between bushes to lower a patchiness cost
+  to a target of 0.4. *Scales:* tiles and disks of 40, 60 and 120 world units (3, 6 and 24 bushes per disk; the lattice spacing is 18). Larger scales are left out because a random world is already even
+  there: the spread of disk means, in units of the bushes' own spread, is 0.69, 0.56, 0.44, 0.31 and 0.15 at 30, 45, 60, 120 and 240 units, and optimising at 60, 120 and 240 (the first version) cut the large
+  scales to 0.03 to 0.12 but left 0.61 at 30 units; optimising at 40, 60 and 120 gives about 0.56, 0.40, 0.21 and 0.09 at 30, 45, 60 and 120. *Metrics:* the spread of disk-mean reward over its random-assignment
+  null (1 = random, lower = more even), the same for the top decile, Moran's I, the most top-decile bushes in a disk, and the largest cluster of top-decile bushes; no simulated forager is involved.
+  *Measured* (`scripts/spatial_report.py`, 20 seeds, practice, S2, S5, S7; cost 1 = a random world): as drawn 1.00 to 1.03; **the most even of 5 random seeds 0.91 to 0.94; tiles 0.72 to 0.74; tiles plus swaps
+  0.40**; the largest top-decile cluster goes from 4.3 to 5.0 bushes to 2.6 (tiles) and 1.8 to 2.0 (swaps); local spread ratios at 40, 60 and 120 units about 1.0 (random), 0.9, 0.8 and 0.7 (tiles) and 0.67,
+  0.47 and 0.25 (swaps). A seed search recovers only a small part of what the tiling does. *Side effect:* neighbours become negatively correlated (Moran's I about -0.2 for tiles and -0.4 for swaps at 22 units,
+  against 0 for a random world): a rich bush tends to have poorer neighbours, which is the evenness itself and also a regularity a participant could in principle notice; a lower target makes it stronger
+  (target 0.3 at these scales gives about -0.6). *Open:* the target (0.4 is a first guess), whether the same scales suit the later patch-foraging experiments, and how visible the regularity is to participants.
+
+[...]
+
+- **ABAB feature sets: what was tried (2026-11-05).** *Aim:* reduce carryover between sessions (a participant who learns that yellow or tall pays should not be helped or misled in the
+  next session) by alternating two complete looks. *Built:* two hue-only colour ramps at one lightness (`warm_arc`, `cool_arc`: lightness fixed so it is never the reward axis), two
+  one-dimension shape sets (`height_only`, `width_only`), a start variant per participant (hash of the ID) with Default, Abab, Baba and Counterbalanced designs, per-variant
+  session assets generated from templates, a rounded-cylinder ("capsule") canopy, and a quick-test mode. *What a playtest found:* (1) hue-only ramps give small steps (about 4 to 5 per
+  10% of the range, against 9 for plasma) and are effectively unreadable for red-green or blue-yellow colour-blind participants, so they would need a colour-vision screen; the
+  first cool arc (120 degrees) was too hard to tell apart and was widened to 165; (2) a stretched ellipsoid changes its crown sharpness as it changes height or width, so a
+  "height-only" set still read as a change of shape, which led to the capsule form (a constant rounded crown); (3) the capsule needed its texture mapping, fruit scatter (a
+  lattice shows as a spiral) and collider rewritten before it looked natural; (4) the default design looked better overall to the PI. *Open concerns that were not tested:* absolute
+  height or width depends on viewing distance (an aspect ratio does not), both sets grow to the biggest bush at the high end (a "bigger is better" prior can carry over), tall bushes are
+  seen from farther away, the two sets' discriminability was never measured, and the occlusion and visibility models still treat every bush as an ellipsoid. *Cheaper ways to
+  reduce carryover* that were discussed and not tried: randomise which end of a feature pays per participant or session, alternate only the colour ramp, and measure the carryover first
+  (`human_analysis.py carryover` and `decay`). *Archived 2026-11-06:* the code is in `archive/abab/` (README there; `removal.patch` reverses the removal). *To revive it:* restore it, regenerate the files with `build_sessions.py ... --wire`, counterbalance the start variant, match the two sets'
+  discriminability, and screen for colour vision.
+
+[...]
+
+- **Session structure (2026-11-05):** open items are in "Session structure" above: the matching of reward across sessions (and what "ceiling" means),
+  hints against no hints, the counterbalancing of the colour and shape order, session durations, and the Interlude's trial count for the 2-D sessions. The
+  later experiments are designed in DECISIONS, "Historical: the planned experiments FN, RW, FI, PL, PA" (reward sparsity, patch leaving, patch assessment; priors and unlearning is not designed yet); they need the terrain and carry-over machinery
+  (terraced moisture; same-features-in-successive-sessions, the opposite of the ABAB alternation), so both are kept.
+
+[...]
+
+- **TODO(PI): clean up the machinery for the old pilot configurations (later; keep it until then).** The pre-ladder sessions (P, S1 to S5 as they were:
+  moisture-paying, continuous or terraced terrain, bumps) live on as `scripts/legacy_sessions.py` with `scripts/fixtures/legacy_S3-S5.asset`, the
+  `LEGACY_NAMES` aliases in `world.py`, the pilot-era analyses keyed on the old names (`idle_analysis`, `human_gap`, `prior_carryover`, `carryover_decay`,
+  `human_analysis`), the old agent battery sessions (S1 to S4), and the moisture-paying and bump code paths of the generators and `FIELD_DEFAULTS`. Most of it can
+  go once nothing needs the pilot data or those worlds. It is kept on purpose for now: small checks on the old data, and the generator tests that pin the old
+  rules. When it goes, take the tests that use `legacy()` with it and re-check `docs/DECISIONS.md` for what each piece was for.
+
+[...]
+
+- **TODO(PI): rebalance so `nearest` stays clearly worse than `greedy`/`plan_beam` in every
+  session.** In the baselines below the blind nearest-bush forager reaches a large share
+  of the planner's score in S3 and S4 (76% / 81% at the original speed and harvest rate), so the
+  payoff for learning the mapping is smallest in the sessions that are hardest to learn.
+  Levers: reward weights/contrast (including making the optimum steeper), world attributes
+  (spacing, bush density, attribute distributions), session timing, harvest rate and
+  movement speed. Re-run the baselines after each change. Deferred: not yet decided.
+
+[...]
+
+- **S5 reward structure (earlier build, superseded 2026-11-05):** was a Gaussian bump plus moisture; S5 is now a weighted linear mixture and the bump is S7's (see "Session structure"). The new sessions are untested with people.
+
+[...]
+
+- **Participant identity:** sessions are keyed only by a generated
+  `sessionId`; no participant ID is collected yet (planned).
+
+[...]
+
+- **Interlude files can go stale (now caught by a test).** Unity warns when a *session's* world file no longer matches its
+  `SessionConfig`, but not for an Interlude's `*.interlude.json`. `scripts/test_interlude.py::test_committed_interlude_file_is_fresh`
+  regenerates each Interlude from the current assets and fails when the committed file differs (re-run `scripts/interlude.py`);
+  `run_tests.py` runs it whenever a session or Interlude asset or an `.interlude.json` changes. Unity itself still gives no warning, and
+  the session `.world` files have no such test (Unity's startup check covers them).
+- **Interlude parameters are untuned:** trial counts (3 practice, 20 otherwise; the 5-point bonus per correct choice was not rescaled when the count went from 5 to 20), the Interlude walking speed (15), the 10 s limit (with a
+  ~1 s walk and 0.5 s harvest), the bush distance/bearing, and the stimulus mix. The Interlude uses the session's own
+  terrain, so participants may recognise regions (a spatial-memory confound); the harvested bushes are gone and the
+  pairs straddle elevation boundaries, which should limit it. The instruction texts are first drafts.
+
+[...]
+
+- **TODO(PI): revisit how moisture maps to height** (and ground colour) after seeing the
+  terraced terrain in play, to get good visual and reward variance: the current linear
+  `(1 − moisture) × elevation` coupling, the 4 levels, the ramp and residual settings, and
+  moisture's now larger reward spread (std 0.16 → 0.30) may all need adjusting.
+
+[...]
+
+- **Moisture is spatially structured**, so moisture-based reward creates
+  location-dependent reward gradients (foraging by region, not just by
+  inspection) — possibly a feature, possibly a confound for S3/S4. In the terraced sessions
+  this is much stronger: neighbouring bushes share a moisture level, so moisture is largely a
+  regional choice (find a good plateau and stay), raising the exploit share and lowering
+  planning demand, and it is strongly confounded with position. Likewise
+  shape and color are independent of position, moisture is not.
+
+
+## Historical: the planned experiments FN, RW, FI, PL, PA (moved from docs/EXPERIMENTS.md, 2026-11-19)
+
+Status when moved: history. Nothing here is in the game. The plan of five single-variable experiments (written 2026-11-06, see "Experiments split by question (2026-11-06)" above) was superseded on 2026-11-14 by one experiment, `FOR`, in a world of hexagonal tiles that varies the reward function and the spatial arrangement together, with ranking sets played in place and both harvesting and the rankings paying. The cleanup of 2026-11-14 deleted FN, RW and FI (generators, screens, assets, tests; git tag `pre-cleanup` has them), the old tutorial and the Interlude. DECISIONS, "Historical: the planned experiments FN, RW, FI, PL, PA" was deleted on 2026-11-19 after this entry was written; its text follows (the RW build-plan phases, which were executed, are summarised) as the record of the single-variable designs, the screening numbers behind them, and a source of ideas for FOR's later sessions. Items marked TODO were never decided. Sections referring to `interlude.py`, `spatialBalance`, `server_admin.py`, `featureCoverage` and the like name code that no longer exists.
+
+#### Why the experiments are separate
+
+The `CF` ladder (S1 to S7) changes three things at once: the number of rewarded features, the nonlinearity of the mapping, and the
+interaction between features, and it changes duration and practice along with them. Each experiment below varies one family of
+things and holds the rest fixed, and the later two ask different questions altogether (scarce reward, foraging policy).
+
+| Experiment | Code (planned) | Question | Reward functions |
+|---|---|---|---|
+| Learning with more rewarded features | FN | How do visible and rewarded feature numbers, and weak weights, change learning? | linear, one to three features |
+| Learning with sparse rewards | RW | How do narrow peaks, and a local against a global maximum, change exploration? | Gaussian bumps in one or two features |
+| Learning with feature interactions | FI | How does non-additive structure change learning? | additive, sigmoid products, tilted bump |
+| Patch leaving | PL | Do people leave clusters of bushes efficiently, given travel and contrast? | easy: linear in one feature |
+| Patch assessment | PA | How do people judge a cluster's value and decide when to leave? | additive, two features |
+
+Codes are provisional (the assets, folders and database keys use them; renaming one means renaming those, see DECISIONS,
+"Experiments"). The existing `CF` ladder maps onto the first three: S1 to S3 and S5 are cases of FN, S1, S2 and S4 to S7 are cases of RW
+(single peak) and FI (S6, S7).
+
+#### Conventions shared by the experiments
+
+- **Instances.** A session is an instance drawn from a pool: its own world seed and its own draw of the reward function's features,
+  directions, positions and weights, so a participant never replays an answer. A pool is generated in Python (`scripts/world.py`,
+  `scripts/interlude.py`) like today's worlds. The size of a pool, and how many instances each participant sees, are open in each
+  experiment.
+- **Order.** A short ease-in first (the simplest cases, simple to complex), then the later instances intermixed in random order, so
+  complexity jumps around and participants cannot assume the next session is harder. Counterbalancing across participants is not settled.
+- **Hints.** Where a hint is used it says which features matter in the early sessions; later sessions have no hint about the structure
+  (what is discovered is part of what is measured). The patch experiments give no hint about the reward function.
+- **Sparsity** (RW, FI): the fraction of the feature interval (one feature) or plane (two features) whose reward is in the top x% of
+  the reward range (x to be decided). It puts sessions of different dimension on one scale. The bushes are assigned so that they cover
+  the feature space evenly, so it carries over to the bushes. FI matches it across types.
+- **Matching.** The best bush's reward and the per-fruit noise (`rewardStd`) are matched across the types that are compared, unless
+  the noise is the variable.
+- **Moisture** is decoration (weight 0) except where FN makes it the third feature (an open question there). Elevation and moisture
+  mark tiles in the patch experiments.
+- **Knowledge state** (PL, PA): never told. It is inferred from the progression of a participant's bush choices (when they begin to
+  track the true values).
+- **Efficiency** is the reward collected relative to an oracle that knows the reward function and follows the marginal value theorem
+  in the same world.
+- **Simulated agents** (`scripts/agents.py`, the battery) screen instances for difficulty and calibrate durations before any
+  participant plays.
+
+Open items that cross experiments: the Interlude today picks pairs by reward gap, and FN, RW and FI each need typed or per-feature
+pairs (below); `spatialBalance` evens the reward over the map, which the patch experiments need off (or applied inside tiles) and
+a moisture-paying reward does not support; session durations and Interlude trial counts wait for measured Interlude timing; the
+bonus design for sparse sessions.
+
+---
+
+#### Learning with more rewarded features (FN)
+
+1. **Display name:** feature number (FN)
+2. **Hypothesis:**
+   1. Visibly varying features that do not influence reward slow the discovery of the relevant features slightly.
+   2. Increasing the number of rewarded features slows learning much more and lowers the probability of learning the true value function.
+   3. The probability of learning to evaluate a rewarded feature (at a nonzero value) is proportional to its weight in the reward function
+      (relative to the other feature weights and the per-fruit noise).
+3. **Experiment:**
+   1. *Features and terms.* Shape, color and moisture are the three attributes a bush can vary in. A feature is *visible* if it varies
+      across bushes, and *rewarded* if its weight is nonzero. All mappings are linear. The direction of each feature's mapping (which end
+      pays) and which features pay are drawn per instance. Bushes sit on a hexagonal lattice, and reward density is roughly uniform in space.
+   2. *Instances.* Each session is an instance drawn from a pool, with its own world seed and its own draw of weights and directions, so a
+      participant never replays the same world.
+   3. *Baseline sessions: one feature pays, one to three features are visible.* The hint names the features.
+      * One visible feature, and it pays. Goal: find the better end of the spectrum. Hint: feature X determines reward.
+      * Two visible features, one pays. Goal: find which one, and the better end. Hint: one of feature X or Y determines reward.
+      * Three visible features, one pays. Goal: find which one, and the better end. Hint: one of X, Y or Z determines reward.
+
+      These are short, with few repeats and few Interlude trials. They measure the cost of perceptual variance when only one feature pays.
+   3a. *Intermediate sessions: at least two features are visible and two of them pay, with equal weight.* These are of intermediate length and
+      measure more complicated hypothesis testing and search.
+      * Two visible features, both pay. Goal: find both better ends at once. Hint: both of the features X and Y determine reward.
+      * Three visible features, two pay. Goal: find which feature does not pay, and the better ends of the other two. Hint: two of the three features determine reward.
+   4. *Weighted sessions: three visible features, all of which can pay.* These are long, with more repeats and more Interlude trials.
+      * Three randomized weights sum to one, and a variety of weight breakdowns across the three features is simulated to get broad coverage
+        of the complexity and threshold space.
+      * Goal: find the relative weights. Hint: all three features matter, but some matter more than others.
+      * **TODO:** how to distribute the normalized weights so that they cover the weight space in a way that makes hypothesis testing
+        straightforward. Considerations so far: express a weak feature's strength in noise units (its weight times its range of values, over
+        `rewardStd`); joint sampling of the two weak weights over a grid including zeros against a one-parameter family such as (1, r, r²); a
+        fixed strongest weight against a fixed total; how many instances a participant sees from a larger pool; whether to adapt the weights
+        to a participant's previous Interlude.
+   5. *Order (PI, 2026-11-09).* One pass through the cells in order: row 1 (one rewarded feature; one, two, three visible), row 2 (two rewarded;
+      two, three visible), then the first weighted session. The remaining iterations of every cell follow in a random order across the whole set.
+      Within a cell the iterations are counterbalanced over the features (each feature pays, or is the idle one, once; each visible pair once).
+   6. *Status (2026-11-09).* Built as `scripts/design/FN.py` with provisional numbers: each of the five baseline cells (V visible, R rewarded:
+      (1,1), (2,1), (3,1), (2,2), (3,2)) is played 3 times, plus 6 weighted sessions (3,3), 21 sessions in all. The weak weights use the stand-in family
+      (1, r, r²) for r = 1, 0.7, 0.5, 0.35, 0.2, 0.1 over a random ranking of the features (the tiling of the weight space is still the TODO above).
+      Duration (PI): 60 s at (1,1) plus 15 s per extra visible feature and 30 s per extra rewarded one, so 60, 75, 90, 105 and 120 s for the baseline cells and 150 s
+      for the weighted sessions (about 37 minutes of play, Interludes not counted). Interlude trials (PI): 5, 10 and 20 for one, two and three rewarded features (20 = 2 repeats, 2 per-feature trials) for weighted.
+      Durations and trial counts wait for measured Interlude timing. Moisture is the third feature (flat, single-coloured ground where it is not
+      visible). See DECISIONS, "FN built on the new generators".
+4. **Analysis:**
+   1. Point trajectories of reward against time in each session. The rate and curvature of increase show performance and periods of learning.
+   2. Interlude choices can be analyzed to estimate a participant's feature weights, and hence how well they learned the true value function.
+   3. A detection curve: the probability that a weak feature is learned, against its strength in noise units, as a mixed model with a
+      random effect per participant.
+   4. Baseline sessions compared with each other for the effect of perceptual variance on learning speed and top performance.
+   5. Weighted sessions compared with the baselines for the effect of the rewarded-feature breakdown on learning speed and top performance.
+
+---
+
+#### Learning with sparse rewards (RW)
+
+1. **Display name:** reward sparsity (RW)
+2. **Hypothesis:**
+   1. When the feature-to-reward mapping is sparse (only a narrow range of feature values pays well), people explore longer and earn
+      fewer points.
+   2. With two peaks, a local and a global maximum, people are more likely to settle on the local one. This should be more likely when the
+      peaks are narrow, far apart or close in height, or when per-fruit noise hides the difference between them.
+3. **Experiment:**
+   1. *Features and terms.* Shape and color always vary across bushes. In every session the reward is a Gaussian bump, or a sum of two bumps,
+      over the features that pay. The other feature, if any, is decoration. Bushes sit on a hexagonal lattice, and reward density is roughly
+      uniform in space. A *peak* is one bump of the reward function. The *global maximum* is the higher peak and the *local maximum* is the
+      lower one.
+   2. *Sparsity* is defined in feature space (see "Conventions"): the fraction of the feature interval or plane whose reward is in the top x%
+      of the reward range. The value of x is to be decided. A narrow 2D bump with the same width as a 1D bump covers far less of its space,
+      so width alone is not comparable across the two.
+   3. *Instances.* Each session is an instance from a pool, with its own world seed and draw of parameters. Peak positions are drawn away
+      from the ends of the feature range, since a peak at an edge behaves like a linear mapping. Which feature pays in the one-feature
+      sessions is drawn per instance.
+   4. *Session types, from simple to complex.* The number of peaks and the number of features that pay together set the difficulty, so
+      session length grows with it.
+      * One peak, one feature pays (the other feature is decoration). Short. Goal: find the best spot on the spectrum.
+      * One peak, both features pay (one 2D bump). Medium. Goal: find the best spot in the plane.
+      * Two peaks, one feature pays (two 1D bumps with a local and a global maximum). Medium to long. Goal: find the best peak, not just a
+        good one.
+      * Two peaks, both features pay (two 2D bumps with a local and a global maximum). Quite long, to encourage continued exploration.
+        Goal: find the best peak in the plane.
+   5. *Parameters that vary across instances* in the two-peak sessions: the sparsity (peak width), the separation between peaks (in units of
+      width), the height ratio of global to local, and the per-fruit noise (`rewardStd`). The two-peak sessions have more repeats and more
+      Interlude trials than the one-peak sessions.
+   6. *Order and intermixing.* The two one-peak sessions come first, from simple to complex. The two-peak sessions follow, in a random order
+      of their parameters, with the one-feature and two-feature types mixed.
+   7. *Hints.* The hints of the one-peak sessions say which features matter. The first two-peak session of each type (one with one feature
+      paying, one with both) says that there are two types of valuable bushes. Later two-peak sessions have no hint about the structure.
+      Participants then cannot count on the hint, and what they carry over from the hinted sessions is part of what we measure.
+   8. **TODO, distribution of the peak parameters.** This needs careful thought to cover the parameter space evenly and to give differences
+      we can analyze: sparsity, separation in width units, height ratio and noise; how many instances each participant sees from the pool;
+      and how to separate the effect of the parameters from the effect of fading the hint.
+   9. *Other open items.*
+      * Session durations and Interlude trial counts for each of the four session types (these depend on measured timing).
+      * Bounds on the width. The narrowest peak must still hold enough bushes, and be wide enough that neighbouring feature values are visibly
+        distinguishable. The world generator needs to guarantee a minimum number of bushes near each peak.
+      * Earnings. Sparse sessions pay little to a participant who never finds a peak, so the bonus design needs a check.
+      * Typed Interlude trials. The Interlude today picks pairs by reward gap. This experiment needs typed pairs: global against local, local
+        against the median bush, global against the median, and a valley bush, so we can read the preference order.
+      * Screening instances with the simulated agents, to check that a greedy agent really is trapped by the local peak and an exploring one
+        is not.
+4. **Analysis:**
+   1. Point trajectories of reward against time in each session. The slope and curvature show learning, and the time of leaving a peak shows
+      the explore/exploit trade-off.
+   2. Interlude performance by trial type and by parameters: does accuracy on global against local depend on sparsity, separation, height
+      ratio and noise? Read the learned preference order across the median, local and global bushes.
+   3. Dynamics of the explore/exploit transition: change points in the visit sequence, the spread of visited feature values over time, and
+      the time and rate of settling.
+   4. Trapping: the share of late harvests in the local peak's neighbourhood, and whether participants who visited both peaks ended on the
+      global one.
+   5. Per-fruit noise: how the noise level changes exploration and trapping, in a mixed model with the other parameters and a random effect
+      per participant.
+   6. Hinted against unhinted sessions, and the instance index as a covariate, to see whether people learn to expect more than one peak.
+
+5. **Build plan (2026-11-10), executed.** RW was built like FN: a design module `scripts/design/RW.py` that `build_experiment.py RW` turned into session and Interlude assets, worlds, Interlude files and instruction texts. Phases done: the decisions below; the peak model (`scripts/rw_peaks.py`, DECISIONS "RW peak model"); plane coverage (a `world.py` assignment stage, DECISIONS "RW plane coverage"); the agent screen (tag rw2, 38,340 instances, DECISIONS "RW screening"); typed Interlude trials; the design module and build; a development build was deployed. All of that code was deleted on 2026-11-14 (tag `pre-cleanup`). Not done: the publish and pilot step. No data-format change was needed (the Interlude trial `type` strings were new values of an existing text column).
+   * *Decisions (PI, 2026-11-10):*
+     * The sparsity measure is taken at x = 10, 20 and 30 (the fraction of the feature interval or plane whose reward is in the top 10%, 20% and 30% of the reward range); an
+       instance reports all three. **TODO (confirm): whether the three x are three thresholds at which every instance is measured, or three target sparsity levels of the pool.**
+     * The pool: one instance of each session type for now; how many instances in all, and how many of each type a participant sees, are decided later.
+     * The margin from the ends of the feature range: wide enough that the reward visibly declines between a peak and the feature extreme. Confirmed, as operationalised: a peak's
+       centre is at least about 1.5 spreads from each end, so the reward at the nearer extreme is at most a third of the peak's height.
+     * The prerequisite is the tutorial, for now.
+     * `rewardStd` is constant (the same in every RW instance), for now.
+     * Decided in phase 3: every peak of a built world holds at least 5 bushes in its top-10% region, and the narrowest peak is expected to hold 10 (the draw then gave at least 7 in 300 placements). In spread that is 0.016 for a one-feature peak and 0.147 for a two-feature one at 700 bushes; the one-feature figure is far below what a person can tell apart, so the perceptual bound on the width (phase 4) will be the binding one there.
+     * The bonus rule is the same as everywhere else (bonus per point, a fixed payment for the time). A participant who never finds a peak earns almost no bonus; that is accepted
+       for now. Considered and not chosen: a guaranteed minimum bonus per session, a bonus on the share of the best possible points, a small baseline reward everywhere (it would change
+       the sparsity design).
+   * *No change to the data format is expected:* the world files, the session rows and the database tables stay as they are; the Interlude trial `type` strings are new values of an
+     existing text column.
+
+6. **Session plan, draft v8 (2026-11-10; nothing here is built; v7 plus the rw4 crossing screen).** Built like FN: cells with an `iteration` index in their `design` record (so the reduced-run `repeats` knob works), a first pass
+   through the baseline cells in order, then the rest in a random order, one world seed and one random draw of the peaks per instance (which feature pays in a one-feature session alternates over the
+   instances), hints per cell type, Interlude trial counts by type. **Sparsity is the share of all the bushes that pay at least 70% of the best bush** (about 7 good bushes per percent in a world of 700);
+   **in a two-peak session it is the total, split equally over the two peaks**. A peak's spread follows from its share (share / 1.69 for one feature, sqrt(share / pi) / 0.844 for two). FN covers the number
+   of features, so the sparsity scan (S) and the separation crossing (T) use two features only; the one-feature sessions are only in the baseline (B). **Discovery is reported strict** (PI, 2026-11-10): a
+   fruit from a bush in the global peak's top-10% region, at least 90% of the best bush's value; **lenient** is the top-30% region (at least 70%). A **person** is taken to be 2 to 3 times slower than the
+   agents: the proxy is the agents' discovery at (session length) / 2 and / 3 (`rw_screen_analysis.human_proxy`).
+   * *The design (16 sessions with 2 iterations of S and T; B once, the teaching sessions):* **B** (baseline, 120 s, fixed order): one and two features by one and two peaks at 15%, the two-peak ones at the
+     nearest separation. **S** (one peak, two features, 180 s): 15% and 5%, 2 iterations. **T** (two peaks, two features, 180 s): **proposed (rw4): sparsity 15% and 10% crossed with the height ratio, 0.3 and 0.75, at one separation of 4.5 spreads, with the margin relaxed to 1.0 spread (the 15% cell does not fit with 1.48); 2 iterations** (v7 had 10% and 5% crossed with the separation, 3 and 4.5, at ratio 0.75). Hints: one-peak sessions name the feature(s) that pay; the first two-peak session of each feature count (B3, B4) says there are two kinds of valuable
+     bush. Order: B in order, then S and T in a seeded random order. Interludes: 5 trials (one feature) and 10 (two) for one peak, 20 typed pairs for two peaks (phase 5). Every peak holds at least 3 bushes
+     in its top-30% region (the guarantee replacing 5 in the top-10%; no instance needed a replacement world in rw3). Time: 44 minutes of play, at most 84 with the Interludes (trials at their 7 s cap,
+     20 s per instruction screen); a participant may stop between sessions.
+   * *The agents on the ladder (rw3: nearest, learner, softmax, curious; 100 worlds per cell; learner, softmax and curious pooled, 300 worlds; strict):*
+
+     | id | features | peaks | sparsity total (per peak) | spread | length | separation | found: agents | person k = 2 | k = 3 | trapped: agents | k = 2 | k = 3 | lenient found k = 2 | k = 3 | points (agents) |
+     |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+     | B1 | one | 1 | 15% | 0.089 | 120 s | | 99% | 88% | 71% | 0 | 0 | 0 | 99% | 92% | 399 |
+     | B2 | two | 1 | 15% | 0.259 | 120 s | | 90% | 63% | 46% | 0 | 0 | 0 | 99% | 89% | 530 |
+     | B3 | one | 2 | 15% (7.5%) | 0.044 | 120 s | 3 | 87% | 54% | 38% | 11% | 24% | 26% | 80% | 61% | 361 |
+     | B4 | two | 2 | 15% (7.5%) | 0.183 | 120 s | 3 | 61% | 35% | 20% | 17% | 16% | 13% | 75% | 65% | 437 |
+     | S2F-15 | two | 1 | 15% | 0.259 | 180 s | | 97% | 81% | 64% | 0 | 0 | 0 | 100% | 98% | 805 |
+     | S2F-5 | two | 1 | 5% | 0.149 | 180 s | | 72% | 41% | 24% | 0 | 0 | 0 | 90% | 73% | 431 |
+     | T2F-10-near | two | 2 | 10% (5%) | 0.149 | 180 s | 3 | 65% | 37% | 27% | 24% | 27% | 24% | 73% | 55% | 560 |
+     | T2F-10-far | two | 2 | 10% (5%) | 0.149 | 180 s | 4.5 | 45% | 28% | 20% | 35% | 26% | 18% | 56% | 52% | 449 |
+     | T2F-5-near | two | 2 | 5% (2.5%) | 0.106 | 180 s | 3 | 50% | 25% | 14% | 22% | 14% | 12% | 61% | 42% | 385 |
+     | T2F-5-far | two | 2 | 5% (2.5%) | 0.106 | 180 s | 4.5 | 40% | 22% | 17% | 23% | 13% | 9% | 48% | 32% | 331 |
+
+     (The score of a B session is at 120 s; S2F-15 at 120 s scores 528, the same as B2, which has the same parameters.)
+   * *What rw3 shows.* (1) **The discovery model holds for the one-peak cells** (agents, strict: B1 99% observed against 97% predicted, B2 90 against 93, S2F-15 97 against 98, S2F-5 72 against 74, a
+     two-feature extrapolation to 5%); the **two-peak cells are lower than the model** (B4 61% against 74, T2F-10-far 45 against 74), by the trapped fraction. (2) **The three learners are
+     indistinguishable again; `nearest` (blind to values) finds less when sparse (S2F-5 48% against 68 to 75) and is trapped less in the far cell** (global found 54% against 42 to 44). (3) **Trapping is
+     large wherever there are two peaks** (11% to 35% for the agents) and zero for one peak. (4) **The separation matters at 10% for the agents (trapped 24% near, 35% far; global found 65% against 45%)
+     but little at the people proxy** (k = 2: trapped 27% against 26%, global found 37% against 28%; k = 3: 24% against 18%, 27% against 20%; a proportion of 300 worlds has a 95% half-width of about 5
+     points) **and not at all at 5%** (22% against 23%). (5) **Sparsity matters a lot for points and discovery**: S2F-15 against S2F-5, 805 against 431 points (-46%), strict discovery 81% against 41% (k = 2).
+     (6) **Under the strict definition no cell reaches 85% for a person except B1** (88% at k = 2, 71% at k = 3), and the hardest cells are 14% to 28%.
+   * *The crossing screen (rw4: T at 15% and 10%, separation 3 and 4.5 at ratio 0.75, ratio 0.3, 0.75 and 0.9 at separation 4.5; margin 1.0 spread; the same four agents, 100 worlds per cell; 800 instances, none needed a
+     replacement; the 10% cells reproduce rw3's).* Strict, learners pooled (300 worlds, a 95% half-width of about 7 to 8 points). Trapped fraction, **agents / person k = 2 / k = 3**: 15% sep 3 ratio .75: 15 / 21 / 24%;
+     sep 4.5 ratio .75: 43 / 34 / 29%; sep 4.5 ratio .3: 20 / 20 / 20%; sep 4.5 ratio .9: 46 / 37 / 28%; 10% sep 3: 16 / 19 / 16%; sep 4.5 ratio .75: 36 / 24 / 20%; ratio .3: 6 / 8 / 8%; ratio .9: 32 / 22 / 15%.
+     Found the global peak, same order: 15%: 80 / 53 / 33, 49 / 34 / 25, 76 / 51 / 37, 49 / 32 / 22; 10%: 70 / 45 / 33, 46 / 29 / 20, 76 / 46 / 29, 50 / 32 / 24. Points at 180 s: 15%: 708, 553, 535, 603; 10%: 586, 466, 451, 506.
+     **The effect on trapping of separation 3 to 4.5 and of ratio 0.3 to 0.9** (points of the trapped fraction, agents / k = 2 / k = 3): 15%: +28 / +13 / +5 and +26 / +16 / +8; 10%: +20 / +5 / +4 and +26 / +14 / +7. So **the
+     ratio is the more robust crossing factor at the person proxy** (the separation at 10% is within the noise); **the ratio effect is all between 0.3 and 0.75** (0.75 to 0.9: +3 and -4, nothing), so 0.9 is wasted; the
+     separation costs points (-155 at 15%, -120 at 10%) while a higher ratio gains them (+68, +56: the local peak one is stuck on pays more); 15% and 10% carry more trapping signal than 10% and 5% (k = 2: 20 to 37% against
+     13 to 14%); `nearest` (value-blind) is trapped 16% to 28% whatever the ratio and separation, so the learners' effects are learning, not geometry.
+   * *Open (PI):* **the baselines' target** (the 85% was set on the lenient definition: B1 and B2 meet it at k = 2, B3 80% and B4 75%; B4 cannot be easier, two two-feature peaks above about 8.7% each do
+     not fit the plane); **the T sparsity**: at the people proxy T at 10% has the most trapping (26% to 27%), at 5% it is 13% to 14% with global discovery of 22% to 25%, so 5% is mostly "nobody finds
+     it"; a T pair of 15% and 10% (the 15% far cell needs the margin relaxed from 1.48 to 1.0 spread) or 12% and 8% would keep more signal; **the separation** has a small effect at the people proxy, so the
+     height ratio (0.3 against 0.9 at one separation, which was as strong in rw2) is worth screening as T's crossing factor before deciding.
+
+   * *Proposal v9 (PI, 2026-11-10; replaces the T crossing of v8, which is too much to characterise sparsity).* **S and T both take three sparsities, 15%, 10% and 5%, 3 iterations each; T's height ratio (0.5) and
+     separation (4.5 spreads) are fixed, the margin 1.0 spread** (S 3 x 3 = 9 sessions, T 9, B 4: 22 sessions). Screen rw5 (`rw_screen.py run --tag rw5 --design sparsity`, 150 worlds per cell; learner, softmax, curious pooled, 450 episodes; strict):
+
+     | cell | spread | found: agents | k = 2 | k = 3 | trapped: agents | k = 2 | k = 3 | lenient found k = 2 | points (agents) |
+     |---|---|---|---|---|---|---|---|---|---|
+     | S2F-15 | 0.259 | 98% | 81% | 65% | 0 | 0 | 0 | 100% | 810 |
+     | S2F-10 | 0.211 | 92% | 71% | 54% | 0 | 0 | 0 | 99% | 655 |
+     | S2F-5 | 0.149 | 78% | 42% | 32% | 0 | 0 | 0 | 87% | 438 |
+     | T2F-15 | 0.183 | 64% | 43% | 27% | 32% | 27% | 23% | 65% | 526 |
+     | T2F-10 | 0.149 | 69% | 37% | 26% | 16% | 16% | 12% | 75% | 447 |
+     | T2F-5 | 0.106 | 49% | 22% | 14% | 14% | 13% | 8% | 62% | 311 |
+
+     Discovery falls steadily with sparsity in both stages (S: 81, 71, 42% at k = 2), so three levels give a usable dose-response. T's trapping falls with sparsity (27, 16, 13% at k = 2), and T2F-15 is hardest to
+     get right because its two peaks are wide and close in absolute terms; the T2F-15 global discovery is below T2F-10 at the agents' pace, so T is not monotone in discovery (fewer bushes outside the two peaks to
+     be distracted by, but the margin of 1.0 packs them together). The ratio 0.5 is a new value, untested before rw5.
+     **Power of v9** (`rw_power_sparsity.py`; 3 iterations x 3 sparsities per stage per participant, participant random intercept sd 0.8, cluster-robust t-test at 0.05, 400 reps; the agents' person-proxy
+     slopes, or half as strong). Power to detect the sparsity slope of discovery:
+
+     | person slowdown, effect | S, N = 20 / 40 / 60 | T, N = 20 / 40 / 60 / 100 | stage x sparsity, N = 60 / 100 |
+     |---|---|---|---|
+     | 2x, as agents | 99 / 100 / 100% | 57 / 89 / 99 / 100% | 68 / 88% |
+     | 2x, half as strong | 54 / 84 / 96% | 21 / 33 / 54 / 75% | 20 / 33% |
+     | 3x, as agents | 91 / 99 / 100% | 46 / 76 / 91 / 99% | 67 / 87% |
+     | 3x, half as strong | 32 / 70 / 84% | 14 / 28 / 36 / 56% | 21 / 37% |
+
+     T's trapping slope over sparsity is about as detectable (2x as agents: 46 / 75 / 90 / 99%; half: 21 / 29 / 42 / 60%). S is well powered at N = 40; **T needs about 60 for the full-strength effect and more than 100
+     if people show half the agents' slope**, because T's discovery is low at every level; the stage-by-sparsity contrast is weakest.
+   * *v9.1 (PI, 2026-11-10): T's sparsities become 15%, 11% and 7%* (S stays 15, 10, 5%). Screen rw6 (`--design tsweep`, T at 15, 13, 11, 9, 7, 5%, 200 worlds per cell, strict, 180 s): global found at a person 2x slower
+     48, 43, 42, 38, 26, 22% (3x: 34, 31, 28, 23, 17, 13%); trapped at 2x 24, 20, 16, 13, 15, 13%. 5% is at the floor (22% found), so it is dropped from T; 15/11/7 keeps the range of discovery (49 to 26% at 2x)
+     and raises its level. Power of the T slope of discovery at N = 40 / 60 / 100: 89 / 97 / 100% (2x, as agents), 36 / 59 / 79% (2x, half as strong), 86 / 96 / 100% (3x); that of trapping falls to
+     40 / 57 / 75% (2x), because trapping is flat between 11% and 7%. The cost: S and T no longer share sparsity levels, so the stage-by-sparsity contrast compares slopes, not matched cells. **The levels, lengths, ratio and
+     separation are plain entries of the design table, so the pilot (about 8 to 10 people, to measure the slowdown k) sets the final ladder: fixed in advance, the middle T cell aimed at about 50% global discovery.**
+   * *Built (2026-11-10 and 11; `scripts/design/RW.py`, `scripts/test_rw_design.py`; development build deployed).* 22 sessions: B1 to B4 (120 s), then the nine S and nine T sessions (180 s: S at 15, 10, 5%, T at 15, 11, 7%
+     total, 3 iterations each, the first iteration of each of the six cells in a seeded random order before the later ones), T at the ratio 0.5 and the separation 4.5 spreads. Every number the pilot may move is a constant of the module;
+     rebuild with `build_experiment.py RW`. **Where it differs from the plan above:**
+     * *Interludes: 20 trials in every session, 17 distinct pairs plus 3 exact repeats* (PI), so the count gives nothing away (FN's baseline had 5 and 10). Two peaks: 6 global against local, 6 global against off, 5 local against off,
+       one repeat of each type; one peak: 17 peak-against-off pairs and 3 repeats. Reward gaps are spread evenly within a type (0.25 up to the 95th percentile of what the type offers), bushes of different trials differ by more than
+       0.07 in shape or colour where the pool allows, repeats are at least 8 trials from their source and alternate the correct side. A peak bush is one that pays at least 70% of its peak (the sparsity definition; the first build used
+       90%, and its peak bushes looked alike from trial to trial). `interludePeakTrials` in `SessionConfig`; the fingerprint leaves it out at 0, so no stored result hash moved.
+     * *The margin is 0.7 spreads for every cell* (was 1.48, and 1.0 for T): the smallest at which no instance's realised sparsity falls more than 10% below the untruncated peak's (600 draws per cell; 0.65 gives 11%). Peaks can sit
+       near an extreme, so extreme feature values are no longer always poor.
+     * *The ground varies* (`moistureVaries` on, `moistureIsFeature` off, weight 0): the screens ran on a flat valley and the first build copied that. The power and screening results above are for a flat valley and the old margins; not re-run.
+     * *Hints:* both features or one feature; B1 and B2 add "most bushes give few points", B3 and B4 add "two kinds of valuable bush"; S and T say only which features matter. The two sentences are on separate lines.
+     * *Time:* about 62 minutes of play, plus the Interludes: at most 20 trials of 7 s per session at the cap (51 minutes over 22 sessions); the one test run showed a median response of 2.3 s, so expect well under that. Not measured end to end.
+     * *Checked:* the built Interlude files of all 11 two-peak sessions (counts, repeats, sides, gaps); a logged run showed the one-peak Interludes (B1, B2) playing and logging as type `peak`. A two-peak Interlude (B3) also played and logged: 10 trials in a `short=0.5` run, type `peak`, all three pair types (`0>1` 5, `0>off` 3, `1>off` 2), no timeouts; its repeats were not in the shortened half. A run resumed across two deployed builds mixes their world files (`pull` warns).
+
+---
+
+#### Learning with feature interactions (FI)
+
+1. **Display name:** feature interaction (FI)
+2. **Hypothesis:**
+   1. Learning is slower and the performance ceiling lower the less separable the reward is in the shape and color axes.
+   2. The cost grows from a rule that is monotone in both features (a Gaussian at a corner, close to additive), to a peaked product (a round Gaussian in the middle, separable in the axes), to a rule separable only in
+      a rotated basis (an elongated Gaussian turned 45 degrees).
+3. **Experiment (built 2026-11-11; `scripts/design/FI.py`, `fi_terms.py`; replaces the first design of sums, products and sigmoid rules, see DECISIONS "FI: three Gaussians"):**
+   1. *Features and rule.* Only shape and color pay (elevation varies and pays nothing). The reward is one Gaussian over the (shape, color) plane with one optimum, so there is no trapping. Bushes sit on the
+      hexagonal lattice with the features dealt evenly over the plane (`featureCoverage`).
+   2. *Cells.* **CORNER**: round, centred at a corner (the four corners in a seeded order). **MIDDLE**: round, centred near the middle (0.4 to 0.6). **ROTATED**: stretched (elongation 3.5) and turned 45 degrees (sign
+      alternating over its sessions). **Sparsity is matched** across the cells: each draw solves the Gaussian's spread so that the share of the plane in the top 40% of the reward range is 0.20 (every instance within 1%);
+      the best bush pays 4 and `rewardStd` is 0.6 everywhere. A linear ramp can replace the corner Gaussian if its small non-separability becomes a concern.
+   3. *Iterations (PI): 3, 3 and 6.* The rotated Gaussian is the hardest and the most variable cell, so it has the most sessions: **12 sessions** of 150 s (a reduced run takes `repeats` and `short` as for FN and RW).
+   4. *Order.* The first iteration of each cell in the order corner, middle, rotated; then the other nine sessions in a seeded random order.
+   5. *Hint.* The first iteration of each cell: "There is one best **combination** of bush shape and fruit color." (only "combination" bold); later iterations have none.
+   6. *Interlude trials,* 20 in every session (17 distinct pairs, 3 exact repeats at least 8 trials apart), typed by where the reward lies: high, middle and low parts of the reward (HL, HM, ML, MM), one feature varied
+      (S, C), and for the rotated Gaussian along and across its long axis (`interlude.INTERACTION_PLANS`; `SessionConfig.interludeInteractionTrials`). No pair is shown with a true gap under 0.25, so every trial has a correct
+      side; gaps are spread within a class and look-alike bushes avoided. **Reversal pairs** (the best separable fit, a function of shape plus a function of color, orders the pair the wrong way) are 3 trials of the rotated
+      Gaussian's session (R, a shortfall goes to HM); a round Gaussian has hardly any.
+4. **Analysis:**
+   1. Points over time by cell, and the share of the oracle's score.
+   2. **The interaction cost** for simulated learners is the same-prior pair (`fi_screen.py`): a delta rule over 1-D bumps of shape and color, summed (`learner_add2`) or multiplied (`learner_joint`), same centres, same
+      spread, same learning rule. Their difference is the cost of ignoring the interaction. It also contains a peak-localisation benefit (an exactly additive peaked rule gave +23), so it is read against the corner cell.
+   3. Interlude choices fitted by models of the same pair (additive, joint) and a model with a free rotation, per participant and cell; reversal-pair accuracy separates a separable learner from one that represents the interaction.
+5. **Agent screen `fi3` (2026-11-11; 80 worlds per cell, 480 worlds, no errors; `fi_screen.py run --tag fi3 --extras`).** Share of the oracle's score at 150 s, additive twin / joint, and the gap (joint minus twin, points):
+
+   | cell | twin | joint | gap (+- se) | Interlude accuracy, twin / joint | found a high bush by 30 s |
+   |---|---|---|---|---|---|
+   | CORNER | 0.92 | 0.92 | +5 +- 7 | 0.99 / 1.00 | 0.80 |
+   | MIDDLE | 0.79 | 0.86 | +63 +- 7 | 0.93 / 0.98 | 0.91 |
+   | ROTATED (45 deg, 3.5) | 0.64 | 0.73 | +70 +- 9 | 0.64 / 0.80 | 0.85 |
+   | control: ALIGNED (0 deg, 3.5) | 0.70 | 0.74 | +35 +- 8 | 0.80 / 0.87 | 0.70 |
+   | control: ROTATED 22 deg | 0.67 | 0.73 | +52 +- 9 | 0.71 / 0.79 | 0.84 |
+   | control: ROTATED, elongation 5 | 0.57 | 0.66 | +72 +- 10 | 0.53 / 0.71 | 0.75 |
+
+   (`nearest`: 0.65, 0.63, 0.57, 0.52, 0.55, 0.53.) **The three cells separate strongly in difficulty:** the twin's share falls 0.13 (z -12) from corner to middle and 0.14 (z -12) from middle to rotated; a person 2.5 times slower
+   than the agents (the agents at 90 s) is at 0.86, 0.76 and 0.64. **The corner is nearly additive** (gap +5, the twin equals the joint learner). **The gap does not separate middle from rotated** (+63 against +70, z 0.6; the earlier
+   screen gave +65 against +89): the Interlude does (twin 0.93 to 0.64, joint 0.98 to 0.80). **Rotation alone** (aligned against rotated, same width, elongation and sparsity): +36 here (z 3.0), +82 in the first test (z 6.8). The aligned
+   gap was +7 there and +35 here (a 2.5-sigma difference), so about +20 pooled, against about +80 for the rotated, a rotation effect of about +60 points. **Reversal pairs of the rotated Gaussian:** twin 0.30, joint 0.48 (chance is 0.5);
+   the aligned control's twin 0.69, joint 0.98. Elongation 5 is harder (twin 0.57) but leaves little to learn from (`nearest` 0.53); **3.5 is kept.**
+   **Caveats:** the joint learner (8 x 8 bumps of spread 0.3) is too coarse to resolve a ridge of short spread 0.13, which probably understates the interaction cost of the rotated cell (a finer pair is untested); the learner gap
+   mixes interaction with a peak-localisation benefit; 80 worlds per cell, one sparsity.
+
+---
+
+#### Patch leaving (PL)
+
+1. **Display name:** patch leaving (PL)
+2. **Hypothesis:** when valuable bushes are unevenly distributed in clusters, people learn to take a cluster down and then go to another good
+   one, even if they give up immediate reward on a longer walk. The longer the walk, the longer they stay in a cluster, and the richer the
+   other clusters, the sooner they leave. Efficiency relative to the optimal policy improves over sessions.
+3. **Experiment:**
+   1. *Features and terms.* A *tile* is a cluster of bushes (a hexagonal tile with several bushes near its center), and tiles are far apart. The
+      *travel cost* τ is the walking time between tile centers divided by the time to harvest one bush. The *patch contrast* ρ is the difference
+      in mean reward between tiles divided by the spread of reward within a tile. The *marginal value theorem* says to leave a patch when the
+      instantaneous reward rate falls below the average rate of the whole environment, including travel. Elevation and moisture distinguish tiles
+      visually and do not pay.
+   2. *Reward function.* Easy to learn: linear in one feature (shape or color), with the direction and the feature drawn per instance, so each
+      session starts without knowledge. Bushes within a tile are similar in that feature (low diversity), and tiles differ in it, so the value
+      of a tile is readable once the rule is known.
+   3. *Layout.* The number of tiles and bushes per tile are fixed in this experiment. The tile distance varies across sessions, in a way that
+      keeps the number of tiles fixed (**TODO**: how, given the bounded terrain).
+   4. *Time scarcity.* The session is always too short to harvest every tile, so a participant must choose between exhausting the current tile
+      and travelling. The session time is set relative to the time to exhaust one tile and walk to another, and is held at the same ratio in
+      every session.
+   5. *Sessions.* Each session combines a level of travel cost (short, medium, long) and a level of patch contrast (low, high). Each cell has
+      several instances with different tile layouts and feature draws.
+   6. *Order and intermixing.* The first session has short travel and high contrast, where the right policy is clearest. Later sessions are
+      intermixed in random order, so participants cannot predict the cost.
+   7. *Knowledge state.* Not told to participants. The hint says only what the controls and the timer do. Knowledge of the reward function is
+      inferred from the progression of each participant's bush choices.
+   8. **TODO, the design:** the number of levels of each axis and the instances per cell, the session length, how to keep the number of tiles
+      fixed as distance grows, the hint wording, and whether to add a short Interlude after each session to check the learned function.
+   9. *Other open items.* `spatialBalance` evens the reward across the map, the opposite of what this experiment needs, so it must be off or
+      applied only within tiles. Clustered tiles need a new placement mode in `scripts/world.py`.
+4. **Analysis:**
+   1. Once the reward function is learned (inferred from choices) and tile value is easy to read, how efficient is the patch-switching policy?
+      Efficiency is the reward collected relative to an oracle that knows the function and follows the marginal value theorem in the same world.
+   2. Leaving gap: the instantaneous reward rate at the time of leaving a tile, minus the environment's average rate. The theorem predicts zero.
+      How does it depend on travel cost and patch contrast?
+   3. Before the function is learned, how does exploration split between bushes within the current tile and new tiles?
+   4. Which tile do participants go to next: the richest, the nearest, or a trade-off between them?
+   5. The time from the start of the session to the point where choices track value, and whether it changes over instances.
+
+---
+
+#### Patch assessment (PA)
+
+1. **Display name:** patch assessment (PA)
+2. **Hypothesis:**
+   1. When the value of a patch is hard to judge at a glance, people are less efficient at leaving patches, but they learn how to explore and
+      exploit over time and across sessions.
+   2. When the learning rule and the diversity of bushes within a patch are complex enough, people develop moderately efficient heuristics but
+      never explore enough to approach the optimal behavior.
+3. **Experiment:**
+   1. *Features and terms.* A tile is a cluster of bushes. The *patch size* is the number of bushes in a tile. The *diversity* is the spread of
+      bush values within a tile. The patch contrast is the difference in mean reward between tiles divided by the spread within a tile.
+      *Glanceability* is how many of a tile's bushes can be seen at once from its edge, which the view cone and terrain occlusion limit.
+      Elevation and moisture distinguish tiles visually and do not pay.
+   2. *Reward function.* An additive linear function of shape and color with unequal weights, so the value of a tile needs several bushes to
+      judge. The features and directions are re-drawn per instance, so each session starts without knowledge.
+   3. *Sessions.* Each session combines a patch size (for example few, medium, many bushes) and a diversity level (low, high). Sessions are much
+      longer than in patch leaving, to allow time for the transition from exploring to exploiting. Because a larger tile is richer in total and
+      takes longer to exhaust, the time scarcity ratio (session time relative to the time to exhaust one tile plus a walk) is held constant
+      across sizes. The session is always too short to harvest every tile.
+   4. *Patch contrast across sessions.* Contrast is high in early sessions and low in later ones. When contrast is high, looking around to get
+      a quick sense of the other patches' mean values pays off, so early sessions favor that kind of exploration. When contrast is low it does
+      not, so later sessions test whether people adapt how much they look around. (Contrast is then confounded with practice; a second group
+      with the reverse or a random order would separate them, at the cost of more participants.)
+   5. *Order.* The first session has few bushes and low diversity. The order of the later cells is random within each contrast stage.
+   6. *Knowledge state.* Inferred from the progression of each participant's bush choices, as in patch leaving, not given by a hint.
+   7. **TODO, the design:** the levels, instances per cell, session length at constant scarcity, the hint wording, how to hold the mean bush value
+      fixed across sizes, and where the contrast switches from high to low.
+   8. *Other open items.* The same placement mode and `spatialBalance` points as in patch leaving. How to set glanceability, which depends on the
+      placement and the terrain, so it is partly confounded with size.
+4. **Analysis:**
+   1. Efficiency (reward collected relative to an oracle that knows the function and follows the marginal value theorem in the same world)
+      against the number of bushes per tile and the diversity within a tile.
+   2. Meta-learning: how efficiency and the leaving gap (the reward rate at leaving minus the environment's average rate) change within a session
+      and across sessions. Do people reach the transition from exploring to exploiting sooner in later sessions?
+   3. Heuristics: fit candidate rules to the logs. Leave after a fixed number of bushes, leave after a run of low rewards (giving-up time),
+      leave when the last reward is below a threshold, leave by an estimate of the tile's mean from the bushes sampled, and the marginal-value
+      rule with the true value. Which fits best, and does it change over sessions?
+   4. Exploration shortfall: how many tiles are sampled before settling, compared with how many the optimal policy would sample. A shortfall
+      that persists is what the second hypothesis predicts.
+   5. Looking around: how much of a participant's early time in a tile or on arrival is spent sweeping the view (yaw changes, peeks at
+      neighbouring tiles) without harvesting, and how it differs between high-contrast and low-contrast sessions.
+   6. Before the function is learned, how does exploration split within and between tiles?
+
+## Historical: the cleanup plan "everything becomes FOR" (moved from docs/CLEANUP_PLAN.md, 2026-11-19)
+
+Drafted 2026-11-13, executed 2026-11-14 (see "Cleanup: everything is FOR" for the glossary of old to new names; git tag `pre-cleanup` holds the old code). The goal: one experiment, `FOR`; a session is foraging in tiles with ranking breaks in place; nothing is called an Interlude; the old tutorials and experiments (TUT, FN, RW, FI) are gone; the tutorial is redesigned afterwards on the prototype (it became the present `TUT`, 2026-11-14 to 16). The step list (phases 0 to 6: tag and backup, delete old experiments, remove the Interlude kind from Unity, rename config/data/SQL/Python mirrors in one pass, rebase the simulator stack, docs, final tests and build) is dropped as executed. What is kept is the survey, the decisions asked of the PI (the defaults were taken) and the risks.
+
+Survey before the cleanup: experiment assets `ScriptableObjects/Experiments/{TUT 3, FN 43, RW 45, FI 25, FOR 3}` files and `StreamingAssets/Experiments/{TUT 8, FN 120, RW 134, FI 92, FOR 8}` files (about 50 MB old); design modules `design/{FN,RW,FI}.py`; the Interlude in 33 C# files (`SessionConfig.cs` 115 mentions, `InterludeManager.cs` 38), about 48 Python scripts and tests, 8 SQL migrations and `handlers.ts` (table `interlude_trials`); 47 Python files used the old aliases `TUT/FN/RW/FI_*`, `S1`-`S7` or `LEGACY_NAMES`.
+
+Decisions (defaults taken):
+1. Names: `interlude*` config fields became `ranking*` (arc fields `rankingArc*`; break fields dropped "Break": `rankingEvery`, `rankingSets`, `rankingSeconds`); table `interlude_trials` became `ranking_sets`; events and files `interlude_*` became `ranking_*`; class `InterludeManager` deleted (its set logic was already in `RankingSets` / `RankingBreak`). With no participant data, the database table and columns were renamed outright in one migration, not kept under old names.
+2. The simulator stack (`sim`, `agents`, `battery`, `results`, `fingerprint`, `analysis`, `plots`) was kept as the engine for FOR: drop the Interlude evaluation, re-base on tiles worlds, re-add a ranking evaluation later (rejected: archive it all). Done in its own phase after the C# and data cleanup so it could be paused.
+3. Fixtures `S1`-`S7`/`P` (frozen non-tiles sessions used as arbitrary test environments) were kept until a synthetic tiles environment replaced them (now `synthetic.py` on `FIX_T0`).
+4. Old design/analysis scripts of retired experiments were deleted; generic exploratory ones (`idle`, `gap`) would move to `archive/` only if they still ran; git history keeps the rest.
+5. No tutorial in the prototype: FOR_S1 was the only session until the new TUT was built.
+
+Risks recorded: scene and asset GUIDs (only CLI edits; delete assets with `delete_asset --confirm true`, then check for missing-script warnings); the rename migration must run after the database backup and before the new build is published (the server refuses unregistered commits anyway); replay mirrors C# rules, so every rename touches `HarvestManager`, `RankingBreak`, `replay.py`, `visibility.py` together (hence one pass); every edit of `ENGINE_FILES` / `AGENT_FILES` moves the engine hashes and makes older `results/` stale (accepted, said in the commit message); `unity test` finds no tests, so each phase ended with a play test by the PI.
+
+## Historical: the validation plan (moved from docs/VALIDATION_PLAN.md, 2026-11-14 plan, moved 2026-11-19)
+
+**Scope (PI, 2026-11-14): a small validator and a release checklist. Nothing more until a pilot argues for it.** The validator was built: `scripts/validate_run.py` (CLAUDE.md "Testing" describes its checks: scoring recomputed independently of the C# code, log integrity, the ranking-break rules; `scripts/test_validate_run.py` has golden sessions with one injected fault per check kind and the two real browser runs of 2026-11-13 as fixtures in `scripts/fixtures/runs/`). Run it on every pilot run (`validate_run.py --all` after `database.py download`) and after any change to `RankingBreak`, `RankingSets`, `DataLogger` or `replay.py`; a FAIL is either a validator bug or a game bug, decide which before collecting more.
+
+Release checklist (by hand; each line has a command that proves it), before `database.py publish` and `deploy_webgl.sh`:
+- Git: `git status` clean (the font atlases excepted), HEAD pushed, `Builds/web/StreamingAssets/build_info.json` has `"commit"` = `git rev-parse HEAD` and `"dirty": false`.
+- Tests: `run_tests.py --all` green at HEAD (slow tests need the PI's yes); `validate_run.py` clean on the latest pilot or browser run.
+- Generated files fresh: `world.py` / `ranking.py pool` output equals the committed files (the slow freshness tests); `online.json` has `"enabled": true`.
+- Server: every migration applied (`select version from supabase_migrations.schema_migrations`), the Edge Functions' `updated_at` (`supabase functions list`) later than the last commit touching `supabase/functions`, `ALLOWED_ORIGIN` set. Migrations and functions go together (an old build breaks in between); back up with `database.py backup` first.
+- Unity: `recompile` clean, no console errors, scenes saved, build target back to Linux after a WebGL build.
+- After deploy: `https://<user>.github.io/foraging-web/StreamingAssets/build_info.json` shows the new commit (Pages caches up to 10 minutes); play one reduced run in the browser (`?short=0.3`), `database.py download`, `validate_run.py` on it.
+
+Not built, on purpose: a scripted `release_check.py`, `monitor_runs.py`, a scheduled canary, a server-side guard in `finish_run`, CI with fixture runs, a validation table in the database, and behaviour warnings (idle share, hidden tab, duplicate runs). They pay off with many unattended participants; at pilot scale each run is looked at anyway. Revisit after a pilot. (The full design of these is in git history of `docs/VALIDATION_PLAN.md`, commit `bbf06e5`.)
+
+## Historical: adversarial review rounds of 2026-10-30 (moved from docs/reviews/2026-10-30-review-rounds.md, 2026-11-19)
+
+Topics: online data stack, WebGL and consent flow, participant UI, replay tooling, a reward re-balance. Applied with the PI's approval: round 1 (server, upload, resume): dead code removed (about -300 lines), migrations squashed to two and the live history repaired, `start_run` takes the run's advisory lock (a second tab could lose events), a finished run returns its completion code from `run-start`, anonymous token resume removed. Round 2 (WebGL input, consent): invariant culture for the consent time (a browser language could block `run-start`), the "Paused" overlay below the data overlay (4900 < 5000) so the completion code stays readable, Enter ignored while "Paused", a malformed `?PROLIFIC_PID=` stays editable. Round 3 (UI, replay tooling): UI simplifier batch, Interlude points only on the final screen (since replaced by the ranking points design), desktop Escape quit accepted, legacy loader and `convert_legacy.py` removed, replay tie rule (the logged fruit decides within 1e-5 s), last-two-frames release, `pull_run` archives world files, `run_tests.py` dependencies derived from imports; replay verify then passed on 33 of 33 real browser sessions (22 of 23 with fruits failed before).
+
+Declined or left (the ones that may still matter): drop the 1.3 s relock cooldown only after a Chrome and Firefox test (Escape, click immediately: no pop-up, next click resumes); one cached `OnlineSettings.Current` (readability only); `patch_webgl_page.py` size as constants; keep the 15 s quit timer; a pause records its reason only when it starts (decide with the analysis plan); `replay.steps` removal (about -165 lines); keep `server_smoke.py`; `load_test.py` exits 1 even when a retry recovered; `webgl_smoke.mjs` never fails; `FORAGING_DENO` is not set in the shell, so `run_tests.py --all` silently skips the 23 server tests; "This harvest earned 1 points" (plural declined); run-finish can race the final batch if Enter is pressed in the exact last-session frame (no data lost, no code withheld). Re-balance review findings (stale SCIENCE baselines, the Interlude tie tolerance being absolute in points per fruit, `rewardFeedbackMax` C# fallbacks of 6 against assets' 4, "free either trial" only in designed mode) concern code and sessions deleted since. Pre-deploy list of that day: a Finnish-language browser reaches the game, malformed PID editable, Escape on the completion screen shows the code, Enter does nothing behind "Paused", the feedback field (migration `20261102000000_feedback.sql`, `supabase functions deploy feedback --no-verify-jwt`, check `select * from public.feedback`), and replace the placeholder `consent.txt` (it also said "about 30 minutes") with the IRB text and bump `version:`.
+
+## Historical: adversarial review 5792605 to b7e1895, 2026-11-06 to 2026-11-16 (moved from docs/reviews/2026-11-16-since-5792605.md, 2026-11-19)
+
+Five slices (A resume and data integrity, B the ranking system and its Python mirrors, C worlds, tiles, config and design tooling, D UI, popups and session flow, E simulator, agents, results and analysis), each reviewed by the simplifier then the red-team; no arbiter was needed. About 40 red-team findings (1 high, 2 medium) and about 120 simplifier proposals (about -1,900 lines if all were taken). Applied by commit 35681b3 and a docs pass: RT-B1 (high: the player's height snaps to the terrain while standing still; replay failed on a real session because the eye stayed 0.1 m low after walking uphill into a break); RT-A1 / RT-A2 (migration `20261116000400_open_break_twice.sql`: an aborted trailing break end counts as an open break, so a second reload no longer loses an interrupted break); the hash batch (small tiers of `ranking.py`, `world.py`, `agents.py`, `sim.py`; `ranking.py` left `ENGINE_FILES` because nothing the simulator runs imports it); the seven unused hint triggers removed (SM-D12); `validate_run` no longer reads old log formats (SM-B3); the on-terrain ranking and `SessionConfig.rankingStage` removed (owner's decision, SM-B1: the floating stage stays). **Owner's decisions:** the reward terms (bumps, products, factors; SM-C1; later narrowed on 2026-11-17 to the bump alone), the unused tile modes and redraw checks (SM-C2) and the single-entry stage tables (SM-C3) are kept as alternatives.
+
+Held up (checked): `HarvestManager.Aimed` against `replay._aimed` line by line; C# pair scoring against `ranking.pair_scores`; schedule and resume bookkeeping; `SIM_FIELDS` (the tracing test could not be got around); the v3 to v4 results migration; the information boundary of the agents; every `ResumeReply` field has a `resume_state` key; each server function has one live definition; `append` retries are idempotent; Edge Function input validation and tokens; the k-th fruit reward and rounding agree with C#; the deploy script never pushes; no reachable deadlock or leftover `PauseGate` flag.
+
+Findings that stayed open when the review was written (many may since have been fixed; check before acting; those not in REVIEW_POLICY "Known and deferred" are collected in the reply that accompanied this move):
+- RT-A5: `resumed_run` is never logged (one early return after `Configure`). RT-D4: the Enter handlers ignore the "Saving your data" gate (+3 lines). RT-D5: score-screen Enter works behind the Paused overlay. RT-A6: `real` of events before `DataLogger.Start` counts from launch (nothing reads it). RT-A9: `append` silently drops an old build's `trials` and `plan`.
+- RT-C7: a development build accepts `?short=` in the URL (logged in `run_modes`); `deploy_webgl.sh` says the build must be a release build and does not check. SM-D18: `harvestRingSizeDeg` sizes the rank numbers while the ring uses `crosshairRingSizeDeg` (a rename changes a key of the logged session JSON).
+- RT-B5: no test fails if the press block from a set's end to the next `rank_go` is removed (about 8 lines: a timed-out set, then a press). RT-B6: no test runs `replay.verify` on a resumed or stage run (fixture candidate: run `521651ec`, 564 KB, replays clean). RT-C4: no test loads `FOR.py` or `TUT.py`, and TUT reads FOR's private `_fields`, so editing FOR and rebuilding TUT regenerates the tutorial world silently (a fast test of about 25 lines). RT-C2: a bump added to a config with none and the text fields that choose the generator do not trigger Unity's stale-world warning (the environment hash and the slow test catch them; the bump case was fixed 2026-11-17 as RT-2).
+- RT-C5: `tile_calibration --quantiles 5-95` becomes 10..90 and `--ks 1-3` redefines "exhaust". RT-C6: `ExperimentBuilder` keeps the last built value of a field a design drops, and `--remove-stale` leaves old `.world` and `.ranking.json` files after a seed change. RT-C9: `FOR_PREVIEW` is a gitignored throwaway; if it exists at build time its world ships.
+- RT-E2: `analysis.select` fails for good when a tag was rerun after `agents.py` changed, and its advice cannot help. RT-E4: `human_data download` drops the participants table on a schema upgrade, leaving orphans.
+- RT-D1 / RT-D3: the hints file's header should say a waiting foraging hint holds back ranking hints and that counts resume from the highest shown hint. RT-D7: the menu's "Start" estimate excludes the rankings and rounds to 5 min, "Continue" includes them. SM-A10 / A11 (squash or split the migrations; one more migration was added instead), SM-B27 (split `RankingBreak.cs`, 879 lines), SM-B28 / B29 (name `replay_harvests`' steps and tolerances; one break-pairing function for replay, visibility and validate_run), SM-D14 (one popup owner), SM-D17 (session end out of `SessionTimerUI`), SM-B2 (unused ranking metrics `kendall_tau`, `rank_gain`, three more), SM-B4 (disc underside), SM-B5 (`rankingEvery` as a flag; the `switches` key of `rank_break_start` is a data-format question), SM-E1 to E4 and E20 (finished populations and aliases, the engine's `Explore` / `Look` / `_walk`, sim.py's third comparison table, the t-interval in `CumulativeCurves`, the deprecated `standard` battery), SM-C4 / C5 (the `Repeats` knob, `TerrainPreview` and `LightingDebug`).
+- Fact worth keeping: the logged ranking-bush id is `TreeCount + pool id` and replay rows are `n0 + row index`; the hint id format is a stored key (renaming a hint breaks resume of runs under way); the simulator models no ranking breaks and its `total` is the human `foraging_points`. ADJ-2 (not a defect): `validate_run` FAILs an abandoned-then-resumed session with two `session_end` events, which ONLINE_DATA_PLAN section 4 expects.
+- Already in "Known and deferred": RT-B2 (cooldown after a resume), RT-B3 (visibility hides stage bushes), RT-A3 (two bogus (0, 0) trajectory rows per resume), RT-A8, RT-C8 / RT-E5.
+
+## Historical: adversarial review 2026-11-17, the reward function is a sum of Gaussian bumps (moved from docs/reviews/2026-11-17-reward-bumps-only.md, 2026-11-19)
+
+Scope: the uncommitted diff against `b1bd7fd` (35 files, +278 / -762): the removal of the per-feature ramp components, product and sigmoid terms, `randomBushValueRange`, `moistureIsFeature`, `terms_relevance` / `RELEVANCE` / `session_features` and `Ramp` / `ramps`; FOR_S1 and TUT_S1 rebuilt as the additive rung. Verdict: no data or scoring defect; 9 small simplifications, 4 red-team findings (1 medium), 2 outside the diff, no conflict between the reviewers.
+
+Applied (the PI's answers, 2026-11-17): the small simplifications S1 to S9 (docstring and comment corrections, a leftover `moistureIsFeature` in FIX_T0, unused `synthetic.py` parameters, duplicate tests); RT-1 (new fast test `test_every_committed_pool_pays_its_sessions_value_map`: a committed ranking pool's `value` equals `bush_value(asset.reward_function, shape, color)`; HEAD's pools were stale against the new maps by up to 0.545 and 0.736 and passed all 78 tests); RT-3 (`world.generate_world` raises on a reward function with no bumps or the removed format instead of silently giving an all-zero world); RT-4 (three `SessionConfig.cs` tooltips); RT-2 (the one-clause stale-world check: `WorldData.FindMismatches` also flags a missing `.centerShape`; a hand-added round bump at angle 0 and widthColor 0 gave no stale warning); doc fixes ("3/4 of the slope" is a measured 0.71, the quarter-power recipe of `wide_corner`; "(removed 2026-11-17)" on history passages); SM-4 (`ValueMap.describe()`), SM-5 (merged bump-formula tests into `test_bump.py`), SM-6 (`gaussian()`'s `width` renamed `across`). A-1: the tile calibration quoted in SCIENCE and DECISIONS ("FOR: tentative tile radius and bushes per tile": thr-60, 4.3 bushes, +10.1%, the only setting where a few good bushes per visit is favoured) was already false at HEAD: `tile_calibration.py FOR_S1 --seeds 0-7 --set session_duration=180` gave thr-40, 6.1 bushes, +9.2%, TOO MANY at HEAD and thr-50, 5.3 bushes, +8.6%, TOO MANY with the bump rewards; marked stale in SCIENCE and DECISIONS.
+
+Declined (the rationale, so they are not re-proposed): SM-1 (`ValueMap(bumps, sd)` instead of `noise` / `equaliser` dicts: it would change the `value_map` JSON inside the logged designJson and cuts against the PI's decision that noise is a second map and the equaliser a pluggable slot); SM-2 (remove the reward-stage machinery: `REWARDS` has one entry and `reward_stage` threads a callable through 15 functions, about -20 to -30 lines, reverses "kept for path B"); SM-3 (always write every field in the world header: changes the header format and regenerates the worlds; RT-2's one clause was chosen); SM-7 and SM-8 left to taste. A-2 (latent): `between_bimodal`'s "poor" region shrinks under a wide corner map. These five are in REVIEW_POLICY "Known and deferred".
+
+Held up (red-team, by evidence): no live reader of a removed name (scripts, design, C#, Editor scripts, supabase, scenes, prefabs; golden run fixtures hold the old logged config but nothing evaluates it); FOR_S1 and TUT_S1 worlds and pools regenerate identically; pool minimum gap per set at least 0.63 (FOR) and 0.68 (TUT) against a tie gap of 0.25; live bush values 0.57 to 4.0 (FOR) and 0.39 to 3.99 (TUT), realised slopes +2.07 and +2.07 (FOR), shape -3.15 and colour +1.18 (TUT), per-fruit rewards 0 to 6 as before so `rewardFeedbackMax` 4 needs no change; the C# and Python bump rules agree (the TUT map checked at three points to 6 places). Not checked: Unity runtime behaviour of the stale check beyond the two sessions, a playtest with the new rewards, `run_tests.py --all`. The edits moved `world.py`, `tiles.py` (engine) and `agents.py` hashes, so every stored simulation result became stale (accepted).

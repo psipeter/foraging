@@ -15,7 +15,7 @@ Read `CLAUDE.md` first (conventions, hard research constraints, what not to do),
 - Do not commit, push or run state-changing `git` commands (`git diff`, `log`, `show`, `status` are fine).
 - Do not touch the Unity Editor or run any `unity` CLI command (a person may have it open). C# cannot be run here: review it by reading, and say so when a finding depends on Unity behavior you could not execute.
 - Do not run `scripts/world.py --unity`, `scripts/interlude.py` as a CLI, any baseline run, or anything that writes into `Assets/`, `ForagingData/` or `results/`. Calling generators in memory is fine; open `results/results.sqlite` read-only if at all.
-- Never recommend an edit to a hash-sensitive file (`ENGINE_FILES`, `AGENT_FILES`; see CLAUDE.md "Results database") without stating that it moves the code hashes.
+- Never recommend an edit to a hash-sensitive file (`ENGINE_FILES`, `AGENT_FILES`; see docs/SIMULATION.md) without stating that it moves the code hashes.
 
 If the caller gives you the simplifier's report, read it before you start: where it proposes deleting or merging something, do not propose adding code there unless you can show that the deletion would cause a failure; say so in the finding.
 

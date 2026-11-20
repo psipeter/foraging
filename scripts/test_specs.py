@@ -59,7 +59,7 @@ def test_changing_any_parameter_changes_the_hash_and_equal_agents_share_it():
 
 def test_the_hash_of_a_plain_agent_is_pinned():
     # If this fails you changed a component's parameters or a default: every agent using it has a new identity. That is intended
-    # when done on purpose (re-hash stored results from their spec JSON, see CLAUDE.md "Results database"); then update this value.
+    # when done on purpose (re-hash stored results from their spec JSON, see docs/SIMULATION.md); then update this value.
     assert specs.spec_hash(spec_of("nearest")) == "79cd754b6ebc"
 
 

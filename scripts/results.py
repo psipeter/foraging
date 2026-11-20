@@ -1,4 +1,4 @@
-"""The results database: every simulated-agent run, keyed by what it was computed from (see CLAUDE.md, "Results database").
+"""The results database: every simulated-agent run, keyed by what it was computed from (see docs/SIMULATION.md).
 
     results/results.sqlite      (repo root, gitignored, flat)
 
