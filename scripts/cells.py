@@ -7,7 +7,7 @@ A table (`scripts/design/tables/<code>.json`) lists cells: {"id", "class" (addit
 `realize` turns each cell into a session with `factors.realize` and writes `scripts/design/realized/<code>.json`, which the design module of that experiment reads (`design/tabled.py`), so that
 `build_experiment.py <code>` is fast and deterministic: realising a cell takes minutes (simulation), building a session does not.
 
-A table may give a "duration" in seconds (default 120): the sessions are realised at that length, with the anchor `factors.ANCHOR_RATE` times it.
+A table may give a "duration" in seconds (default 120): the sessions are realised at that length, with the anchor `factors.ANCHOR_RATE` times it. A cell may give its own "duration", which replaces the table's for that cell.
 
 A cell is realised with up to `draws` nuisance draws (which corner an additive map sits in, the start of the search that places the other maps' bumps), the first that holds the cap on the
 best bush (`factors.MAX_PEAK`) and the anchor, and a cell for which none does is recorded as inaccessible with the reasons. The session's world is the cell's `world_seed` if it gives one, else `FIRST_WORLD_SEED + 100 * id` (no search among worlds since 2026-11-18: with the pool placed at random the learner's points vary 9 to 11 percent of the anchor across worlds; a placement that needs a redraw or a search will bring its own). The best bush
@@ -100,7 +100,7 @@ def realize_table(table_path, workers=6):
                     if ref["status"] != "ok":
                         raise ValueError(f"cell {c['id']} takes the gain of cell {c['gain_of']}, which is inaccessible")
                     c["gain"] = ref["map"]["equaliser"]["value"]
-            for record in pool.imap_unordered(_work, [(c, session, duration) for c in wave]):
+            for record in pool.imap_unordered(_work, [(c, session, float(c.get("duration", duration))) for c in wave]):
                 data["cells"].append(record)
                 data["cells"].sort(key=lambda c: c["id"])
                 out.write_text(json.dumps(data, indent=1))

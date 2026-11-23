@@ -15,6 +15,7 @@ do and the project it goes to (the password already names the project, and a str
 
     ./venv/bin/python scripts/database.py migrate                    # write: apply the files of supabase/migrations/ the database has not applied (all in one transaction), recorded in the CLI's own table; back up first
     ./venv/bin/python scripts/database.py cleanup --commit smoke-test   # write: the runs, participants and release the smoke and load tests left under a throwaway build name (a git hash is refused)
+    ./venv/bin/python scripts/database.py clear-runs --before 2026-11-20T00:00:00Z   # write: every run started before that time (sessions, events, trajectory, feedback go with it) and the participants created before it that then have no run; experiments, releases and worlds stay; back up first
     ./venv/bin/python scripts/database.py set-secret --name FORAGING_POOLER_URL   # asks the Supabase access token, then the database password (the transaction-pooler string is built from it); no database connection
     ./venv/bin/python scripts/database.py set-secret --name ALLOWED_ORIGIN         # asks the token, then the value
     ./venv/bin/python scripts/database.py deploy-functions           # the Supabase CLI as a child process with the token in its environment only; no database connection
@@ -272,7 +273,7 @@ def pull_run(conn, run_id, out_root):
 
 ONLINE_JSON = PROJECT_ROOT / "Assets" / "StreamingAssets" / "online.json"
 LOG_DIR = PROJECT_ROOT / "results"
-WRITES = {"publish", "register-experiment", "register-release", "register-worlds", "cleanup", "migrate"}      # the operations that change the database
+WRITES = {"publish", "register-experiment", "register-release", "register-worlds", "cleanup", "clear-runs", "migrate"}      # the operations that change the database
 TOKEN_OPERATIONS = {"set-secret", "deploy-functions"}        # no database connection: they use the Supabase access token, pasted the same way
 
 
@@ -465,6 +466,23 @@ def cleanup(conn, commit, log):
     log(f"deleted {len(runs)} run(s), the participants of {len(people)} id(s) without other runs, {released} release(s) of {commit}")
 
 
+def clear_rows(conn, before):
+    """What `clear-runs` would delete: (run ids started before `before`, participant ids created before it that have no run left). Experiments, releases and worlds are never touched."""
+    runs = [r["run_id"] for r in conn.execute("select run_id from public.runs where started_at < %s", (before,)).fetchall()]
+    people = [r["participant_id"] for r in conn.execute(
+        "select p.participant_id from public.participants p where p.created_at < %s and not exists "
+        "(select 1 from public.runs r where r.participant_id = p.participant_id and r.started_at >= %s)", (before, before)).fetchall()]
+    return runs, people
+
+
+def clear_runs(conn, before, log):
+    """Delete the runs started before `before` (their sessions, events, trajectory, ranking sets, feedback and consents go with them) and the participants created before it with no run left."""
+    runs, people = clear_rows(conn, before)
+    conn.execute("delete from public.runs where started_at < %s", (before,))
+    conn.execute("delete from public.participants where participant_id = any(%s)", (people,))
+    log(f"deleted {len(runs)} run(s) started before {before} and {len(people)} participant(s) without a later run")
+
+
 def preview(args, conn, log):
     """What a write is about to do, read first (read-only); False when there is nothing to do, so no confirmation is asked."""
     with read_only(conn):
@@ -479,6 +497,10 @@ def preview(args, conn, log):
             else:
                 log("every migration is applied: nothing to do")
             return bool(pending)
+        if args.command == "clear-runs":
+            runs, people = clear_rows(conn, args.before)
+            kept = conn.execute("select count(*) as n from public.runs where started_at >= %s", (args.before,)).fetchone()["n"]
+            log(f"would delete {len(runs)} run(s) started before {args.before} and {len(people)} participant(s); {kept} run(s) stay")
         if args.command == "cleanup":
             runs, people = throwaway_rows(conn, args.commit)
             log(f"would delete {len(runs)} run(s) of build {args.commit}, up to {len(people)} participant(s), and its release")
@@ -577,6 +599,8 @@ def build_parser():
     b.add_argument("--label", default="manual")
     c = sub.add_parser("cleanup", help="delete what the smoke and load tests left under a throwaway build name")
     c.add_argument("--commit", required=True, help="the throwaway build name (smoke-test, load-test); a git hash is refused")
+    cr = sub.add_parser("clear-runs", help="delete the runs started before a time and the participants left without a run; experiments, releases and worlds stay")
+    cr.add_argument("--before", required=True, help="an ISO timestamp with a zone, e.g. 2026-11-20T00:00:00Z: runs started at or after it stay")
     sub.add_parser("migrate", help="apply the migration files the database has not applied, in one transaction")
     sc = sub.add_parser("set-secret", help="set an Edge Function secret (Supabase access token pasted; no database connection)")
     sc.add_argument("--name", required=True, help="FORAGING_POOLER_URL (asks the database password and builds the transaction-pooler string) or another secret (asks its value)")
@@ -605,6 +629,8 @@ def run_operation(args, conn, log, plan=None):
                 log(f"registered {args.commit} with {experiments}")
             elif args.command == "cleanup":
                 cleanup(conn, args.commit, log)
+            elif args.command == "clear-runs":
+                clear_runs(conn, args.before, log)
             elif args.command == "migrate":
                 apply_migrations(conn, pending_migrations(conn)[0], log)
             else:

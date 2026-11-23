@@ -175,3 +175,21 @@ def test_cleanup_deletes_a_throwaway_builds_runs_participants_and_release_and_no
     left = {r["build_commit"] for r in db.execute("select build_commit from public.runs where experiment = 'CL'")}
     assert left == {"keep-me"} and db.execute("select count(*) as n from public.releases where build_commit = 'smoke-test'").fetchone()["n"] == 0
     assert db.execute("select count(*) as n from public.releases where build_commit = 'keep-me'").fetchone()["n"] == 1
+
+
+def test_clear_runs_deletes_older_runs_and_their_participants_and_keeps_the_rest(uri, db, tmp_path):
+    db.execute("insert into public.experiments (code, title) values ('CR', 'Clear test') on conflict do nothing")
+    database.register_release(db, "clear-build", {"CR": 1}, None)
+    ids = {}
+    for label, when in (("old", "2026-11-01T00:00:00Z"), ("new", "2026-11-21T00:00:00Z")):
+        pid, rid = str(uuid.uuid4()), str(uuid.uuid4())
+        _insert(db, "participants", participant_id=pid, created_at=when)
+        _insert(db, "runs", run_id=rid, participant_id=pid, experiment="CR", build_commit="clear-build", started_at=when)
+        _insert(db, "sessions", run_id=rid, session_index=0)
+        ids[label] = (pid, rid)
+    run_main(["clear-runs", "--before", "2026-11-20T00:00:00Z"], uri, tmp_path)
+    runs = {str(r["run_id"]) for r in db.execute("select run_id from public.runs where experiment = 'CR'")}
+    people = {str(r["participant_id"]) for r in db.execute("select participant_id from public.participants")}
+    assert runs == {ids["new"][1]} and ids["new"][0] in people and ids["old"][0] not in people
+    assert db.execute("select count(*) as n from public.sessions where run_id = %s", (ids["old"][1],)).fetchone()["n"] == 0
+    assert db.execute("select count(*) as n from public.releases where build_commit = 'clear-build'").fetchone()["n"] == 1

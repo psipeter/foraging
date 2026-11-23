@@ -55,25 +55,27 @@ Agents: **mvt** is the marginal-value-theorem forager at the optimal long-run ra
 
 ---
 
-## PSC: Pilot Spacing
+## PSC: Pilot Spacing (redesigned 2026-11-23)
 
-**What is varied.** Only the travel time between patches: 3, 6 and 9 s, on the same additive value map (Gini 0.55, same bush values). Patches are pushed farther apart, so the world holds fewer of them (76, 34, 18 tiles; 684, 306, 162 bushes). The gain is fixed, so points fall as travel time rises.
+**What is varied.** The travel time between patches: 3, 6 and 9 s. Patches are pushed farther apart, so the world holds fewer of them (79, 33 and 18 tiles). Each session has a different round value bump at Gini 0.5 (interaction 0.13 to 0.15, nonlinearity about 0.4), centred at a different point, so each needs fresh learning. To hold the number of bushes harvested roughly equal, the longer-travel sessions are longer (180, 200 and 220 s), and to hold the learner's points equal they have a larger gain (1.31, 1.42 and 1.51; peak bush 5.2, 5.7 and 6.0).
 
-**Where to see it.** `docs/pilots/PSC_layout.png` (top-down layout: same patches, spaced farther apart, bush values coloured); `docs/pilots/PSC.png` (the value maps, identical); `docs/pilots/PSC.txt` (numeric check: only travel time changes; mean bush value 1.54, 1.54, 1.55).
+**Where to see it.** `docs/pilots/PSC.png` (the three value maps); `docs/pilots/PSC.txt` (numeric check; mean bush value rises with the gain, 1.75 to 1.98, which the check flags by design); `docs/pilots/agents.md` (agent table); `docs/pilots/PSC_layout.png` (the top-down layout: the same patches spaced farther apart, drawn for the earlier worlds of this pilot, which had 76, 34 and 18 tiles).
 
-| | S1 travel 3 s | S2 travel 6 s | S3 travel 9 s |
+Averages over 20 unselected worlds, each at its own session length:
+
+| | S1 (3 s, 180 s) | S2 (6 s, 200 s) | S3 (9 s, 220 s) |
 |---|---:|---:|---:|
-| mvt benchmark, points | 1357 ± 9 | 1082 ± 8 | 906 ± 10 |
-| Learner, points | 1127 ± 7 | 905 ± 7 | 791 ± 8 |
-| Nearest-bush agent, points | 797 ± 5 | 730 ± 3 | 680 ± 7 |
-| Benchmark bushes per patch | 2.0 | 2.6 | 3.1 |
-| Learner bushes per patch | 4.9 | 6.0 | 6.4 |
-| Best fixed k | 2.4 | 3.2 | 3.5 |
+| Learner, points | 1133 ± 8 | 1131 ± 8 | 1134 ± 9 |
+| Learner, bushes harvested | 46.6 | 47.8 | 47.7 |
+| Learner, bushes per patch | 5.7 | 6.8 | 6.9 |
+| mvt benchmark, points | 1423 ± 7 | 1382 ± 9 | 1346 ± 10 |
+| mvt benchmark, bushes harvested | 36.6 | 34.6 | 33.7 |
+| mvt benchmark, bushes per patch | 2.56 | 2.90 | 3.30 |
+| Nearest-bush agent, points | 900 | 969 | 1047 |
 
 **Key differences in agent behaviour**
-- Longer travel lowers every agent's points (benchmark 1357 to 906, learner 1127 to 791), so the score carries the manipulation directly.
-- Longer travel rewards staying longer in each patch: the optimal bushes per patch rises 2.0, 2.6, 3.1 and the best fixed k 2.4 to 3.5. This is the opposite direction from PSP and the classic marginal-value-theorem prediction.
-- The learner moves the same way (4.9, 6.0, 6.4 bushes per patch), though it overstays at every level; its gap to the benchmark stays about 17 to 18%.
-- Long-travel worlds are less forgiving of a bad strategy: the nearest-bush agent loses about 15% from S1 to S3, the benchmark about 33%.
+- Longer travel rewards staying longer in each patch: the optimal bushes per patch rises 2.6, 2.9, 3.3 (2.9, 3.1, 3.6 when the benchmark believes the within-patch step people take). This is the opposite direction from PSP and the marginal-value-theorem prediction.
+- The learner moves the same way (5.7, 6.8, 6.9) but overstays at every level.
+- The sessions' lengths and gains remove most of the confounds of the first design: the number of bushes harvested and the learner's points are about equal across sessions (the benchmark's points still fall about 5%).
 
-**Caveats.** Because the gain is fixed, travel time and points change together; participants earn less in S3 by design, which could affect motivation as well as strategy. The tables show a direction, not a threshold: the pilot has to show whether participants lengthen their patch visits with travel time, and by how much.
+**Caveats.** The sample counts and points are matched for the simulated learner; people may behave differently. The progression in bushes per patch is smaller on an average world than on the chosen ones (S1 to S2 +0.34, against +0.55 on the chosen worlds). The pre-pilot data collected before 2026-11-23 used the earlier design (one additive map in all three sessions, fixed gain, 180 s) and is not comparable.

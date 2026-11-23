@@ -32,14 +32,15 @@ Knobs: PSP_S1: class round, gini 0.4, travel_time 5.0; PSP_S2: class round, gini
 
 | agent | PSC_S1 points | PSC_S1 bushes/patch | PSC_S2 points | PSC_S2 bushes/patch | PSC_S3 points | PSC_S3 bushes/patch |
 |---|---:|---:|---:|---:|---:|---:|
-| nearest | 797 ± 5 | 8.45 ± 0.02 | 730 ± 3 | 8.40 ± 0.15 | 680 ± 7 | 8.52 ± 0.04 |
-| learner (delta rule) | 1127 ± 7 | 4.86 ± 0.07 | 905 ± 7 | 5.96 ± 0.08 | 791 ± 8 | 6.39 ± 0.06 |
-| best top-k (hindsight) | 1353 ± 7 | 2.37 ± 0.11 | 1086 ± 6 | 3.13 ± 0.14 | 938 ± 3 | 3.47 ± 0.10 |
-| best thr-q (hindsight) | 1357 ± 6 | 2.24 ± 0.08 | 1096 ± 5 | 2.97 ± 0.08 | 924 ± 5 | 3.40 ± 0.11 |
-| mvt (marginal value) | 1357 ± 9 | 2.03 ± 0.02 | 1082 ± 8 | 2.56 ± 0.04 | 906 ± 10 | 3.10 ± 0.04 |
+| nearest | 898 ± 7 | 8.45 ± 0.02 | 970 ± 7 | 8.57 ± 0.02 | 1047 ± 6 | 8.60 ± 0.04 |
+| learner (delta rule) | 1139 ± 8 | 5.71 ± 0.09 | 1131 ± 8 | 6.84 ± 0.08 | 1133 ± 9 | 6.87 ± 0.06 |
+| best top-k (hindsight) | 1440 ± 7 | 2.92 ± 0.08 | 1398 ± 6 | 3.26 ± 0.12 | 1360 ± 8 | 3.54 ± 0.14 |
+| best thr-q (hindsight) | 1438 ± 5 | 2.83 ± 0.07 | 1397 ± 5 | 3.27 ± 0.08 | 1371 ± 4 | 3.67 ± 0.13 |
+| mvt (marginal value) | 1425 ± 7 | 2.55 ± 0.04 | 1387 ± 8 | 2.90 ± 0.03 | 1344 ± 10 | 3.31 ± 0.05 |
 
-Worlds per session: 20 (the session's own, then seeds 1000 up). Mean k and q chosen: PSC_S1: top-2.4, thr-74; PSC_S2: top-3.2, thr-66; PSC_S3: top-3.5, thr-60.
-Knobs: PSC_S1: class additive, gini 0.55, travel_time 3.0; PSC_S2: class additive, gini 0.55, travel_time 6.0; PSC_S3: class additive, gini 0.55, travel_time 9.0.
+Worlds per session: 20 (the session's own, then seeds 1000 up). Mean k and q chosen: PSC_S1: top-3.0, thr-68; PSC_S2: top-3.3, thr-63; PSC_S3: top-3.6, thr-58.
+Sessions run 180, 200 and 220 s with gains 1.31, 1.42 and 1.51 (redesigned 2026-11-23); mvt here uses the engine's step costs (`patch_foraging.HUMAN_C_IN` is off).
+Knobs: PSC_S1: class round, gini 0.5, travel_time 3.0; PSC_S2: class round, gini 0.5, travel_time 6.0; PSC_S3: class round, gini 0.5, travel_time 9.0.
 
 ## FOR
 

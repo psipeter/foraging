@@ -1,6 +1,6 @@
 """Five agents on the realised sessions of an experiment: points earned and bushes harvested per patch, as a table.
 
-    ./venv/bin/python scripts/agent_benchmark.py PCX FOR TUT [--worlds 20] [--workers 3] [--out docs/pilots/agents.md]
+    ./venv/bin/python scripts/agent_benchmark.py PCX FOR TUT [--worlds 20] [--workers 3] [--human-steps] [--out docs/pilots/agents.md]
 
 For each session of `design/realized/<code>.json`, `--worlds` worlds (the session's own world seed first, then seeds 1000 up) are played by
 
@@ -40,7 +40,7 @@ EXTRA_SEEDS = 1000
 
 def play(job):
     """One session: {agent: (points per world, bushes per patch per world)} and the chosen k and q per world."""
-    code, name, session, duration, cell, n_worlds = job
+    code, name, session, duration, cell, n_worlds, c_in = job
     valuemap = value_maps.ValueMap.from_dict(cell["map"])
     params = world.load_session(session, session_duration=float(duration), **cell["settings"], **valuemap.compile())
     seeds = [int(cell["world_seed"])] + [EXTRA_SEEDS + i for i in range(n_worlds - 1)]
@@ -51,7 +51,7 @@ def play(job):
         w = world.generate_world(params, seed)
         tile_of, tile_ids = tc.tile_of_world(w)
         for a in ("nearest", "learner", "mvt"):
-            r = patch_foraging.run(a, w) if a == "mvt" else sim.run_episode(REGISTRY[a](), w)
+            r = patch_foraging.run(a, w, c_in) if a == "mvt" else sim.run_episode(REGISTRY[a](), w)
             points[a].append(r.total)
             bushes[a].append(tc.route_stats(r, tile_of, w.value)["per_visit"])
         table = tc.calibrate_world(w, list(KS), QUANTILES)
@@ -63,10 +63,10 @@ def play(job):
     return {"code": code, "session": name, "knobs": cell["knobs"], "points": points, "bushes": bushes, "chosen": chosen, "n_worlds": len(seeds), "n_tiles": int(tile_ids.size)}
 
 
-def jobs_of(code, n_worlds):
+def jobs_of(code, n_worlds, c_in=None):
     data = json.loads((cells.REALIZED / f"{code}.json").read_text())
     ok = [c for c in data["cells"] if c["status"] == "ok"]
-    return [(code, f"{code}_S{i}", data.get("session", "FOR_S1"), c.get("duration", data.get("duration", 120.0)), c, n_worlds) for i, c in enumerate(ok, 1)]
+    return [(code, f"{code}_S{i}", data.get("session", "FOR_S1"), c.get("duration", data.get("duration", 120.0)), c, n_worlds, c_in) for i, c in enumerate(ok, 1)]
 
 
 def stats(x):
@@ -110,9 +110,10 @@ def main():
     ap.add_argument("codes", nargs="+")
     ap.add_argument("--worlds", type=int, default=20)
     ap.add_argument("--workers", type=int, default=3)
+    ap.add_argument("--human-steps", action="store_true", help="mvt believes the step inside a patch takes patch_foraging.HUMAN_C_IN seconds, as participants take it (its points are still charged at the engine's costs)")
     ap.add_argument("--out", default=str(ROOT / "docs" / "pilots" / "agents.md"))
     args = ap.parse_args()
-    jobs = [j for code in args.codes for j in jobs_of(code, args.worlds)]
+    jobs = [j for code in args.codes for j in jobs_of(code, args.worlds, patch_foraging.HUMAN_C_IN if args.human_steps else None)]
     with mp.Pool(max(1, min(args.workers, len(jobs)))) as pool:
         results = pool.map(play, jobs)
     out = Path(args.out)

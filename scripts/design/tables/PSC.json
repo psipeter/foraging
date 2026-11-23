@@ -2,45 +2,44 @@
  "code": "PSC",
  "session": "FOR_S1",
  "duration": 180,
- "note": "Pilot: Spacing: the travel time between patches, 3, 6 and 9 s, on one additive map (the corner where shape pays more when higher and colour when lower, so the rule differs from PCX and TUT); the gain is fixed at the 3 s cell's, so the points fall with travel. The participants are not told what varies.",
+ "note": "Pilot: Spacing: the travel time between patches, 3, 6 and 9 s, on a round Gaussian at Gini 0.5 (the statistics of PSP S2) whose centre (the corners of a triangle of radius 0.3 around the middle, rotated 60 degrees from PSP's) differs per session and from PSP's, so each session needs fresh learning; the gain of the 3 s cell is the calibrated one and the gains of the longer sessions are raised (by the learner's points on 20 worlds, 1133, 1045 and 983 at a common gain) so that the learner earns about the same in each, and S2 and S3 are longer (200 and 220 s) so that the number of bushes harvested falls less with travel. The participants are not told what varies. The world seeds were picked from 20 candidates per session (a small search) so that the optimal number of bushes per patch rises evenly across the sessions.",
  "cells": [
   {
    "id": 1,
-   "class": "additive",
-   "gini": 0.55,
+   "class": "round",
+   "gini": 0.5,
    "travel_time": 3.0,
-   "corner": [
-    1,
-    0
+   "at": [
+    0.712,
+    0.712
    ],
-   "aspect": 2.0,
-   "world_seed": 9401
+   "world_seed": 9610
   },
   {
    "id": 2,
-   "class": "additive",
-   "gini": 0.55,
+   "class": "round",
+   "gini": 0.5,
    "travel_time": 6.0,
-   "corner": [
-    1,
-    0
+   "at": [
+    0.21,
+    0.578
    ],
-   "aspect": 2.0,
-   "world_seed": 9402,
-   "gain_of": 1
+   "world_seed": 9714,
+   "duration": 200,
+   "gain": 1.4198
   },
   {
    "id": 3,
-   "class": "additive",
-   "gini": 0.55,
+   "class": "round",
+   "gini": 0.5,
    "travel_time": 9.0,
-   "corner": [
-    1,
-    0
+   "at": [
+    0.578,
+    0.21
    ],
-   "aspect": 2.0,
-   "world_seed": 9403,
-   "gain_of": 1
+   "world_seed": 9805,
+   "duration": 220,
+   "gain": 1.5094
   }
  ]
 }

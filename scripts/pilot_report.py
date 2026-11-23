@@ -31,6 +31,7 @@ import world
 ROOT = Path(__file__).resolve().parent.parent
 TARGET_MEAN = 2.2               # the mean bush value of a session at its realised gain, over the independence runs (2.1 to 2.3 in the means of every class)
 AGENTS = ("nearest", "learner", "oracle", *patch_foraging.FACTORIES)
+C_IN = None            # set by --human-steps: the patch-foraging benchmarks believe the step inside a patch takes this many seconds (patch_foraging.HUMAN_C_IN)
 
 # What a pilot's sessions must do, in session order: `vary` {metric: the least span, rising}; `hold` {metric: (kind, tolerance)} with kind "abs" (max - min), "rel" (that over the mean) or "max"; `limit` {metric: upper bound}.
 HOLD_ALL = {"mean_bush_value": ("rel", 0.10), "tile_sum_dev": ("max", 1.0), "learner": ("rel", 0.20)}
@@ -71,7 +72,7 @@ def session_metrics(valuemap, w, agents=()):
         tile_of, _ = tile_calibration.tile_of_world(w)
         for a in agents:
             if a in patch_foraging.FACTORIES:
-                run = patch_foraging.run(a, w)
+                run = patch_foraging.run(a, w, C_IN)
                 m[a], m[f"{a}_bushes"] = float(run.total), tile_calibration.route_stats(run, tile_of, w.value)["per_visit"]
             else:
                 m[a] = float(sim.run_n(REGISTRY[a], worlds=[w]).totals[0])
@@ -204,7 +205,10 @@ def main():
     ap.add_argument("--agents", dest="agents", action="store_true", default=None, help="run nearest, learner and oracle on each cell's own world (default for report)")
     ap.add_argument("--no-agents", dest="agents", action="store_false")
     ap.add_argument("--out", default=None, help="the figure (a .png); the table goes next to it as .txt")
+    ap.add_argument("--human-steps", action="store_true", help="the patch-foraging benchmarks believe the step inside a patch takes patch_foraging.HUMAN_C_IN seconds, as participants take it (their points are still charged at the engine's costs)")
     args = ap.parse_args()
+    global C_IN
+    C_IN = patch_foraging.HUMAN_C_IN if args.human_steps else None
     agents = (args.mode == "report") if args.agents is None else args.agents
     recs = records(args.code, args.mode, args.workers, agents)
     out = Path(args.out) if args.out else ROOT / "results" / f"pilot_{args.code}_{args.mode}.png"

@@ -72,3 +72,12 @@ def test_the_agents_play_a_tiles_world_and_the_marginal_value_rule_takes_what_th
     tile_of, _ = tc.tile_of_world(w)
     simple = max(tc.calibrate_world(w, [1, 2, 3, 4, 9])[n][0] for n in ("top-1", "top-2", "top-3", "top-4", "top-9"))
     assert totals["dp_average"] > 0.85 * simple and totals["dp_finite"] > 0.85 * simple
+
+
+def test_a_faster_believed_step_inside_a_patch_makes_the_benchmark_stay_longer_and_the_default_is_unchanged():
+    params = synthetic.session(visible=("shape", "color"), layout="tiles", assignment="tiles", tile_placement="balanced", tile_sum_tol=1.0, session_duration=90.0)
+    w = world.generate_world(params, 2)
+    tile_of, _ = tc.tile_of_world(w)
+    per_visit = lambda c_in: tc.route_stats(pf.run("mvt", w, c_in), tile_of, w.value)["per_visit"]
+    assert pf.run("mvt", w).total == pf.run("mvt", w, None).total
+    assert per_visit(0.2) >= per_visit(None)                      # believing a cheaper step cannot make it leave sooner

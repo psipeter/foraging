@@ -24,6 +24,7 @@ import tile_calibration as tc
 TIME_STEP = 0.25            # seconds: the grid of the finite-horizon DP
 PRIOR_SECONDS = 30.0        # the running rate starts as this many seconds at the rate of an average bush
 RHO_BISECTIONS = 60
+HUMAN_C_IN = 1.0            # seconds from one bush of a patch to the next as participants take it (median 0.8 to 1.1 s for two people in PSC, 2026-11-23): the engine's costs give 1.7 s
 
 
 def average_costs(pos, radius, reach, tile_of, speed, max_angle, fruit_count, fruit_duration):
@@ -138,6 +139,7 @@ class PatchActor(tc.TilePolicy):
 
     model = None
     c_travel = None             # seconds between patches when set (else the average step to the nearest bush of a neighbouring tile)
+    c_in = None                 # seconds of the step from one bush of a patch to the next when set (else `average_costs`): what the agent believes, so it changes where it leaves, not what the engine charges
 
     def _build(self, view):
         m, task = view.memory, self.task
@@ -147,6 +149,8 @@ class PatchActor(tc.TilePolicy):
         costs_ = average_costs(m.pos, m.radius, view.reach(), self.tile_of, task.speed, task.max_angle, task.fruit_count, task.fruit_duration)
         if self.c_travel is not None:
             costs_["c_travel"] = self.c_travel
+        if self.c_in is not None:
+            costs_["c_in"] = self.c_in
         self.model = PatchModel([mean[self.tile_of == t] for t in tile_ids], task.fruit_count, costs_["harvest"], costs_["c_in"], costs_["c_travel"], task.session_duration)
         self.costs = costs_
 
@@ -221,10 +225,11 @@ class MVTRunning(MVT):
 FACTORIES = {"dp_finite": DPFinite, "dp_average": DPAverage, "mvt": MVT, "mvt_running": MVTRunning}
 
 
-def make_agent(name, world):
+def make_agent(name, world, c_in=None):
     """The agent `name` of `FACTORIES` for a tiles world: an oracle (every bush's value) bound to the world's tiles. The step between patches is the average of one rollout of the agent itself (the
     analytic estimate of `average_costs` when it visits no patch): where the next patch lies depends on which are left, and the first bush of a patch is the best one, not the nearest, so the walk between patches is
-    longer than the nearest neighbour's. The cost is taken from the seconds that were not harvesting, less the steps inside the patches, over the patches visited."""
+    longer than the nearest neighbour's. The cost is taken from the seconds that were not harvesting, less the steps inside the patches, over the patches visited.
+    `c_in` (e.g. `HUMAN_C_IN`) replaces the agent's belief about the step inside a patch; the engine still charges its own costs, so the agent's points are not those of a faster body."""
     tile_of, _ = tc.tile_of_world(world)
     actor = FACTORIES[name]().bind(tile_of)
     result = sim.run_episode(tc.oracle(actor), world)
@@ -233,9 +238,10 @@ def make_agent(name, world):
     c_travel = max((used - (stats["bushes"] - stats["visits"]) * actor.costs["c_in"]) / stats["visits"], 0.0) if stats["visits"] else None
     actor = FACTORIES[name]().bind(tile_of)
     actor.c_travel = c_travel
+    actor.c_in = c_in
     return tc.oracle(actor)
 
 
-def run(name, world):
+def run(name, world, c_in=None):
     """The episode of agent `name` on `world` (`sim.run_episode`)."""
-    return sim.run_episode(make_agent(name, world), world)
+    return sim.run_episode(make_agent(name, world, c_in), world)

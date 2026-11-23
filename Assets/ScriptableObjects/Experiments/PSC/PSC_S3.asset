@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: PSC_S3
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
-  sessionDuration: 180
-  worldSeed: 9403
+  sessionDuration: 220
+  worldSeed: 9805
   isPractice: 0
   freezeSun: 0
   rankingEvery: 1
@@ -54,12 +54,12 @@ MonoBehaviour:
   controlsReminderOpacity: 0.35
   rewardFunction:
     bumps:
-    - centerShape: 1
-      centerColor: 0
-      width: 0.6207297
-      widthColor: 0.31036484
+    - centerShape: 0.578
+      centerColor: 0.21
+      width: 0.26832077
+      widthColor: 0.26832077
       angle: 0
-      height: 5.722764
+      height: 6.0376
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -92,7 +92,7 @@ MonoBehaviour:
   spentTint: {r: 0.55, g: 0.5, b: 0.42, a: 1}
   fruitPopDuration: 0.15
   showHarvestHint: 1
-  rewardFeedbackMax: 6
+  rewardFeedbackMax: 7
   rewardSizeScaling: 1
   popupScale: 1.7
   popupExtraScale: 0.9
@@ -140,19 +140,19 @@ MonoBehaviour:
   layout: tiles
   assignment: tiles
   rewardStage: 
-  designJson: '{"anchor": {"agent": "learner", "check_points": {"learner": 789, "nearest":
-    678, "oracle": 895}, "duration": 180.0, "points": 1125.0, "rate": 6.25}, "calibrator":
-    1, "cell": 3, "experiment": "PSC", "index": 3, "instance": "PSC_S3", "knobs":
-    {"aspect": 2.0, "class": "additive", "corner": [1, 0], "gain": 1.430690970750318,
-    "gain_of": 1, "gini": 0.55, "travel_time": 9.0, "world_seed": 9403}, "nuisance_draw":
-    0, "value_map": {"bumps": [{"angle": 0.0, "center_color": 0.0, "center_shape":
-    1.0, "height": 4.0, "width": 0.6207296746436562, "width_color": 0.31036483732182807}],
-    "equaliser": {"type": "gain", "value": 1.430690970750318}, "noise": {"sd": 0.6,
-    "type": "flat"}}, "value_map_descriptors": {"effective_weight_color": 3.9126,
-    "effective_weight_shape": 1.6126, "effective_weight_total": 5.5252, "fraction_above_half_max":
-    0.2112, "gini": 0.55, "interaction": 0.0925, "log_interaction": 0.0, "max": 5.7228,
-    "mean": 1.5474, "min": 0.0087, "nonlinearity": 0.1447, "range": 5.7141, "shape_share":
-    0.2919}, "world_seed": 9403}'
+  designJson: '{"anchor": {"agent": "learner", "check_points": {"learner": 1134,
+    "nearest": 1040, "oracle": 1299}, "duration": 220.0, "points": 1375.0, "rate":
+    6.25}, "calibrator": 1, "cell": 3, "experiment": "PSC", "index": 3, "instance":
+    "PSC_S3", "knobs": {"at": [0.578, 0.21], "class": "round", "duration": 220, "gain":
+    1.5094, "gini": 0.5, "travel_time": 9.0, "world_seed": 9805}, "nuisance_draw":
+    0, "value_map": {"bumps": [{"angle": 0.0, "center_color": 0.21, "center_shape":
+    0.578, "height": 4.0, "width": 0.2683207641928581, "width_color": 0.2683207641928581}],
+    "equaliser": {"type": "gain", "value": 1.5094}, "noise": {"sd": 0.6, "type":
+    "flat"}}, "value_map_descriptors": {"effective_weight_color": 4.6666, "effective_weight_shape":
+    5.0868, "effective_weight_total": 9.7533, "fraction_above_half_max": 0.2761,
+    "gini": 0.5, "interaction": 0.1296, "log_interaction": 0.0, "max": 6.0374, "mean":
+    1.9583, "min": 0.0078, "nonlinearity": 0.4144, "range": 6.0297, "shape_share":
+    0.5215}, "world_seed": 9805}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1
