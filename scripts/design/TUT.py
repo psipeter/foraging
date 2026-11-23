@@ -79,7 +79,7 @@ Press [Enter] to continue
 Scoring
 
 You have a limited **time** in each session
-Try to learn and harvest efficiently
+Learn and harvest **efficiently** to earn more **points**
 
 Press [Enter] to continue
 
