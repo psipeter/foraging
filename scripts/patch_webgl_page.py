@@ -6,12 +6,17 @@ target the size of the canvas element; this makes the render target a fixed WIDT
 CSS scale the canvas to the window with a box of the same shape as the picture, so Unity never sees a size change and every participant gets the same
 16:9 picture (field of view and resolution do not depend on the window). The Unity footer (title and fullscreen button) is hidden.
 
-    python3 scripts/patch_webgl_page.py <index.html> [--width 1920 --height 1080]
+It also adds the hardware-acceleration gate (`scripts/webgl_gpu_check.js`, docs/DECISIONS.md "WebGL: hardware acceleration is required"): a browser that
+renders WebGL in software gets instructions for its browser and Unity's loader is never added to the page. `--dev` leaves the gate out (development
+builds and `scripts/webgl_smoke.mjs`, whose headless browser renders in software).
+
+    python3 scripts/patch_webgl_page.py <index.html> [--width 1920 --height 1080] [--dev]
 
 It fails loudly if the template no longer contains what it replaces (a Unity upgrade); it is idempotent.
 """
 
 import argparse
+import os
 import sys
 
 MARKER = "<!-- patched by scripts/patch_webgl_page.py -->"
@@ -25,7 +30,21 @@ SCRIPT = """  <script>
     });
   </script>
 """
-def css(width, height):
+GATE_CSS = """    #gpu-gate { position: fixed; inset: 0; z-index: 100; background: #14161c; color: #e8e8ee; overflow: auto; font: 18px/1.5 system-ui, sans-serif; display: flex; align-items: center; justify-content: center; -webkit-user-select: text; user-select: text }
+    #gpu-gate .gpu-card { max-width: 640px; padding: 32px }
+    #gpu-gate h1 { font-size: 28px; margin: 0 0 16px }
+    #gpu-gate li { margin: 6px 0 }
+    #gpu-gate .gpu-more { color: #aab; margin-bottom: 0 }
+    #gpu-gate button { font: inherit; padding: 8px 20px; cursor: pointer }
+"""
+
+
+def gate_script():
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "webgl_gpu_check.js"), encoding="utf-8") as f:
+        return "  <script>\n" + f.read() + "  </script>\n"
+
+
+def css(width, height, gate=False):
     # The canvas element is sized to the picture (the largest width x height-shaped box that fits the window, centred), not stretched
     # over the window with object-fit: Unity maps the mouse from the element's box, so a letterboxed picture would offset every click.
     return f"""  <style>
@@ -35,11 +54,11 @@ def css(width, height):
     #unity-canvas {{ outline: none !important; -webkit-tap-highlight-color: transparent }}
     html, body, #unity-container {{ -webkit-user-select: none; user-select: none }}
     #unity-footer {{ display: none }}
-  </style>
+{GATE_CSS if gate else ""}  </style>
 """
 
 
-def patch(html, width, height):
+def patch(html, width, height, gate=True):
     if MARKER in html:
         return html
     swaps = [
@@ -50,8 +69,11 @@ def patch(html, width, height):
          "config.matchWebGLToCanvasSize = false;   // the render target stays the canvas's width x height attributes; CSS scales it"),
         ('canvas.style.width = "960px";\n        canvas.style.height = "600px";',
          f"// fixed {width}x{height} drawing buffer, scaled to the window by CSS (see the style block in <head>)"),
-        ("</head>", MARKER + "\n" + SCRIPT + css(width, height) + "</head>"),
+        ("</head>", MARKER + "\n" + SCRIPT + (gate_script() if gate else "") + css(width, height, gate) + "</head>"),
     ]
+    if gate:
+        # Unity's loader is added to the page only when the check passed (the check ran in <head>, before this line).
+        swaps.append(("document.body.appendChild(script);", "if (window.gpuCheckPassed) document.body.appendChild(script);"))
     for old, new in swaps:
         if html.count(old) != 1:
             sys.exit(f"patch_webgl_page: expected exactly one occurrence of {old!r} in the page, found {html.count(old)} "
@@ -65,10 +87,11 @@ def main():
     parser.add_argument("page")
     parser.add_argument("--width", type=int, default=1920)
     parser.add_argument("--height", type=int, default=1080)
+    parser.add_argument("--dev", action="store_true", help="no hardware-acceleration gate (development builds, the software-GL smoke test)")
     args = parser.parse_args()
     with open(args.page, encoding="utf-8") as f:
         html = f.read()
-    patched = patch(html, args.width, args.height)
+    patched = patch(html, args.width, args.height, gate=not args.dev)
     if patched != html:
         with open(args.page, "w", encoding="utf-8") as f:
             f.write(patched)

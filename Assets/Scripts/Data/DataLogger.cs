@@ -119,6 +119,9 @@ public class DataLogger : MonoBehaviour
             }
         }
 
+        LogEvent("graphics", payload: Json.Obj(("device", SystemInfo.graphicsDeviceName), ("api", SystemInfo.graphicsDeviceType.ToString()),
+            ("memory_mb", SystemInfo.graphicsMemorySize)));      // slow-session reports: was the browser drawing on a GPU?
+
         Flush();
     }
 
