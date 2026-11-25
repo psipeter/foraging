@@ -1,15 +1,15 @@
-"""Ranking sets: k bushes in view at once, harvested in best-to-worst order, played in place during a session's ranking breaks.
+"""Selection sets: k bushes in view at once, harvested in best-to-worst order, played in place during a session's selection breaks.
 
 The participant (or agent) stands still and sees every bush of the set on an arc in front of them, all with the same distance from the player to the
 canopy's edge. Harvesting needs no walking (the game ignores the harvest range here and takes the bush the crosshair is on), so no bush hides another,
 and the rank of a bush is the order in which it was harvested. A bush stays, spent, after it is harvested. Outcomes are never shown.
 
-A session's sets are one pool file (`<session>_seed<N>.ranking.json`, `ranking.py pool <session>`), chosen together so that, across them, the true values fill
+A session's sets are one pool file (`<session>_seed<N>.ranking.json`, `selection.py pool <session>`), chosen together so that, across them, the true values fill
 the range evenly and the bushes fill the feature plane; within a set the values are a ladder with every neighbouring gap at least the tie gap
-(`rankingTieGap`). The geometry of a set is fixed by the arc (`rankingDistance`, `rankingArcSpan`, `rankingSetSize`), positions are relative to the player
+(`selectionTieGap`). The geometry of a set is fixed by the arc (`selectionDistance`, `selectionArcSpan`, `selectionSetSize`), positions are relative to the player
 (standing at the origin, facing +z), and the game turns and moves them to the player's pose.
 
-The module holds the generator (`generate_pool`), the geometry checks (`check_arc`) and the scores a ranking can be given from its picks
+The module holds the generator (`generate_pool`), the geometry checks (`check_arc`) and the scores a selection can be given from its picks
 (`pair_scores` (the payout rule), `implied_pair_scores`, `kendall_tau`, `first_pick_regret`, `rank_gain`: all are computed from the raw order and the true values, so the metric
 can be chosen at analysis time). Scoring is not part of a run (see docs/SIMULATION.md).
 """
@@ -33,7 +33,7 @@ VALUE_LOW_QUANTILE = 0.02   # the ladder of values spans these quantiles of the 
 VALUE_HIGH_QUANTILE = 0.995
 REPULSION = 0.12            # spread (feature units) of the repulsion that spreads the chosen bushes over the feature plane
 SAME_SET_REPULSION = 2.0    # bushes of one set repel this much more than bushes of different sets (they must look different)
-FEATURE_AXES = ("shape", "color")      # moisture is the player's ground value in a set: it is no feature of a ranking
+FEATURE_AXES = ("shape", "color")      # moisture is the player's ground value in a set: it is no feature of a selection
 
 
 def canopy_radius(params, shape):
@@ -160,7 +160,7 @@ def choose_sets(params, pool, set_count, set_size, min_gap, rng, steps=SEARCH_ST
 
 
 # --------------------------------------------------------------------------------------------------
-# The plus design (`rankingDesign` "plus")
+# The plus design (`selectionDesign` "plus")
 # --------------------------------------------------------------------------------------------------
 
 PLUS_AXES_MODES = ("aligned", "bump", "random")
@@ -209,7 +209,7 @@ def plus_axes(mode, frame, arm, ratio, rng):
         r = math.exp(rng.uniform(-math.log(max(ratio, 1.0)), math.log(max(ratio, 1.0))))
         m = math.sqrt(s1 * s2)
         return np.array([math.cos(phi), math.sin(phi)]), np.array([-math.sin(phi), math.cos(phi)]), arm * m * math.sqrt(r), arm * m / math.sqrt(r)
-    raise ValueError(f"unknown rankingPlusAxes {mode!r}: one of {PLUS_AXES_MODES} or 'mixed'")
+    raise ValueError(f"unknown selectionPlusAxes {mode!r}: one of {PLUS_AXES_MODES} or 'mixed'")
 
 
 def plus_fit_options(turnable):
@@ -227,26 +227,26 @@ def plus_fit_options(turnable):
 
 
 def plus_sets(params, set_count, set_size, min_gap, rng):
-    """The pool's sets as a plus: a centre around the map's peak and four arms, two along each of the plus's two axes (`rankingPlusAxes`; "mixed" takes aligned, random, random in turn),
+    """The pool's sets as a plus: a centre around the map's peak and four arms, two along each of the plus's two axes (`selectionPlusAxes`; "mixed" takes aligned, random, random in turn),
     each arm of its own length.
-    The centres are spread evenly: for each axes mode the centres of its sets lie on a sunflower spiral over the ellipse of radius `rankingPlusJitter` spreads of the peak bump
+    The centres are spread evenly: for each axes mode the centres of its sets lie on a sunflower spiral over the ellipse of radius `selectionPlusJitter` spreads of the peak bump
     (equal area per set, a random turn of the spiral per mode), so every part of the neighbourhood of the peak is visited; a centre that falls outside the unit square is moved onto its edge.
-    A plus is kept when all five points lie in the unit square, pay at least PLUS_MIN_FRACTION of the peak, are `rankingPlusMinSeparation` apart in the plane, and their values differ by the
+    A plus is kept when all five points lie in the unit square, pay at least PLUS_MIN_FRACTION of the peak, are `selectionPlusMinSeparation` apart in the plane, and their values differ by the
     tie gap. When the nominal plus does not fit, a random plus is shrunk (down to PLUS_MIN_SCALE) and turned (up to 45 degrees about its centre) and an aligned (or bump) plus is only stretched
     (each axis' arms shrunk by their own factor, never turned, so it stays on its axes), by the smallest change that fits (`plus_fit_options`);
     only when none fits are the arms and axes drawn again, and only then is the centre moved toward the peak (`pull` in the meta). Returns (pool, chosen, roles, meta): `pool` the bushes (set s, rank j from the lowest value at index s * set_size + j), `chosen`
     the indices that arrange them, `roles[s][j]` the role of the rank-j bush ("centre", "+1", "-1", "+2", "-2") and `meta[s]` how the set was drawn."""
-    plan, difficulty = str(getattr(params, "ranking_plus_plan", "spiral") or "spiral"), str(getattr(params, "ranking_plus_difficulty", "free") or "free")
+    plan, difficulty = str(getattr(params, "selection_plus_plan", "spiral") or "spiral"), str(getattr(params, "selection_plus_difficulty", "free") or "free")
     if plan != "spiral" or difficulty != "free":
         import plus_plans                                                  # (the other plans and the ladder of values live there; this function is the baseline)
         return plus_plans.plus_sets(params, set_count, set_size, min_gap, rng, plan, difficulty)
     if set_size != 5:
-        raise ValueError(f"the plus design has five bushes (a centre and four arms), not rankingSetSize {set_size}")
+        raise ValueError(f"the plus design has five bushes (a centre and four arms), not selectionSetSize {set_size}")
     if not (bool(params.shape_varies) and bool(params.color_varies)):
         raise ValueError("the plus design needs both shape and colour to vary")
-    mode_setting = str(getattr(params, "ranking_plus_axes", "mixed") or "mixed")
-    jitter, arm = float(getattr(params, "ranking_plus_jitter", 1.0)), float(getattr(params, "ranking_plus_arm", 1.0))
-    ratio, sep = float(getattr(params, "ranking_plus_arm_ratio", 2.0)), float(getattr(params, "ranking_plus_min_separation", 0.08))
+    mode_setting = str(getattr(params, "selection_plus_axes", "mixed") or "mixed")
+    jitter, arm = float(getattr(params, "selection_plus_jitter", 1.0)), float(getattr(params, "selection_plus_arm", 1.0))
+    ratio, sep = float(getattr(params, "selection_plus_arm_ratio", 2.0)), float(getattr(params, "selection_plus_min_separation", 0.08))
     peak, frame = peak_and_frame(params)
     angle, s1, s2 = frame
     th = math.radians(angle)
@@ -351,12 +351,12 @@ def arrange_slots(count, set_size, rng):
 
 
 # --------------------------------------------------------------------------------------------------
-# The dense design: five 5x5 grids, one per ranking (scripts/dense_grid.py plans them), picked best 5 of 25
+# The dense design: five 5x5 grids, one per selection (scripts/dense_grid.py plans them), picked best 5 of 25
 # --------------------------------------------------------------------------------------------------
 
 GRID_N = 5
-NEW_FIELDS = ("ranking_design", "ranking_times", "ranking_max_wait", "ranking_picks", "ranking_grid_spacing", "ranking_grid_distance", "ranking_stage_tilt", "ranking_grid_preset",
-              "ranking_top_k_points", "ranking_paid")      # fields an asset may not hold yet (world.py's loader would refuse them as overrides)
+NEW_FIELDS = ("selection_design", "selection_times", "selection_max_wait", "selection_picks", "selection_grid_spacing", "selection_grid_distance", "selection_stage_tilt", "selection_grid_preset",
+              "selection_top_k_points", "selection_paid")      # fields an asset may not hold yet (world.py's loader would refuse them as overrides)
 TOPK_PRESETS = ("even", "balanced", "diverse")
 
 
@@ -366,16 +366,16 @@ def grid_slot_position(a, b, spacing, distance):
 
 
 def dense_sets(params, count=None):
-    """The `count` (default one per rankingTimes entry, else 5) grids of the session's plan (`dense_grid.plan_session`), each as 25 bushes in the slot order a * 5 + b:
+    """The `count` (default one per selectionTimes entry, else 5) grids of the session's plan (`dense_grid.plan_session`), each as 25 bushes in the slot order a * 5 + b:
     their (shape, colour) cells clipped to the unit square. Returns (list of per-set dicts with 'cells', 'plan'): the plan record has the peak index, the spacing, the ratio and the count inside."""
     import dense_grid
-    times = list(getattr(params, "ranking_times", None) or [])
+    times = list(getattr(params, "selection_times", None) or [])
     count = int(count or len(times) or 5)
-    preset = str(getattr(params, "ranking_grid_preset", "") or "balanced")
+    preset = str(getattr(params, "selection_grid_preset", "") or "balanced")
     if preset not in TOPK_PRESETS:
-        raise ValueError(f"unknown rankingGridPreset {preset!r}: {TOPK_PRESETS}")
+        raise ValueError(f"unknown selectionGridPreset {preset!r}: {TOPK_PRESETS}")
     world, last_ratio = dense_grid.load_world(params.session_name)
-    plan_count = max(count, GRID_N)                                  # the planner is built for five rankings: fewer (the tutorial's one) are the first grids of a five-ranking plan
+    plan_count = max(count, GRID_N)                                  # the planner is built for five selections: fewer (the tutorial's one) are the first grids of a five-selection plan
     return dense_grid.plan_session(params.session_name, world, last_ratio, dense_grid.PRESETS[preset], plan_count)[:count]
 
 
@@ -384,8 +384,8 @@ def top_k_values(values, k):
 
 
 def top_k_score(picked_values, all_values, k=GRID_N, scale=100.0):
-    """The score of a dense ranking, 0 to `scale`: the picked values' sum against the grid's best k, from the expected sum of k random bushes (so a random pick scores about 0 and the best k `scale`).
-    `picked_values` may be fewer than k (a ranking that timed out). Mirrored by RankingSets.TopKScore."""
+    """The score of a dense selection, 0 to `scale`: the picked values' sum against the grid's best k, from the expected sum of k random bushes (so a random pick scores about 0 and the best k `scale`).
+    `picked_values` may be fewer than k (a selection that timed out). Mirrored by SelectionSets.TopKScore."""
     best = sum(top_k_values(all_values, k))
     base = float(k) * float(np.mean(all_values))
     if best - base <= 1e-9:
@@ -401,7 +401,7 @@ def top_k_hits(picked_ids, values_by_id, k=GRID_N):
 
 
 def paid_set_index(seed, count):
-    """The ranking (0-based) that pays when only one does (rankingPaid 'one'): drawn from the world seed. Mirrored by RankingSets.PaidSetIndex."""
+    """The selection (0-based) that pays when only one does (selectionPaid 'one'): drawn from the world seed. Mirrored by SelectionSets.PaidSetIndex."""
     return int((((int(seed) * 2654435761) % (1 << 64)) >> 8) % max(int(count), 1))
 
 
@@ -410,11 +410,11 @@ def paid_set_index(seed, count):
 # --------------------------------------------------------------------------------------------------
 
 def dense_pool(params, seed, rng_fruit):
-    """The pool file of the dense design: set s is the grid planned for ranking s (25 bushes, ids s * 25 + slot), the positions the same lattice in every set. Returns (sidecar, params)."""
+    """The pool file of the dense design: set s is the grid planned for selection s (25 bushes, ids s * 25 + slot), the positions the same lattice in every set. Returns (sidecar, params)."""
     grids = dense_sets(params)
     count = len(grids)
-    spacing, distance = float(getattr(params, "ranking_grid_spacing", 7.0)), float(getattr(params, "ranking_grid_distance", 18.0))
-    picks = int(getattr(params, "ranking_picks", GRID_N) or GRID_N)
+    spacing, distance = float(getattr(params, "selection_grid_spacing", 7.0)), float(getattr(params, "selection_grid_distance", 18.0))
+    picks = int(getattr(params, "selection_picks", GRID_N) or GRID_N)
     moisture = float(params.moisture_when_fixed)
     size = GRID_N * GRID_N
     n = count * size
@@ -439,7 +439,7 @@ def dense_pool(params, seed, rng_fruit):
     noise = rng_fruit.standard_normal((n, fruit_count)) * float(params.reward_std)
     fruit_reward = np.maximum(0, np.rint(value[:, None] + noise)).astype(np.int32)
     sidecar = {
-        "format": "ranking-pool", "design": "dense", "layout": "grid", "gridN": GRID_N, "pickCount": picks, "preset": str(getattr(params, "ranking_grid_preset", "") or "balanced"),
+        "format": "ranking-pool", "design": "dense", "layout": "grid", "gridN": GRID_N, "pickCount": picks, "preset": str(getattr(params, "selection_grid_preset", "") or "balanced"),
         "session": params.session_name, "seed": seed, "n": count, "setSize": size, "arcSpan": 0.0, "bushDistance": distance, "gridSpacing": spacing, "groundMoisture": moisture,
         "tieTolerance": TIE_TOLERANCE, "minGap": 0.0, "margins": None, "fruitCount": fruit_count, "treePos": pos.reshape(-1).tolist(), "shape": shape.tolist(), "color": color.tolist(),
         "moisture": mois.tolist(), "canopyRadius": radius.tolist(), "value": value.tolist(), "fruitRewards": fruit_reward.reshape(-1).astype(int).tolist(), "sets": sets,
@@ -448,18 +448,18 @@ def dense_pool(params, seed, rng_fruit):
 
 
 def generate_pool(name, pool_size=POOL_SIZE, steps=SEARCH_STEPS, **overrides):
-    """The pool of the ranking sets a session plays in place after its patch switches: `rankingPoolSets` sets of `rankingSetSize` bushes of the session's own
-    reward function, chosen jointly, used in order by the game, on an arc of `rankingArcSpan` degrees at `rankingDistance`, the tie gap `rankingTieGap`.
+    """The pool of the selection sets a session plays in place after its patch switches: `selectionPoolSets` sets of `selectionSetSize` bushes of the session's own
+    reward function, chosen jointly, used in order by the game, on an arc of `selectionArcSpan` degrees at `selectionDistance`, the tie gap `selectionTieGap`.
     Positions (`treePos`) are relative to the player standing at the origin and facing +z; the game turns and moves them to the player's pose and puts the
     bush on the ground there, so `moisture` is only a recorded value (moisture never pays). Returns (sidecar, params)."""
-    new_fields = {k: overrides.pop(k) for k in list(overrides) if k in NEW_FIELDS or k.startswith("ranking_plus_")}   # (fields an asset may not hold yet: world.py's loader would refuse them)
+    new_fields = {k: overrides.pop(k) for k in list(overrides) if k in NEW_FIELDS or k.startswith("selection_plus_")}   # (fields an asset may not hold yet: world.py's loader would refuse them)
     params = load_session(name, **overrides)
     for key, value in new_fields.items():
         setattr(params, key, value)
-    set_size, set_count = int(params.ranking_set_size), int(params.ranking_pool_sets)
-    arc_span, distance, gap = float(params.ranking_arc_span), float(params.ranking_distance), float(params.ranking_tie_gap)
+    set_size, set_count = int(params.selection_set_size), int(params.selection_pool_sets)
+    arc_span, distance, gap = float(params.selection_arc_span), float(params.selection_distance), float(params.selection_tie_gap)
     moisture = float(params.moisture_when_fixed)
-    design = str(getattr(params, "ranking_design", "ladder") or "ladder")
+    design = str(getattr(params, "selection_design", "ladder") or "ladder")
     margins = None if design == "dense" else check_arc(params, set_size, arc_span, distance)
 
     seed = int(params.world_seed)
@@ -473,7 +473,7 @@ def generate_pool(name, pool_size=POOL_SIZE, steps=SEARCH_STEPS, **overrides):
         chosen = choose_sets(params, pool, set_count, set_size, gap, rng_sets, steps=steps)
         roles = plus_meta = None
     else:
-        raise ValueError(f"unknown rankingDesign {design!r}: 'ladder', 'plus' or 'dense'")
+        raise ValueError(f"unknown selectionDesign {design!r}: 'ladder', 'plus' or 'dense'")
     bearings = slot_bearings(set_size, arc_span)
     perms = arrange_slots(set_count, set_size, rng_slots)
 
@@ -530,11 +530,11 @@ def export_pool(name, out_dir=None):
 
 
 # --------------------------------------------------------------------------------------------------
-# Scores of a ranking, from the raw picks (computed at analysis time; none is part of a run)
+# Scores of a selection, from the raw picks (computed at analysis time; none is part of a run)
 # --------------------------------------------------------------------------------------------------
 
 def pair_scores(picked_values, all_values, tol=TIE_TOLERANCE):
-    """(correct, total): the payout rule (`RankingSets.ScorePairs`). `total` is the number of non-tied pairs of the whole set (`all_values`, its true values); a pair is
+    """(correct, total): the payout rule (`SelectionSets.ScorePairs`). `total` is the number of non-tied pairs of the whole set (`all_values`, its true values); a pair is
     correct only when both bushes were picked and the one picked first is worth more, so a pair with an unpicked bush (a timed-out set) is never correct.
     `picked_values` are the true values in pick order (best first). Pairs whose values differ by less than `tol` are ties and are not counted."""
     values = np.asarray(all_values, dtype=float)
@@ -545,7 +545,7 @@ def pair_scores(picked_values, all_values, tol=TIE_TOLERANCE):
     return correct, total
 
 
-POINTS_MODES = ("pair", "pair_mean_value")       # how a correct pair is paid (`SessionConfig.rankingPointsMode`; "" is "pair")
+POINTS_MODES = ("pair", "pair_mean_value")       # how a correct pair is paid (`SessionConfig.selectionPointsMode`; "" is "pair")
 
 
 def pair_weight(mode, value_a, value_b):
@@ -554,12 +554,12 @@ def pair_weight(mode, value_a, value_b):
         return 1.0
     if mode == "pair_mean_value":
         return (float(value_a) + float(value_b)) / 2.0
-    raise ValueError(f"unknown ranking points mode {mode!r} (one of {POINTS_MODES})")
+    raise ValueError(f"unknown selection points mode {mode!r} (one of {POINTS_MODES})")
 
 
-def rankings_to_points(picked_values, all_values, bonus, mode="pair", tol=TIE_TOLERANCE):
-    """(points, correct, total) of one ranked set: the payout (`RankingSets.ScorePairs` and `RankingBreak.FinishSet` are the same rule). Which pairs are correct is `pair_scores`; each pays `bonus` times its
-    `pair_weight` in `mode`, so `pair` pays `bonus` per correct pair. A new way of paying is a new mode here and in `RankingSets.PairWeight`, nothing else. Arguments as `pair_scores`."""
+def selections_to_points(picked_values, all_values, bonus, mode="pair", tol=TIE_TOLERANCE):
+    """(points, correct, total) of one ranked set: the payout (`SelectionSets.ScorePairs` and `SelectionBreak.FinishSet` are the same rule). Which pairs are correct is `pair_scores`; each pays `bonus` times its
+    `pair_weight` in `mode`, so `pair` pays `bonus` per correct pair. A new way of paying is a new mode here and in `SelectionSets.PairWeight`, nothing else. Arguments as `pair_scores`."""
     correct, total = pair_scores(picked_values, all_values, tol)
     picked = np.asarray(picked_values, dtype=float)
     weight = sum(pair_weight(mode, picked[i], picked[j]) for i in range(len(picked)) for j in range(i + 1, len(picked)) if picked[i] - picked[j] >= tol)
@@ -616,7 +616,7 @@ def rank_gain(picked_values, all_values):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Generate the ranking pools of sessions for Unity.")
+    ap = argparse.ArgumentParser(description="Generate the selection pools of sessions for Unity.")
     ap.add_argument("command", choices=["pool"])
     ap.add_argument("sessions", nargs="+", help="session names, e.g. FOR_S1")
     ap.add_argument("--out", default=None, help="output directory (default Assets/StreamingAssets/Experiments/<code>)")

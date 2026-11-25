@@ -128,7 +128,7 @@ Shader "Foraging/FruitUnlit"
                 half3 lit = lerp(fullyLit, colorPreserved, (half)_ColorPreservation);
                 half exposureComp = _FruitExposureComp > 0.0 ? (half)_FruitExposureComp : 1.0h;
                 half4 color = half4(lit * (half)_Brightness * exposureComp, _Color.a);
-                half grey = dot(color.rgb, half3(0.299h, 0.587h, 0.114h));          // _Gray fades the fruit to grayscale (a ranking break), set per renderer
+                half grey = dot(color.rgb, half3(0.299h, 0.587h, 0.114h));          // _Gray fades the fruit to grayscale (a selection break), set per renderer
                 color.rgb = lerp(color.rgb, grey.xxx, (half)_Gray);
                 color.rgb = MixFog(color.rgb, i.fogCoord);
                 return color;

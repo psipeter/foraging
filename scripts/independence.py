@@ -5,7 +5,7 @@
     ./venv/bin/python scripts/independence.py plot --tag T [--out docs/independence_correlations.png]
 
 `run` appends one JSON line per session to `results/independence_<tag>.jsonl` (flat, gitignored): the knobs asked, then either the realised session (map descriptors, gain, layout, the factors and
-points measured on fresh worlds, whether the anchor was met, whether a ranking pool could be built) or the reason it could not be made (an unreachable pair, a gain
+points measured on fresh worlds, whether the anchor was met, whether a selection pool could be built) or the reason it could not be made (an unreachable pair, a gain
 that does not settle). A rerun with the same tag skips the settings already done. `report` prints the failures, the correlation matrix of the realised factors and the side effects of each knob.
 
 The knobs (the PI's ranges, 2026-11-17): Gini 0.3 to 0.7 (0.2 to 0.8 in the first runs: 0.2 is too undifferentiated to learn from, and above 0.7 few classes stay under the cap); travel time 3 to 12 s (within-patch diversity is no longer a knob: the pool is placed at random, 2026-11-18); complexity in the three classes of the ladder (
@@ -53,10 +53,10 @@ def design(n=40, seed=0):
 
 
 def pool_builds(session, valuemap, settings):
-    """Whether the ranking pool of the session can be built (sparse maps leave many bushes tied near zero); True, or the error text."""
-    import ranking
+    """Whether the selection pool of the session can be built (sparse maps leave many bushes tied near zero); True, or the error text."""
+    import selection
     try:
-        ranking.generate_pool(session, **settings, **valuemap.compile())
+        selection.generate_pool(session, **settings, **valuemap.compile())
         return True
     except ValueError as e:
         return str(e)[:160]
@@ -112,7 +112,7 @@ def table(path):
 def report(args):
     path = ROOT / "results" / f"independence_{args.tag}.jsonl"
     rows, ok, names, data = table(path)
-    print(f"{len(rows)} sessions asked, {len(ok)} realised, {sum(r['within_tolerance'] for r in ok)} within the anchor tolerance, {sum(r['pool'] is True for r in ok)} with a ranking pool")
+    print(f"{len(rows)} sessions asked, {len(ok)} realised, {sum(r['within_tolerance'] for r in ok)} within the anchor tolerance, {sum(r['pool'] is True for r in ok)} with a selection pool")
     for r in rows:
         if not r["ok"]:
             print("  FAILED", {k: r["knobs"][k] for k in ("class", "gini", "interaction", "travel_time")}, r["reason"][:110])

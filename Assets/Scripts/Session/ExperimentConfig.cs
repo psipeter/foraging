@@ -38,7 +38,7 @@ public class ExperimentConfig : ScriptableObject
     // The minutes the menu quotes: the stated estimate, else MinutesOf the sessions.
     public float EstimatedMinutes => estimatedMinutes > 0f ? estimatedMinutes : MinutesOf(sessions, 1f);
 
-    // The foraging time of the sessions, `shortFactor` as RunModes.Short applies it, rounded to the nearest minute (at least 1). Ranking time is left out (PI, 2026-11-19): how many
+    // The foraging time of the sessions, `shortFactor` as RunModes.Short applies it, rounded to the nearest minute (at least 1). Selection time is left out (PI, 2026-11-19): how many
     // patch leavings there are and how fast the participant ranks is too variable to estimate, so the quote undershoots the true time a little.
     public static float MinutesOf(IList<SessionConfig> list, float shortFactor)
     {
@@ -87,7 +87,7 @@ public class ExperimentConfig : ScriptableObject
         return seconds;
     }
 
-    // The StreamingAssets files a session reads: its world, its ranking pool and its instruction text.
+    // The StreamingAssets files a session reads: its world, its selection pool and its instruction text.
     public static List<string> FilesOf(SessionConfig session)
     {
         var files = new List<string>();
@@ -97,9 +97,9 @@ public class ExperimentConfig : ScriptableObject
         }
 
         files.Add(WorldData.PathFor(session));
-        if (session.RankingEvery > 0)
+        if (session.SelectionEvery > 0)
         {
-            files.Add(WorldData.RankingPoolPathFor(session));
+            files.Add(WorldData.SelectionPoolPathFor(session));
         }
 
         if (!string.IsNullOrEmpty(session.InstructionsFile))

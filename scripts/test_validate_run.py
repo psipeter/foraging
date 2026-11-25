@@ -17,8 +17,8 @@ from validate_run import FAIL, PASS, SKIP, WARN, Ctx
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "runs"
 
-CONFIG = {"sessionDuration": 20.0, "rankingEvery": 1, "rankingCooldown": 5.0, "rankingMinBushes": 1, "rankingLastSeconds": 3.0, "rankingBonusPerPair": 4,
-          "rankingPoolSets": 12, "isPractice": False, "rankingSettleDepth": 0}
+CONFIG = {"sessionDuration": 20.0, "selectionEvery": 1, "selectionCooldown": 5.0, "selectionMinBushes": 1, "selectionLastSeconds": 3.0, "selectionBonusPerPair": 4,
+          "selectionPoolSets": 12, "isPractice": False, "selectionSettleDepth": 0}
 FRUIT_REWARD = np.array([[5, 6, 7, 8, 9], [1, 2, 3, 4, 5], [2, 2, 2, 2, 2]])        # three world bushes (ids 0-2); the sets' bushes are ids 3-5
 CENTRES = np.array([[-40.0, 0.0], [40.0, 0.0]])                                      # two tiles: x < 0 and x > 0
 SET_BUSHES = [{"id": 3, "x": 0, "z": 16, "radius": 2, "shape": 0.1}, {"id": 4, "x": 5, "z": 16, "radius": 2, "shape": 0.2}, {"id": 5, "x": 10, "z": 16, "radius": 2, "shape": 0.3}]
@@ -62,7 +62,7 @@ def set_row(index, bushes_ranks, correct, points):
 
 
 def golden(second=(13.0, 15.5, 16.0)):
-    """A session of 20 foraging seconds with two breaks (3 s each; the second at `second` = start, last set's end, end), two ranking sets (3/3 and 2/3 pairs), 16 + 20 points."""
+    """A session of 20 foraging seconds with two breaks (3 s each; the second at `second` = start, last set's end, end), two selection sets (3/3 and 2/3 pairs), 16 + 20 points."""
     events = [event(0.0, "session_start"), event(0.5, "pause", payload={"reason": "pointer"}), event(0.6, "resume"),
               fruit(1.0, 0, 0, 5, 5), fruit(1.5, 0, 1, 6, 11), fruit(3.5, 1, 0, 1, 12)]
     events += break_events(1, 4.0, 6.5, 7.0, 3, 12) + [fruit(8.0, 1, 1, 2, 14)]
@@ -106,13 +106,13 @@ def retotal(ctx):
     set_points(ctx, foraging=total)
 
 
-def set_points(ctx, foraging=None, ranking=None):
+def set_points(ctx, foraging=None, selection=None):
     """Set the session row's and the session_end payload's totals together."""
     end = find(ctx.events, "session_end")["payload"]
     if foraging is not None:
         ctx.row["foraging_points"] = end["foraging_points"] = foraging
-    if ranking is not None:
-        ctx.row["ranking_points"] = end["ranking_points"] = ranking
+    if selection is not None:
+        ctx.row["ranking_points"] = end["ranking_points"] = selection
 
 
 # --- the golden session -------------------------------------------------------------------------------------------------------------------
@@ -123,21 +123,21 @@ def test_the_golden_session_passes_every_check():
     assert by_name(results)["foraging time = sessionDuration"].status == PASS and by_name(results)["break cooldown"].status == PASS
 
 
-def test_a_session_without_ranking_skips_the_ranking_checks():
+def test_a_session_without_selection_skips_the_selection_checks():
     ctx = golden()
-    ctx.row["config"]["rankingEvery"] = 0
+    ctx.row["config"]["selectionEvery"] = 0
     ctx.events = [e for e in ctx.events if not e["type"].startswith("rank_") and e["tree_id"] != 3]
     ctx.sets = None
-    set_points(ctx, ranking=0)
+    set_points(ctx, selection=0)
     reseq(ctx.events)
     results = by_name(v.run_checks(ctx))
-    assert results["break rules"].status == SKIP and results["ranking pair scores"].status == SKIP and results["rank_break events balanced"].status == SKIP
+    assert results["break rules"].status == SKIP and results["selection pair scores"].status == SKIP and results["rank_break events balanced"].status == SKIP
     assert not [r for r in results.values() if r.status in (FAIL, WARN)]
 
 
 def test_an_old_interlude_session_fails_as_unsupported():
     ctx = golden()
-    ctx.row["config"].update(isInterlude=True, rankingEvery=0)
+    ctx.row["config"].update(isInterlude=True, selectionEvery=0)
     ctx.events = [e for e in ctx.events if not e["type"].startswith("rank_")]
     ctx.sets = [set_row(0, [(3, 1), (4, 2), (5, 3)], 3, 0)]            # an Interlude's trial row
     reseq(ctx.events)
@@ -175,16 +175,16 @@ def test_a_wrong_correct_pairs_fails_the_pair_score_check():
     ctx = golden()
     ctx.sets[0]["correct_pairs"], ctx.sets[0]["points"] = 2, 8                # the picks were 3 of 3 pairs
     find(ctx.events, "rank_set_end")["payload"].update(correct_pairs=2, points=8)
-    set_points(ctx, ranking=16)
-    assert failing(ctx) == {"ranking pair scores", "ranking points"}          # the points are recomputed from the picks too: 8 is not what 3 correct pairs pay
+    set_points(ctx, selection=16)
+    assert failing(ctx) == {"selection pair scores", "selection points"}          # the points are recomputed from the picks too: 8 is not what 3 correct pairs pay
 
 
 def test_wrong_points_fail_the_points_check():
     ctx = golden()
     ctx.sets[0]["points"] = 13                                                # 3 pairs x 4 = 12
     find(ctx.events, "rank_set_end")["payload"]["points"] = 13
-    set_points(ctx, ranking=21)
-    assert failing(ctx) == {"ranking points"}
+    set_points(ctx, selection=21)
+    assert failing(ctx) == {"selection points"}
 
 
 def test_a_set_end_event_that_differs_from_the_row_fails():
@@ -202,14 +202,14 @@ def test_ranking_points_must_equal_the_sum_of_the_sets():
 def test_a_practice_session_pays_no_points():
     ctx = golden()
     ctx.row["config"]["isPractice"] = True
-    assert failing(ctx) == {"ranking points"}
+    assert failing(ctx) == {"selection points"}
 
 
 def test_a_missing_rank_set_end_fails_the_set_events_check():
     ctx = golden()
     ctx.events.remove(find(ctx.events, "rank_set_end", 1))
     reseq(ctx.events)
-    assert failing(ctx) == {"ranking set events"}
+    assert failing(ctx) == {"selection set events"}
 
 
 def test_unbalanced_break_events_fail_the_balance_check():
@@ -270,7 +270,7 @@ def test_a_break_without_a_tile_change_fails():
 
 def test_a_break_before_enough_bushes_were_harvested_fails():
     ctx = golden()
-    ctx.row["config"]["rankingMinBushes"] = 3
+    ctx.row["config"]["selectionMinBushes"] = 3
     assert failing(ctx) == {"bushes between breaks"}
 
 
@@ -279,14 +279,14 @@ def test_a_break_right_after_another_without_a_bush_harvested_between_them_fails
     ctx.events = [e for e in ctx.events if not (e["type"] == "fruit" and e["t"] == 8.0)]                  # the only fruit between break 1 and break 2
     reseq(ctx.events)
     assert "bushes between breaks" in failing(ctx)
-    ctx.row["config"]["rankingMinBushes"] = 0
+    ctx.row["config"]["selectionMinBushes"] = 0
     assert "bushes between breaks" not in failing(ctx)
 
 
 def test_a_break_in_the_last_seconds_is_noticed():
     ctx = golden()
     ctx.row["config"]["sessionDuration"] = 20.0
-    ctx.row["config"]["rankingLastSeconds"] = 11.0                               # break 2 starts with 10 s left
+    ctx.row["config"]["selectionLastSeconds"] = 11.0                               # break 2 starts with 10 s left
     results = by_name(v.run_checks(ctx))
     assert results["no break in the last seconds"].status == WARN                # a harvest bout may have delayed the start: undecidable
     ctx.row["config"]["sessionDuration"] = 10.0
@@ -296,7 +296,7 @@ def test_a_break_in_the_last_seconds_is_noticed():
 def test_the_foraging_time_must_be_the_session_duration_and_a_reduced_run_only_warns():
     ctx = golden()
     ctx.row["config"]["sessionDuration"] = 30.0
-    ctx.row["config"]["rankingLastSeconds"] = 3.0
+    ctx.row["config"]["selectionLastSeconds"] = 3.0
     assert failing(ctx) == {"foraging time = sessionDuration"}
     ctx.events.insert(1, event(0.0, "run_modes", payload={"short": 0.3}))
     reseq(ctx.events)
@@ -305,9 +305,9 @@ def test_the_foraging_time_must_be_the_session_duration_and_a_reduced_run_only_w
 
 
 def scheduled(schedule=(1, 2)):
-    """The golden session under a rankingLeavings schedule: a qualifying leaving at t = 2.5 (number 1) and at 9.5 (number 2), each due, and the leaving number in the break starts."""
+    """The golden session under a selectionLeavings schedule: a qualifying leaving at t = 2.5 (number 1) and at 9.5 (number 2), each due, and the leaving number in the break starts."""
     ctx = golden()
-    ctx.row["config"]["rankingLeavings"] = list(schedule)
+    ctx.row["config"]["selectionLeavings"] = list(schedule)
     ctx.events += [event(2.5, "rank_leaving", payload={"n": 1, "tile": 1, "due": True}), event(9.5, "rank_leaving", payload={"n": 2, "tile": 0, "due": True})]
     for n, e in enumerate([e for e in ctx.events if e["type"] == "rank_break_start"], start=1):
         e["payload"]["leaving"] = n
@@ -355,7 +355,7 @@ def test_a_break_cut_short_by_a_reload_and_played_again_passes():
     ctx = interrupted()
     results = by_name(v.run_checks(ctx))
     assert [r for r in results.values() if r.status == FAIL] == []
-    assert results["ranking set events"].status == PASS and results["rank_break events balanced"].status == PASS
+    assert results["selection set events"].status == PASS and results["rank_break events balanced"].status == PASS
 
 
 def test_a_try_cut_short_without_the_aborted_end_fails_the_balance_check():
@@ -435,7 +435,7 @@ def test_the_real_browser_runs_pass(run):
     assert [r for r in results if r.status == FAIL] == []
     names = by_name(results)
     assert names["world file hash"].status == PASS and names["foraging_points = running_total"].status == PASS
-    assert names["ranking pair scores"].status == PASS and names["break after a patch switch"].status == PASS
+    assert names["selection pair scores"].status == PASS and names["break after a patch switch"].status == PASS
 
 
 def test_a_fault_in_a_real_run_is_found(tmp_path):
@@ -451,11 +451,11 @@ def test_a_fault_in_a_real_run_is_found(tmp_path):
 
 def test_a_weighted_points_mode_is_recomputed_from_the_picks_and_an_unknown_mode_fails():
     ctx = golden()
-    ctx.config["rankingPointsMode"] = "pair_mean_value"
-    assert failing(ctx) == {"ranking points"}                                  # the golden rows hold the per-pair points (12 and 8)
+    ctx.config["selectionPointsMode"] = "pair_mean_value"
+    assert failing(ctx) == {"selection points"}                                  # the golden rows hold the per-pair points (12 and 8)
     for row, ev, points in ((ctx.sets[0], find(ctx.events, "rank_set_end", 0), 24.0), (ctx.sets[1], find(ctx.events, "rank_set_end", 1), 14.0)):
         row["points"] = ev["payload"]["points"] = points                       # set 0: all 3 pairs, means 2.5 + 2 + 1.5, times 4; set 1: two pairs, means 1.5 + 2, times 4
-    set_points(ctx, ranking=38.0)
+    set_points(ctx, selection=38.0)
     assert failing(ctx) == set()
-    ctx.config["rankingPointsMode"] = "by_rank"
-    assert failing(ctx) == {"ranking pair scores", "ranking points", "rank_set_end = row"}
+    ctx.config["selectionPointsMode"] = "by_rank"
+    assert failing(ctx) == {"selection pair scores", "selection points", "rank_set_end = row"}

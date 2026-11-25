@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 [CreateAssetMenu(
     fileName = "SessionConfig",
@@ -14,98 +15,98 @@ public class SessionConfig : ScriptableObject
     [Tooltip("Hold the sun still at solar noon.")]
     [SerializeField] private bool freezeSun;
 
-    [Header("Ranking (a set of bushes played in place after patch switches, on the terrain the player stands on; the set file is read from scripts/ranking.py pool)")]
-    [Tooltip("A ranking is due after this many patch switches (a settled crossing into another tile); 0 = no rankings.")]
-    [SerializeField] private int rankingEvery = 0;
-    [Tooltip("The patch leavings (numbered from 1: a qualifying switch, see rankingCooldown / rankingMinBushes / rankingLastSeconds) after which a ranking is due, for example 1, 2, 4, 8. Empty = every 'rankingEvery'-th leaving. rankingEvery must still be above 0 to turn rankings on.")]
-    [SerializeField] private int[] rankingLeavings = new int[0];
-    [Tooltip("Ranking sets played in one ranking.")]
-    [SerializeField] private int rankingSets = 1;
-    [Tooltip("Seconds of the countdown of one ranking set (the main clock is frozen meanwhile).")]
-    [SerializeField] private float rankingSeconds = 20f;
-    [Tooltip("The fewest seconds of foraging between the end of one ranking and a patch switch that counts toward the next (a switch inside this time is ignored; 0 in FOR and TUT: the harvest rule alone spaces the rankings).")]
-    [SerializeField] private float rankingCooldown = 10f;
-    [Tooltip("A crossing into another tile counts as a patch switch once the player is this many units past the edge between the tiles (0 = at the edge itself, so the ranking starts as early as possible and the arc is farthest from the next cluster).")]
-    [SerializeField] private float rankingSettleDepth = 0f;
-    [Tooltip("Sets in the pool file (used in order, one after another). Read by scripts/ranking.py pool: regenerate the file after changing it.")]
-    [SerializeField] private int rankingPoolSets = 12;
-    [Tooltip("Seconds the ranking bushes take to grow and to shrink away again.")]
-    [SerializeField] private float rankingFadeSeconds = 0.4f;
-    [Tooltip("Seconds the world's bushes take to fade to grayscale when a ranking starts, and back to colour when it ends.")]
-    [SerializeField] private float rankingGraySeconds = 0.25f;
-    [Tooltip("Seconds per fruit while harvesting a ranking bush (a whole bush takes this times fruitCount): quick.")]
-    [SerializeField] private float rankingFruitSeconds = 0.05f;
-    [Tooltip("No ranking starts when this many seconds or fewer of the session are left.")]
-    [SerializeField] private float rankingLastSeconds = 10f;
-    [Tooltip("A patch switch counts toward a ranking only once the participant has harvested (taken a fruit from) at least this many different bushes since the last ranking ended (since the session began, before the first), so no ranking comes before they have seen what a bush pays and none follows another without foraging in between.")]
-    [SerializeField] private int rankingMinBushes = 1;
-    [Tooltip("The line shown at the top of the screen during a ranking.")]
-    [SerializeField] private string rankingText = "Select the 5 most valuable bushes. 100 points available.";
-    [Tooltip("Bushes per set. Read by scripts/ranking.py.")]
-    [SerializeField] private int rankingSetSize = 5;
-    [Tooltip("Degrees from the leftmost to the rightmost bush centre (the arc is symmetric about the heading). The outermost centres must stay inside the view of a 4:3 window, so at least half of each bush is on screen without turning: scripts/ranking.py checks. Read by scripts/ranking.py.")]
-    [SerializeField] private float rankingArcSpan = 84f;
-    [Tooltip("Distance from the player to the nearest point of each canopy (world units); the same for every bush. Read by scripts/ranking.py.")]
-    [SerializeField] private float rankingDistance = 16f;
-    [Tooltip("The smallest true reward difference (points per fruit) between two bushes of a set; pairs closer than this are ties and score nothing. Read by scripts/ranking.py.")]
-    [SerializeField] private float rankingTieGap = 0.25f;
-    [Tooltip("How the pool's sets are chosen: \"ladder\" (or empty) = five bushes whose true values form a ladder spread over the feature plane (the first design); \"plus\" = five bushes in a plus shape in the (shape, color) plane around the value map's peak. Read by scripts/ranking.py.")]
-    [SerializeField] private string rankingDesign = "ladder";
-    [Tooltip("Plus design: the plus's two axes. \"aligned\" = the shape and color axes; \"bump\" = the global-maximum bump's own axes (turned and stretched like it); \"random\" = a random turn and stretch; \"mixed\" = the sets take aligned, random, random in turn. A plus that would leave the map is shrunk and turned to fit. Read by scripts/ranking.py.")]
-    [SerializeField] private string rankingPlusAxes = "mixed";
-    [Tooltip("Plus design: the centre bushes lie evenly spread (a sunflower spiral per axes mode) over an ellipse around the peak of this radius, in spreads (sigma) of the peak's bump along each of its axes. Read by scripts/ranking.py.")]
-    [SerializeField] private float rankingPlusJitter = 1f;
-    [Tooltip("Plus design: the arms reach this many spreads (sigma) from the centre along the plus's axes (each arm draws its own length between 0.7 and 1.3 times this). Read by scripts/ranking.py.")]
-    [SerializeField] private float rankingPlusArm = 1f;
-    [Tooltip("Plus design, random axes: the second axis is this many times (at most) longer or shorter than the first, drawn log-uniformly. Read by scripts/ranking.py.")]
-    [SerializeField] private float rankingPlusArmRatio = 2f;
-    [Tooltip("Plus design: where the three pluses of a ranking go: \"spiral\" (each axes mode on a sunflower spiral around the peak), \"ring\" (a triangle around the peak per ranking, rotating and widening) \"tile\" (greedy space filling of the rewarding region) or \"cover\" (centres anywhere in the rewarding region, each ranking tiling it between its three pluses). Read by scripts/ranking.py and plus_plans.py.")]
-    [SerializeField] private string rankingPlusPlan = "spiral";
-    [Tooltip("Plus design: the spread of values in a set: \"free\" (whatever the fit gives), \"easy\", \"medium\", \"hard\" (a ladder of values a fixed step apart, wide to narrow), a number (the step as a share of the peak) or \"mixed\" (easy, medium, hard over the rankings). Read by scripts/plus_plans.py.")]
-    [SerializeField] private string rankingPlusDifficulty = "free";
-    [Tooltip("Plus design: the smallest distance in the unit (shape, color) plane between two bushes of a set, so they look different. Read by scripts/ranking.py.")]
-    [SerializeField] private float rankingPlusMinSeparation = 0.08f;
-    [Tooltip("Fixed schedule: the session seconds (elapsed, the clock is held in a ranking) at which the 1st, 2nd, ... ranking becomes due, for example 30, 60, 90, 120, 150 (empty = the patch-leaving rules above). A due ranking starts at the next moment no harvest is under way, or after rankingMaxWait seconds at most.")]
-    [SerializeField] private float[] rankingTimes = new float[0];
-    [Tooltip("Fixed schedule: the most seconds a due ranking waits for a harvest bout to end; then the bout is cancelled and the ranking starts.")]
-    [SerializeField] private float rankingMaxWait = 10f;
-    [Tooltip("Dense design (rankingDesign 'dense'): how many bushes the participant picks (harvests) in a ranking of the grid, the best of the 25.")]
-    [SerializeField] private int rankingPicks = 5;
-    [Tooltip("Dense design: the distance in world units between neighbouring bushes of the 5x5 grid on the stage. Read by scripts/ranking.py.")]
-    [SerializeField] private float rankingGridSpacing = 7f;
-    [Tooltip("Dense design: the distance from the player to the middle of the grid (world units, along the heading). Read by scripts/ranking.py.")]
-    [SerializeField] private float rankingGridDistance = 18f;
-    [Tooltip("Dense design: the preset of scripts/dense_grid.py that plans the five grids (even, balanced, diverse). Read by scripts/ranking.py.")]
-    [SerializeField] private string rankingGridPreset = "balanced";
-    [Tooltip("Dense design: points a ranking is worth at most (the 'top_k' points mode: 100 x (picked sum - expected sum of a random pick) / (best sum - expected sum), from 0).")]
-    [SerializeField] private float rankingTopKPoints = 100f;
-    [Tooltip("Dense design: which rankings pay: 'one' = one ranking, drawn from the world seed, pays its points; 'all' = every ranking pays.")]
-    [SerializeField] private string rankingPaid = "one";
-    [Tooltip("The halo of the bush being aimed at is a copy of its canopy this many times larger (the main task uses 1.03), so it shows at the ranking's distance.")]
-    [SerializeField] private float rankingRimScale = 1.15f;
+    [Header("Selection (a set of bushes played in place after patch switches, on the terrain the player stands on; the set file is read from scripts/selection.py pool)")]
+    [Tooltip("A selection is due after this many patch switches (a settled crossing into another tile); 0 = no selections.")]
+    [FormerlySerializedAs("rankingEvery")] [SerializeField] private int selectionEvery = 0;
+    [Tooltip("The patch leavings (numbered from 1: a qualifying switch, see selectionCooldown / selectionMinBushes / selectionLastSeconds) after which a selection is due, for example 1, 2, 4, 8. Empty = every 'selectionEvery'-th leaving. selectionEvery must still be above 0 to turn selections on.")]
+    [FormerlySerializedAs("rankingLeavings")] [SerializeField] private int[] selectionLeavings = new int[0];
+    [Tooltip("Selection sets played in one selection.")]
+    [FormerlySerializedAs("rankingSets")] [SerializeField] private int selectionSets = 1;
+    [Tooltip("Seconds of the countdown of one selection set (the main clock is frozen meanwhile).")]
+    [FormerlySerializedAs("rankingSeconds")] [SerializeField] private float selectionSeconds = 20f;
+    [Tooltip("The fewest seconds of foraging between the end of one selection and a patch switch that counts toward the next (a switch inside this time is ignored; 0 in FOR and TUT: the harvest rule alone spaces the selections).")]
+    [FormerlySerializedAs("rankingCooldown")] [SerializeField] private float selectionCooldown = 10f;
+    [Tooltip("A crossing into another tile counts as a patch switch once the player is this many units past the edge between the tiles (0 = at the edge itself, so the selection starts as early as possible and the arc is farthest from the next cluster).")]
+    [FormerlySerializedAs("rankingSettleDepth")] [SerializeField] private float selectionSettleDepth = 0f;
+    [Tooltip("Sets in the pool file (used in order, one after another). Read by scripts/selection.py pool: regenerate the file after changing it.")]
+    [FormerlySerializedAs("rankingPoolSets")] [SerializeField] private int selectionPoolSets = 12;
+    [Tooltip("Seconds the selection bushes take to grow and to shrink away again.")]
+    [FormerlySerializedAs("rankingFadeSeconds")] [SerializeField] private float selectionFadeSeconds = 0.4f;
+    [Tooltip("Seconds the world's bushes take to fade to grayscale when a selection starts, and back to colour when it ends.")]
+    [FormerlySerializedAs("rankingGraySeconds")] [SerializeField] private float selectionGraySeconds = 0.25f;
+    [Tooltip("Seconds per fruit while harvesting a selection bush (a whole bush takes this times fruitCount): quick.")]
+    [FormerlySerializedAs("rankingFruitSeconds")] [SerializeField] private float selectionFruitSeconds = 0.05f;
+    [Tooltip("No selection starts when this many seconds or fewer of the session are left.")]
+    [FormerlySerializedAs("rankingLastSeconds")] [SerializeField] private float selectionLastSeconds = 10f;
+    [Tooltip("A patch switch counts toward a selection only once the participant has harvested (taken a fruit from) at least this many different bushes since the last selection ended (since the session began, before the first), so no selection comes before they have seen what a bush pays and none follows another without foraging in between.")]
+    [FormerlySerializedAs("rankingMinBushes")] [SerializeField] private int selectionMinBushes = 1;
+    [Tooltip("The line shown at the top of the screen during a selection.")]
+    [FormerlySerializedAs("rankingText")] [SerializeField] private string selectionText = "Select the 5 most valuable bushes. 100 points available.";
+    [Tooltip("Bushes per set. Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingSetSize")] [SerializeField] private int selectionSetSize = 5;
+    [Tooltip("Degrees from the leftmost to the rightmost bush centre (the arc is symmetric about the heading). The outermost centres must stay inside the view of a 4:3 window, so at least half of each bush is on screen without turning: scripts/selection.py checks. Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingArcSpan")] [SerializeField] private float selectionArcSpan = 84f;
+    [Tooltip("Distance from the player to the nearest point of each canopy (world units); the same for every bush. Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingDistance")] [SerializeField] private float selectionDistance = 16f;
+    [Tooltip("The smallest true reward difference (points per fruit) between two bushes of a set; pairs closer than this are ties and score nothing. Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingTieGap")] [SerializeField] private float selectionTieGap = 0.25f;
+    [Tooltip("How the pool's sets are chosen: \"ladder\" (or empty) = five bushes whose true values form a ladder spread over the feature plane (the first design); \"plus\" = five bushes in a plus shape in the (shape, color) plane around the value map's peak. Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingDesign")] [SerializeField] private string selectionDesign = "ladder";
+    [Tooltip("Plus design: the plus's two axes. \"aligned\" = the shape and color axes; \"bump\" = the global-maximum bump's own axes (turned and stretched like it); \"random\" = a random turn and stretch; \"mixed\" = the sets take aligned, random, random in turn. A plus that would leave the map is shrunk and turned to fit. Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingPlusAxes")] [SerializeField] private string selectionPlusAxes = "mixed";
+    [Tooltip("Plus design: the centre bushes lie evenly spread (a sunflower spiral per axes mode) over an ellipse around the peak of this radius, in spreads (sigma) of the peak's bump along each of its axes. Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingPlusJitter")] [SerializeField] private float selectionPlusJitter = 1f;
+    [Tooltip("Plus design: the arms reach this many spreads (sigma) from the centre along the plus's axes (each arm draws its own length between 0.7 and 1.3 times this). Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingPlusArm")] [SerializeField] private float selectionPlusArm = 1f;
+    [Tooltip("Plus design, random axes: the second axis is this many times (at most) longer or shorter than the first, drawn log-uniformly. Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingPlusArmRatio")] [SerializeField] private float selectionPlusArmRatio = 2f;
+    [Tooltip("Plus design: where the three pluses of a selection go: \"spiral\" (each axes mode on a sunflower spiral around the peak), \"ring\" (a triangle around the peak per selection, rotating and widening) \"tile\" (greedy space filling of the rewarding region) or \"cover\" (centres anywhere in the rewarding region, each selection tiling it between its three pluses). Read by scripts/selection.py and plus_plans.py.")]
+    [FormerlySerializedAs("rankingPlusPlan")] [SerializeField] private string selectionPlusPlan = "spiral";
+    [Tooltip("Plus design: the spread of values in a set: \"free\" (whatever the fit gives), \"easy\", \"medium\", \"hard\" (a ladder of values a fixed step apart, wide to narrow), a number (the step as a share of the peak) or \"mixed\" (easy, medium, hard over the selections). Read by scripts/plus_plans.py.")]
+    [FormerlySerializedAs("rankingPlusDifficulty")] [SerializeField] private string selectionPlusDifficulty = "free";
+    [Tooltip("Plus design: the smallest distance in the unit (shape, color) plane between two bushes of a set, so they look different. Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingPlusMinSeparation")] [SerializeField] private float selectionPlusMinSeparation = 0.08f;
+    [Tooltip("Fixed schedule: the session seconds (elapsed, the clock is held in a selection) at which the 1st, 2nd, ... selection becomes due, for example 30, 60, 90, 120, 150 (empty = the patch-leaving rules above). A due selection starts at the next moment no harvest is under way, or after selectionMaxWait seconds at most.")]
+    [FormerlySerializedAs("rankingTimes")] [SerializeField] private float[] selectionTimes = new float[0];
+    [Tooltip("Fixed schedule: the most seconds a due selection waits for a harvest bout to end; then the bout is cancelled and the selection starts.")]
+    [FormerlySerializedAs("rankingMaxWait")] [SerializeField] private float selectionMaxWait = 10f;
+    [Tooltip("Dense design (selectionDesign 'dense'): how many bushes the participant picks (harvests) in a selection of the grid, the best of the 25.")]
+    [FormerlySerializedAs("rankingPicks")] [SerializeField] private int selectionPicks = 5;
+    [Tooltip("Dense design: the distance in world units between neighbouring bushes of the 5x5 grid on the stage. Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingGridSpacing")] [SerializeField] private float selectionGridSpacing = 7f;
+    [Tooltip("Dense design: the distance from the player to the middle of the grid (world units, along the heading). Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingGridDistance")] [SerializeField] private float selectionGridDistance = 18f;
+    [Tooltip("Dense design: the preset of scripts/dense_grid.py that plans the five grids (even, balanced, diverse). Read by scripts/selection.py.")]
+    [FormerlySerializedAs("rankingGridPreset")] [SerializeField] private string selectionGridPreset = "balanced";
+    [Tooltip("Dense design: points a selection is worth at most (the 'top_k' points mode: 100 x (picked sum - expected sum of a random pick) / (best sum - expected sum), from 0).")]
+    [FormerlySerializedAs("rankingTopKPoints")] [SerializeField] private float selectionTopKPoints = 100f;
+    [Tooltip("Dense design: which selections pay: 'one' = one selection, drawn from the world seed, pays its points; 'all' = every selection pays.")]
+    [FormerlySerializedAs("rankingPaid")] [SerializeField] private string selectionPaid = "one";
+    [Tooltip("The halo of the bush being aimed at is a copy of its canopy this many times larger (the main task uses 1.03), so it shows at the selection's distance.")]
+    [FormerlySerializedAs("rankingRimScale")] [SerializeField] private float selectionRimScale = 1.15f;
     [Tooltip("How many times brighter the rim of the bush being aimed at is than in the main task.")]
-    [SerializeField] private float rankingRimBoost = 3f;
-    [Tooltip("How far above the usual spot the progress ring and the rank number sit, in ring diameters, so they clear the canopy and its halo at the ranking's distance.")]
-    [SerializeField] private float rankingMarkerLift = 0.75f;
+    [FormerlySerializedAs("rankingRimBoost")] [SerializeField] private float selectionRimBoost = 3f;
+    [Tooltip("How far above the usual spot the progress ring and the rank number sit, in ring diameters, so they clear the canopy and its halo at the selection's distance.")]
+    [FormerlySerializedAs("rankingMarkerLift")] [SerializeField] private float selectionMarkerLift = 0.75f;
     [Tooltip("Size of the rank number, as a multiple of the number's size in the main task's units (the digits are about this times 1.2 degrees tall).")]
-    [SerializeField] private float rankingRankScale = 3f;
+    [FormerlySerializedAs("rankingRankScale")] [SerializeField] private float selectionRankScale = 3f;
     [Tooltip("Hidden bonus points per correctly ordered pair (a set of k bushes implies k(k-1)/2 pairs; pairs whose true values are tied are not counted, and a pair with an unranked bush is never correct), shown only on the final screen. Practice sessions award none. Provisional: scoring is decided at analysis time.")]
-    [SerializeField] private float rankingBonusPerPair = 4f;
-    [Tooltip("How a correct pair is paid: \"pair\" (or empty) is the bonus per correct pair; \"pair_mean_value\" is the bonus times the mean of the pair's two true bush values, so a miss among the best bushes costs more than among the poor ones. scripts/ranking.py POINTS_MODES lists the modes; RankingSets.PairWeight is the same rule.")]
-    [SerializeField] private string rankingPointsMode = "pair";
-    [Tooltip("Degrees beyond a canopy's edge at which the crosshair still selects it in a ranking when crosshairRadius is 0, the cone rule (0 = the crosshair must be inside the canopy; with the crosshair, rankingCrosshairRadius decides).")]
-    [SerializeField] private float rankingAimTolerance = 1.5f;
-    [Tooltip("The crosshair's hidden hit circle during a ranking (degrees), in place of crosshairRadius: the bushes of a set stand at least 2 degrees apart in the view, so a circle of up to 1 degree can touch only one of them. 0 = crosshairRadius. Read by scripts/replay.py from the log.")]
-    [SerializeField] private float rankingCrosshairRadius = 1f;
+    [FormerlySerializedAs("rankingBonusPerPair")] [SerializeField] private float selectionBonusPerPair = 4f;
+    [Tooltip("How a correct pair is paid: \"pair\" (or empty) is the bonus per correct pair; \"pair_mean_value\" is the bonus times the mean of the pair's two true bush values, so a miss among the best bushes costs more than among the poor ones. scripts/selection.py POINTS_MODES lists the modes; SelectionSets.PairWeight is the same rule.")]
+    [FormerlySerializedAs("rankingPointsMode")] [SerializeField] private string selectionPointsMode = "pair";
+    [Tooltip("Degrees beyond a canopy's edge at which the crosshair still selects it in a selection when crosshairRadius is 0, the cone rule (0 = the crosshair must be inside the canopy; with the crosshair, selectionCrosshairRadius decides).")]
+    [FormerlySerializedAs("rankingAimTolerance")] [SerializeField] private float selectionAimTolerance = 1.5f;
+    [Tooltip("The crosshair's hidden hit circle during a selection (degrees), in place of crosshairRadius: the bushes of a set stand at least 2 degrees apart in the view, so a circle of up to 1 degree can touch only one of them. 0 = crosshairRadius. Read by scripts/replay.py from the log.")]
+    [FormerlySerializedAs("rankingCrosshairRadius")] [SerializeField] private float selectionCrosshairRadius = 1f;
     [Tooltip("How far below the player's ground the disc's surface lies (units), so the player looks down onto the bushes. The camera is never moved.")]
-    [SerializeField] private float rankingStageDrop = 3f;
+    [FormerlySerializedAs("rankingStageDrop")] [SerializeField] private float selectionStageDrop = 3f;
     [Tooltip("Degrees the stage tips about the player's right: the far side rises, so the rows behind do not hide each other and the bushes stand upright on a hillside (0 = flat). The camera is never moved.")]
-    [SerializeField] private float rankingStageTilt = 0f;
+    [FormerlySerializedAs("rankingStageTilt")] [SerializeField] private float selectionStageTilt = 0f;
     [Tooltip("How far the disc's edge lies beyond the outermost bushes of the set (units).")]
-    [SerializeField] private float rankingStageMargin = 4f;
-    [Tooltip("How far the real terrain (and the sky's mountains) fade towards grey while a ranking runs, 0 to 1. The world's bushes always fade fully.")]
+    [FormerlySerializedAs("rankingStageMargin")] [SerializeField] private float selectionStageMargin = 4f;
+    [Tooltip("How far the real terrain (and the sky's mountains) fade towards grey while a selection runs, 0 to 1. The world's bushes always fade fully.")]
     [Range(0f, 1f)]
-    [SerializeField] private float rankingStageWorldGray = 0.6f;
+    [FormerlySerializedAs("rankingStageWorldGray")] [SerializeField] private float selectionStageWorldGray = 0.6f;
 
     [Header("Instructions")]
     [Tooltip("File in StreamingAssets shown before this session. '{part}' and '{total}' are replaced by this session's number and the count of sessions.")]
@@ -114,9 +115,9 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private string sessionLabel = "";
     [Tooltip("Optional file in StreamingAssets of popup hints that appear as the participant acts (the first line of a block is its trigger: see UI/TutorialHints.cs). Empty = no hints.")]
     [SerializeField] private string hintsFile = "";
-    [Tooltip("Small texts on the end screen of a session that has rankings: under the foraging points, under the ranking points, and centred under the total. Empty = none. **bold** works.")]
+    [Tooltip("Small texts on the end screen of a session that has selections: under the foraging points, under the selection points, and centred under the total. Empty = none. **bold** works.")]
     [SerializeField] private string scoreCaptionForaging = "";
-    [SerializeField] private string scoreCaptionRanking = "";
+    [SerializeField] private string scoreCaptionSelection = "";
     [SerializeField] private string scoreNote = "";
     [Tooltip("Optional text kept on screen during the session (empty = none).")]
     [SerializeField] private string controlsReminder = "";
@@ -159,7 +160,7 @@ public class SessionConfig : ScriptableObject
     [SerializeField] private float highlightFadeAngle = 45f;
     [Tooltip("Harvest is available, and keeps progressing, only while the bush is within this bearing (degrees). Looking further away pauses the harvest.")]
     [SerializeField] private float harvestMaxAngle = 35f;
-    [Tooltip("The crosshair's hidden hit circle (degrees of view angle around the centre of the screen): a bush can be harvested only while this circle touches its canopy (the canopy's real shape, above and below as well as to the sides), together with the harvest range. Used by main sessions and rankings alike. 0 = the old rule (a 35 degree cone of yaw, harvestMaxAngle; rankingAimTolerance). Read by scripts/replay.py from the log.")]
+    [Tooltip("The crosshair's hidden hit circle (degrees of view angle around the centre of the screen): a bush can be harvested only while this circle touches its canopy (the canopy's real shape, above and below as well as to the sides), together with the harvest range. Used by main sessions and selections alike. 0 = the old rule (a 35 degree cone of yaw, harvestMaxAngle; selectionAimTolerance). Read by scripts/replay.py from the log.")]
     [SerializeField] private float crosshairRadius = 7f;
     [Tooltip("A harvest in progress (main sessions) keeps going while the circle, grown by this factor, still touches the bush, so hand tremor at the edge does not pause it. Starting a harvest uses the plain circle.")]
     [SerializeField] private float crosshairReleaseScale = 2f;
@@ -180,7 +181,7 @@ public class SessionConfig : ScriptableObject
     [Tooltip("Rim light, selected bush only: thin crisp edge line, added on top of the soft glow.")]
     [SerializeField] private float rimSelectedIntensity = 2.5f;
     [SerializeField] private float rimSelectedPower = 8f;
-    [Tooltip("Size reference, in degrees of view of the camera, of the rank numbers above the bushes of a ranking set (the crosshair's harvest ring has its own, crosshairRingSizeDeg).")]
+    [Tooltip("Size reference, in degrees of view of the camera, of the rank numbers above the bushes of a selection set (the crosshair's harvest ring has its own, crosshairRingSizeDeg).")]
     [SerializeField] private float harvestRingSizeDeg = 7f;
     [Tooltip("An exhausted bush stays as a landmark and obstacle, easing into its 'spent' look over this long.")]
     [SerializeField] private float spentTransitionDuration = 0.6f;
@@ -389,55 +390,55 @@ public class SessionConfig : ScriptableObject
     public bool IsPractice => isPractice;
     public string ExperimentCode => name.Split('_')[0];
     public bool FreezeSun => freezeSun;
-    public int RankingEvery => rankingEvery;
-    public int[] RankingLeavings => rankingLeavings ?? new int[0];
-    public int RankingSets => rankingSets;
-    public float RankingSeconds => rankingSeconds;
-    public float RankingCooldown => rankingCooldown;
-    public float RankingSettleDepth => rankingSettleDepth;
-    public int RankingPoolSets => rankingPoolSets;
-    public float RankingFadeSeconds => rankingFadeSeconds;
-    public float RankingGraySeconds => rankingGraySeconds;
-    public float RankingFruitSeconds => rankingFruitSeconds;
-    public float RankingLastSeconds => rankingLastSeconds;
-    public int RankingMinBushes => rankingMinBushes;
-    public string RankingText => rankingText;
-    public int RankingSetSize => rankingSetSize;
-    public float RankingArcSpan => rankingArcSpan;
-    public float RankingDistance => rankingDistance;
-    public float RankingTieGap => rankingTieGap;
-    public string RankingDesign => string.IsNullOrEmpty(rankingDesign) ? "ladder" : rankingDesign;
-    public string RankingPlusAxes => string.IsNullOrEmpty(rankingPlusAxes) ? "mixed" : rankingPlusAxes;
-    public float RankingPlusJitter => rankingPlusJitter;
-    public float RankingPlusArm => rankingPlusArm;
-    public float RankingPlusArmRatio => rankingPlusArmRatio;
-    public float RankingPlusMinSeparation => rankingPlusMinSeparation;
-    public float[] RankingTimes => rankingTimes ?? new float[0];
-    public float RankingMaxWait => rankingMaxWait;
-    public int RankingPicks => rankingPicks;
-    public float RankingGridSpacing => rankingGridSpacing;
-    public float RankingGridDistance => rankingGridDistance;
-    public string RankingGridPreset => string.IsNullOrEmpty(rankingGridPreset) ? "balanced" : rankingGridPreset;
-    public float RankingTopKPoints => rankingTopKPoints;
-    public string RankingPaid => string.IsNullOrEmpty(rankingPaid) ? "one" : rankingPaid;
-    public string RankingPlusPlan => string.IsNullOrEmpty(rankingPlusPlan) ? "spiral" : rankingPlusPlan;
-    public string RankingPlusDifficulty => string.IsNullOrEmpty(rankingPlusDifficulty) ? "free" : rankingPlusDifficulty;
-    public float RankingRimScale => rankingRimScale;
-    public float RankingRimBoost => rankingRimBoost;
-    public float RankingMarkerLift => rankingMarkerLift;
-    public float RankingRankScale => rankingRankScale;
-    public float RankingBonusPerPair => rankingBonusPerPair;
-    public string RankingPointsMode => string.IsNullOrEmpty(rankingPointsMode) ? "pair" : rankingPointsMode;
-    public float RankingAimTolerance => rankingAimTolerance;
-    public float RankingCrosshairRadius => rankingCrosshairRadius;
-    public float RankingStageDrop => rankingStageDrop;
-    public float RankingStageMargin => rankingStageMargin;
-    public float RankingStageTilt => rankingStageTilt;
-    public float RankingStageWorldGray => rankingStageWorldGray;
+    public int SelectionEvery => selectionEvery;
+    public int[] SelectionLeavings => selectionLeavings ?? new int[0];
+    public int SelectionSets => selectionSets;
+    public float SelectionSeconds => selectionSeconds;
+    public float SelectionCooldown => selectionCooldown;
+    public float SelectionSettleDepth => selectionSettleDepth;
+    public int SelectionPoolSets => selectionPoolSets;
+    public float SelectionFadeSeconds => selectionFadeSeconds;
+    public float SelectionGraySeconds => selectionGraySeconds;
+    public float SelectionFruitSeconds => selectionFruitSeconds;
+    public float SelectionLastSeconds => selectionLastSeconds;
+    public int SelectionMinBushes => selectionMinBushes;
+    public string SelectionText => selectionText;
+    public int SelectionSetSize => selectionSetSize;
+    public float SelectionArcSpan => selectionArcSpan;
+    public float SelectionDistance => selectionDistance;
+    public float SelectionTieGap => selectionTieGap;
+    public string SelectionDesign => string.IsNullOrEmpty(selectionDesign) ? "ladder" : selectionDesign;
+    public string SelectionPlusAxes => string.IsNullOrEmpty(selectionPlusAxes) ? "mixed" : selectionPlusAxes;
+    public float SelectionPlusJitter => selectionPlusJitter;
+    public float SelectionPlusArm => selectionPlusArm;
+    public float SelectionPlusArmRatio => selectionPlusArmRatio;
+    public float SelectionPlusMinSeparation => selectionPlusMinSeparation;
+    public float[] SelectionTimes => selectionTimes ?? new float[0];
+    public float SelectionMaxWait => selectionMaxWait;
+    public int SelectionPicks => selectionPicks;
+    public float SelectionGridSpacing => selectionGridSpacing;
+    public float SelectionGridDistance => selectionGridDistance;
+    public string SelectionGridPreset => string.IsNullOrEmpty(selectionGridPreset) ? "balanced" : selectionGridPreset;
+    public float SelectionTopKPoints => selectionTopKPoints;
+    public string SelectionPaid => string.IsNullOrEmpty(selectionPaid) ? "one" : selectionPaid;
+    public string SelectionPlusPlan => string.IsNullOrEmpty(selectionPlusPlan) ? "spiral" : selectionPlusPlan;
+    public string SelectionPlusDifficulty => string.IsNullOrEmpty(selectionPlusDifficulty) ? "free" : selectionPlusDifficulty;
+    public float SelectionRimScale => selectionRimScale;
+    public float SelectionRimBoost => selectionRimBoost;
+    public float SelectionMarkerLift => selectionMarkerLift;
+    public float SelectionRankScale => selectionRankScale;
+    public float SelectionBonusPerPair => selectionBonusPerPair;
+    public string SelectionPointsMode => string.IsNullOrEmpty(selectionPointsMode) ? "pair" : selectionPointsMode;
+    public float SelectionAimTolerance => selectionAimTolerance;
+    public float SelectionCrosshairRadius => selectionCrosshairRadius;
+    public float SelectionStageDrop => selectionStageDrop;
+    public float SelectionStageMargin => selectionStageMargin;
+    public float SelectionStageTilt => selectionStageTilt;
+    public float SelectionStageWorldGray => selectionStageWorldGray;
     public string HintsFile => hintsFile;
     public string SessionLabel => sessionLabel;
     public string ScoreCaptionForaging => scoreCaptionForaging;
-    public string ScoreCaptionRanking => scoreCaptionRanking;
+    public string ScoreCaptionSelection => scoreCaptionSelection;
     public string ScoreNote => scoreNote;
 
     // A copy for a reduced run (RunModes.Short; never the asset itself, which would be saved into the file): a session lasts `factor` of its length.

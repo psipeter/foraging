@@ -62,4 +62,4 @@ def test_the_window_is_the_last_n_harvests_or_the_last_k_patches():
     visits = [(i, (i // 3, 0), 1.0) for i in range(12)]                                      # four patches of three harvests
     assert [v[0] for v in hg.window(visits, 12, 5, 0)] == [7, 8, 9, 10, 11]
     assert [v[0] for v in hg.window(visits, 12, 5, 2)] == [6, 7, 8, 9, 10, 11]
-    assert hg.ranking_times(visits) == [3, 6, 9]
+    assert hg.selection_times(visits) == [3, 6, 9]

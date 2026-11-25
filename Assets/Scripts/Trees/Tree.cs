@@ -23,7 +23,7 @@ public class Tree : MonoBehaviour
     public int treeId;
     public SessionConfig sessionConfig;
     public Material rimMaterial;
-    public float groundYOverride = float.NaN;          // a bush of a ranking stage stands on its disc, not on the terrain: the ground height there
+    public float groundYOverride = float.NaN;          // a bush of a selection stage stands on its disc, not on the terrain: the ground height there
 
     [SerializeField] private TerrainManager terrainManager;
 
@@ -141,8 +141,8 @@ public class Tree : MonoBehaviour
     // Both ease toward their targets so the cues fade in and out instead of popping.
     private void UpdateRim()
     {
-        float softTarget = _highlightLevel * sessionConfig.RimApproachIntensity * (_highlightEmphasis ? sessionConfig.RankingRimBoost * 0.5f : 1f);
-        float boost = _highlightEmphasis ? sessionConfig.RankingRimBoost : 1f;
+        float softTarget = _highlightLevel * sessionConfig.RimApproachIntensity * (_highlightEmphasis ? sessionConfig.SelectionRimBoost * 0.5f : 1f);
+        float boost = _highlightEmphasis ? sessionConfig.SelectionRimBoost : 1f;
         float crispTarget = _highlightSelected ? sessionConfig.RimSelectedIntensity * boost : 0f;
         float ease = 1f - Mathf.Exp(-12f * Time.deltaTime);
         _softCurrent = Mathf.Lerp(_softCurrent, softTarget, ease);
@@ -163,7 +163,7 @@ public class Tree : MonoBehaviour
         // Slightly different rim color once the bush is selected (harvestable).
         _selectedBlend = Mathf.Lerp(_selectedBlend, _highlightSelected ? 1f : 0f, ease);
         _rimInstance.SetColor("_RimColor", Color.Lerp(sessionConfig.RimColor, sessionConfig.RimSelectedColor, _selectedBlend));
-        _rimObject.transform.localScale = Vector3.one * Mathf.Lerp(RimScale, _highlightEmphasis ? sessionConfig.RankingRimScale : RimScale, _selectedBlend);
+        _rimObject.transform.localScale = Vector3.one * Mathf.Lerp(RimScale, _highlightEmphasis ? sessionConfig.SelectionRimScale : RimScale, _selectedBlend);
         _rimInstance.SetFloat("_SoftIntensity", _softCurrent);
         _rimInstance.SetFloat("_SoftPower", sessionConfig.RimApproachPower);
         _rimInstance.SetFloat("_CrispIntensity", _crispCurrent);
@@ -375,7 +375,7 @@ public class Tree : MonoBehaviour
         _rimObject.SetActive(false);
     }
 
-    // Fades the bush to grayscale (0 = as it is, 1 = grey), for the world's bushes while a ranking break runs: the canopy's tint goes smoothly to its luminance and its
+    // Fades the bush to grayscale (0 = as it is, 1 = grey), for the world's bushes while a selection break runs: the canopy's tint goes smoothly to its luminance and its
     // texture steps through desaturated copies (CanopyGrayscale), the fruit's shader has a _Gray property set through a property block (no shared material is written).
     public void SetGray(float amount)
     {
@@ -427,7 +427,7 @@ public class Tree : MonoBehaviour
         }
     }
 
-    // Ranking: the rank this bush was given (1 = the first harvested) shown as a number above the crown, facing the camera at the
+    // Selection: the rank this bush was given (1 = the first harvested) shown as a number above the crown, facing the camera at the
     // size reference harvestRingSizeDeg (the ring itself is the crosshair's). 0 removes it. A spent bush keeps its number.
     public void SetRank(int rank)
     {
@@ -487,9 +487,9 @@ public class Tree : MonoBehaviour
         float degrees = sessionConfig.HarvestRingSizeDeg;
         float size = 2f * dist * Mathf.Tan(degrees * 0.5f * Mathf.Deg2Rad);
         Transform label = _rankLabel.transform;
-        label.position = crown + Vector3.up * (0.4f + size * (0.5f + sessionConfig.RankingMarkerLift));
+        label.position = crown + Vector3.up * (0.4f + size * (0.5f + sessionConfig.SelectionMarkerLift));
         label.rotation = _rankCamera.rotation;
-        label.localScale = Vector3.one * (size / Mathf.Max(transform.lossyScale.x, 0.0001f) * 0.25f * sessionConfig.RankingRankScale);
+        label.localScale = Vector3.one * (size / Mathf.Max(transform.lossyScale.x, 0.0001f) * 0.25f * sessionConfig.SelectionRankScale);
     }
 
     // Exhausted bush: stays as a landmark and obstacle, easing into a spent look (uniformly shrunk, drab tint).
@@ -748,7 +748,7 @@ public class Tree : MonoBehaviour
     }
 
     // level: 0-1 graded cue while approaching; selected: this is the bush Space would harvest (or is harvesting).
-    // `emphasized` (a ranking): the selected bush gets a bigger, brighter halo, so it shows at the ranking's distance.
+    // `emphasized` (a selection): the selected bush gets a bigger, brighter halo, so it shows at the selection's distance.
     public void SetHighlight(float level, bool selected, bool emphasized = false)
     {
         _highlightLevel = Mathf.Clamp01(level);

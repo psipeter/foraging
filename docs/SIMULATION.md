@@ -90,7 +90,7 @@ random stream comes from the world seed, so a result is reproducible from its ke
 
 **The assessment battery** (`scripts/battery.py`; "battery" because "test suite" already means pytest). One definition of how agents are compared:
 the labels T1 to T4 of the one frozen tiles session `FIX_T0`, at the durations of the default `long` battery (60, 90, 120, 120 s, passed as `session_duration` overrides; `--battery standard` is the shorter 45, 60, 60, 90 s one), each label on its own worlds (world seeds shifted by 100 per label); reward only since the cleanup of 2026-11-14 (the
-Interlude half and the checkpoint scores are gone, and no ranking evaluation exists yet; the environment is a frozen tiles session); 10 seeds by default; each agent starts fresh in every session.
+Interlude half and the checkpoint scores are gone, and no selection evaluation exists yet; the environment is a frozen tiles session); 10 seeds by default; each agent starts fresh in every session.
 ```bash
 ./venv/bin/python scripts/battery.py list
 ./venv/bin/python scripts/battery.py run --population main --tag <name> [--agents a,b,...] [--seeds 0-9] [--db PATH]   # records <name>/<session> runs

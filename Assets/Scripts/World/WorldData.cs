@@ -110,8 +110,8 @@ public class WorldData
         return $"Experiments/{config.ExperimentCode}/{config.name}_seed{config.WorldSeed}.world";
     }
 
-    // A session's ranking pool (written by scripts/ranking.py pool), relative to StreamingAssets.
-    public static string RankingPoolPathFor(SessionConfig config)
+    // A session's selection pool (written by scripts/selection.py pool), relative to StreamingAssets.
+    public static string SelectionPoolPathFor(SessionConfig config)
     {
         return $"Experiments/{config.ExperimentCode}/{config.name}_seed{config.WorldSeed}.ranking.json";
     }

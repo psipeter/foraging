@@ -2,8 +2,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 
-// What a ranking break (RankingBreak) uses to score a set and to log its ranking_sets row (in SetRow.Columns order; `bushes` holds one object per bush in slot order).
-public static class RankingSets
+// What a selection break (SelectionBreak) uses to score a set and to log its ranking_sets row (in SetRow.Columns order; `bushes` holds one object per bush in slot order).
+public static class SelectionSets
 {
     public static string F(float value)
     {
@@ -12,7 +12,7 @@ public static class RankingSets
 
     // The payout rule: a set has one pair per two of its bushes, those whose true values differ by less than `tie` left out (`total`). A pair is `correct` only when
     // both bushes were picked and the one picked first is worth more; a pair with an unpicked bush (a timed-out set) is never correct, so leaving bushes unranked
-    // costs every pair they are in. `weight` is the sum of `PairWeight` over the correct pairs: the set pays the bonus times it. (scripts/ranking.py rankings_to_points is the same rule.)
+    // costs every pair they are in. `weight` is the sum of `PairWeight` over the correct pairs: the set pays the bonus times it. (scripts/selection.py selections_to_points is the same rule.)
     public static void ScorePairs(IReadOnlyList<int> setIds, IReadOnlyDictionary<int, float> values, IReadOnlyList<int> picks, float tie, string mode, out int correct, out int total, out float weight)
     {
         correct = 0;
@@ -40,7 +40,7 @@ public static class RankingSets
         }
     }
 
-    // What a correct pair is worth, in units of the bonus: "pair_mean_value" the mean of its two true values, any other mode (the default "pair") one. (scripts/ranking.py pair_weight.)
+    // What a correct pair is worth, in units of the bonus: "pair_mean_value" the mean of its two true values, any other mode (the default "pair") one. (scripts/selection.py pair_weight.)
     public static float PairWeight(string mode, float valueA, float valueB)
     {
         return mode == "pair_mean_value" ? (valueA + valueB) * 0.5f : 1f;
@@ -79,8 +79,8 @@ public static class RankingSets
         };
     }
 
-    // The dense design's score (scripts/ranking.py top_k_score is the same rule): 0 to `scale`, the picked values' sum against the best `k` of the grid, from the expected sum of k random bushes
-    // (k times the grid's mean value); fewer picks than k (a timed-out ranking) simply sum fewer values.
+    // The dense design's score (scripts/selection.py top_k_score is the same rule): 0 to `scale`, the picked values' sum against the best `k` of the grid, from the expected sum of k random bushes
+    // (k times the grid's mean value); fewer picks than k (a timed-out selection) simply sum fewer values.
     public static float TopKScore(IReadOnlyList<float> pickedValues, IReadOnlyList<float> allValues, int k, float scale)
     {
         var sorted = new List<float>(allValues);
@@ -127,7 +127,7 @@ public static class RankingSets
         return hits;
     }
 
-    // Which ranking (0-based) pays when only one does: drawn from the world seed (scripts/ranking.py paid_set_index).
+    // Which selection (0-based) pays when only one does: drawn from the world seed (scripts/selection.py paid_set_index).
     public static int PaidSetIndex(int seed, int count)
     {
         ulong h = ((ulong)(uint)seed * 2654435761UL) >> 8;

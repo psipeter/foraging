@@ -16,40 +16,56 @@ MonoBehaviour:
   worldSeed: 9182
   isPractice: 0
   freezeSun: 0
-  rankingEvery: 1
-  rankingLeavings: 
-  rankingEstimate: 8
-  rankingSets: 1
-  rankingSeconds: 20
-  rankingCooldown: 0
-  rankingSettleDepth: 0
-  rankingPoolSets: 30
-  rankingFadeSeconds: 0.4
-  rankingGraySeconds: 0.25
-  rankingFruitSeconds: 0.05
-  rankingLastSeconds: 10
-  rankingMinBushes: 1
-  rankingText: Rank these bushes from most to least valuable
-  rankingSetSize: 5
-  rankingArcSpan: 84
-  rankingDistance: 16
-  rankingTieGap: 0.25
-  rankingRimScale: 1.15
-  rankingRimBoost: 3
-  rankingMarkerLift: 0.75
-  rankingRankScale: 3
-  rankingBonusPerPair: 4
-  rankingPointsMode: pair_mean_value
-  rankingAimTolerance: 1.5
-  rankingCrosshairRadius: 1
-  rankingStageDrop: 3
-  rankingStageMargin: 4
-  rankingStageWorldGray: 0.6
+  selectionEvery: 1
+  selectionLeavings: 
+  selectionSets: 1
+  selectionSeconds: 20
+  selectionCooldown: 0
+  selectionSettleDepth: 0
+  selectionPoolSets: 30
+  selectionFadeSeconds: 0.4
+  selectionGraySeconds: 0.25
+  selectionFruitSeconds: 0.05
+  selectionLastSeconds: 10
+  selectionMinBushes: 1
+  selectionText: Rank these bushes from most to least valuable
+  selectionSetSize: 5
+  selectionArcSpan: 84
+  selectionDistance: 16
+  selectionTieGap: 0.25
+  selectionDesign: ladder
+  selectionPlusAxes: mixed
+  selectionPlusJitter: 1
+  selectionPlusArm: 1
+  selectionPlusArmRatio: 2
+  selectionPlusPlan: spiral
+  selectionPlusDifficulty: free
+  selectionPlusMinSeparation: 0.08
+  selectionTimes: []
+  selectionMaxWait: 10
+  selectionPicks: 5
+  selectionGridSpacing: 7
+  selectionGridDistance: 18
+  selectionGridPreset: balanced
+  selectionTopKPoints: 100
+  selectionPaid: one
+  selectionRimScale: 1.15
+  selectionRimBoost: 3
+  selectionMarkerLift: 0.75
+  selectionRankScale: 3
+  selectionBonusPerPair: 4
+  selectionPointsMode: pair_mean_value
+  selectionAimTolerance: 1.5
+  selectionCrosshairRadius: 1
+  selectionStageDrop: 3
+  selectionStageTilt: 0
+  selectionStageMargin: 4
+  selectionStageWorldGray: 0.6
   instructionsFile: Experiments/FOR/instructions_S1.txt
   sessionLabel: 
   hintsFile: 
   scoreCaptionForaging: 
-  scoreCaptionRanking: 
+  scoreCaptionSelection: 
   scoreNote: 
   controlsReminder: 
   controlsReminderOpacity: 0.35

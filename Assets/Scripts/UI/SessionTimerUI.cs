@@ -39,7 +39,7 @@ public class SessionTimerUI : MonoBehaviour
         _textIdle = timerText.color;
     }
 
-    // The session clock is held (a ranking break): the plate and digits dim; false puts them back.
+    // The session clock is held (a selection break): the plate and digits dim; false puts them back.
     public void SetPaused(bool paused)
     {
         if (timerText == null)
@@ -178,9 +178,9 @@ public class SessionTimerUI : MonoBehaviour
             }
         }
 
-        // The ranking sets' points appear only here (during play a set shows a sealed "+???"). The totals are on the experiment's completion screen, after the last of these.
-        bool split = sessionConfig != null && sessionConfig.RankingEvery > 0;
-        _score = ScoreScreen.Show(GameManager.PartLabel, _lastTotalScore, RankingBreak.Points, split, "Press [Enter] to continue", FindFirstObjectByType<CameraController>(), sessionConfig);
+        // The selection sets' points appear only here (during play a set shows a sealed "+???"). The totals are on the experiment's completion screen, after the last of these.
+        bool split = sessionConfig != null && sessionConfig.SelectionEvery > 0;
+        _score = ScoreScreen.Show(GameManager.PartLabel, _lastTotalScore, SelectionBreak.Points, split, "Press [Enter] to continue", FindFirstObjectByType<CameraController>(), sessionConfig);
         Music.PlayScore();
     }
 }

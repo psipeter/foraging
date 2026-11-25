@@ -9,8 +9,8 @@ public class FeedbackAudio : MonoBehaviour
     {
         FruitPick,
         BushExhausted,
-        RankingPick,
-        RankingDone,
+        SelectionPick,
+        SelectionDone,
         PopupOpen
     }
 
@@ -42,7 +42,7 @@ public class FeedbackAudio : MonoBehaviour
     {
         HarvestManager.OnFruitCollected += HandleFruitCollected;
         HarvestManager.OnBushExhausted += HandleBushExhausted;
-        RankingBreak.OnSetScored += HandleSetScored;
+        SelectionBreak.OnSetScored += HandleSetScored;
         InstructionsScreen.OnOpened += HandlePopupOpened;
     }
 
@@ -50,14 +50,14 @@ public class FeedbackAudio : MonoBehaviour
     {
         HarvestManager.OnFruitCollected -= HandleFruitCollected;
         HarvestManager.OnBushExhausted -= HandleBushExhausted;
-        RankingBreak.OnSetScored -= HandleSetScored;
+        SelectionBreak.OnSetScored -= HandleSetScored;
         InstructionsScreen.OnOpened -= HandlePopupOpened;
     }
 
-    // The ranking set was scored: one chime, always the same (it says the set is done, not how it went).
+    // The selection set was scored: one chime, always the same (it says the set is done, not how it went).
     private void HandleSetScored()
     {
-        Play(Cue.RankingDone, 1f);
+        Play(Cue.SelectionDone, 1f);
     }
 
     // An instruction popup opens: one quiet pip, the same for every popup.
@@ -68,12 +68,12 @@ public class FeedbackAudio : MonoBehaviour
 
     private void HandleFruitCollected(float amount, Vector3 worldPos)
     {
-        // A ranking never reveals the reward, so its pick sound is a different, neutral sound that never changes
+        // A selection never reveals the reward, so its pick sound is a different, neutral sound that never changes
         // pitch. (The main pick sound rises in pitch with the reward, and reusing it, even at a fixed pitch, would
         // pair the harvest with that low-versus-high-reward cue.)
-        if (RankingBreak.Active)
+        if (SelectionBreak.Active)
         {
-            Play(Cue.RankingPick, 1f);
+            Play(Cue.SelectionPick, 1f);
             return;
         }
 
@@ -112,19 +112,19 @@ public class FeedbackAudio : MonoBehaviour
              + 0.35f * Mathf.Sin(2f * Mathf.PI * 2f * PickToneHz * t)
              + 0.12f * Mathf.Sin(2f * Mathf.PI * 3f * PickToneHz * t)) * Mathf.Exp(-t * 24f));
 
-        // Ranking pick: a very short, soft, low "bloop" that falls in pitch (the main pick blip is bright and has a
-        // fixed upward contour), so it cannot be mistaken for the reward cue. At a ranking's fast per-fruit rate it
+        // Selection pick: a very short, soft, low "bloop" that falls in pitch (the main pick blip is bright and has a
+        // fixed upward contour), so it cannot be mistaken for the reward cue. At a selection's fast per-fruit rate it
         // reads as a quick run of ticks.
         const float length = 0.045f;
-        _clips[Cue.RankingPick] = Synthesize("RankingPick", length, (t) =>
+        _clips[Cue.SelectionPick] = Synthesize("SelectionPick", length, (t) =>
         {
             const float f0 = 480f, f1 = 300f;
             float phase = 2f * Mathf.PI * (f0 * t + (f1 - f0) * t * t / (2f * length));
             return Mathf.Sin(phase) * Mathf.Exp(-t * 55f);
         });
 
-        // Ranking done: a soft rising triad (C, E, G) of bell-like notes, slower and lower than the reward blip and the exhausted chime, so it is its own sound.
-        _clips[Cue.RankingDone] = Synthesize("RankingDone", 0.9f, (t) =>
+        // Selection done: a soft rising triad (C, E, G) of bell-like notes, slower and lower than the reward blip and the exhausted chime, so it is its own sound.
+        _clips[Cue.SelectionDone] = Synthesize("SelectionDone", 0.9f, (t) =>
         {
             float sum = 0f;
             float[] notes = { 523.25f, 659.25f, 783.99f };

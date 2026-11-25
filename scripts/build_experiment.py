@@ -1,10 +1,10 @@
 """Build an experiment from its design module (`scripts/design/<code>.py`): its session assets, the ExperimentConfig and its catalog
-entry (through the open Unity Editor and Assets/Editor/ExperimentBuilder.cs), the instruction texts, the worlds and the ranking pools.
+entry (through the open Unity Editor and Assets/Editor/ExperimentBuilder.cs), the instruction texts, the worlds and the selection pools.
 
     ./venv/bin/python scripts/build_experiment.py <code> [--remove-stale] [--no-generate] [--dry-run]
 
 --remove-stale   delete the experiment's session assets that the design no longer lists (generated files of those names are removed too)
---no-generate    write assets and texts only; skip the worlds and pools (regenerate them with world.py / ranking.py)
+--no-generate    write assets and texts only; skip the worlds and pools (regenerate them with world.py / selection.py)
 --dry-run        print what would be built and write nothing
 
 An open Editor in the `ready` state is needed for the assets (see CLAUDE.md, "Driving the Unity Editor"); nothing falls back to editing YAML.
@@ -83,20 +83,20 @@ def write_texts(module):
 
 
 def generate(module):
-    """Worlds and ranking pools of every instance (what `world.py --unity` and `ranking.py pool` do), in this process."""
-    import ranking
+    """Worlds and selection pools of every instance (what `world.py --unity` and `selection.py pool` do), in this process."""
+    import selection
     import world
     for inst in module.instances():
         params = world.load_session(inst.name)
         path = world.unity_world_path(inst.name, int(params.world_seed))
         world.export_unity(world.generate_world(params, int(params.world_seed)), path)
         print(f"{path.name}")
-        if int(getattr(params, "ranking_every", 0) or 0) > 0:
-            print(ranking.export_pool(inst.name)[0].name)
+        if int(getattr(params, "selection_every", 0) or 0) > 0:
+            print(selection.export_pool(inst.name)[0].name)
 
 
 def remove_stale_files(module):
-    """Generated files in the experiment's StreamingAssets folder that no instance owns (worlds and ranking pools; texts are left alone)."""
+    """Generated files in the experiment's StreamingAssets folder that no instance owns (worlds and selection pools; texts are left alone)."""
     keep = {inst.name for inst in module.instances()}
     removed = []
     for path in (STREAMING_EXPERIMENTS / module.CODE).glob("*_seed*.*"):

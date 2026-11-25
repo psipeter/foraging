@@ -143,10 +143,10 @@ public class TerrainManager : MonoBehaviour
 
     }
 
-    // The terrain's own material instance (the textures and settings of this session; the ranking stage's disc copies it).
+    // The terrain's own material instance (the textures and settings of this session; the selection stage's disc copies it).
     public Material MaterialInstance { get; private set; }
 
-    // How far the terrain is greyed, 0 to 1 (a ranking stage greys the world behind it).
+    // How far the terrain is greyed, 0 to 1 (a selection stage greys the world behind it).
     public void SetGray(float amount)
     {
         if (MaterialInstance != null)

@@ -1,4 +1,4 @@
-session / ranking: shape spacing x colour spacing, points inside, peak index (shape, colour), best-5 sum as a share of 5 peaks
+session / selection: shape spacing x colour spacing, points inside, peak index (shape, colour), best-5 sum as a share of 5 peaks
 Complexity, session 1 (PCX_S1, preset balanced) (map stretched 2.00:1 along shape, grid colour:shape spacing ends 1.71)
   1: 0.245 x 0.245, 6/25 = 24%, peak (4, 4), 0.81
   2: 0.220 x 0.230, 7/25 = 28%, peak (4, 4), 0.84

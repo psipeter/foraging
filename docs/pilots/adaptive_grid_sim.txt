@@ -1,17 +1,17 @@
-PSC_S1: s_max 0.333, s_min 0.130 (peak [0.71, 0.71], map spread 0.27); 150 participants of each type, 10 rankings
+PSC_S1: s_max 0.333, s_min 0.130 (peak [0.71, 0.71], map spread 0.27); 150 participants of each type, 10 selections
 
-recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at ranking 3, 6, 10
+recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at selection 3, 6, 10
   fixed      0.086 0.087 0.078
   staircase  0.066 0.057 0.043
   posterior  0.068 0.052 0.044
 
-pay per ranking (mean of 100*(L+R)/2) by participant type, over all rankings
+pay per selection (mean of 100*(L+R)/2) by participant type, over all selections
   policy         fast     slow    noisy    wrong  sandbag   centre
   fixed          80.5     76.6     67.1     68.6     68.2     53.5
   staircase      84.6     76.2     67.3     60.0     70.2     46.7
   posterior      81.9     72.1     70.2     52.6     68.8     52.9
 
-what the grid size tells a participant: correlation, across fast learners, of the mean spacing of rankings 5-10 with how wrong their belief is (0 = nothing)
+what the grid size tells a participant: correlation, across fast learners, of the mean spacing of selections 5-10 with how wrong their belief is (0 = nothing)
   staircase  r = +0.17
   posterior  r = +0.24
 
@@ -19,30 +19,30 @@ drift of the window centre toward the truth beyond the belief (mean projection, 
   staircase  -0.05
   posterior  -0.19
 
-sandbagging: total pay over the rankings, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)
+sandbagging: total pay over the selections, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)
   fixed       +123.3 points
   staircase   +143.6 points
   posterior   +131.7 points
 
-the ranker with no knowledge (centre) against the slow learner, mean pay per ranking
+the ranker with no knowledge (centre) against the slow learner, mean pay per selection
   fixed      centre  53.5   slow  76.6
   staircase  centre  46.7   slow  76.2
   posterior  centre  52.9   slow  72.1
 
-PCX_S2: s_max 0.333, s_min 0.105 (peak [0.12, 0.65], map spread 0.27); 150 participants of each type, 10 rankings
+PCX_S2: s_max 0.333, s_min 0.105 (peak [0.12, 0.65], map spread 0.27); 150 participants of each type, 10 selections
 
-recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at ranking 3, 6, 10
+recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at selection 3, 6, 10
   fixed      0.070 0.064 0.052
   staircase  0.054 0.048 0.039
   posterior  0.063 0.048 0.041
 
-pay per ranking (mean of 100*(L+R)/2) by participant type, over all rankings
+pay per selection (mean of 100*(L+R)/2) by participant type, over all selections
   policy         fast     slow    noisy    wrong  sandbag   centre
   fixed          79.7     77.1     69.7     69.1     68.0     53.1
   staircase      84.7     77.9     72.8     61.8     71.3     46.0
   posterior      81.5     72.2     72.2     56.1     69.0     47.6
 
-what the grid size tells a participant: correlation, across fast learners, of the mean spacing of rankings 5-10 with how wrong their belief is (0 = nothing)
+what the grid size tells a participant: correlation, across fast learners, of the mean spacing of selections 5-10 with how wrong their belief is (0 = nothing)
   staircase  r = +0.17
   posterior  r = +0.03
 
@@ -50,30 +50,30 @@ drift of the window centre toward the truth beyond the belief (mean projection, 
   staircase  -0.03
   posterior  -0.19
 
-sandbagging: total pay over the rankings, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)
+sandbagging: total pay over the selections, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)
   fixed       +116.8 points
   staircase   +133.3 points
   posterior   +124.8 points
 
-the ranker with no knowledge (centre) against the slow learner, mean pay per ranking
+the ranker with no knowledge (centre) against the slow learner, mean pay per selection
   fixed      centre  53.1   slow  77.1
   staircase  centre  46.0   slow  77.9
   posterior  centre  47.6   slow  72.2
 
-PCX_S3: s_max 0.333, s_min 0.075 (peak [0.5, 0.58], map spread 0.33); 150 participants of each type, 10 rankings
+PCX_S3: s_max 0.333, s_min 0.075 (peak [0.5, 0.58], map spread 0.33); 150 participants of each type, 10 selections
 
-recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at ranking 3, 6, 10
+recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at selection 3, 6, 10
   fixed      0.084 0.065 0.044
   staircase  0.063 0.055 0.043
   posterior  0.081 0.058 0.049
 
-pay per ranking (mean of 100*(L+R)/2) by participant type, over all rankings
+pay per selection (mean of 100*(L+R)/2) by participant type, over all selections
   policy         fast     slow    noisy    wrong  sandbag   centre
   fixed          73.6     64.4     57.2     48.7     61.2     75.3
   staircase      73.6     67.4     59.4     48.0     60.5     55.2
   posterior      71.8     62.2     61.7     44.2     60.5     66.7
 
-what the grid size tells a participant: correlation, across fast learners, of the mean spacing of rankings 5-10 with how wrong their belief is (0 = nothing)
+what the grid size tells a participant: correlation, across fast learners, of the mean spacing of selections 5-10 with how wrong their belief is (0 = nothing)
   staircase  r = -0.08
   posterior  r = -0.20
 
@@ -81,12 +81,12 @@ drift of the window centre toward the truth beyond the belief (mean projection, 
   staircase  -0.06
   posterior  -0.51
 
-sandbagging: total pay over the rankings, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)
+sandbagging: total pay over the selections, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)
   fixed       +123.5 points
   staircase   +130.8 points
   posterior   +113.8 points
 
-the ranker with no knowledge (centre) against the slow learner, mean pay per ranking
+the ranker with no knowledge (centre) against the slow learner, mean pay per selection
   fixed      centre  75.3   slow  64.4
   staircase  centre  55.2   slow  67.4
   posterior  centre  66.7   slow  62.2

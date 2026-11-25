@@ -5,7 +5,7 @@
         session.json                               the `sessions` row (config, world hashes, camera, display, score, ...)
         events.csv                                 seq,t,real,type,tree_id,k,reward,running_total,payload
         trajectory.csv                             seq,t,x,z,yaw,pitch,keys   (the quantized values the server holds)
-        ranking_sets.csv                           seq + the columns of the `ranking_sets` table (a session with ranking breaks only)
+        ranking_sets.csv                           seq + the columns of the `ranking_sets` table (a session with selection breaks only)
 
 The Editor and standalone builds write this as the developer mirror of what an online build uploads; `read_session`
 returns the same structures whether the rows came from here or from the database. Missing numbers are empty cells
@@ -22,7 +22,7 @@ import numpy as np
 
 EVENT_COLUMNS = ("seq", "t", "real", "type", "tree_id", "k", "reward", "running_total", "payload")
 TRAJECTORY_COLUMNS = ("seq", "t", "x", "z", "yaw", "pitch", "keys")
-RANKING_COLUMNS = (
+SELECTION_COLUMNS = (
     "seq", "set_index", "pool_index", "start_x", "start_z", "timed_out", "response_time", "first_harvest_time", "points", "paused_seconds",
     "set_size", "correct_pairs", "total_pairs", "bushes")      # a set is one row; `bushes` is a list of dicts, JSON in the CSV
 _INTEGER = {"seq", "set_index", "pool_index", "timed_out", "set_size", "correct_pairs", "total_pairs"}
@@ -113,7 +113,7 @@ def write_run(root, run_id, run):
 
 def write_session(root, run_id, session_index, session, traj, events, sets=None):
     """Write one session. `traj` is (n, 6) t, x, z, yaw, pitch, keys, already quantized (`trajectory_codec.quantize`),
-    `events` a list of dicts (t, type and optionally real, tree_id, k, reward, running_total, payload), `sets` ranking-set dicts.
+    `events` a list of dicts (t, type and optionally real, tree_id, k, reward, running_total, payload), `sets` selection-set dicts.
     `seq` is the position in the list."""
     folder = Path(root) / str(run_id) / f"{session_index:02d}"
     folder.mkdir(parents=True, exist_ok=True)
@@ -139,9 +139,9 @@ def write_session(root, run_id, session_index, session, traj, events, sets=None)
     if sets is not None:
         with open(folder / "ranking_sets.csv", "w", newline="") as f:
             w = csv.writer(f, lineterminator="\n")
-            w.writerow(RANKING_COLUMNS)
+            w.writerow(SELECTION_COLUMNS)
             for seq, t in enumerate(sets):
-                w.writerow([seq if c == "seq" else _cell(t.get(c)) for c in RANKING_COLUMNS])
+                w.writerow([seq if c == "seq" else _cell(t.get(c)) for c in SELECTION_COLUMNS])
     return folder
 
 
@@ -159,7 +159,7 @@ def read_session(folder):
         raise ValueError(f"{folder}: trajectory seq is not consecutive")
     sets = set_cut = None
     if (folder / "ranking_sets.csv").exists():
-        sets, set_cut = _read_rows(folder / "ranking_sets.csv", RANKING_COLUMNS, _set)
+        sets, set_cut = _read_rows(folder / "ranking_sets.csv", SELECTION_COLUMNS, _set)
     truncated = [name for name, cut in (("trajectory.csv", traj_cut), ("events.csv", events_cut),
                                         ("ranking_sets.csv", set_cut)) if cut]
     return {"session": session, "traj": traj[:, 1:], "events": events, "sets": sets, "truncated": truncated}

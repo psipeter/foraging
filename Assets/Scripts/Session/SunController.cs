@@ -42,7 +42,7 @@ public class SunController : MonoBehaviour
 
     public bool SessionComplete => sessionTime >= SessionDuration;
 
-    // While held the session clock does not advance (a ranking break): the timer, the sun and the end of the session wait.
+    // While held the session clock does not advance (a selection break): the timer, the sun and the end of the session wait.
     public bool ClockHeld { get; set; }
 
     public static event Action OnSessionEnd;
@@ -55,7 +55,7 @@ public class SunController : MonoBehaviour
         sessionTime = Mathf.Max(0f, seconds);
     }
 
-    // Ends the session now (a ranking never ends a session).
+    // Ends the session now (a selection never ends a session).
     public void EndSession()
     {
         sessionTime = SessionDuration;

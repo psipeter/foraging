@@ -6,7 +6,7 @@ The instruction page and the hints are `instructions_S1.txt` and `hints_S1.txt`,
 
 import value_maps
 from design import Instance
-from design.FOR import DENSE_RANKING_FIELDS, RANKING_TEXT, CROSSHAIR_RADIUS, CROSSHAIR_RING_DEG, FEEDBACK_FIELDS, RANKING_FIELDS, _fields
+from design.FOR import DENSE_SELECTION_FIELDS, SELECTION_TEXT, CROSSHAIR_RADIUS, CROSSHAIR_RING_DEG, FEEDBACK_FIELDS, SELECTION_FIELDS, _fields
 
 CODE = "TUT"
 TITLE = "Tutorial"
@@ -15,7 +15,7 @@ COUNTS_TOWARD_TOTAL = False
 TEMPLATE_SESSION = "FOR_S1"             # copied only when the session has no asset yet (the lighting, camera and so on come from it)
 
 SECONDS = 150
-TUT_SCHEDULE = {"rankingTimes.Array.size": 2, "rankingTimes.Array.data[0]": 30.0, "rankingTimes.Array.data[1]": 90.0, "rankingPoolSets": 2}      # the pilots' dense selection (design/FOR.py) played twice, at 30 s and 90 s of the 150 (the time popups sit at 60 s and 120 s)
+TUT_SCHEDULE = {"selectionTimes.Array.size": 2, "selectionTimes.Array.data[0]": 30.0, "selectionTimes.Array.data[1]": 90.0, "selectionPoolSets": 2}      # the pilots' dense selection (design/FOR.py) played twice, at 30 s and 90 s of the 150 (the time popups sit at 60 s and 120 s)
 CONTROLS_REMINDER = "Mouse: look. W / S: walk. Space: hold to harvest. Escape: pause"      # the bar at the bottom of the screen for the whole tutorial ("Key: action" pairs, `InstructionsPanel.FormatControls`)
 LABEL = "Tutorial"                      # the small blue line over every instruction screen and popup, and on the end screen
 
@@ -36,8 +36,8 @@ HINTS = """# Tutorial hints. A block is a trigger line, then the popup: title, t
 #
 #     Press [Enter] to continue
 #
-# Triggers (Assets/Scripts/UI/TutorialHints.cs; an unknown one is an error): bout n (a harvest that took fruit ends), patch_switch n (the nth qualifying patch leaving, as the rankings count them),
-# selection_start n, selection_end n, time_left s (the first moment s foraging seconds or fewer are left; the clock pulses yellow while the hint is up). A waiting foraging hint holds back a ranking hint behind it; after a resume, counts carry on from the highest hint of a trigger already shown.
+# Triggers (Assets/Scripts/UI/TutorialHints.cs; an unknown one is an error): bout n (a harvest that took fruit ends), patch_switch n (the nth qualifying patch leaving, as the selections count them),
+# selection_start n, selection_end n, time_left s (the first moment s foraging seconds or fewer are left; the clock pulses yellow while the hint is up). A waiting foraging hint holds back a selection hint behind it; after a resume, counts carry on from the highest hint of a trigger already shown.
 # {points} is what the harvest that fired it earned.
 
 @bout 1
@@ -102,9 +102,9 @@ def instances():
     fields = _fields({"tileRadius": s["tile_radius"]}, c["world_seed"], valuemap)
     return [Instance(f"{CODE}_S1", fields,
                      {"sessionDuration": SECONDS, "instructionsFile": f"Experiments/{CODE}/instructions_S1.txt", "hintsFile": f"Experiments/{CODE}/hints_S1.txt", "sessionLabel": LABEL, "controlsReminder": CONTROLS_REMINDER,
-                      "scoreCaptionForaging": "Points earned from harvesting bushes", "scoreCaptionRanking": "Points earned from selecting bushes",
+                      "scoreCaptionForaging": "Points earned from harvesting bushes", "scoreCaptionSelection": "Points earned from selecting bushes",
                       "scoreNote": "**Payment** is based on total points earned",
-                      "isPractice": True, "crosshairRadius": CROSSHAIR_RADIUS, "crosshairRingSizeDeg": CROSSHAIR_RING_DEG, **FEEDBACK_FIELDS, "rewardFeedbackMax": float(c["feedback_max"]), **RANKING_FIELDS, **{k: v for k, v in DENSE_RANKING_FIELDS.items() if not k.startswith("rankingTimes")}, **TUT_SCHEDULE},
+                      "isPractice": True, "crosshairRadius": CROSSHAIR_RADIUS, "crosshairRingSizeDeg": CROSSHAIR_RING_DEG, **FEEDBACK_FIELDS, "rewardFeedbackMax": float(c["feedback_max"]), **SELECTION_FIELDS, **{k: v for k, v in DENSE_SELECTION_FIELDS.items() if not k.startswith("selectionTimes")}, **TUT_SCHEDULE},
                      {"experiment": CODE, "index": 1, "cell": "tutorial", "tutorial": True, "knobs": c["knobs"], "world_seed": c["world_seed"], "calibrator": c["calibrator"], **valuemap.describe()})]
 
 

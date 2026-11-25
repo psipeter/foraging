@@ -33,18 +33,18 @@ public class ResumeReply
     public bool has_pose;
     public PoseReply pose;
     public double clock;                    // the session clock to continue from (later than every stored frame and event)
-    public double held_seconds;             // of it, the seconds the session clock was held in ranking breaks (the foraging clock continues from clock - held_seconds)
-    public int breaks;                      // the number of the last ranking break begun (a break played again after an interruption keeps its number)
-    public int open_break;                  // the number of the break the data stops inside, 0 when none (docs/ONLINE_DATA_PLAN.md, "Ranking breaks")
+    public double held_seconds;             // of it, the seconds the session clock was held in selection breaks (the foraging clock continues from clock - held_seconds)
+    public int breaks;                      // the number of the last selection break begun (a break played again after an interruption keeps its number)
+    public int open_break;                  // the number of the break the data stops inside, 0 when none (docs/ONLINE_DATA_PLAN.md, "Selection breaks")
     public int open_break_leaving;          // the patch leaving it came at
     public int open_break_sets_done;        // how many of its sets were scored
     public bool open_break_end_logged;      // the break's aborted end is already in the log (a second reload before it was played again): do not log another
-    public int leavings;                    // the patch leavings counted so far (rank_leaving events): the ranking schedule continues from it
-    public bool leaving_due;                // the last leaving made a ranking due that had not begun
+    public int leavings;                    // the patch leavings counted so far (rank_leaving events): the selection schedule continues from it
+    public bool leaving_due;                // the last leaving made a selection due that had not begun
     public string[] hints_shown;            // the ids of the tutorial hints already shown in the session (not shown again)
-    public int sets_played;                 // ranking sets shown so far, counting the tries that were interrupted (the pool continues from sets_next, the scored ones)
-    public float ranking_points;            // the points paid by the ranking sets so far (0 in a practice session)
-    public int ranking_pairs;               // the correct pairs of the ranking sets so far: with the bonus per pair, what they were worth, which the end screen shows
+    public int sets_played;                 // selection sets shown so far, counting the tries that were interrupted (the pool continues from sets_next, the scored ones)
+    public float ranking_points;            // the points paid by the selection sets so far (0 in a practice session)
+    public int ranking_pairs;               // the correct pairs of the selection sets so far: with the bonus per pair, what they were worth, which the end screen shows
     public float running_total;
     public TreeCount[] fruits_taken;        // fruits already taken per bush
     public int open_bout_tree;              // the bush being harvested when the data stops, or -1

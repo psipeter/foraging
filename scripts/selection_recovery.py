@@ -1,21 +1,21 @@
-"""Model recovery for the plus ranking design: which axes mode tells learners with different knowledge apart?
+"""Model recovery for the plus selection design: which axes mode tells learners with different knowledge apart?
 
 Four simulated learners know a session's value map to different degrees: `full` (the true map), `additive` (its best additive approximation, a function of shape plus a function of
 colour: no conjunction knowledge), `shape` (the map averaged over colour: a shape-only learner) and `colour` (averaged over shape). A learner ranks a set of five bushes by a
 Plackett-Luce choice over its own values at temperature `tau` (points per fruit): first it picks the best, then the best of the rest, and so on. Four contrasts ask what a set of
-rankings can tell apart:
+selections can tell apart:
 
     conjunction   additive vs full    (does the participant know the joint structure?)
     colour use    shape vs additive   (does the participant use colour at all?)
     shape use     colour vs additive  (does the participant use shape at all?)
     which feature shape vs colour
 
-For each set the distributions over its 120 possible rankings under the two learners are exact, so the Jeffreys divergence (KL both ways, nats) is the expected evidence one ranking
+For each set the distributions over its 120 possible selections under the two learners are exact, so the Jeffreys divergence (KL both ways, nats) is the expected evidence one selection
 of that set gives; its mean over the sets of an axes mode says how informative that mode is. Recovery accuracy is the share of simulated participants (n sets, drawn from the
 mode, ranked by one learner or the other) whose summed log-likelihood ratio picks the right learner. Where two learners agree on a map (an additive map: additive and full) the
 divergence is 0 for every mode.
 
-    ranking_recovery.py PSC_S1 PCX_S1 ... [--seeds 8] [--tau 1.0] [--reps 4000] [--out file.png] [--txt file.txt]
+    selection_recovery.py PSC_S1 PCX_S1 ... [--seeds 8] [--tau 1.0] [--reps 4000] [--out file.png] [--txt file.txt]
 
 The sets are the plus pools of `--seeds` world seeds (the session's own seed and the next ones), so a mode's mean rests on a few hundred sets. Not an engine file.
 """
@@ -30,7 +30,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-import ranking
+import selection
 from world import REWARDS, stage_names
 
 DOCS = Path(__file__).resolve().parent.parent / "docs" / "pilots"
@@ -52,8 +52,8 @@ def learners(params):
     return {"full": full, "additive": additive, "shape": shape, "colour": colour}
 
 
-def ranking_log_probs(values, tau):
-    """log P of each of the 120 rankings of five bushes with these values under Plackett-Luce at temperature tau (in pick order: best first)."""
+def selection_log_probs(values, tau):
+    """log P of each of the 120 selections of five bushes with these values under Plackett-Luce at temperature tau (in pick order: best first)."""
     u = np.asarray(values, dtype=float)[PERMS] / tau                          # (120, 5): utilities in the order picked
     tail = np.logaddexp.accumulate(u[:, ::-1], axis=1)[:, ::-1]               # log of the sum over the bushes not yet picked
     return (u - tail).sum(axis=1)
@@ -61,11 +61,11 @@ def ranking_log_probs(values, tau):
 
 def collect_sets(session, seeds):
     """(sets, params): each set a dict with its axes mode and the shape and colour of its five bushes, from the plus pools of `seeds` consecutive world seeds."""
-    base = ranking.load_session(session).world_seed
+    base = selection.load_session(session).world_seed
     sets, params, failed = [], None, 0
     for k in range(seeds):
         try:
-            sidecar, params = ranking.generate_pool(session, ranking_design="plus", world_seed=int(base) + k)
+            sidecar, params = selection.generate_pool(session, selection_design="plus", world_seed=int(base) + k)
         except ValueError:
             failed += 1
             continue
@@ -77,7 +77,7 @@ def collect_sets(session, seeds):
 def analyse(session, seeds, tau, reps, n_sets, rng):
     sets, params, failed = collect_sets(session, seeds)
     models = learners(params)
-    logp = {m: np.array([ranking_log_probs(f(s["shape"], s["colour"]), tau) for s in sets]) for m, f in models.items()}
+    logp = {m: np.array([selection_log_probs(f(s["shape"], s["colour"]), tau) for s in sets]) for m, f in models.items()}
     axes = np.array([s["axes"] for s in sets])
     out = {"session": session, "sets": len(sets), "failedSeeds": failed, "contrasts": {}}
     for name, a, b in CONTRASTS:
@@ -127,7 +127,7 @@ def figure(results, tau, n_sets):
                 ax.set_ylabel(f"{res['session']}\nmean divergence per set (nats)", fontsize=8)
             if r == 0:
                 ax.set_title(f"{name}: {a} vs {b}", fontsize=10)
-    fig.suptitle(f"Model recovery of the plus ranking sets (tau {tau} points per fruit; bars: expected evidence of one set; acc: recovery with {n_sets} sets of that mode)")
+    fig.suptitle(f"Model recovery of the plus selection sets (tau {tau} points per fruit; bars: expected evidence of one set; acc: recovery with {n_sets} sets of that mode)")
     return fig
 
 
@@ -144,13 +144,13 @@ def text(results, tau, n_sets):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Model recovery of the plus ranking sets by axes mode.")
+    ap = argparse.ArgumentParser(description="Model recovery of the plus selection sets by axes mode.")
     ap.add_argument("sessions", nargs="+")
     ap.add_argument("--seeds", type=int, default=8)
     ap.add_argument("--tau", type=float, default=1.0)
     ap.add_argument("--reps", type=int, default=4000)
     ap.add_argument("--sets", type=int, default=10, help="sets of one mode in a participant's data (accuracy columns)")
-    ap.add_argument("--out", default=str(DOCS / "ranking_plus_recovery.png"))
+    ap.add_argument("--out", default=str(DOCS / "selection_plus_recovery.png"))
     ap.add_argument("--txt", default=None)
     args = ap.parse_args()
     rng = np.random.default_rng(20261124)

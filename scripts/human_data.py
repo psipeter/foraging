@@ -5,10 +5,10 @@
 
 `database.py download` reads the database in a read-only transaction and calls `download` here with its query function; it writes, under `ForagingData/` (gitignored; it holds participant names):
 
-    <run_id>/<session:02d>/...   the raw local layout of rundata.py (events, decoded trajectory, ranking sets, world files in
+    <run_id>/<session:02d>/...   the raw local layout of rundata.py (events, decoded trajectory, selection sets, world files in
                                  _worlds/), so replay.py and visibility.py read a participant like a local log; run.json also
                                  carries the participant ID, the name they signed with and their feedback text
-    humans.sqlite                tidy tables, one row per participant / session / event / ranking set:
+    humans.sqlite                tidy tables, one row per participant / session / event / selection set:
         participants      one row per run (a participant has one run per experiment): run_id, participant (the Prolific ID typed on the
                           login screen), signature (the name typed on the consent screen), status, started_at, finished_at, minutes,
                           build_commit, n_sessions, n_completed, feedback, on_server, ..., and at the end participant_id (the server's
@@ -17,7 +17,7 @@
                           foraging_points and ranking_points (as logged at the session's end; the total is their sum), n_fruits, n_sets, n_correct_pairs, n_total_pairs, frames, mean_frame_ms, max_frame_ms,
                           config and display (JSON text), and at the end experiment (the run's)
         events            the `events` table (payload as JSON text); the view `fruits` is its type = 'fruit' rows
-        ranking_sets      the `ranking_sets` table, as in rundata.RANKING_COLUMNS, plus run_id and session_index (a set is one row: `bushes`
+        ranking_sets      the `ranking_sets` table, as in rundata.SELECTION_COLUMNS, plus run_id and session_index (a set is one row: `bushes`
                           is JSON text; `Humans.picks()` and the `ranking_picks` view give one row per bush)
 
 A run is downloaded again only when it is new or its status, last upload or session count changed (`--all` downloads every run again).
@@ -65,7 +65,7 @@ TABLES = (   # name, select, order: one query per page, restricted to the runs b
     ("sets", "select * from public.ranking_sets", "run_id, session_index, seq"),
 )
 
-_SET_TYPES = {c: "text" if c in rundata._TEXT or c in rundata._JSON else "integer" if c in rundata._INTEGER else "real" for c in rundata.RANKING_COLUMNS}
+_SET_TYPES = {c: "text" if c in rundata._TEXT or c in rundata._JSON else "integer" if c in rundata._INTEGER else "real" for c in rundata.SELECTION_COLUMNS}
 SCHEMA = f"""
 create table if not exists participants (run_id text primary key, participant text, signature text, consent_version text, status text,
     started_at text, finished_at text, minutes real, build_commit text, build_dirty integer, platform text, unity_version text,
@@ -126,7 +126,7 @@ def _store_run(con, out, run, sessions, events, chunks, sets):
     rundata.write_run(out, run_id, meta)
     for table in ("sessions", "events", "ranking_sets"):
         con.execute(f"delete from {table} where run_id = ?", (run_id,))
-    columns = rundata.RANKING_COLUMNS
+    columns = rundata.SELECTION_COLUMNS
     for s in sessions:
         index = s["session_index"]
         ev = events[index]
@@ -195,7 +195,7 @@ class Humans:
     root: Path
 
     def picks(self):
-        """The ranking sets' long form: one row per bush of each set (run_id, session_index, seq, set_index, pool_index, bush_id, slot, shape, color, moisture, value,
+        """The selection sets' long form: one row per bush of each set (run_id, session_index, seq, set_index, pool_index, bush_id, slot, shape, color, moisture, value,
         rank (None if not finished), start_time, finish_time, fruits), from the `bushes` column of the set rows."""
         rows = []
         for t in self.ranking_sets[self.ranking_sets["bushes"].notna()].itertuples():

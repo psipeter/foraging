@@ -1,19 +1,19 @@
-PSC_S1: s_max 0.333, s_min 0.130 (peak [0.71, 0.71], map spread 0.27); 150 participants of each type, 10 rankings
+PSC_S1: s_max 0.333, s_min 0.130 (peak [0.71, 0.71], map spread 0.27); 150 participants of each type, 10 selections
 
-recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at ranking 3, 6, 10
+recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at selection 3, 6, 10
   fixed          0.086 0.087 0.078
   staircase      0.066 0.057 0.043
   truthdist:1    0.067 0.055 0.049
   truthdist:2    0.066 0.057 0.044
 
-pay per ranking (mean of 100*(L+R)/2) by participant type, over all rankings
+pay per selection (mean of 100*(L+R)/2) by participant type, over all selections
   policy             fast     slow    noisy    wrong  sandbag   centre
   fixed              80.5     76.6     67.1     68.6     68.2     53.5
   staircase          84.6     76.2     67.3     60.0     70.2     46.7
   truthdist:1        82.0     72.8     71.2     57.1     70.1     53.8
   truthdist:2        82.8     75.8     69.3     59.5     70.6     52.7
 
-what the grid size tells a participant: correlation, across fast learners, of the mean spacing of rankings 5-10 with how wrong their belief is (0 = nothing)
+what the grid size tells a participant: correlation, across fast learners, of the mean spacing of selections 5-10 with how wrong their belief is (0 = nothing)
   staircase      r = +0.17
   truthdist:1    r = +0.34
   truthdist:2    r = +0.57
@@ -23,40 +23,40 @@ drift of the window centre toward the truth beyond the belief (mean projection, 
   truthdist:1    -0.17
   truthdist:2    -0.20
 
-what the grid shows: share of windows that contain the true peak, and share whose best cell is the middle one (fast learners, rankings 3-10)
+what the grid shows: share of windows that contain the true peak, and share whose best cell is the middle one (fast learners, selections 3-10)
   fixed          contains 1.00   best cell is the middle 0.00
   staircase      contains 0.99   best cell is the middle 0.74
   truthdist:1    contains 0.96   best cell is the middle 0.58
   truthdist:2    contains 1.00   best cell is the middle 0.68
 
-sandbagging: total pay over the rankings, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)
+sandbagging: total pay over the selections, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)
   fixed           +123.3 points
   staircase       +143.6 points
   truthdist:1     +119.3 points
   truthdist:2     +122.8 points
 
-the ranker with no knowledge (centre) against the slow learner, mean pay per ranking
+the ranker with no knowledge (centre) against the slow learner, mean pay per selection
   fixed      centre  53.5   slow  76.6
   staircase  centre  46.7   slow  76.2
   truthdist:1 centre  53.8   slow  72.8
   truthdist:2 centre  52.7   slow  75.8
 
-PCX_S2: s_max 0.333, s_min 0.105 (peak [0.12, 0.65], map spread 0.27); 150 participants of each type, 10 rankings
+PCX_S2: s_max 0.333, s_min 0.105 (peak [0.12, 0.65], map spread 0.27); 150 participants of each type, 10 selections
 
-recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at ranking 3, 6, 10
+recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at selection 3, 6, 10
   fixed          0.070 0.064 0.052
   staircase      0.054 0.048 0.039
   truthdist:1    0.060 0.050 0.052
   truthdist:2    0.056 0.049 0.041
 
-pay per ranking (mean of 100*(L+R)/2) by participant type, over all rankings
+pay per selection (mean of 100*(L+R)/2) by participant type, over all selections
   policy             fast     slow    noisy    wrong  sandbag   centre
   fixed              79.7     77.1     69.7     69.1     68.0     53.1
   staircase          84.7     77.9     72.8     61.8     71.3     46.0
   truthdist:1        81.6     73.8     72.9     58.3     70.3     48.6
   truthdist:2        82.3     77.2     71.9     61.1     70.6     51.2
 
-what the grid size tells a participant: correlation, across fast learners, of the mean spacing of rankings 5-10 with how wrong their belief is (0 = nothing)
+what the grid size tells a participant: correlation, across fast learners, of the mean spacing of selections 5-10 with how wrong their belief is (0 = nothing)
   staircase      r = +0.17
   truthdist:1    r = +0.32
   truthdist:2    r = +0.59
@@ -66,40 +66,40 @@ drift of the window centre toward the truth beyond the belief (mean projection, 
   truthdist:1    -0.17
   truthdist:2    -0.20
 
-what the grid shows: share of windows that contain the true peak, and share whose best cell is the middle one (fast learners, rankings 3-10)
+what the grid shows: share of windows that contain the true peak, and share whose best cell is the middle one (fast learners, selections 3-10)
   fixed          contains 0.00   best cell is the middle 0.00
   staircase      contains 0.99   best cell is the middle 0.32
   truthdist:1    contains 0.94   best cell is the middle 0.62
   truthdist:2    contains 1.00   best cell is the middle 0.65
 
-sandbagging: total pay over the rankings, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)
+sandbagging: total pay over the selections, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)
   fixed           +116.8 points
   staircase       +133.3 points
   truthdist:1     +113.4 points
   truthdist:2     +116.8 points
 
-the ranker with no knowledge (centre) against the slow learner, mean pay per ranking
+the ranker with no knowledge (centre) against the slow learner, mean pay per selection
   fixed      centre  53.1   slow  77.1
   staircase  centre  46.0   slow  77.9
   truthdist:1 centre  48.6   slow  73.8
   truthdist:2 centre  51.2   slow  77.2
 
-PCX_S3: s_max 0.333, s_min 0.075 (peak [0.5, 0.58], map spread 0.33); 150 participants of each type, 10 rankings
+PCX_S3: s_max 0.333, s_min 0.075 (peak [0.5, 0.58], map spread 0.33); 150 participants of each type, 10 selections
 
-recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at ranking 3, 6, 10
+recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at selection 3, 6, 10
   fixed          0.084 0.065 0.044
   staircase      0.063 0.055 0.043
   truthdist:1    0.064 0.056 0.054
   truthdist:2    0.059 0.054 0.043
 
-pay per ranking (mean of 100*(L+R)/2) by participant type, over all rankings
+pay per selection (mean of 100*(L+R)/2) by participant type, over all selections
   policy             fast     slow    noisy    wrong  sandbag   centre
   fixed              73.6     64.4     57.2     48.7     61.2     75.3
   staircase          73.6     67.4     59.4     48.0     60.5     55.2
   truthdist:1        72.5     64.1     64.7     46.2     61.3     66.8
   truthdist:2        72.5     67.6     61.9     47.7     60.8     68.5
 
-what the grid size tells a participant: correlation, across fast learners, of the mean spacing of rankings 5-10 with how wrong their belief is (0 = nothing)
+what the grid size tells a participant: correlation, across fast learners, of the mean spacing of selections 5-10 with how wrong their belief is (0 = nothing)
   staircase      r = -0.08
   truthdist:1    r = +0.54
   truthdist:2    r = +0.69
@@ -109,19 +109,19 @@ drift of the window centre toward the truth beyond the belief (mean projection, 
   truthdist:1    -0.30
   truthdist:2    -0.28
 
-what the grid shows: share of windows that contain the true peak, and share whose best cell is the middle one (fast learners, rankings 3-10)
+what the grid shows: share of windows that contain the true peak, and share whose best cell is the middle one (fast learners, selections 3-10)
   fixed          contains 1.00   best cell is the middle 0.00
   staircase      contains 1.00   best cell is the middle 0.53
   truthdist:1    contains 0.81   best cell is the middle 0.26
   truthdist:2    contains 1.00   best cell is the middle 0.36
 
-sandbagging: total pay over the rankings, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)
+sandbagging: total pay over the selections, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)
   fixed           +123.5 points
   staircase       +130.8 points
   truthdist:1     +111.6 points
   truthdist:2     +116.6 points
 
-the ranker with no knowledge (centre) against the slow learner, mean pay per ranking
+the ranker with no knowledge (centre) against the slow learner, mean pay per selection
   fixed      centre  75.3   slow  64.4
   staircase  centre  55.2   slow  67.4
   truthdist:1 centre  66.8   slow  64.1

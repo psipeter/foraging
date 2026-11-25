@@ -11,7 +11,7 @@ def test_a_grid_stays_inside_the_square_and_has_nine_cells_a_spacing_apart():
             assert np.isclose(np.diff(np.unique(np.round(cells[:, 0], 9))).min(), s)
 
 
-def test_the_plackett_luce_likelihood_prefers_the_ranking_the_utilities_imply():
+def test_the_plackett_luce_likelihood_prefers_the_selection_the_utilities_imply():
     u = np.array([3.0, 1.0, 2.0, 0.0, 4.0])
     good, bad = np.array([4, 0, 2, 1, 3]), np.array([3, 1, 2, 0, 4])
     assert ag.pl_loglik(u, good, 1.0) > ag.pl_loglik(u, bad, 1.0)

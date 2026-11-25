@@ -9,7 +9,7 @@ A design module defines
     instances() -> list of Instance, in play order
     texts() -> {file name: text} instruction texts, written to Assets/StreamingAssets/Experiments/<code>/ (optional)
 
-`build_experiment.py <code>` turns that into assets (through the Editor), worlds, ranking pools and texts. An instance's `design` dict is stored as
+`build_experiment.py <code>` turns that into assets (through the Editor), worlds, selection pools and texts. An instance's `design` dict is stored as
 JSON in the session asset's `designJson`, which the logger records with the rest of the config: the instance id, its cell parameters, its hint
 arm. A design gives a session's reward as a `value_maps.ValueMap` and passes its `fields()` (the bumps and the noise); a design's `ValueMap.describe()` puts the map and its descriptors in the logged design. Field names are SessionConfig's serialized names; nested ones use a dotted path (`rewardFunction.bumps.Array.data[0].height`), and a list is sized
 first by `<path>.Array.size`.

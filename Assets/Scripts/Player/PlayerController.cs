@@ -215,7 +215,7 @@ public class PlayerController : MonoBehaviour
             _rawMove = context.ReadValue<Vector2>();
         }
 
-        moveInput = _stationary ? Vector2.zero : _rawMove;        // a stationary player (a ranking) has no walking input at all, so no walking key is read or logged as held
+        moveInput = _stationary ? Vector2.zero : _rawMove;        // a stationary player (a selection) has no walking input at all, so no walking key is read or logged as held
     }
 
     // Space: started = pressed, canceled = released (Invoke Unity Events fires all phases).
@@ -240,7 +240,7 @@ public class PlayerController : MonoBehaviour
         return pressed;
     }
 
-    // A ranking: the player stands where they are for the whole block (looking stays free). Unlike the harvest lock, a bout ending does not release it.
+    // A selection: the player stands where they are for the whole block (looking stays free). Unlike the harvest lock, a bout ending does not release it.
     public void SetStationary(bool stationary)
     {
         _stationary = stationary;

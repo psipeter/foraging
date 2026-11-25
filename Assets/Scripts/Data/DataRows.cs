@@ -24,7 +24,7 @@ public class EventRow
     }
 }
 
-// One ranking set: the cells of ranking_sets.csv after `seq`, in Columns order, already formatted ('' = missing).
+// One selection set: the cells of ranking_sets.csv after `seq`, in Columns order, already formatted ('' = missing).
 public class SetRow
 {
     public int Seq;

@@ -15,7 +15,7 @@ the camera, so it is recomputed here from `replay.SessionLog`:
   is an opaque half-ellipsoid, the same shape as the one that is sampled, and only bushes that exist at that moment can hide
   another). `visible_fraction` is the share of those points that qualify, a graded measure
   of how much of the bush is in view.
-* In a ranking break (a session's in-place ranking: `rank_break_start` / `rank_break_end`) the real bushes stay (grey, not harvestable) and the current set's stand
+* In a selection break (a session's in-place selection: `rank_break_start` / `rank_break_end`) the real bushes stay (grey, not harvestable) and the current set's stand
   among them (their table is the `rank_set` event); a set is taken as standing from its `rank_set` to its `rank_set_end` (the growth and the shrinking are not modelled),
   and the returned `tree_id` of such a bush is its logged id. The grey is not modelled either: a real bush counts as visible as ever.
   Known limit (RT-B3): the stage stands on a disc above or beside the terrain, but the occluders are the real terrain and bushes, so stage bushes behind real terrain count as hidden
@@ -40,7 +40,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from perception import hidden_by_bushes, hidden_by_terrain, sample_grid, unit_directions
-from replay import break_windows, bush_ground, canopy_height, load_session_log, with_ranking_bushes
+from replay import break_windows, bush_ground, canopy_height, load_session_log, with_selection_bushes
 
 
 # --------------------------------------------------------------------------------------------------
@@ -90,7 +90,7 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
     trajectory `frames` (indices) when `dt` is None. `bush_occlusion=False` ignores bushes hiding each other (terrain still hides).
     See the module docstring for the model."""
     cfg, man = log.config, log.manifest
-    b, rank_sets, ids = with_ranking_bushes(log)
+    b, rank_sets, ids = with_selection_bushes(log)
     windows = break_windows(log.events)
     n_real = len(log.bushes.pos)
     elevation = log.grids["elevation"]
@@ -109,7 +109,7 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
     n = len(b.pos)
     rx = b.canopy_radius
     ry = canopy_height(cfg, b.shape) * 0.5
-    ground = bush_ground(b, elevation, half)          # a ranking stage's bushes stand on their disc (the logged y)
+    ground = bush_ground(b, elevation, half)          # a selection stage's bushes stand on their disc (the logged y)
     dirs = unit_directions()
     # Sample points (n, P, 3) in world coordinates and their outward normals.
     pts = np.empty((n, len(dirs), 3))

@@ -257,7 +257,7 @@ def test_a_run_whose_build_no_longer_lists_the_experiment_does_not_finish(env):
 def test_ranking_sets_are_stored_and_the_resume_state_has_them(env):
     c = client(env)
     c.start(prolific_pid="PID_sets")
-    sets = [ranking_set(i, 1, 3.5) for i in range(2)]
+    sets = [selection_set(i, 1, 3.5) for i in range(2)]
     ack = c.append(0, session=session_row(), events=event_rows([ev(0.0, "session_start")]), sets=sets)
     assert ack["sets_next"] == 2
     assert env["db"].execute("select set_index, pool_index, paused_seconds from public.ranking_sets where run_id = %s order by seq", (c.run_id,)).fetchall() == [
@@ -396,7 +396,7 @@ def test_the_public_roles_can_read_nothing_and_call_nothing(env, role):
                 conn.execute(statement)
 
 
-def ranking_set(seq, correct, points):
+def selection_set(seq, correct, points):
     return {"seq": seq, "set_index": seq, "pool_index": seq + 4, "timed_out": 0, "response_time": 1.5, "paused_seconds": 2.5, "points": points,
             "set_size": 2, "correct_pairs": correct, "total_pairs": 1}
 
@@ -406,8 +406,8 @@ def test_resume_state_carries_the_totals_of_finished_sessions(env):
     c.start(prolific_pid="PID_totals")
     done = {"completed": True, "ended_at": "2026-10-29T12:00:00Z"}
     c.append(0, session=session_row(0, is_practice=True, foraging_points=58.0, **done), events=event_rows([ev(0.0, "session_start")]))
-    c.append(1, session=session_row(1, foraging_points=33.0, ranking_points=5.0, **done), events=event_rows([ev(0.0, "session_start")]), sets=[ranking_set(0, 1, 5.0)])
-    c.append(2, session=session_row(2), events=event_rows([ev(0.0, "session_start")]), sets=[ranking_set(0, 1, 5.0), ranking_set(1, 0, 0.0)])
+    c.append(1, session=session_row(1, foraging_points=33.0, ranking_points=5.0, **done), events=event_rows([ev(0.0, "session_start")]), sets=[selection_set(0, 1, 5.0)])
+    c.append(2, session=session_row(2), events=event_rows([ev(0.0, "session_start")]), sets=[selection_set(0, 1, 5.0), selection_set(1, 0, 0.0)])
     state = c.start(prolific_pid="PID_totals")["resume"]
     assert state["session_index"] == 2 and state["completed"] is False
     assert [(p["index"], p["is_practice"], p["foraging_points"], p["ranking_points"]) for p in state["previous"]] == [(0, True, 58.0, 0.0), (1, False, 33.0, 5.0)]
@@ -491,7 +491,7 @@ def test_menu_points_are_completed_foraging_plus_ranking_points_without_the_prac
     c.start(login=False)
     done = {"completed": True, "ended_at": "2026-11-07T12:00:00Z"}
     c.append(0, session=session_row(0, is_practice=True, foraging_points=58.0, **done), events=event_rows([ev(0.0, "session_start")]))         # practice: not counted
-    c.append(1, session=session_row(1, foraging_points=2.0, ranking_points=5.0, **done), events=event_rows([ev(0.0, "session_start")]), sets=[ranking_set(0, 1, 5.0), ranking_set(1, 0, 0.0)])
+    c.append(1, session=session_row(1, foraging_points=2.0, ranking_points=5.0, **done), events=event_rows([ev(0.0, "session_start")]), sets=[selection_set(0, 1, 5.0), selection_set(1, 0, 0.0)])
     standing = {m["code"]: m for m in c.login("PID_points")["experiments"]}["TEST"]
     assert standing["points"] == 7.0 and standing["sessions_done"] == 2
 
@@ -613,15 +613,15 @@ def test_a_full_run_of_a_development_release_still_needs_every_session_and_a_res
     assert two_sessions_ok["ok"] is False and any("0 sessions present, 2 expected" in p for p in two_sessions_ok["problems"])
 
 
-def test_a_ranking_set_is_a_row_with_bushes_and_counts_in_the_tallies_and_the_long_view(env):
+def test_a_selection_set_is_a_row_with_bushes_and_counts_in_the_tallies_and_the_long_view(env):
     c = client(env)
-    c.start(prolific_pid="PID_ranking")
+    c.start(prolific_pid="PID_selection")
     bushes = [{"id": 5, "slot": 0, "shape": 0.25, "color": 0.5, "moisture": 0.5, "value": 1.5, "rank": 1, "start_time": 1.0, "finish_time": 2.5, "fruits": 10},
               {"id": 6, "slot": 1, "shape": 0.75, "color": 0.1, "moisture": 0.5, "value": 0.5, "rank": None, "start_time": None, "finish_time": None, "fruits": 0}]
-    row = {**ranking_set(0, 1, 3.5), "timed_out": 1, "response_time": 30.0, "start_x": 1.0, "start_z": 2.0, "bushes": bushes}
+    row = {**selection_set(0, 1, 3.5), "timed_out": 1, "response_time": 30.0, "start_x": 1.0, "start_z": 2.0, "bushes": bushes}
     ack = c.append(0, session=session_row(0), events=event_rows([ev(0.0, "session_start")]), sets=[row])
     assert ack["sets_next"] == 1
-    state = c.start(prolific_pid="PID_ranking")["resume"]
+    state = c.start(prolific_pid="PID_selection")["resume"]
     assert state["ranking_points"] == 3.5 and state["sets_next"] == 1
     picks = env["db"].execute("select bush_id, slot, rank, finish_time, fruits from public.ranking_picks where run_id = %s order by bush_id", (c.run_id,)).fetchall()
     assert picks == [{"bush_id": 5, "slot": 0, "rank": 1, "finish_time": 2.5, "fruits": 10}, {"bush_id": 6, "slot": 1, "rank": None, "finish_time": None, "fruits": 0}]

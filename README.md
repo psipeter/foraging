@@ -30,18 +30,18 @@ pairs earn a hidden bonus). The reward function and the layout vary from session
   `Assets/Scenes/SampleScene.unity`, press Play.
 - The experiment and its sessions are assets in `Assets/ScriptableObjects/Experiments/FOR/`, made from the design table
   `scripts/design/FOR.py` by `scripts/build_experiment.py FOR`. All task parameters are `SessionConfig` fields.
-  Some changes (terrain, reward function, tile layout, the ranking pool) need the generator scripts re-run;
+  Some changes (terrain, reward function, tile layout, the selection pool) need the generator scripts re-run;
   see "What to regenerate" in `CLAUDE.md`.
 - Instruction text is read from `Assets/StreamingAssets/Experiments/FOR/`.
 - Controls (first person): mouse looks around, W/S walk forward/back, hold Space
   to harvest while the (faint) crosshair is on a bush, Enter to continue between screens, Esc to quit. Eye height, field of view,
   and mouse sensitivity are `SessionConfig` fields.
-- Python tools (world and ranking-pool generators, a strategy simulator, tests) live in `scripts/`; run the tests
+- Python tools (world and selection-pool generators, a strategy simulator, tests) live in `scripts/`; run the tests
   with `./venv/bin/python scripts/run_tests.py`.
 
 ## Data
 
-Each session writes `trajectory.csv`, `events.csv` and `session.json`, and `ranking_sets.csv` (one row per ranking set),
+Each session writes `trajectory.csv`, `events.csv` and `session.json`, and `ranking_sets.csv` (one row per selection set),
 to `ForagingData/<run id>/<session>/` in the project root (world files are archived once in `ForagingData/_worlds/`).
 `scripts/replay.py` reloads a folder and replays it.
 This folder is gitignored (not backed up by git). It currently contains only

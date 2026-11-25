@@ -10,10 +10,10 @@ from the server's state, so the harvest state (open bout, per-bush progress on t
 fruit counts come from the logged fruit events, and the events logged in the gap (after the last uploaded frame, up to the resume)
 have no frames to be derived from: `verify` leaves them out.
 
-A foraging session with ranking breaks (RankingBreak: `rank_break_start` / `rank_break_end` events) plays a ranking set in place: the real bushes are
-still there but grey and not harvestable, the set's bushes (not in the world file; their table is the `rank_set` event) stand on an arc, the harvest is aimed (no range, the ranking's
-tolerance) and quick (`rankingFruitSeconds` a fruit), and presses are discarded from the break's start and each set's end up to the next
-`rank_go` (or the break's end). `with_ranking_bushes` appends those bushes to the table and `break_windows` gives the windows.
+A foraging session with selection breaks (SelectionBreak: `rank_break_start` / `rank_break_end` events) plays a selection set in place: the real bushes are
+still there but grey and not harvestable, the set's bushes (not in the world file; their table is the `rank_set` event) stand on an arc, the harvest is aimed (no range, the selection's
+tolerance) and quick (`selectionFruitSeconds` a fruit), and presses are discarded from the break's start and each set's end up to the next
+`rank_go` (or the break's end). `with_selection_bushes` appends those bushes to the table and `break_windows` gives the windows.
 
 `replay_harvests` mirrors HarvestManager.Update frame for frame (range, bearing cone, press edge, fruit timer with
 per-bush carry-over, exhaustion), so the logged fruit events can be *derived* from the trajectory alone. `verify`
@@ -51,7 +51,7 @@ class Bushes:
     canopy_radius: np.ndarray   # (n,)
     fruit_reward: np.ndarray    # (n, fruit_count) reward of the k-th fruit taken from each bush
     shape: np.ndarray = None    # (n,) shape attribute (sets the canopy height; see visibility.py)
-    ground: np.ndarray = None   # (n,) the ground height under a bush where it is not the terrain's (a ranking stage's disc; nan elsewhere); None: the terrain everywhere
+    ground: np.ndarray = None   # (n,) the ground height under a bush where it is not the terrain's (a selection stage's disc; nan elsewhere); None: the terrain everywhere
 
 
 @dataclass
@@ -171,7 +171,7 @@ def canopy_height(config, shape):
 
 
 def bush_ground(b, elevation, half):
-    """The ground height at each bush: the terrain's, except for the bushes of a ranking stage, which stand on their disc (the logged `y`, Bushes.ground)."""
+    """The ground height at each bush: the terrain's, except for the bushes of a selection stage, which stand on their disc (the logged `y`, Bushes.ground)."""
     ground = sample_grid(elevation, half, b.pos[:, 0], b.pos[:, 1])
     if b.ground is not None:
         ground = np.where(np.isnan(b.ground), ground, b.ground)
@@ -183,14 +183,14 @@ def _payload(e):
 
 
 def break_windows(events):
-    """[(start, end)] session seconds of each ranking break (end is inf for one that never logged its end)."""
+    """[(start, end)] session seconds of each selection break (end is inf for one that never logged its end)."""
     starts = sorted(e["t"] for e in events if e["type"] == "rank_break_start")
     ends = sorted(e["t"] for e in events if e["type"] == "rank_break_end")
     return [(s, ends[i] if i < len(ends) else np.inf) for i, s in enumerate(starts)]
 
 
-def with_ranking_bushes(log):
-    """(bushes, sets, ids): the world's bush table with the bushes of every ranking set appended (the `rank_set` events carry them: tree id, x, z, canopy radius,
+def with_selection_bushes(log):
+    """(bushes, sets, ids): the world's bush table with the bushes of every selection set appended (the `rank_set` events carry them: tree id, x, z, canopy radius,
     shape; they pay nothing), `sets` one dict per `rank_set` (t, end = the time of its `rank_set_end`, or of its break's end for a try interrupted by a resume, slots = their indices in the table) and `ids`, the logged tree id
     of every row of the table (a pool wrap can give two sets the same ids, so a set's bushes are rows of their own)."""
     b = log.bushes
@@ -219,13 +219,13 @@ def with_ranking_bushes(log):
 def replay_harvests(log):
     """Re-derive the harvest events from the trajectory. Returns a list of event dicts in the logged vocabulary
     (harvest_press, harvest_pause/resume, fruit, harvest_release); a release the trajectory alone does not explain
-    (a ranking set's end cancelling a bout, or the session ending) is taken from the log and marked
+    (a selection set's end cancelling a bout, or the session ending) is taken from the log and marked
     `forced`."""
     cfg = log.config
     gap_base, gap_per = cfg["harvestRangeGapBase"], cfg["harvestRangeGapPerRadius"]
     max_angle, per_fruit = cfg["harvestMaxAngle"], cfg["fruitHarvestDuration"]
     n0 = len(log.bushes.pos)
-    b, rank_sets, ids = with_ranking_bushes(log)
+    b, rank_sets, ids = with_selection_bushes(log)
     n, n_fruits = len(b.pos), b.fruit_reward.shape[1]
     gaps = gap_base + gap_per * b.canopy_radius
     # The crosshair rule (SessionConfig.crosshairRadius > 0; a log without it, or with 0, is the old cone): the view ray must touch the canopy's ellipsoid grown by the
@@ -237,15 +237,15 @@ def replay_harvests(log):
         half_height = 0.5 * canopy_height(cfg, b.shape)
         centres = np.stack([b.pos[:, 0], ground, b.pos[:, 1]], axis=-1)
         release_radius = crosshair * max(float(cfg.get("crosshairReleaseScale") or 1.0), 1.0)
-    # In a ranking break the hit circle is rankingCrosshairRadius (0 or a log without it: the crosshairRadius), small enough that neighbouring bushes of a set are not both touched.
-    ranking_crosshair = float(cfg.get("rankingCrosshairRadius") or 0.0) or crosshair
-    # A ranking break (HarvestManager.SetAimMode): aimed (no harvest range; with the old cone, the ranking's tolerance) and quick (rankingFruitSeconds a fruit) from its start to its end.
+    # In a selection break the hit circle is selectionCrosshairRadius (0 or a log without it: the crosshairRadius), small enough that neighbouring bushes of a set are not both touched.
+    selection_crosshair = float(cfg.get("selectionCrosshairRadius") or 0.0) or crosshair
+    # A selection break (HarvestManager.SetAimMode): aimed (no harvest range; with the old cone, the selection's tolerance) and quick (selectionFruitSeconds a fruit) from its start to its end.
     windows = break_windows(log.events)
-    break_per_fruit, break_angle = cfg.get("rankingFruitSeconds", per_fruit), cfg.get("rankingAimTolerance", max_angle)
+    break_per_fruit, break_angle = cfg.get("selectionFruitSeconds", per_fruit), cfg.get("selectionAimTolerance", max_angle)
     next_set, was_in_break = 0, False
 
     ev = log.events
-    # Releases the keys cannot explain are honoured only where the game itself ends a bout: a ranking set's end
+    # Releases the keys cannot explain are honoured only where the game itself ends a bout: a selection set's end
     # and the session's last frames. Any other logged release must come from the replayed key rules, or verify flags it.
     tail = _last_frames_start(log.traj)
     cut_times = [e["t"] for e in ev if e["type"] == "rank_set_end"]
@@ -253,7 +253,7 @@ def replay_harvests(log):
                     and (e["t"] >= tail or any(abs(e["t"] - c) < TIE for c in cut_times))]   # a rank_set_end is logged on the frame it ends the bout
     # The fruit a logged tie resolves to, by (bush, k): see the fruit timer below.
     fruit_t = {(e["tree_id"], e["k"]): e["t"] for e in ev if e["type"] == "fruit"}
-    # A ranking break discards presses from its start and from each set's end up to the next rank_go (a set going live) or the break's end.
+    # A selection break discards presses from its start and from each set's end up to the next rank_go (a set going live) or the break's end.
     unblocks = sorted(e["t"] for e in ev if e["type"] in ("rank_go", "rank_break_end"))
     blocks = [(e["t"], min((g for g in unblocks if g > e["t"] + 1e-9), default=np.inf)) for e in ev
               if e["type"] in ("rank_break_start", "rank_set_end")]
@@ -321,7 +321,7 @@ def replay_harvests(log):
                 if crosshair > 0.0:
                     cand = np.flatnonzero((edge <= gaps[idx]) | aim_now)
                     if len(cand):
-                        cand = cand[_aimed(centres[idx[cand]], b.canopy_radius[idx[cand]], half_height[idx[cand]], eye, forward, ranking_crosshair if in_break else crosshair)]
+                        cand = cand[_aimed(centres[idx[cand]], b.canopy_radius[idx[cand]], half_height[idx[cand]], eye, forward, selection_crosshair if in_break else crosshair)]
                     if len(cand):
                         focus = int(idx[cand[np.argmin(edge[cand])]])
                 else:
@@ -416,9 +416,9 @@ def steps(log, dt=0.1):
 
     Returns arrays over the grid: t, x, z, yaw (unwrapped degrees), pitch, forward/back/harvest key states (0/1),
     `reward` (sum of the fruit rewards that arrive in the step, from the logged events), `harvesting` (1 inside a
-    bout), `tree` (the bush being harvested, else -1) and `ranking` (1 inside a ranking break: the player stands still ranking
+    bout), `tree` (the bush being harvested, else -1) and `selection` (1 inside a selection break: the player stands still selection
     a set, the real bushes are grey and not harvestable, and the tree ids of the bouts are those of the set's bushes). Pose is linearly interpolated, except across a teleport
-    (a ranking break's teleport or a resume), where the earlier pose is held until the jump; discrete states take the latest
+    (a selection break's teleport or a resume), where the earlier pose is held until the jump; discrete states take the latest
     frame at or before the step start.
     """
     tr = log.traj
@@ -454,11 +454,11 @@ def steps(log, dt=0.1):
         inside = t >= bout_start["t"] - dt
         harvesting[inside] = 1
         tree[inside] = bout_start["tree_id"]
-    ranking = np.zeros(len(t), dtype=int)
+    selection = np.zeros(len(t), dtype=int)
     for lo, hi in break_windows(log.events):
-        ranking[(t > lo) & (t <= hi)] = 1
+        selection[(t > lo) & (t <= hi)] = 1
     return {"t": t, **pose, "forward": (keys & KEY_FORWARD > 0).astype(int), "back": (keys & KEY_BACK > 0).astype(int),
-            "harvest": (keys & KEY_HARVEST > 0).astype(int), "reward": reward, "harvesting": harvesting, "tree": tree, "ranking": ranking}
+            "harvest": (keys & KEY_HARVEST > 0).astype(int), "reward": reward, "harvesting": harvesting, "tree": tree, "selection": selection}
 
 
 def main():

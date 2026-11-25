@@ -36,7 +36,7 @@ public class TreeGenerator : MonoBehaviour
         }
     }
 
-    // One bush standing on the terrain at (x, z): the world's bushes at the start, and the ranking break's bushes later (their ids follow the world's).
+    // One bush standing on the terrain at (x, z): the world's bushes at the start, and the selection break's bushes later (their ids follow the world's).
     public Tree CreateTree(int treeId, float x, float z, TreeAttributes attributes, int[] fruitRewards, float groundY = float.NaN)
     {
         float elevation = float.IsNaN(groundY) ? terrainManager.SampleElevation(x, z) : groundY;

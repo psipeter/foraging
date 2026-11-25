@@ -1,9 +1,9 @@
 using UnityEngine;
 
-// The floating disc of a ranking stage: a small bumpy oval of terrain, a little bigger than the arc of bushes, with a short underside. Its top uses the
+// The floating disc of a selection stage: a small bumpy oval of terrain, a little bigger than the arc of bushes, with a short underside. Its top uses the
 // terrain's own shader and textures with a fixed moisture (0 arid, 0.5 grassland, 1 swamp: the three key textures), so it looks like the real ground. It is built in code for each set
 // in the set's own frame (x to the player's right, z ahead, the player at the origin), and `HeightAt` gives the surface height the bushes stand on.
-public class RankingDisc
+public class SelectionDisc
 {
     private const int Segments = 72;
     private const int Rings = 6;
@@ -22,17 +22,17 @@ public class RankingDisc
 
     // `terrain` is the terrain's material instance (its shader, textures and tiling); `centre` and `turn` place the disc in the world (the set's frame is the player's position turned
     // by the view's yaw); `radiusX` and `radiusZ` are the outline's mean half sizes along the player's right and ahead; `halfExtent` is the world's, for the texture's scale.
-    public static RankingDisc Create(Material terrain, Vector3 position, Quaternion turn, Vector2 centre, float radiusX, float radiusZ, float halfExtent, int seed, int layer, float tiltDegrees = 0f)
+    public static SelectionDisc Create(Material terrain, Vector3 position, Quaternion turn, Vector2 centre, float radiusX, float radiusZ, float halfExtent, int seed, int layer, float tiltDegrees = 0f)
     {
         float tilt = tiltDegrees * Mathf.Deg2Rad;
-        var disc = new RankingDisc { _rx = radiusX, _rz = radiusZ / Mathf.Cos(tilt), _centre = centre, _tilt = tilt };      // `radiusZ` is the horizontal half size
+        var disc = new SelectionDisc { _rx = radiusX, _rz = radiusZ / Mathf.Cos(tilt), _centre = centre, _tilt = tilt };      // `radiusZ` is the horizontal half size
         var rng = new System.Random(seed);
         disc.TextureIndex = rng.Next(3);
         disc._phase1 = (float)(rng.NextDouble() * Mathf.PI * 2f);
         disc._phase2 = (float)(rng.NextDouble() * Mathf.PI * 2f);
         disc._phase3 = (float)(rng.NextDouble() * Mathf.PI * 2f);
 
-        disc.Object = new GameObject("RankingDisc");
+        disc.Object = new GameObject("SelectionDisc");
         disc.Object.layer = layer;
         Quaternion frame = turn * Quaternion.Euler(-tiltDegrees, 0f, 0f);            // tipped about the player's right: the far side up, a hillside
         disc.Object.transform.SetPositionAndRotation(position, frame);
@@ -170,7 +170,7 @@ public class RankingDisc
             under.AddRange(new[] { ringStart + 2 * Segments + s, ringStart + 2 * Segments + n, vertices.Length - 1 });
         }
 
-        var mesh = new Mesh { name = "RankingDisc" };
+        var mesh = new Mesh { name = "SelectionDisc" };
         mesh.vertices = vertices;
         mesh.uv = uv;
         mesh.uv2 = uv2;

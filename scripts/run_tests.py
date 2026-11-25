@@ -50,7 +50,7 @@ EXTRA = {
     "scripts/test_sim.py": (set(), [_is_session_asset]),
     "scripts/test_feature_flags.py": (set(), [_is_session_asset]),        # (these build their worlds on FIX_T0 through synthetic.py)
     "scripts/test_realization.py": (set(), [_is_session_asset]),
-    "scripts/test_ranking.py": (set(), [_is_session_asset]),
+    "scripts/test_selection.py": (set(), [_is_session_asset]),
     "scripts/test_tiles.py": (set(), [_is_session_asset]),
     "scripts/test_tile_calibration.py": (set(), [_is_session_asset]),
     "scripts/test_agents.py": (set(), [_is_session_asset]),

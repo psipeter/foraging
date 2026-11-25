@@ -5,14 +5,14 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
-// A ranking break: a ranking set played in place, inside a foraging session, so the participant stays in the foraging stage (SessionConfig.ranking*,
-// docs/DECISIONS.md "FOR: ranking breaks inside the session"). After the patch switches of the leaving schedule (`rankingLeavings`; none: every `rankingEvery`-th, 1 in FOR and TUT) (a settled crossing into another tile of a tiles
-// world) the real bushes fade to grayscale (and cannot be aimed at) and a set of ranking bushes grows on an arc in front of the player, on the terrain they stand on. The player
+// A selection break: a selection set played in place, inside a foraging session, so the participant stays in the foraging stage (SessionConfig.selection*,
+// docs/DECISIONS.md "FOR: selection breaks inside the session"). After the patch switches of the leaving schedule (`selectionLeavings`; none: every `selectionEvery`-th, 1 in FOR and TUT) (a settled crossing into another tile of a tiles
+// world) the real bushes fade to grayscale (and cannot be aimed at) and a set of selection bushes grows on an arc in front of the player, on the terrain they stand on. The player
 // harvests them from most to least points under these rules (stationary, any bush in view, a started harvest is finished). The session clock is held
-// while a break runs (SunController.ClockHeld) and a second countdown shows the set's own seconds; outcomes are hidden and the ranking bushes pay nothing
-// (zero fruit rewards), so the score does not move. The sets come from the session's pool file (scripts/ranking.py pool), used in order.
+// while a break runs (SunController.ClockHeld) and a second countdown shows the set's own seconds; outcomes are hidden and the selection bushes pay nothing
+// (zero fruit rewards), so the score does not move. The sets come from the session's pool file (scripts/selection.py pool), used in order.
 // Created at runtime by GameManager (no scene wiring). Change its timing, blocks and events together with scripts/replay.py, visibility.py and validate_run.py. The arc is placed on whatever ground is there (no wait for flat ground: it looked fine in the first playtest).
-public class RankingBreak : MonoBehaviour
+public class SelectionBreak : MonoBehaviour
 {
     [Serializable]
     private class PoolBush
@@ -51,8 +51,8 @@ public class RankingBreak : MonoBehaviour
     // True from the start of a break to its end: the consumers of HarvestManager's events (HarvestUI, FeedbackAudio, InstructionsPanel) hide outcomes meanwhile.
     public static bool Active { get; private set; }
 
-    // Raised when a ranking set has been scored. It carries nothing on purpose: the HUD shows a sealed "+???" and plays a chime, the same whatever the set earned,
-    // so the ranking teaches nothing about the values.
+    // Raised when a selection set has been scored. It carries nothing on purpose: the HUD shows a sealed "+???" and plays a chime, the same whatever the set earned,
+    // so the selection teaches nothing about the values.
     public static event System.Action OnSetScored;
 
     // For the tutorial's hints: a set's bushes have grown (its index in the break), just before its countdown starts; a break ends.
@@ -63,14 +63,14 @@ public class RankingBreak : MonoBehaviour
     // The hidden bonus earned in this session's breaks so far (what the correct pairs would pay, also in a practice session); the session's end screen adds it to the points.
     public static float Points { get; private set; }
 
-    // The points the session's ranking sets actually paid (0 in a practice session): the session row's ranking_points.
+    // The points the session's selection sets actually paid (0 in a practice session): the session row's ranking_points.
     public static float PaidPoints { get; private set; }
 
     // The running set's countdown (seconds), for the clock under the main one.
     public float SecondsLeft { get; private set; }
 
     private bool Dense => _pool != null && _pool.layout == "grid";
-    private bool TimesMode => _config.RankingTimes.Length > 0;
+    private bool TimesMode => _config.SelectionTimes.Length > 0;
 
     private SessionConfig _config;
     private WorldData _world;
@@ -99,19 +99,19 @@ public class RankingBreak : MonoBehaviour
     public const int StageLayer = 20;
     private GameObject _stageCamera;
     private int _mainCullingMask;
-    private RankingDisc _disc;
+    private SelectionDisc _disc;
     private int _tile = -1;
     private int _switches;                  // qualifying leavings since the last break (the every-N rule)
-    private int _leavings;                  // qualifying leavings in the session so far (the scheduled rule, SessionConfig.rankingLeavings)
-    private bool _due;                      // a ranking is due at the next moment no harvest is under way
-    private float _dueAt = -1f;             // session seconds elapsed when the due ranking became due (the fixed schedule, SessionConfig.rankingTimes)
+    private int _leavings;                  // qualifying leavings in the session so far (the scheduled rule, SessionConfig.selectionLeavings)
+    private bool _due;                      // a selection is due at the next moment no harvest is under way
+    private float _dueAt = -1f;             // session seconds elapsed when the due selection became due (the fixed schedule, SessionConfig.selectionTimes)
     private int _pickTarget;                // picks that end the running set (all its bushes in an arc, `pickCount` in the dense design)
     private TextMeshProUGUI _counterText;   // the dense design's "Picked 2 / 5"
     private int _rerunFrom = -1;            // a break played again after a resume starts at this set (-1: a break begun normally)
     private int _breakNumber;
     private int _poolIndex;
     private int _setCounter;                // sets played in the session so far: the row's position, one after another
-    private readonly HashSet<int> _bushesSinceBreak = new HashSet<int>();       // the world's bushes a fruit has been taken from since the last ranking ended (since the session began before the first)
+    private readonly HashSet<int> _bushesSinceBreak = new HashSet<int>();       // the world's bushes a fruit has been taken from since the last selection ended (since the session began before the first)
     private float _lastEnd = float.NegativeInfinity;       // session seconds elapsed when the last break ended
 
     // The running set.
@@ -125,85 +125,85 @@ public class RankingBreak : MonoBehaviour
     private int _setSize;
 
     // The break component for a session, or null when it has none (no breaks configured, no tiles in the world, no pool file).
-    public static RankingBreak Create(SessionConfig config, WorldData world, TreeGenerator treeGenerator, PlayerController player, CameraController camera,
+    public static SelectionBreak Create(SessionConfig config, WorldData world, TreeGenerator treeGenerator, PlayerController player, CameraController camera,
         HarvestManager harvest, SunController sun, HarvestUI harvestUI, DataLogger log, SessionTimerUI timer)
     {
         Points = 0f;        // statics outlive the scene: a session without breaks must not inherit the last one's
         PaidPoints = 0f;
-        if (config == null || (config.RankingEvery <= 0 && config.RankingTimes.Length == 0) || world == null || !world.HasTiles)
+        if (config == null || (config.SelectionEvery <= 0 && config.SelectionTimes.Length == 0) || world == null || !world.HasTiles)
         {
             return null;
         }
 
-        string path = WorldData.RankingPoolPathFor(config);
+        string path = WorldData.SelectionPoolPathFor(config);
         if (!StreamingData.Exists(path))
         {
-            Debug.LogError($"RankingBreak: pool file not found: {path}; generate it with scripts/ranking.py pool {config.name}.");
+            Debug.LogError($"SelectionBreak: pool file not found: {path}; generate it with scripts/selection.py pool {config.name}.");
             return null;
         }
 
         PoolFile pool = JsonUtility.FromJson<PoolFile>(StreamingData.ReadText(path));
         if (pool == null || pool.format != "ranking-pool" || pool.sets == null || pool.sets.Length == 0)
         {
-            Debug.LogError($"RankingBreak: {path} is not a ranking-break pool; regenerate it.");
+            Debug.LogError($"SelectionBreak: {path} is not a selection-break pool; regenerate it.");
             return null;
         }
 
-        var go = new GameObject("RankingBreak");
-        var rankingBreak = go.AddComponent<RankingBreak>();
-        rankingBreak._config = config;
-        rankingBreak._world = world;
-        rankingBreak._treeGenerator = treeGenerator;
-        rankingBreak._player = player;
-        rankingBreak._camera = camera;
-        rankingBreak._harvest = harvest;
-        rankingBreak._sun = sun;
-        rankingBreak._harvestUI = harvestUI;
-        rankingBreak._log = log;
-        rankingBreak._timer = timer;
-        rankingBreak._pool = pool;
+        var go = new GameObject("SelectionBreak");
+        var selectionBreak = go.AddComponent<SelectionBreak>();
+        selectionBreak._config = config;
+        selectionBreak._world = world;
+        selectionBreak._treeGenerator = treeGenerator;
+        selectionBreak._player = player;
+        selectionBreak._camera = camera;
+        selectionBreak._harvest = harvest;
+        selectionBreak._sun = sun;
+        selectionBreak._harvestUI = harvestUI;
+        selectionBreak._log = log;
+        selectionBreak._timer = timer;
+        selectionBreak._pool = pool;
         if (ResumeInfo.MidSession(GameManager.CurrentSessionIndex))
         {
             // What the sets were worth (the end screen shows it) is the correct pairs times the bonus: the paid points are 0 in a practice session, so they would restart the screen at 0.
             // Only the pair count is stored, so in a points mode that weights pairs the practice figure after a resume is this unweighted estimate (the paid points are exact).
-            Points = config.RankingPointsMode == "pair" ? Mathf.Max(ResumeInfo.Pending.ranking_points, ResumeInfo.Pending.ranking_pairs * config.RankingBonusPerPair)
-                : config.IsPractice ? ResumeInfo.Pending.ranking_pairs * config.RankingBonusPerPair : ResumeInfo.Pending.ranking_points;
+            Points = config.SelectionPointsMode == "pair" ? Mathf.Max(ResumeInfo.Pending.ranking_points, ResumeInfo.Pending.ranking_pairs * config.SelectionBonusPerPair)
+                : config.IsPractice ? ResumeInfo.Pending.ranking_pairs * config.SelectionBonusPerPair : ResumeInfo.Pending.ranking_points;
             PaidPoints = ResumeInfo.Pending.ranking_points;
             // Continuing an interrupted session: the numbering, the pool and the rows carry on. The pool continues from the sets that were scored (a set shown but not scored is
             // shown again), and a break the data stopped inside is played again from its first unscored set (the participant's picks in the interrupted set are not kept).
             ResumeReply r = ResumeInfo.Pending;
-            rankingBreak._breakNumber = r.breaks;
-            rankingBreak._poolIndex = r.sets_next;
-            rankingBreak._setCounter = r.sets_next;
-            int[] schedule = config.RankingLeavings;
+            selectionBreak._breakNumber = r.breaks;
+            selectionBreak._poolIndex = r.sets_next;
+            selectionBreak._setCounter = r.sets_next;
+            int[] schedule = config.SelectionLeavings;
             if (r.open_break > 0)
             {
-                rankingBreak._breakNumber = r.open_break - 1;                         // RunBreak numbers it again
-                rankingBreak._leavings = r.open_break_leaving;
-                if (r.open_break_sets_done < config.RankingSets)
+                selectionBreak._breakNumber = r.open_break - 1;                         // RunBreak numbers it again
+                selectionBreak._leavings = r.open_break_leaving;
+                if (r.open_break_sets_done < config.SelectionSets)
                 {
-                    rankingBreak._rerunFrom = r.open_break_sets_done;
-                    rankingBreak._due = true;
+                    selectionBreak._rerunFrom = r.open_break_sets_done;
+                    selectionBreak._due = true;
                 }
                 else
                 {
-                    rankingBreak._breakNumber = r.open_break;                         // every set was scored: the break only had its end to come
+                    selectionBreak._breakNumber = r.open_break;                         // every set was scored: the break only had its end to come
                 }
             }
             else if (r.leavings > 0)
             {
-                rankingBreak._leavings = r.leavings;                                   // the schedule continues where it was: a reload does not start the count again
-                rankingBreak._due = r.leaving_due;                                     // (a ranking that was due and had not begun still comes)
+                selectionBreak._leavings = r.leavings;                                   // the schedule continues where it was: a reload does not start the count again
+                selectionBreak._due = r.leaving_due;                                     // (a selection that was due and had not begun still comes)
             }
             else if (schedule.Length > 0 && r.breaks > 0)
             {
-                rankingBreak._leavings = schedule[Mathf.Min(r.breaks, schedule.Length) - 1];       // a server that does not count the leavings: count on from the last break's number
+                selectionBreak._leavings = schedule[Mathf.Min(r.breaks, schedule.Length) - 1];       // a server that does not count the leavings: count on from the last break's number
             }
 
-            // The bushes harvested since the last ranking are not restored (the server does not say which they were): after a resume the next ranking waits for rankingMinBushes more.
+            // The bushes harvested since the last selection are not restored (the server does not say which they were): after a resume the next selection waits for selectionMinBushes more.
         }
 
-        return rankingBreak;
+        return selectionBreak;
     }
 
     private void OnEnable()
@@ -279,9 +279,9 @@ public class RankingBreak : MonoBehaviour
             return;
         }
 
-        // A switch counts once the player is `rankingSettleDepth` past the edge on the new side (0: at the edge, which puts the arc farthest from the next cluster); one inside the cooldown after a break,
-        // or in the last seconds of the session, or before enough bushes have been harvested since the last ranking, is ignored (it does not wait to fire later, in the middle of the next patch).
-        if (tile != _tile && _world.DepthIntoTile(p.x, p.z, _tile, tile) >= _config.RankingSettleDepth)
+        // A switch counts once the player is `selectionSettleDepth` past the edge on the new side (0: at the edge, which puts the arc farthest from the next cluster); one inside the cooldown after a break,
+        // or in the last seconds of the session, or before enough bushes have been harvested since the last selection, is ignored (it does not wait to fire later, in the middle of the next patch).
+        if (tile != _tile && _world.DepthIntoTile(p.x, p.z, _tile, tile) >= _config.SelectionSettleDepth)
         {
             _tile = tile;
             if (SwitchCounts())
@@ -303,12 +303,12 @@ public class RankingBreak : MonoBehaviour
         }
     }
 
-    // The fixed schedule (SessionConfig.rankingTimes): the next ranking becomes due when the session's elapsed seconds (the clock is held in a ranking) reach its time, and starts at the next moment
-    // no harvest bout is under way; a bout that outlasts rankingMaxWait is cancelled. scripts/replay.py and validate_run.py mirror this.
+    // The fixed schedule (SessionConfig.selectionTimes): the next selection becomes due when the session's elapsed seconds (the clock is held in a selection) reach its time, and starts at the next moment
+    // no harvest bout is under way; a bout that outlasts selectionMaxWait is cancelled. scripts/replay.py and validate_run.py mirror this.
     private void TickSchedule()
     {
         float elapsed = _config.SessionDuration - _sun.SessionTimeRemaining;
-        float[] times = _config.RankingTimes;
+        float[] times = _config.SelectionTimes;
         if (!_due && _breakNumber < times.Length && elapsed >= times[_breakNumber])
         {
             _due = true;
@@ -324,24 +324,24 @@ public class RankingBreak : MonoBehaviour
             _dueAt = elapsed;                          // a break played again after a resume
         }
 
-        if (_due && _harvest.IsHarvesting && elapsed - _dueAt >= _config.RankingMaxWait)
+        if (_due && _harvest.IsHarvesting && elapsed - _dueAt >= _config.SelectionMaxWait)
         {
             _harvest.CancelBout();
         }
     }
 
-    // A ranking is due at this leaving: it is on the schedule, or, with no schedule, every `rankingEvery`-th since the last break.
+    // A selection is due at this leaving: it is on the schedule, or, with no schedule, every `selectionEvery`-th since the last break.
     private bool BreakDue()
     {
-        int[] schedule = _config.RankingLeavings;
-        return schedule.Length > 0 ? System.Array.IndexOf(schedule, _leavings) >= 0 : _switches >= _config.RankingEvery;
+        int[] schedule = _config.SelectionLeavings;
+        return schedule.Length > 0 ? System.Array.IndexOf(schedule, _leavings) >= 0 : _switches >= _config.SelectionEvery;
     }
 
     private bool SwitchCounts()
     {
         float elapsed = _config.SessionDuration - _sun.SessionTimeRemaining;
-        return _sun.SessionTimeRemaining > _config.RankingLastSeconds && elapsed - _lastEnd >= _config.RankingCooldown
-            && _bushesSinceBreak.Count >= _config.RankingMinBushes;
+        return _sun.SessionTimeRemaining > _config.SelectionLastSeconds && elapsed - _lastEnd >= _config.SelectionCooldown
+            && _bushesSinceBreak.Count >= _config.SelectionMinBushes;
     }
 
     private IEnumerator RunBreak()
@@ -356,11 +356,11 @@ public class RankingBreak : MonoBehaviour
         _rerunFrom = -1;
         _player.SetStationary(true);
         _harvest.SetBlocked(true);
-        _harvest.SetAimMode(true, _config.RankingAimTolerance);
-        _harvest.SetFruitSeconds(_config.RankingFruitSeconds);
+        _harvest.SetAimMode(true, _config.SelectionAimTolerance);
+        _harvest.SetFruitSeconds(_config.SelectionFruitSeconds);
         if (_log != null)
         {
-            _log.LogEvent("rank_break_start", payload: Json.Obj(("break", _breakNumber), ("switches", _switches), ("tile", _tile), ("pool_index", _poolIndex), ("sets", _config.RankingSets), ("leaving", _leavings), ("resumed", again)));
+            _log.LogEvent("rank_break_start", payload: Json.Obj(("break", _breakNumber), ("switches", _switches), ("tile", _tile), ("pool_index", _poolIndex), ("sets", _config.SelectionSets), ("leaving", _leavings), ("resumed", again)));
         }
 
         // The world's bushes stay where they are but go grey, and none can be aimed at meanwhile.
@@ -374,10 +374,10 @@ public class RankingBreak : MonoBehaviour
 
         yield return GrayFade(1f);
 
-        for (int s = firstSet; s < _config.RankingSets; s++)
+        for (int s = firstSet; s < _config.SelectionSets; s++)
         {
             PoolSet set = _pool.sets[_poolIndex % _pool.sets.Length];
-            yield return RunSet(set, s, s == _config.RankingSets - 1);
+            yield return RunSet(set, s, s == _config.SelectionSets - 1);
             _poolIndex++;
         }
 
@@ -432,7 +432,7 @@ public class RankingBreak : MonoBehaviour
         _pickTarget = Dense ? Mathf.Clamp(_pool.pickCount > 0 ? _pool.pickCount : 5, 1, _setSize) : _setSize;
         var created = new List<Tree>();
         var scales = new List<Vector3>();
-        float discY = _treeGenerator.Terrain.SampleElevation(origin.x, origin.z) - _config.RankingStageDrop;
+        float discY = _treeGenerator.Terrain.SampleElevation(origin.x, origin.z) - _config.SelectionStageDrop;
         _disc = BuildDisc(set, origin, turn, discY);
 
         foreach (PoolBush b in set.bushes)
@@ -494,7 +494,7 @@ public class RankingBreak : MonoBehaviour
         _setClock = 0f;
         float paused = 0f;
         bool timedOut = false;
-        SecondsLeft = _config.RankingSeconds;
+        SecondsLeft = _config.SelectionSeconds;
         var ids = new List<string>();
         foreach (PoolBush b in set.bushes)
         {
@@ -523,7 +523,7 @@ public class RankingBreak : MonoBehaviour
             }
 
             _setClock += Time.deltaTime;
-            SecondsLeft = Mathf.Max(0f, _config.RankingSeconds - _setClock);
+            SecondsLeft = Mathf.Max(0f, _config.SelectionSeconds - _setClock);
             if (_firstHarvestTime < 0f && _harvest.IsHarvesting)
             {
                 _firstHarvestTime = _setClock;
@@ -534,7 +534,7 @@ public class RankingBreak : MonoBehaviour
                 break;
             }
 
-            if (_setClock >= _config.RankingSeconds)
+            if (_setClock >= _config.SelectionSeconds)
             {
                 _harvest.CancelBout();
                 timedOut = true;
@@ -567,12 +567,12 @@ public class RankingBreak : MonoBehaviour
         }
 
         FadeHud(0f);
-        yield return new WaitForSecondsRealtime(_config.RankingFadeSeconds);
+        yield return new WaitForSecondsRealtime(_config.SelectionFadeSeconds);
         yield return RemoveSet(created, scales, _disc);
     }
 
     // The set's bushes shrink away and are destroyed.
-    private IEnumerator RemoveSet(List<Tree> created, List<Vector3> scales, RankingDisc disc)
+    private IEnumerator RemoveSet(List<Tree> created, List<Vector3> scales, SelectionDisc disc)
     {
         yield return Scale(created.ToArray(), scales.ToArray(), 1f, 0f, disc.Object.transform);
         Destroy(disc.Object);
@@ -605,24 +605,24 @@ public class RankingBreak : MonoBehaviour
         bool paid = true;
         if (Dense)
         {
-            // the dense design: the best `pickCount` of the 25, scored 0 to rankingTopKPoints (scripts/ranking.py top_k_score); one ranking, drawn from the world seed, pays (rankingPaid "one")
+            // the dense design: the best `pickCount` of the 25, scored 0 to selectionTopKPoints (scripts/selection.py top_k_score); one selection, drawn from the world seed, pays (selectionPaid "one")
             var pickedValues = new List<float>();
             foreach (int id in _picks)
             {
                 pickedValues.Add(values[id]);
             }
 
-            score = RankingSets.TopKScore(pickedValues, new List<float>(values.Values), _pickTarget, _config.RankingTopKPoints);
-            correct = RankingSets.TopKHits(_picks, values, _pickTarget);
+            score = SelectionSets.TopKScore(pickedValues, new List<float>(values.Values), _pickTarget, _config.SelectionTopKPoints);
+            correct = SelectionSets.TopKHits(_picks, values, _pickTarget);
             total = _pickTarget;
-            paid = _config.RankingPaid == "all" || set.index == RankingSets.PaidSetIndex(_config.WorldSeed, _pool.sets.Length);
+            paid = _config.SelectionPaid == "all" || set.index == SelectionSets.PaidSetIndex(_config.WorldSeed, _pool.sets.Length);
             worth = paid ? score : 0f;
         }
         else
         {
             float tie = _pool.tieTolerance > 0f ? _pool.tieTolerance : 0.05f;
-            RankingSets.ScorePairs(setIds, values, _picks, tie, _config.RankingPointsMode, out correct, out total, out float weight);
-            worth = weight * _config.RankingBonusPerPair;
+            SelectionSets.ScorePairs(setIds, values, _picks, tie, _config.SelectionPointsMode, out correct, out total, out float weight);
+            worth = weight * _config.SelectionBonusPerPair;
         }
 
         float points = _config.IsPractice ? 0f : worth;
@@ -637,7 +637,7 @@ public class RankingBreak : MonoBehaviour
         var times = new List<string>();
         foreach (float t in _pickTimes)
         {
-            times.Add(RankingSets.F(t));
+            times.Add(SelectionSets.F(t));
         }
 
         _log.LogEvent("rank_set_end", payload: Json.Obj(("picked", new Json.Raw("[" + string.Join(",", _picks) + "]")), ("pick_times", new Json.Raw("[" + string.Join(",", times) + "]")),
@@ -650,13 +650,13 @@ public class RankingBreak : MonoBehaviour
             int id = _world.TreeCount + b.id;
             int index = _picks.IndexOf(id);
             _setTrees.TryGetValue(b.id, out Tree tree);
-            objects.Add(RankingSets.BushObject(id, b.slot, b.shape, b.color, b.moisture, b.value, index + 1, _firstStart.TryGetValue(id, out float started) ? started : -1f,
+            objects.Add(SelectionSets.BushObject(id, b.slot, b.shape, b.color, b.moisture, b.value, index + 1, _firstStart.TryGetValue(id, out float started) ? started : -1f,
                 index >= 0 ? _pickTimes[index] : -1f, tree != null ? tree.FruitCount - tree.FruitsRemaining : 0));
         }
 
-        float response = timedOut ? _config.RankingSeconds : (_pickTimes.Count > 0 ? _pickTimes[_pickTimes.Count - 1] : 0f);
+        float response = timedOut ? _config.SelectionSeconds : (_pickTimes.Count > 0 ? _pickTimes[_pickTimes.Count - 1] : 0f);
         Vector3 p = _player.transform.position;
-        _log.LogSet(RankingSets.RowCells(_setCounter++, set.index, p.x, p.z, timedOut, response, _firstHarvestTime, points, paused, _setSize, correct, total, objects));
+        _log.LogSet(SelectionSets.RowCells(_setCounter++, set.index, p.x, p.z, timedOut, response, _firstHarvestTime, points, paused, _setSize, correct, total, objects));
     }
 
     private void HandleBoutStarted(Tree tree)
@@ -712,7 +712,7 @@ public class RankingBreak : MonoBehaviour
 
     private IEnumerator GrayFade(Tree[] trees, float from, float to)
     {
-        float seconds = Mathf.Max(_config.RankingGraySeconds, 0.01f);
+        float seconds = Mathf.Max(_config.SelectionGraySeconds, 0.01f);
         float elapsed = 0f;
         while (elapsed < seconds)
         {
@@ -743,7 +743,7 @@ public class RankingBreak : MonoBehaviour
     }
 
     // A disc of terrain just bigger than the set's arc, below the player's ground, in the set's frame (the player at the origin, z ahead).
-    private RankingDisc BuildDisc(PoolSet set, Vector3 origin, Quaternion turn, float discY)
+    private SelectionDisc BuildDisc(PoolSet set, Vector3 origin, Quaternion turn, float discY)
     {
         float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
         foreach (PoolBush b in set.bushes)
@@ -756,16 +756,16 @@ public class RankingBreak : MonoBehaviour
         }
 
         var centre = new Vector2((minX + maxX) / 2f, (minZ + maxZ) / 2f);
-        float margin = _config.RankingStageMargin;
+        float margin = _config.SelectionStageMargin;
         Vector3 position = origin + turn * new Vector3(centre.x, 0f, centre.y);
         position.y = discY;
         int seed = _config.WorldSeed * 31 + _breakNumber;
-        return RankingDisc.Create(_treeGenerator.Terrain.MaterialInstance, position, turn, centre, (maxX - minX) / 2f + margin, (maxZ - minZ) / 2f + margin, _config.WorldHalfExtent, seed, StageLayer, _config.RankingStageTilt);
+        return SelectionDisc.Create(_treeGenerator.Terrain.MaterialInstance, position, turn, centre, (maxX - minX) / 2f + margin, (maxZ - minZ) / 2f + margin, _config.WorldHalfExtent, seed, StageLayer, _config.SelectionStageTilt);
     }
 
     // A second (overlay) camera draws the stage layer over the world after clearing depth, so the real terrain cannot hide the disc below it; the main camera never
     // draws that layer. The camera is made once, in the session's first frames, and stays in the stack: adding it for a break and removing it afterwards made the browser show a black
-    // frame or two when a ranking ended (the logs show no hitch and no pause overlay then), and a stack that never changes cannot.
+    // frame or two when a selection ended (the logs show no hitch and no pause overlay then), and a stack that never changes cannot.
     private void EnsureStageCamera()
     {
         Camera main = _camera != null ? _camera.PlayerCamera : null;
@@ -776,7 +776,7 @@ public class RankingBreak : MonoBehaviour
 
         _mainCullingMask = main.cullingMask;
         main.cullingMask &= ~(1 << StageLayer);
-        _stageCamera = new GameObject("RankingStageCamera");
+        _stageCamera = new GameObject("SelectionStageCamera");
         _stageCamera.transform.SetParent(main.transform, false);
         Camera overlay = _stageCamera.AddComponent<Camera>();
         overlay.CopyFrom(main);
@@ -806,19 +806,19 @@ public class RankingBreak : MonoBehaviour
         _stageCamera = null;
     }
 
-    // The terrain behind the stage fades part of the way to grey with the world's bushes (the amount is rankingStageWorldGray).
+    // The terrain behind the stage fades part of the way to grey with the world's bushes (the amount is selectionStageWorldGray).
     private void GrayTerrain(float amount)
     {
         if (_treeGenerator != null && _treeGenerator.Terrain != null)
         {
-            _treeGenerator.Terrain.SetGray(amount * _config.RankingStageWorldGray);
+            _treeGenerator.Terrain.SetGray(amount * _config.SelectionStageWorldGray);
         }
     }
 
     // The trees' scales move from `from` to `to` times their own over the fade (not exactly zero: a zero-scale collider logs warnings).
     private IEnumerator Scale(Tree[] trees, Vector3[] full, float from, float to, Transform disc)
     {
-        float seconds = Mathf.Max(_config.RankingFadeSeconds, 0.01f);
+        float seconds = Mathf.Max(_config.SelectionFadeSeconds, 0.01f);
         float elapsed = 0f;
         while (elapsed < seconds)
         {
@@ -870,7 +870,7 @@ public class RankingBreak : MonoBehaviour
 
         if (_hud == null)
         {
-            _hud = new GameObject("RankingBreakHud", typeof(RectTransform), typeof(CanvasGroup));
+            _hud = new GameObject("SelectionBreakHud", typeof(RectTransform), typeof(CanvasGroup));
             _hud.transform.SetParent(canvas.transform, false);
             _hudGroup = _hud.GetComponent<CanvasGroup>();
             _hudGroup.blocksRaycasts = false;
@@ -881,7 +881,7 @@ public class RankingBreak : MonoBehaviour
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
             Color plate = new Color(0.06f, 0.067f, 0.09f, 0.55f);
-            TextMeshProUGUI banner = UiStyle.Label(_hud.transform, "Banner", _config.RankingText, 32f, TextAlignmentOptions.Center, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Color.white);
+            TextMeshProUGUI banner = UiStyle.Label(_hud.transform, "Banner", _config.SelectionText, 32f, TextAlignmentOptions.Center, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Color.white);
             UiStyle.HudPlate(banner, new Vector2(0f, -64f), new Vector2(1100f, 64f), 32f, plate, "BannerPlate");
             _counterText = Dense ? UiStyle.Label(_hud.transform, "Counter", "", 40f, TextAlignmentOptions.Center, new Vector2(1f, 1f), new Vector2(1f, 1f), Color.white) : null;
             if (_counterText != null)
@@ -893,7 +893,7 @@ public class RankingBreak : MonoBehaviour
             UiStyle.HudPlate(_clockText, new Vector2(64f + 110f, -(44f + 34f + 76f)), new Vector2(220f, 68f), 46f, plate, "CountdownPlate");
         }
 
-        SecondsLeft = _config.RankingSeconds;
+        SecondsLeft = _config.SelectionSeconds;
         if (_counterText != null)
         {
             _counterText.text = $"Selected 0 / {_pickTarget}";
@@ -924,7 +924,7 @@ public class RankingBreak : MonoBehaviour
     private IEnumerator FadeHudRoutine(float target)
     {
         float from = _hudGroup.alpha;
-        float seconds = Mathf.Max(_config.RankingFadeSeconds, 0.01f);
+        float seconds = Mathf.Max(_config.SelectionFadeSeconds, 0.01f);
         float elapsed = 0f;
         while (elapsed < seconds)
         {

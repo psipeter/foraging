@@ -127,7 +127,7 @@ def test_verify_flags_a_release_the_keys_do_not_explain():
     log.events = [e for e in log.events if e["t"] <= fr[2]["t"] and e["type"] != "fruit" or e["type"] == "fruit" and e["t"] <= fr[2]["t"]]
     log.events.append(dict(type="harvest_release", t=fr[2]["t"], tree_id=0, real=0.0, k=-1, reward=float("nan"), payload={}))
     assert verify(log)[0]
-    # The same release is accepted when a rank_set_end coincides with it (a ranking set cancelling the bout).
+    # The same release is accepted when a rank_set_end coincides with it (a selection set cancelling the bout).
     log.events.append(dict(type="rank_set_end", t=fr[2]["t"], real=0.0, tree_id=-1, k=-1, reward=float("nan"), payload={}))
     log.manifest.pop("foraging_points", None)
     assert not [p for p in verify(log)[0] if p.startswith(("harvest_release", "fruit", "harvest_press"))]
@@ -404,11 +404,11 @@ def test_a_pulled_runs_world_archive_next_to_its_folder_is_found(tmp_path, monke
     assert len(load_session_log(folder).bushes.pos) > 0
 
 
-# --- a ranking break inside a foraging session (RankingBreak) -------------------------------------------------------------------------
+# --- a selection break inside a foraging session (SelectionBreak) -------------------------------------------------------------------------
 
-# --- a ranking break inside a foraging session (RankingBreak) -----------------------------------------------------
+# --- a selection break inside a foraging session (SelectionBreak) -----------------------------------------------------
 
-BREAK = {"config": dict(CFG, rankingFruitSeconds=0.05, rankingAimTolerance=1.5)}
+BREAK = {"config": dict(CFG, selectionFruitSeconds=0.05, selectionAimTolerance=1.5)}
 SET_ID = 101
 
 
@@ -422,7 +422,7 @@ def keyed(spans, total=400, x=0.0, z=7.0):
 
 
 def break_events(start=1.0, rank_set=1.3, go=1.5, set_end=2.5, end=2.7, z=67.0):
-    """One real bush (radius 1, at (0, 10)) and one ranking set of one bush 60 units from the player, as RankingBreak logs them."""
+    """One real bush (radius 1, at (0, 10)) and one selection set of one bush 60 units from the player, as SelectionBreak logs them."""
     both = {"break": 1}
     return [_ev("rank_break_start", start, **both),
             _ev("rank_set", rank_set, **{"break": 1, "set": 0, "fruits": 10, "bushes": [{"id": SET_ID, "x": 0.0, "z": z, "radius": 1.0, "shape": 0.5}]}),
@@ -441,7 +441,7 @@ def test_a_break_harvest_is_aimed_quick_and_pays_nothing_and_the_foraging_harves
     got = fruits(out)
     ranked = [e for e in got if e["tree_id"] == SET_ID]
     assert len(ranked) == 10 and all(e["reward"] == 0.0 for e in ranked)
-    assert np.allclose(np.diff([e["t"] for e in ranked]), 0.05, atol=2 / HZ)       # quick: rankingFruitSeconds a fruit, not the session's 0.8
+    assert np.allclose(np.diff([e["t"] for e in ranked]), 0.05, atol=2 / HZ)       # quick: selectionFruitSeconds a fruit, not the session's 0.8
     real = [e for e in got if e["tree_id"] == 0]
     assert len(real) == 1 and real[0]["reward"] == 1.0 and abs(real[0]["t"] - 3.81) < 3 / HZ         # the main task's rules again: in range, 0.8 s a fruit
     assert real[0]["running_total"] == 1.0
@@ -491,8 +491,8 @@ def test_a_break_replay_verifies_against_its_own_events():
 
 def test_steps_marks_the_break():
     s = steps(break_log(), 0.1)
-    in_break = s["t"][s["ranking"] == 1]
-    assert 1.0 < in_break.min() <= 1.1 and 2.6 <= in_break.max() <= 2.7 and s["ranking"].sum() == len(in_break)
+    in_break = s["t"][s["selection"] == 1]
+    assert 1.0 < in_break.min() <= 1.1 and 2.6 <= in_break.max() <= 2.7 and s["selection"].sum() == len(in_break)
 
 
 def test_two_sets_with_the_same_ids_are_separate_bushes():
@@ -500,7 +500,7 @@ def test_two_sets_with_the_same_ids_are_separate_bushes():
     log = break_log(spans=((1.7, 2.6), (3.2, 3.9)), set_end=2.8, end=3.9)
     second = _ev("rank_set", 3.0, **{"break": 1, "set": 1, "fruits": 10, "bushes": [{"id": SET_ID, "x": 20.0, "z": 27.0, "radius": 1.0, "shape": 0.5}]})
     log.events = sorted(log.events + [second, _ev("rank_go", 3.1, **{"break": 1}), _ev("rank_set_end", 3.85, **{"break": 1})], key=lambda e: e["t"])
-    bushes, sets, ids = replay.with_ranking_bushes(log)
+    bushes, sets, ids = replay.with_selection_bushes(log)
     assert len(sets) == 2 and len(bushes.pos) == 3 and list(ids) == [0, SET_ID, SET_ID] and np.allclose(bushes.pos[2], [20.0, 27.0])
 
 
@@ -512,7 +512,7 @@ def test_a_set_interrupted_by_a_resume_stands_only_until_its_break_ends():
              _ev("rank_set", 3.1, **{"break": 1, "set": 1, "fruits": 10, "bushes": [{"id": SET_ID, "x": 0.0, "z": 25.0, "radius": 1.0, "shape": 0.5}]}),
              _ev("rank_go", 3.2, **{"break": 1}), _ev("rank_set_end", 3.85, **{"break": 1})]
     log.events = sorted([e for e in log.events if not (e["type"] == "rank_set_end")] + again, key=lambda e: e["t"])
-    _, sets, _ = replay.with_ranking_bushes(log)
+    _, sets, _ = replay.with_selection_bushes(log)
     assert len(sets) == 2 and sets[0]["end"] == pytest.approx(2.0) and sets[1]["end"] == pytest.approx(3.85)
 
 
@@ -542,11 +542,11 @@ def cross_log(rows, bushes=((0.0, 10.0, 1.0),), shape=0.0, cfg=None, n_fruits=3)
 def hold(x, z, yaw, pitch, seconds=0.3, keys=4):
     return [(x, z, yaw, pitch, keys)] * int(seconds * HZ)
 
-def ranking_cross(offset_deg, ranking_radius=None):
-    """A ranking set of one bush at (0, 16), the player at the origin pressing Space for 0.4 s after the set goes live, the view turned `offset_deg` of yaw off the bush's middle."""
-    cfg = dict(CROSS, rankingFruitSeconds=0.05, rankingAimTolerance=1.5)
-    if ranking_radius is not None:
-        cfg["rankingCrosshairRadius"] = ranking_radius
+def selection_cross(offset_deg, selection_radius=None):
+    """A selection set of one bush at (0, 16), the player at the origin pressing Space for 0.4 s after the set goes live, the view turned `offset_deg` of yaw off the bush's middle."""
+    cfg = dict(CROSS, selectionFruitSeconds=0.05, selectionAimTolerance=1.5)
+    if selection_radius is not None:
+        cfg["selectionCrosshairRadius"] = selection_radius
     yaw, pitch = look(0.0, 0.0, 0.0, 16.0)
     rows = hold(0.0, 0.0, yaw + offset_deg, pitch, 0.5, keys=0) + hold(0.0, 0.0, yaw + offset_deg, pitch, 0.4) + hold(0.0, 0.0, yaw + offset_deg, pitch, 0.3, keys=0)
     log = cross_log(rows, bushes=((50.0, 50.0, 1.0),), cfg=cfg)
@@ -558,23 +558,23 @@ def ranking_cross(offset_deg, ranking_radius=None):
 
 
 def test_a_stage_bush_stands_where_the_log_says_not_on_the_terrain():
-    # the same set, looked at on the middle of the canopy; on the terrain (no `y`) the view hits, with the bush logged 30 units lower (a ranking stage's disc) it misses
-    log = ranking_cross(0.0, ranking_radius=0.5)
+    # the same set, looked at on the middle of the canopy; on the terrain (no `y`) the view hits, with the bush logged 30 units lower (a selection stage's disc) it misses
+    log = selection_cross(0.0, selection_radius=0.5)
     assert press_events(replay_harvests(log))
-    low = ranking_cross(0.0, ranking_radius=0.5)
+    low = selection_cross(0.0, selection_radius=0.5)
     for e in low.events:
         if e["type"] == "rank_set":
             e["payload"]["bushes"][0]["y"] = -30.0
     assert not press_events(replay_harvests(low))
 
 
-def test_a_ranking_uses_its_own_smaller_hit_circle():
+def test_a_selection_uses_its_own_smaller_hit_circle():
     # a view 1 degree past the canopy's edge (the bush is 1 unit in radius, 16 away: 3.6 degrees from its middle to its edge, so 4.6 off the middle): the crosshair circle of
-    # 1.5 degrees touches it, the ranking's 0.5 does not
+    # 1.5 degrees touches it, the selection's 0.5 does not
     miss_by_one = float(np.degrees(np.arctan(1.0 / 16.0)) + 1.0)
-    assert press_events(replay_harvests(ranking_cross(miss_by_one)))                          # no ranking radius in the log: the crosshair's
-    assert not press_events(replay_harvests(ranking_cross(miss_by_one, ranking_radius=0.5)))
-    assert press_events(replay_harvests(ranking_cross(0.0, ranking_radius=0.5)))              # on the bush: still picked
+    assert press_events(replay_harvests(selection_cross(miss_by_one)))                          # no selection radius in the log: the crosshair's
+    assert not press_events(replay_harvests(selection_cross(miss_by_one, selection_radius=0.5)))
+    assert press_events(replay_harvests(selection_cross(0.0, selection_radius=0.5)))              # on the bush: still picked
 
 
 
@@ -601,7 +601,7 @@ def test_a_tall_bush_is_aimed_higher_up_than_a_squat_one():
     assert press_events(replay_harvests(cross_log(hold(0.0, -20.0, yaw, higher), shape=1.0)))
 
 
-def test_the_range_applies_to_the_crosshair_in_the_main_task_but_not_inside_a_ranking_break():
+def test_the_range_applies_to_the_crosshair_in_the_main_task_but_not_inside_a_selection_break():
     near = dict(CROSS, harvestRangeGapBase=7.0)
     yaw, pitch = look(0.0, -20.0, 0.0, 10.0)
     rows = hold(0.0, -20.0, yaw, pitch)
@@ -610,7 +610,7 @@ def test_the_range_applies_to_the_crosshair_in_the_main_task_but_not_inside_a_ra
     log.events = [_ev("rank_break_start", 0.0, **{"break": 1}),
                   _ev("rank_set", 0.0, **{"break": 1, "set": 0, "fruits": 3, "bushes": [{"id": SET_ID, "x": 0.0, "z": 10.0, "radius": 1.0, "shape": 0.0}]}),
                   _ev("rank_go", 0.005, **{"break": 1})]
-    assert [e["tree_id"] for e in press_events(replay_harvests(log))] == [SET_ID]            # ranking: no range
+    assert [e["tree_id"] for e in press_events(replay_harvests(log))] == [SET_ID]            # selection: no range
 
 
 def test_of_two_bushes_on_the_ray_the_nearer_is_the_target():

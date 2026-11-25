@@ -12,7 +12,7 @@ environment and code fingerprints, and every query in analysis.py work unchanged
 Scores and plots are not part of the battery: they are computed later from the database (scripts/analysis.py).
 
 The battery's sessions are labels T1 to T4 of one frozen tiles environment, `FIX_T0` (scripts/fixtures/sessions/), at different session lengths, each label on
-its own set of worlds (the world seeds are shifted by 100 per label). The ranking evaluation that once followed each session is gone and has not been rebuilt, so
+its own set of worlds (the world seeds are shifted by 100 per label). The selection evaluation that once followed each session is gone and has not been rebuilt, so
 the battery measures reward only.
 """
 

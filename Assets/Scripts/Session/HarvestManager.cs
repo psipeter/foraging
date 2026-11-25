@@ -60,7 +60,7 @@ public class HarvestManager : MonoBehaviour
     public static event Action<HarvestBout> OnHarvestBoutEnded;
     public static event Action<HarvestHint> OnHintChanged;
     public static event Action OnBushExhausted;
-    // Raised for every fruit taken, in every session kind (a ranking counts fruits to register a pick).
+    // Raised for every fruit taken, in every session kind (a selection counts fruits to register a pick).
     public static event Action<Tree> OnFruitTaken;
     // For the DataLogger: a bout started on a tree; a fruit with its index k on that tree (0-based, in the order taken),
     // reward and the session total after it; the target entered (true) or left (false) the harvest range/cone mid-bout.
@@ -89,7 +89,7 @@ public class HarvestManager : MonoBehaviour
         OnScoreChanged?.Invoke(_runningTotal);
     }
 
-    // While blocked no bout can start and Space presses are discarded (the gap between ranking sets). The caller
+    // While blocked no bout can start and Space presses are discarded (the gap between selection sets). The caller
     // ends any open bout first; replay mirrors the window with the rank_break_start / rank_set_end ... rank_go / rank_break_end events.
     public void SetBlocked(bool blocked)
     {
@@ -213,7 +213,7 @@ public class HarvestManager : MonoBehaviour
                 targetIndex = focusIndex;
             }
         }
-        else if (!_aimMode && !playerController.HarvestHeld)        // aiming: a bout started is finished, whatever the key does (a ranking's commitment)
+        else if (!_aimMode && !playerController.HarvestHeld)        // aiming: a bout started is finished, whatever the key does (a selection's commitment)
         {
             EndBout();
             targetIndex = -1;
@@ -342,7 +342,7 @@ public class HarvestManager : MonoBehaviour
 
         OnFruitTaken?.Invoke(_target);
 
-        // Events fire in every session kind. In a ranking the consumers hide the outcome (no +X popup or score; the
+        // Events fire in every session kind. In a selection the consumers hide the outcome (no +X popup or score; the
         // pick sound plays at a fixed pitch, see HarvestUI and FeedbackAudio).
         OnFruitCollected?.Invoke(fruitReward, worldPos);
         OnScoreChanged?.Invoke(_runningTotal);
@@ -391,16 +391,16 @@ public class HarvestManager : MonoBehaviour
         OnHarvestBoutEnded?.Invoke(finished);
     }
 
-    // A ranking swaps which bushes are active between sets: stop any harvest first, then call this so the
+    // A selection swaps which bushes are active between sets: stop any harvest first, then call this so the
     // next Update re-finds the active trees.
     public void RefreshTrees()
     {
         _trees = null;
     }
 
-    // Ranking: the player stands still and picks by aiming; a harvest started (Space pressed on the bush aimed at) runs to the bush's last fruit whatever the
+    // Selection: the player stands still and picks by aiming; a harvest started (Space pressed on the bush aimed at) runs to the bush's last fruit whatever the
     // key and the crosshair do afterwards (the commitment: the rank of a bush is the order of starting and of finishing alike). The harvest range is ignored (any bush in view can be harvested) and the
-    // crosshair rule applies as in the foraging (the ranking's own radius, `rankingCrosshairRadius`); `toleranceDegrees` (a bearing limit beyond the canopy's edge) matters only for the cone rule, `crosshairRadius` 0; the progress ring is
+    // crosshair rule applies as in the foraging (the selection's own radius, `selectionCrosshairRadius`); `toleranceDegrees` (a bearing limit beyond the canopy's edge) matters only for the cone rule, `crosshairRadius` 0; the progress ring is
     // shown only on the bush aimed at or harvested, the rank number replacing it once the bush is finished). scripts/replay.py and scripts/visibility.py mirror this rule.
     public void SetAimMode(bool on, float toleranceDegrees)
     {
@@ -408,7 +408,7 @@ public class HarvestManager : MonoBehaviour
         _aimTolerance = toleranceDegrees;
     }
 
-    // Seconds per fruit: the session's, or the ranking break's quick harvest while it overrides it (SetFruitSeconds; below 0 clears it).
+    // Seconds per fruit: the session's, or the selection break's quick harvest while it overrides it (SetFruitSeconds; below 0 clears it).
     private float FruitSeconds => _fruitSecondsOverride > 0f ? _fruitSecondsOverride : sessionConfig.FruitHarvestDuration;
 
     public void SetFruitSeconds(float seconds)
@@ -444,8 +444,8 @@ public class HarvestManager : MonoBehaviour
         return discriminant >= 0f && (-b + Mathf.Sqrt(discriminant)) / a > 0f;
     }
 
-    // The hit circle in degrees: the crosshair's, or in a ranking its own smaller one (SessionConfig.rankingCrosshairRadius; scripts/replay.py mirrors this).
-    private float AimRadius => _aimMode && sessionConfig.RankingCrosshairRadius > 0f ? sessionConfig.RankingCrosshairRadius : sessionConfig.CrosshairRadius;
+    // The hit circle in degrees: the crosshair's, or in a selection its own smaller one (SessionConfig.selectionCrosshairRadius; scripts/replay.py mirrors this).
+    private float AimRadius => _aimMode && sessionConfig.SelectionCrosshairRadius > 0f ? sessionConfig.SelectionCrosshairRadius : sessionConfig.CrosshairRadius;
 
     private float HarvestAngle => _aimMode ? _aimTolerance : sessionConfig.HarvestMaxAngle;
 

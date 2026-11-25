@@ -1,12 +1,12 @@
 """The two key figures of the pilots on the pilots' value maps: `trends` and `grids`.
 
     pilot_figures.py trends [--out docs/pilots/pilot_trends.png]
-    pilot_figures.py grids  [--out docs/pilots/pilot_ranking.png]
+    pilot_figures.py grids  [--out docs/pilots/pilot_selection.png]
 
 `trends`: one row per experiment (Complexity PCX, Spacing PSC, Sparsity PSP), the three sessions' maps in columns (the fixed 0 to 9 fruit scale; a contour at half the peak; the world's bushes
 as dots: the world is generated with the map, so the dots are the bushes the participant would see), and a fourth panel with the descriptors across the three sessions (map Gini, bush Gini,
 interaction, nonlinearity, as plotted by `value_maps` and `factors.measure`); the text file adds the span-and-hold check of each pilot knob (`pilot_report.PILOTS`). The knob of each pilot is the solid line.
-`grids`: the dense 5x5 ranking grids of `dense_grid.py`, five rankings in columns, one row per experiment and session.
+`grids`: the dense 5x5 selection grids of `dense_grid.py`, five selections in columns, one row per experiment and session.
 """
 
 import argparse
@@ -22,7 +22,7 @@ import factors
 import pilot_report
 import sim
 import value_maps
-from ranking import load_session
+from selection import load_session
 
 DOCS = Path(__file__).resolve().parent.parent / "docs" / "pilots"
 EXPERIMENTS = (("PCX", "Complexity", "interaction"), ("PSC", "Spacing", "travel time"), ("PSP", "Sparsity", "Gini"))
@@ -132,7 +132,7 @@ def main():
     ap.add_argument("command", choices=["trends", "grids"])
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
-    out = Path(args.out or DOCS / ("pilot_trends.png" if args.command == "trends" else "pilot_ranking.png"))
+    out = Path(args.out or DOCS / ("pilot_trends.png" if args.command == "trends" else "pilot_selection.png"))
     out.parent.mkdir(parents=True, exist_ok=True)
     if args.command == "trends":
         fig, text = trends_figure()

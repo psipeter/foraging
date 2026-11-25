@@ -13,7 +13,7 @@ Shader "Universal Render Pipeline/Unlit/VertexColor"
         _RockColor ("Mountain Rock Color", Color) = (0.42, 0.40, 0.38, 1)
         _SnowColor ("Mountain Snow Color", Color) = (0.93, 0.95, 0.98, 1)
         _MountainFogStrength ("Fog multiplier on mountains", Range(0, 1)) = 0.3
-        _GrayAmount ("Grey amount (a ranking stage greys the world)", Range(0, 1)) = 0
+        _GrayAmount ("Grey amount (a selection stage greys the world)", Range(0, 1)) = 0
     }
 
     SubShader

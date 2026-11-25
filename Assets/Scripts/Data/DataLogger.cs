@@ -7,9 +7,9 @@ using UnityEngine;
 
 // Records everything needed to replay the participant's actions in their exact world (docs/ONLINE_DATA_PLAN.md):
 //   trajectory   one row per rendered frame: t, x, z, yaw, pitch, keys (the state HarvestManager reads that frame), quantized
-//   events       sparse discrete events (pause, harvest press/release, every fruit, teleports, ranking breaks, ...)
+//   events       sparse discrete events (pause, harvest press/release, every fruit, teleports, selection breaks, ...)
 //   session row  the full SessionConfig, the world file's hash, build info, display and frame statistics
-//   ranking sets one row per ranking set
+//   selection sets one row per selection set
 // Rows are batched (events within a second, trajectory every five seconds online, every second offline) and handed to the
 // DataPipeline, which writes the local copy under ForagingData/<run id>/<session>/ and uploads when online. The clock `t`
 // is unpaused session seconds since the logger started (it stands still while a screen or the data gate holds
@@ -155,7 +155,7 @@ public class DataLogger : MonoBehaviour
         });
         if (r.open_break > 0 && !r.open_break_end_logged)
         {
-            // The break the data stopped inside is closed here, so the starts and ends stay paired (the server's held-clock sum pairs them in order); RankingBreak plays it again.
+            // The break the data stopped inside is closed here, so the starts and ends stay paired (the server's held-clock sum pairs them in order); SelectionBreak plays it again.
             _events.Insert(1, new EventRow
             {
                 T = _t, Real = Time.realtimeSinceStartup - _realStart, Type = "rank_break_end",
@@ -185,7 +185,7 @@ public class DataLogger : MonoBehaviour
             }
 
             harvestManager?.RestoreState(r.fruits_taken, r.running_total);
-            sunController?.SetSessionTime((float)(r.clock - r.held_seconds));      // the logged clock runs on through ranking breaks; the session clock does not
+            sunController?.SetSessionTime((float)(r.clock - r.held_seconds));      // the logged clock runs on through selection breaks; the session clock does not
         }
 
         _poseRestored = true;
@@ -280,7 +280,7 @@ public class DataLogger : MonoBehaviour
         });
     }
 
-    // One ranking set: its cells in SetRow.Columns order, formatted, '' for a missing value.
+    // One selection set: its cells in SetRow.Columns order, formatted, '' for a missing value.
     public void LogSet(string[] cells)
     {
         _sets.Add(new SetRow { Cells = cells });
@@ -381,7 +381,7 @@ public class DataLogger : MonoBehaviour
         }
 
         LogEvent("session_end", runningTotal: _lastRunningTotal,
-            payload: Json.Obj(("foraging_points", _lastRunningTotal), ("ranking_points", RankingBreak.PaidPoints)));
+            payload: Json.Obj(("foraging_points", _lastRunningTotal), ("ranking_points", SelectionBreak.PaidPoints)));
         _finalized = true;
         try
         {
@@ -493,6 +493,6 @@ public class DataLogger : MonoBehaviour
             ("ended_at", final ? DateTime.UtcNow.ToString("O") : null),
             ("completed", final && sunController != null && sunController.SessionComplete),
             ("foraging_points", final ? (object)_lastRunningTotal : null),
-            ("ranking_points", final ? (object)RankingBreak.PaidPoints : null));
+            ("ranking_points", final ? (object)SelectionBreak.PaidPoints : null));
     }
 }

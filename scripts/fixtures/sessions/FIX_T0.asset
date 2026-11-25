@@ -16,28 +16,28 @@ MonoBehaviour:
   worldSeed: 7101
   isPractice: 0
   freezeSun: 0
-  rankingEvery: 0
-  rankingSets: 1
-  rankingSeconds: 20
-  rankingCooldown: 10
-  rankingSettleDepth: 0
-  rankingPoolSets: 12
-  rankingFadeSeconds: 0.4
-  rankingGraySeconds: 0.25
-  rankingFruitSeconds: 0.05
-  rankingLastSeconds: 10
-  rankingMinBushes: 1
-  rankingText: 'Rank these bushes: harvest them from most to least points'
-  rankingSetSize: 5
-  rankingArcSpan: 84
-  rankingDistance: 16
-  rankingTieGap: 0.25
-  rankingRimScale: 1.15
-  rankingRimBoost: 3
-  rankingMarkerLift: 0.75
-  rankingRankScale: 3
-  rankingBonusPerPair: 2
-  rankingAimTolerance: 1.5
+  selectionEvery: 0
+  selectionSets: 1
+  selectionSeconds: 20
+  selectionCooldown: 10
+  selectionSettleDepth: 0
+  selectionPoolSets: 12
+  selectionFadeSeconds: 0.4
+  selectionGraySeconds: 0.25
+  selectionFruitSeconds: 0.05
+  selectionLastSeconds: 10
+  selectionMinBushes: 1
+  selectionText: 'Rank these bushes: harvest them from most to least points'
+  selectionSetSize: 5
+  selectionArcSpan: 84
+  selectionDistance: 16
+  selectionTieGap: 0.25
+  selectionRimScale: 1.15
+  selectionRimBoost: 3
+  selectionMarkerLift: 0.75
+  selectionRankScale: 3
+  selectionBonusPerPair: 2
+  selectionAimTolerance: 1.5
   instructionsFile: Experiments/FOR/instructions_S1.txt
   controlsReminder: 
   firstHarvestMessage: 

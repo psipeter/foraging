@@ -1,10 +1,10 @@
-"""Figures of the plus ranking design (`SessionConfig.rankingDesign` "plus"): the pool's sets drawn on the session's value map.
+"""Figures of the plus selection design (`SessionConfig.selectionDesign` "plus"): the pool's sets drawn on the session's value map.
 
-`ranking_plus.py mock <session> --shots a.png b.png c.png [--set-index 0 1 2]` pairs sets with screenshots of them in the game.
-`ranking_plus.py preview <session> [--axes mixed] [--jitter 1] [--arm 1] [--ratio 2] [--sep 0.08] [--sets 30] [--seed N] [--out file.png]` generates the pool the settings
+`selection_plus.py mock <session> --shots a.png b.png c.png [--set-index 0 1 2]` pairs sets with screenshots of them in the game.
+`selection_plus.py preview <session> [--axes mixed] [--jitter 1] [--arm 1] [--ratio 2] [--sep 0.08] [--sets 30] [--seed N] [--out file.png]` generates the pool the settings
 would give (the session's own, with any setting given here replacing it; nothing is written to the project except the figure) and draws, for each axes mode present, the
 value map over (shape, colour) with each set's five bushes as a plus (the centre a disc, the arms squares, joined through the centre), then what the sets show of the map to
-someone who sees only the bushes: where the centres lie around the peak and what share of the peak each role pays. The default output is `docs/pilots/<session>_ranking_plus.png`.
+someone who sees only the bushes: where the centres lie around the peak and what share of the peak each role pays. The default output is `docs/pilots/<session>_selection_plus.png`.
 """
 
 import argparse
@@ -16,7 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-import ranking
+import selection
 from world import REWARDS, stage_names
 
 DOCS = Path(__file__).resolve().parent.parent / "docs" / "pilots"
@@ -53,7 +53,7 @@ def figure(sidecar, params, title):
     sets, meta = sidecar["sets"], sidecar["plus"]
     peak, frame = sidecar["peak"], sidecar["frame"]
     axis, field = field_on_grid(params)
-    modes = [m for m in ranking.PLUS_AXES_MODES if any(x["axes"] == m for x in meta)]
+    modes = [m for m in selection.PLUS_AXES_MODES if any(x["axes"] == m for x in meta)]
     fig = plt.figure(figsize=(5.0 * max(len(modes), 3), 10.2), layout="constrained")
     grid = fig.add_gridspec(2, max(len(modes), 3), height_ratios=[1.0, 0.85])
     for col, mode in enumerate(modes):
@@ -68,7 +68,7 @@ def figure(sidecar, params, title):
     ax = fig.add_subplot(grid[1, 0])
     th = math.radians(frame[0])
     f1, f2 = np.array([math.cos(th), math.sin(th)]), np.array([-math.sin(th), math.cos(th)])
-    for mode, marker in zip(ranking.PLUS_AXES_MODES, "ovs"):
+    for mode, marker in zip(selection.PLUS_AXES_MODES, "ovs"):
         off = np.array([m["offset"] for m in meta if m["axes"] == mode])
         if len(off):
             ax.plot(off @ f1 / frame[1], off @ f2 / frame[2], marker, label=mode, alpha=0.8)
@@ -82,12 +82,12 @@ def figure(sidecar, params, title):
     ax.legend(fontsize=8)
 
     ax = fig.add_subplot(grid[1, 1])
-    shares = {r: [] for r in ranking.PLUS_ROLES}
+    shares = {r: [] for r in selection.PLUS_ROLES}
     for st in sets:
         for b in st["bushes"]:
             shares[b["role"]].append(b["value"] / peak[2])
-    ax.boxplot([shares[r] for r in ranking.PLUS_ROLES], tick_labels=list(ranking.PLUS_ROLES), showfliers=True)
-    ax.axhline(ranking.PLUS_MIN_FRACTION, color="#cc4444", linewidth=0.8, linestyle=":")
+    ax.boxplot([shares[r] for r in selection.PLUS_ROLES], tick_labels=list(selection.PLUS_ROLES), showfliers=True)
+    ax.axhline(selection.PLUS_MIN_FRACTION, color="#cc4444", linewidth=0.8, linestyle=":")
     ax.set_ylim(0, 1.05)
     ax.set_ylabel("value as a share of the peak")
     ax.set_title("what each role pays")
@@ -142,8 +142,8 @@ def draw_bush(ax, x, bush, params, stops, rng):
     return half_h
 
 
-def draw_ranking_row(axes_row, sidecar, params, ids, stops, field_axis, field, label):
-    """One ranking (the sets `ids`): the value map with their pluses in column 0, then each set's five bushes with their true values."""
+def draw_selection_row(axes_row, sidecar, params, ids, stops, field_axis, field, label):
+    """One selection (the sets `ids`): the value map with their pluses in column 0, then each set's five bushes with their true values."""
     sets, meta, peak = sidecar["sets"], sidecar["plus"], sidecar["peak"]
     ax = axes_row[0]
     draw_map(ax, field_axis, field, peak)
@@ -166,8 +166,8 @@ def draw_ranking_row(axes_row, sidecar, params, ids, stops, field_axis, field, l
                      + f"  (steps {min(np.diff(values)):.2f} to {max(np.diff(values)):.2f})", fontsize=10, color=MODE_COLOURS.get(m["axes"], "k"))
 
 
-def rankings_figure(sidecar, params, title, rows=None, group=3):
-    """One row per group of `group` consecutive sets (a ranking of three pluses: aligned, random, random): the value map with the pluses overlaid, then the five bushes of each set
+def selections_figure(sidecar, params, title, rows=None, group=3):
+    """One row per group of `group` consecutive sets (a selection of three pluses: aligned, random, random): the value map with the pluses overlaid, then the five bushes of each set
     drawn in their slots (left to right) with the true value above each bush."""
     n_rows = len(sidecar["sets"]) // group if rows is None else min(rows, len(sidecar["sets"]) // group)
     axis, field = field_on_grid(params)
@@ -175,21 +175,21 @@ def rankings_figure(sidecar, params, title, rows=None, group=3):
     fig, axes = plt.subplots(n_rows, 1 + group, figsize=(4.0 + 4.1 * group, 3.3 * n_rows), gridspec_kw={"width_ratios": [1.0] + [1.25] * group}, layout="constrained", squeeze=False)
     for row in range(n_rows):
         ids = list(range(row * group, row * group + group))
-        draw_ranking_row(axes[row], sidecar, params, ids, stops, axis, field, f"ranking {row + 1}: sets {ids[0]}-{ids[-1]}")
+        draw_selection_row(axes[row], sidecar, params, ids, stops, axis, field, f"selection {row + 1}: sets {ids[0]}-{ids[-1]}")
     fig.suptitle(title)
     return fig
 
 
 def difficulty_figure(session, plan, levels, overrides, title, group=3):
-    """One row per difficulty (the first ranking of a pool made with that difficulty and plan): the same four columns as `rankings_figure`."""
+    """One row per difficulty (the first selection of a pool made with that difficulty and plan): the same four columns as `selections_figure`."""
     import plus_plans
     fig, axes = plt.subplots(len(levels), 1 + group, figsize=(4.0 + 4.1 * group, 3.4 * len(levels)), gridspec_kw={"width_ratios": [1.0] + [1.25] * group}, layout="constrained", squeeze=False)
     for row, level in enumerate(levels):
-        sidecar, params = ranking.generate_pool(session, ranking_design="plus", ranking_plus_plan=plan, ranking_plus_difficulty=level, **overrides)
+        sidecar, params = selection.generate_pool(session, selection_design="plus", selection_plus_plan=plan, selection_plus_difficulty=level, **overrides)
         axis, field = field_on_grid(params)
         step = plus_plans.DIFFICULTY.get(level, None)
         label = f"{level}" + (f": a step of {step:.2f} of the peak ({step * sidecar['peak'][2]:.2f} points)" if step else "")
-        draw_ranking_row(axes[row], sidecar, params, list(range(group)), ramp_colours(params), axis, field, label)
+        draw_selection_row(axes[row], sidecar, params, list(range(group)), ramp_colours(params), axis, field, label)
     fig.suptitle(title)
     return fig
 
@@ -233,7 +233,7 @@ def plans_figure(session, variants, overrides, title):
     fig, axes = plt.subplots(len(variants), 4, figsize=(17, 3.6 * len(variants)), gridspec_kw={"width_ratios": [1.0, 0.9, 0.9, 0.8]}, layout="constrained", squeeze=False)
     for row, variant in enumerate(variants):
         plan, difficulty = variant.split(":")
-        sidecar, params = ranking.generate_pool(session, ranking_design="plus", ranking_plus_plan=plan, ranking_plus_difficulty=difficulty, **overrides)
+        sidecar, params = selection.generate_pool(session, selection_design="plus", selection_plus_plan=plan, selection_plus_difficulty=difficulty, **overrides)
         peak = sidecar["peak"]
         axis, field = field_on_grid(params)
         ax = axes[row, 0]
@@ -248,7 +248,7 @@ def plans_figure(session, variants, overrides, title):
         ax.set_title(variant, fontsize=11)
         ax = axes[row, 1]
         values = np.array(sidecar["value"]) / peak[2]
-        ax.hist(values, bins=10, range=(ranking.PLUS_MIN_FRACTION, 1.0), color="#777777")
+        ax.hist(values, bins=10, range=(selection.PLUS_MIN_FRACTION, 1.0), color="#777777")
         ax.axhline(len(values) / 10.0, color="#cc4444", linestyle=":", linewidth=1)
         ax.set_xlabel("bush value, share of the peak")
         ax.set_ylabel("bushes")
@@ -262,7 +262,7 @@ def plans_figure(session, variants, overrides, title):
         ax = axes[row, 3]
         ax.axis("off")
         m = plus_plans.metrics(sidecar, params)
-        lines = [f"coverage of the rewarding region", f"  mean distance {m['coverageMean']:.3f}", f"  95th percentile {m['coverageP95']:.3f}", f"  within one ranking {m['rankingCoverage']:.3f}", f"nearest-bush distance {m['nearestBush']:.3f}", "",
+        lines = [f"coverage of the rewarding region", f"  mean distance {m['coverageMean']:.3f}", f"  95th percentile {m['coverageP95']:.3f}", f"  within one selection {m['selectionCoverage']:.3f}", f"nearest-bush distance {m['nearestBush']:.3f}", "",
                  f"value evenness (entropy) {m['valueEntropy']:.2f}", f"step between neighbours (median) {m['stepMedian']:.2f}", f"best minus worst (median) {m['spanMedian']:.2f}", "",
                  f"centre is the best bush {100 * m['centreBest']:.0f}%", f"ladders hit {100 * m['hit']:.0f}%", f"shrunk or turned {100 * m['fitted']:.0f}%", f"centre moved {100 * m['moved']:.0f}%"]
         ax.text(0.0, 1.0, "\n".join(lines), va="top", ha="left", fontsize=9, family="monospace")
@@ -290,8 +290,8 @@ def mockup(sidecar, params, set_indices, shots, title):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Figures of the plus ranking design.")
-    ap.add_argument("command", choices=["preview", "mock", "rankings", "spread", "plans", "difficulty"])
+    ap = argparse.ArgumentParser(description="Figures of the plus selection design.")
+    ap.add_argument("command", choices=["preview", "mock", "selections", "spread", "plans", "difficulty"])
     ap.add_argument("--shots", nargs="*", default=[], help="mock: screenshots of the sets named by --set-index, in order")
     ap.add_argument("--set-index", nargs="*", type=int, default=[0, 1, 2], help="mock: pool set indices")
     ap.add_argument("session")
@@ -300,46 +300,46 @@ def main():
     ap.add_argument("--arm", type=float, default=None)
     ap.add_argument("--ratio", type=float, default=None)
     ap.add_argument("--sep", type=float, default=None)
-    ap.add_argument("--sets", type=int, default=None, help="sets in the pool (rankingPoolSets)")
+    ap.add_argument("--sets", type=int, default=None, help="sets in the pool (selectionPoolSets)")
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--variants", nargs="*", default=["spiral:free", "ring:free", "tile:free", "ring:medium", "tile:mixed"], help="plans: plan:difficulty pairs")
-    ap.add_argument("--rows", type=int, default=None, help="rankings: draw only this many rows (rankings of three sets)")
+    ap.add_argument("--rows", type=int, default=None, help="selections: draw only this many rows (selections of three sets)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
-    ov = {"ranking_design": "plus"}
-    for key, value in (("ranking_plus_axes", args.axes), ("ranking_plus_jitter", args.jitter), ("ranking_plus_arm", args.arm), ("ranking_plus_arm_ratio", args.ratio),
-                       ("ranking_plus_min_separation", args.sep), ("ranking_pool_sets", args.sets), ("world_seed", args.seed)):
+    ov = {"selection_design": "plus"}
+    for key, value in (("selection_plus_axes", args.axes), ("selection_plus_jitter", args.jitter), ("selection_plus_arm", args.arm), ("selection_plus_arm_ratio", args.ratio),
+                       ("selection_plus_min_separation", args.sep), ("selection_pool_sets", args.sets), ("world_seed", args.seed)):
         if value is not None:
             ov[key] = value
     if args.command == "difficulty":
         given = args.variants != ap.get_default("variants")
         levels = [v.split(":")[-1] for v in args.variants] if given else ["easy", "medium", "hard"]
         plan = args.variants[0].split(":")[0] if given and ":" in args.variants[0] else "tile"
-        out = Path(args.out) if args.out else DOCS / f"{args.session}_ranking_plus_difficulty.png"
-        fig = difficulty_figure(args.session, plan, levels, {k: v for k, v in ov.items() if k != "ranking_design"}, f"{args.session}: one ranking (aligned, random, random) at each difficulty, plan {plan}")
+        out = Path(args.out) if args.out else DOCS / f"{args.session}_selection_plus_difficulty.png"
+        fig = difficulty_figure(args.session, plan, levels, {k: v for k, v in ov.items() if k != "selection_design"}, f"{args.session}: one selection (aligned, random, random) at each difficulty, plan {plan}")
         out.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(out, dpi=110)
         print(out)
         return
     if args.command == "plans":
-        out = Path(args.out) if args.out else DOCS / f"{args.session}_ranking_plus_plans.png"
-        fig = plans_figure(args.session, args.variants, {k: v for k, v in ov.items() if k != "ranking_design"}, f"{args.session}: plans for placing and valuing the plus sets (seed {args.seed or 'the session'})")
+        out = Path(args.out) if args.out else DOCS / f"{args.session}_selection_plus_plans.png"
+        fig = plans_figure(args.session, args.variants, {k: v for k, v in ov.items() if k != "selection_design"}, f"{args.session}: plans for placing and valuing the plus sets (seed {args.seed or 'the session'})")
         out.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(out, dpi=100)
         print(out)
         return
-    sidecar, params = ranking.generate_pool(args.session, **ov)
-    out = Path(args.out) if args.out else DOCS / f"{args.session}_ranking_plus.png"
-    if args.command == "rankings":
-        out = Path(args.out) if args.out else DOCS / f"{args.session}_ranking_plus_rankings.png"
-        fig = rankings_figure(sidecar, params, f"{args.session}: the plus rankings, the value map and the bushes as the participant sees them (seed {sidecar['seed']})", rows=args.rows)
+    sidecar, params = selection.generate_pool(args.session, **ov)
+    out = Path(args.out) if args.out else DOCS / f"{args.session}_selection_plus.png"
+    if args.command == "selections":
+        out = Path(args.out) if args.out else DOCS / f"{args.session}_selection_plus_selections.png"
+        fig = selections_figure(sidecar, params, f"{args.session}: the plus selections, the value map and the bushes as the participant sees them (seed {sidecar['seed']})", rows=args.rows)
     elif args.command == "spread":
-        out = Path(args.out) if args.out else DOCS / f"{args.session}_ranking_plus_spread.png"
+        out = Path(args.out) if args.out else DOCS / f"{args.session}_selection_plus_spread.png"
         fig = spread_figure(sidecar, f"{args.session}: spread of the plus sets' values by axes mode (seed {sidecar['seed']})")
     elif args.command == "mock":
-        fig = mockup(sidecar, params, args.set_index, args.shots, f"{args.session}: plus ranking sets in the game (seed {sidecar['seed']})")
+        fig = mockup(sidecar, params, args.set_index, args.shots, f"{args.session}: plus selection sets in the game (seed {sidecar['seed']})")
     else:
-        fig = figure(sidecar, params, f"{args.session}: plus ranking sets on the value map (seed {sidecar['seed']})")
+        fig = figure(sidecar, params, f"{args.session}: plus selection sets on the value map (seed {sidecar['seed']})")
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=110)
     print(out)

@@ -9,20 +9,20 @@ public class ScoreScreen : MonoBehaviour
     private const float DegreesPerSecond = 3.5f;
 
 
-    private TextMeshProUGUI _total, _ranking, _foragingText;
-    private float _foraging, _rankingPoints;
+    private TextMeshProUGUI _total, _selection, _foragingText;
+    private float _foraging, _selectionPoints;
     private CanvasGroup _scrimGroup, _panelGroup;
     private RectTransform _panelRect;
     private Vector2 _panelHome;
 
-    // `foraging` and `ranking` are the two parts of the session's points. With `split` (a session that has rankings) the total is shown in the middle with the two parts
-    // smaller on either side, and after a moment the three count up together from zero (the ranking points stay hidden until now). `config` (optional) supplies the captions under
-    // the foraging and the ranking points and a note centred under the total (SessionConfig.scoreCaption*, scoreNote).
-    public static ScoreScreen Show(string partLabel, float foraging, float ranking, bool split, string prompt, CameraController camera, SessionConfig config = null)
+    // `foraging` and `selection` are the two parts of the session's points. With `split` (a session that has selections) the total is shown in the middle with the two parts
+    // smaller on either side, and after a moment the three count up together from zero (the selection points stay hidden until now). `config` (optional) supplies the captions under
+    // the foraging and the selection points and a note centred under the total (SessionConfig.scoreCaption*, scoreNote).
+    public static ScoreScreen Show(string partLabel, float foraging, float selection, bool split, string prompt, CameraController camera, SessionConfig config = null)
     {
         Canvas canvas = UiStyle.Canvas("ScoreScreen", null, 4100);
         var screen = canvas.gameObject.AddComponent<ScoreScreen>();
-        screen.Build(canvas.transform, partLabel, foraging, ranking, split, prompt, config);
+        screen.Build(canvas.transform, partLabel, foraging, selection, split, prompt, config);
         screen.StartCoroutine(screen.Appear());
         if (camera != null)
         {
@@ -37,10 +37,10 @@ public class ScoreScreen : MonoBehaviour
         return screen;
     }
 
-    private void Build(Transform canvas, string partLabel, float foraging, float ranking, bool split, string prompt, SessionConfig config)
+    private void Build(Transform canvas, string partLabel, float foraging, float selection, bool split, string prompt, SessionConfig config)
     {
         _foraging = foraging;
-        _rankingPoints = ranking;
+        _selectionPoints = selection;
         string note = split && config != null ? config.ScoreNote : "";
         // Every item is placed from the panel's top edge (the top stays put) or, for the prompt, from its bottom edge, so a note only makes the panel taller.
         float ruleFromTop = note.Length > 0 ? 435f : 335f;
@@ -53,7 +53,7 @@ public class ScoreScreen : MonoBehaviour
         _panelRect = (RectTransform)panel;
         _panelGroup = panel.gameObject.AddComponent<CanvasGroup>();
         UiStyle.Eyebrow(panel, $"{partLabel} complete", 0f, top - 58f, 780f, TextAlignmentOptions.Center);
-        _total = UiStyle.Text(panel, "Points", split ? "0" : $"{foraging + ranking:F0}", split ? 190f : 230f, TextAlignmentOptions.Center, 0f, top - 220f, split ? 460f : 780f, 260f);
+        _total = UiStyle.Text(panel, "Points", split ? "0" : $"{foraging + selection:F0}", split ? 190f : 230f, TextAlignmentOptions.Center, 0f, top - 220f, split ? 460f : 780f, 260f);
         _total.font = UiStyle.DisplayFont;
         if (split)
         {
@@ -61,11 +61,11 @@ public class ScoreScreen : MonoBehaviour
             UiStyle.Eyebrow(panel, "foraging", -sideX, top - 170f, 170f, TextAlignmentOptions.Center).color = UiStyle.ForagingTint;
             _foragingText = UiStyle.Text(panel, "Foraging", "0", 66f, TextAlignmentOptions.Center, -sideX, top - 230f, 170f, 100f, UiStyle.Muted);
             _foragingText.font = UiStyle.DisplayFont;
-            UiStyle.Eyebrow(panel, "selection", sideX, top - 170f, 170f, TextAlignmentOptions.Center).color = UiStyle.RankingTint;
-            _ranking = UiStyle.Text(panel, "Ranking", "0", 66f, TextAlignmentOptions.Center, sideX, top - 230f, 170f, 100f, UiStyle.Muted);
-            _ranking.font = UiStyle.DisplayFont;
+            UiStyle.Eyebrow(panel, "selection", sideX, top - 170f, 170f, TextAlignmentOptions.Center).color = UiStyle.SelectionTint;
+            _selection = UiStyle.Text(panel, "Selection", "0", 66f, TextAlignmentOptions.Center, sideX, top - 230f, 170f, 100f, UiStyle.Muted);
+            _selection.font = UiStyle.DisplayFont;
             Caption(panel, config != null ? config.ScoreCaptionForaging : "", -sideX, top - 320f, 190f, 90f);
-            Caption(panel, config != null ? config.ScoreCaptionRanking : "", sideX, top - 320f, 190f, 90f);
+            Caption(panel, config != null ? config.ScoreCaptionSelection : "", sideX, top - 320f, 190f, 90f);
         }
 
         if (note.Length > 0)
@@ -103,7 +103,7 @@ public class ScoreScreen : MonoBehaviour
         caption.textWrappingMode = TextWrappingModes.Normal;
     }
 
-    // The foraging points, the ranking points and the total count up together from zero (ease-out); the total punches when they land.
+    // The foraging points, the selection points and the total count up together from zero (ease-out); the total punches when they land.
     private IEnumerator CountUp()
     {
         const float delay = 0.8f, seconds = 1.4f;
@@ -132,8 +132,8 @@ public class ScoreScreen : MonoBehaviour
     private void SetNumbers(float fraction)
     {
         _foragingText.text = $"{_foraging * fraction:F0}";
-        _ranking.text = $"{_rankingPoints * fraction:F0}";
-        _total.text = $"{(_foraging + _rankingPoints) * fraction:F0}";
+        _selection.text = $"{_selectionPoints * fraction:F0}";
+        _total.text = $"{(_foraging + _selectionPoints) * fraction:F0}";
     }
 
     private IEnumerator Drift(CameraController camera)

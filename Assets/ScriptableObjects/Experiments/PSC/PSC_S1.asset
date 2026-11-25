@@ -16,61 +16,61 @@ MonoBehaviour:
   worldSeed: 9610
   isPractice: 0
   freezeSun: 0
-  rankingEvery: 1
-  rankingLeavings: 
-  rankingSets: 1
-  rankingSeconds: 45
-  rankingCooldown: 0
-  rankingSettleDepth: 0
-  rankingPoolSets: 5
-  rankingFadeSeconds: 0.4
-  rankingGraySeconds: 0.25
-  rankingFruitSeconds: 0.05
-  rankingLastSeconds: 10
-  rankingMinBushes: 1
-  rankingText: Select the 5 most valuable bushes. 100 points available.
-  rankingSetSize: 5
-  rankingArcSpan: 84
-  rankingDistance: 16
-  rankingTieGap: 0.25
-  rankingDesign: dense
-  rankingPlusAxes: mixed
-  rankingPlusJitter: 1
-  rankingPlusArm: 1
-  rankingPlusArmRatio: 2
-  rankingPlusPlan: spiral
-  rankingPlusDifficulty: free
-  rankingPlusMinSeparation: 0.08
-  rankingTimes:
+  selectionEvery: 1
+  selectionLeavings: 
+  selectionSets: 1
+  selectionSeconds: 45
+  selectionCooldown: 0
+  selectionSettleDepth: 0
+  selectionPoolSets: 5
+  selectionFadeSeconds: 0.4
+  selectionGraySeconds: 0.25
+  selectionFruitSeconds: 0.05
+  selectionLastSeconds: 10
+  selectionMinBushes: 1
+  selectionText: Select the 5 most valuable bushes. 100 points available.
+  selectionSetSize: 5
+  selectionArcSpan: 84
+  selectionDistance: 16
+  selectionTieGap: 0.25
+  selectionDesign: dense
+  selectionPlusAxes: mixed
+  selectionPlusJitter: 1
+  selectionPlusArm: 1
+  selectionPlusArmRatio: 2
+  selectionPlusPlan: spiral
+  selectionPlusDifficulty: free
+  selectionPlusMinSeparation: 0.08
+  selectionTimes:
   - 30
   - 60
   - 90
   - 120
   - 150
-  rankingMaxWait: 10
-  rankingPicks: 5
-  rankingGridSpacing: 7
-  rankingGridDistance: 22
-  rankingGridPreset: balanced
-  rankingTopKPoints: 100
-  rankingPaid: one
-  rankingRimScale: 1.15
-  rankingRimBoost: 3
-  rankingMarkerLift: 0.75
-  rankingRankScale: 3
-  rankingBonusPerPair: 4
-  rankingPointsMode: top_k
-  rankingAimTolerance: 1.5
-  rankingCrosshairRadius: 1
-  rankingStageDrop: 2
-  rankingStageTilt: 30
-  rankingStageMargin: 5.5
-  rankingStageWorldGray: 0.6
+  selectionMaxWait: 10
+  selectionPicks: 5
+  selectionGridSpacing: 7
+  selectionGridDistance: 22
+  selectionGridPreset: balanced
+  selectionTopKPoints: 100
+  selectionPaid: one
+  selectionRimScale: 1.15
+  selectionRimBoost: 3
+  selectionMarkerLift: 0.75
+  selectionRankScale: 3
+  selectionBonusPerPair: 4
+  selectionPointsMode: top_k
+  selectionAimTolerance: 1.5
+  selectionCrosshairRadius: 1
+  selectionStageDrop: 2
+  selectionStageTilt: 30
+  selectionStageMargin: 5.5
+  selectionStageWorldGray: 0.6
   instructionsFile: Experiments/PSC/instructions_S1.txt
   sessionLabel: 
   hintsFile: 
   scoreCaptionForaging: 
-  scoreCaptionRanking: 
+  scoreCaptionSelection: 
   scoreNote: 
   controlsReminder: 
   controlsReminderOpacity: 0.35

@@ -192,12 +192,12 @@ def break_events(start=0.0, end=0.6):
             _rank_event("rank_set_end", 0.5, **both), _rank_event("rank_break_end", end, **both)]
 
 
-def test_in_a_ranking_break_the_sets_bushes_stand_among_the_real_ones_and_carry_their_logged_ids():
+def test_in_a_selection_break_the_sets_bushes_stand_among_the_real_ones_and_carry_their_logged_ids():
     log = make_log([[0.0, 20.0]], events=break_events())             # the frame is at 0.1 s, inside the break
     assert sorted(seen(log)["tree_id"]) == [0, 101]
 
 
-def test_outside_a_ranking_break_the_real_bushes_are_there_and_the_sets_are_not():
+def test_outside_a_selection_break_the_real_bushes_are_there_and_the_sets_are_not():
     log = make_log([[0.0, 20.0]], events=break_events(start=0.0, end=0.06))      # the break is over by 0.1 s
     assert list(seen(log)["tree_id"]) == [0]
 

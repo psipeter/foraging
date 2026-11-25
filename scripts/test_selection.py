@@ -4,9 +4,9 @@ import math
 import numpy as np
 import pytest
 
-import ranking
+import selection
 import synthetic
-from ranking import angular_radius, check_arc, generate_pool, horizontal_fov, kendall_tau, first_pick_regret, implied_pair_scores, pair_accuracy, pair_scores, pair_weight, rank_gain, rankings_to_points, slot_bearings
+from selection import angular_radius, check_arc, generate_pool, horizontal_fov, kendall_tau, first_pick_regret, implied_pair_scores, pair_accuracy, pair_scores, pair_weight, rank_gain, selections_to_points, slot_bearings
 from world import bush_value, load_session
 
 SESSION = "FIX_T0"
@@ -30,7 +30,7 @@ def bush_table(sidecar):
 
 
 def test_every_committed_pool_pays_its_sessions_value_map():
-    """Unity checks the world file against the asset but nothing checks the pool file: a reward change followed by `world.py --unity` alone would leave rankings scored against the old rule."""
+    """Unity checks the world file against the asset but nothing checks the pool file: a reward change followed by `world.py --unity` alone would leave selections scored against the old rule."""
     from world import EXPERIMENTS_DIR, STREAMING_EXPERIMENTS
     pools = sorted(STREAMING_EXPERIMENTS.glob("*/*.ranking.json"))
     assert pools
@@ -38,7 +38,7 @@ def test_every_committed_pool_pays_its_sessions_value_map():
         session = path.name.split("_seed")[0]
         assert (EXPERIMENTS_DIR / session.split("_")[0] / f"{session}.asset").exists(), session
         _, _, shape, color, value = bush_table(json.loads(path.read_text()))
-        assert value == pytest.approx(bush_value(load_session(session).reward_function, shape, color), abs=1e-6), f"{path.name} is stale: run scripts/ranking.py pool {session}"
+        assert value == pytest.approx(bush_value(load_session(session).reward_function, shape, color), abs=1e-6), f"{path.name} is stale: run scripts/selection.py pool {session}"
 
 
 # ---- geometry -------------------------------------------------------------------------------------
@@ -59,13 +59,13 @@ def test_canopies_never_overlap_in_the_view_and_fit_a_narrow_window():
     sidecar, params = built()
     pos, radius, *_ = bush_table(sidecar)
     margins = sidecar["margins"]
-    assert margins["separation"] >= ranking.ANGLE_MARGIN and margins["view"] >= ranking.FOV_MARGIN
-    hfov = horizontal_fov(75.0, ranking.MIN_ASPECT)
+    assert margins["separation"] >= selection.ANGLE_MARGIN and margins["view"] >= selection.FOV_MARGIN
+    hfov = horizontal_fov(75.0, selection.MIN_ASPECT)
     for trial in sidecar["sets"]:
         spans = sorted((b["bearing"] - float(angular_radius(sidecar["bushDistance"], radius[b["id"]])),
                         b["bearing"] + float(angular_radius(sidecar["bushDistance"], radius[b["id"]]))) for b in trial["bushes"])
-        assert all(later[0] - earlier[1] >= ranking.ANGLE_MARGIN for earlier, later in zip(spans, spans[1:]))
-        assert all(abs(b["bearing"]) <= hfov / 2 - ranking.FOV_MARGIN for b in trial["bushes"])          # at least half of each bush shows
+        assert all(later[0] - earlier[1] >= selection.ANGLE_MARGIN for earlier, later in zip(spans, spans[1:]))
+        assert all(abs(b["bearing"]) <= hfov / 2 - selection.FOV_MARGIN for b in trial["bushes"])          # at least half of each bush shows
 
 
 def test_an_arc_that_cannot_hold_the_set_is_refused():
@@ -105,7 +105,7 @@ def test_every_set_is_a_ladder_with_no_tie_and_the_sets_are_disjoint():
 
 
 def test_the_sets_together_fill_the_value_range_and_each_spans_it():
-    sidecar, _ = built(ranking_pool_sets=4)
+    sidecar, _ = built(selection_pool_sets=4)
     spans = [t["valueSpan"] for t in sidecar["sets"]]
     allv = np.asarray(sidecar["value"])
     assert min(spans) > 0.8 * np.ptp(allv)                                 # each set covers about the whole range
@@ -131,12 +131,12 @@ def test_same_seed_same_file_and_other_seed_other_file():
 
 def test_a_range_too_narrow_for_the_tie_gap_is_refused():
     with pytest.raises(ValueError, match="span too little"):
-        generate_pool(SESSION, **TWO_FEATURES, ranking_tie_gap=1.5, steps=100)
+        generate_pool(SESSION, **TWO_FEATURES, selection_tie_gap=1.5, steps=100)
 
 
 
 
-def test_a_perfect_ranking_scores_one_and_a_reversed_one_zero():
+def test_a_perfect_selection_scores_one_and_a_reversed_one_zero():
     values = [3.0, 2.0, 1.0, 0.0]
     assert pair_scores(values, values) == (6, 6)
     assert pair_scores(values[::-1], values) == (0, 6)
@@ -161,7 +161,7 @@ def test_the_payout_counts_every_pair_with_an_unranked_bush_as_incorrect():
     assert pair_scores([4.0, 3.0], [4.0, 3.0, 3.02, 0.0]) == (1, 5)                # the near tie is left out of total
 
 
-def test_a_random_ranking_scores_one_half():
+def test_a_random_selection_scores_one_half():
     rng = np.random.default_rng(0)
     values = np.array([0.0, 0.7, 1.5, 2.2, 3.1, 4.0])
     accuracy = [pair_accuracy(rng.permutation(values), values) for _ in range(4000)]
@@ -170,16 +170,16 @@ def test_a_random_ranking_scores_one_half():
 
 
 
-# ---- the pool of sets a session plays in place (ranking breaks) ---------------------------------------
+# ---- the pool of sets a session plays in place (selection breaks) ---------------------------------------
 
 def test_a_pool_holds_the_stated_number_of_sets_of_the_stated_size():
-    p = built(ranking_pool_sets=7, ranking_set_size=5)[0]
+    p = built(selection_pool_sets=7, selection_set_size=5)[0]
     assert p["format"] == "ranking-pool" and p["n"] == 7 and p["setSize"] == 5 and len(p["sets"]) == 7
     assert all(len(t["bushes"]) == 5 for t in p["sets"])
 
 
 def test_a_pair_is_a_set_of_two():
-    sidecar, _ = built(ranking_set_size=2, ranking_pool_sets=5, ranking_arc_span=60.0, steps=3000)
+    sidecar, _ = built(selection_set_size=2, selection_pool_sets=5, selection_arc_span=60.0, steps=3000)
     assert sidecar["setSize"] == 2 and sidecar["n"] == 5
     for s in sidecar["sets"]:
         left, right = s["bushes"]
@@ -188,26 +188,26 @@ def test_a_pair_is_a_set_of_two():
 
 
 def test_the_pool_file_sits_beside_the_world_file(tmp_path):
-    path, sidecar = ranking.export_pool("FOR_S1", out_dir=tmp_path)
+    path, sidecar = selection.export_pool("FOR_S1", out_dir=tmp_path)
     assert path.name == f"FOR_S1_seed{sidecar['seed']}.ranking.json" and path.parent == tmp_path
 
 
 def test_the_pair_mode_pays_the_bonus_per_correct_pair_and_the_mean_value_mode_weights_each_pair_by_its_bushes():
     values = [5.61, 4.30, 3.03, 1.75, 0.48]
-    assert rankings_to_points(values, values, 4.0) == (40.0, 10, 10) and rankings_to_points(values, values, 4.0, "") == (40.0, 10, 10)
-    full, correct, total = rankings_to_points(values, values, 4.0, "pair_mean_value")
+    assert selections_to_points(values, values, 4.0) == (40.0, 10, 10) and selections_to_points(values, values, 4.0, "") == (40.0, 10, 10)
+    full, correct, total = selections_to_points(values, values, 4.0, "pair_mean_value")
     assert (correct, total) == (10, 10) and full == pytest.approx(4.0 * 2.0 * sum(values))        # each bush is in 4 pairs, each pair counts both: 2 x the sum of the values
     picked = [5.61, 4.30, 1.75, 3.03, 0.48]                                                        # the third and fourth bushes swapped: the pair (3.03, 1.75) is lost
-    points, correct, _ = rankings_to_points(picked, values, 4.0, "pair_mean_value")
+    points, correct, _ = selections_to_points(picked, values, 4.0, "pair_mean_value")
     assert correct == 9 and points == pytest.approx(full - 4.0 * (3.03 + 1.75) / 2)                  # 111.8 as the pilot's third FOR set
-    assert rankings_to_points(picked, values, 4.0)[0] == 36.0
-    assert rankings_to_points([], values, 4.0, "pair_mean_value") == (0.0, 0, 10)                   # a timed-out set earns nothing
+    assert selections_to_points(picked, values, 4.0)[0] == 36.0
+    assert selections_to_points([], values, 4.0, "pair_mean_value") == (0.0, 0, 10)                   # a timed-out set earns nothing
     top, bottom = [4.0, 5.0, 3.0, 2.0, 1.0], [5.0, 4.0, 3.0, 1.0, 2.0]                             # a miss between the top two against one between the bottom two
-    assert rankings_to_points(top, values_ladder := [5.0, 4.0, 3.0, 2.0, 1.0], 1.0, "pair_mean_value")[0] < rankings_to_points(bottom, values_ladder, 1.0, "pair_mean_value")[0]
+    assert selections_to_points(top, values_ladder := [5.0, 4.0, 3.0, 2.0, 1.0], 1.0, "pair_mean_value")[0] < selections_to_points(bottom, values_ladder, 1.0, "pair_mean_value")[0]
 
 
 def test_an_unknown_points_mode_is_an_error():
-    with pytest.raises(ValueError, match="unknown ranking points mode"):
+    with pytest.raises(ValueError, match="unknown selection points mode"):
         pair_weight("by_rank", 1.0, 2.0)
     assert pair_weight("pair_mean_value", 1.0, 3.0) == 2.0 and pair_weight("pair", 1.0, 3.0) == 1.0
 
@@ -217,11 +217,11 @@ def test_an_unknown_points_mode_is_an_error():
 import value_maps
 
 ROTATED_MAP = value_maps.ValueMap((value_maps.Bump(0.6, 0.5, 0.18, 0.36, 30.0, 4.0),))        # a turned, stretched bump away from the corner: room for a plus around its peak
-PLUS = {"ranking_design": "plus"}
+PLUS = {"selection_design": "plus"}
 
 
 def plus_pool(axes="mixed", **options):
-    return generate_pool(SESSION, **synthetic.overrides(valuemap=ROTATED_MAP, ranking_plus_axes=axes, **PLUS, **options))
+    return generate_pool(SESSION, **synthetic.overrides(valuemap=ROTATED_MAP, selection_plus_axes=axes, **PLUS, **options))
 
 
 def test_the_ladder_design_is_the_default_and_unchanged_by_the_plus_fields():
@@ -234,13 +234,13 @@ def test_every_plus_has_a_centre_and_four_arms_that_look_good_stay_inside_and_di
     sidecar, params = plus_pool(axes)
     peak = sidecar["peak"][2]
     for s, trial in enumerate(sidecar["sets"]):
-        assert sorted(b["role"] for b in trial["bushes"]) == sorted(ranking.PLUS_ROLES)
+        assert sorted(b["role"] for b in trial["bushes"]) == sorted(selection.PLUS_ROLES)
         shape, color = np.array([b["shape"] for b in trial["bushes"]]), np.array([b["color"] for b in trial["bushes"]])
-        assert min(shape.min(), color.min()) >= ranking.PLUS_MARGIN - 1e-9 and max(shape.max(), color.max()) <= 1 - ranking.PLUS_MARGIN + 1e-9
+        assert min(shape.min(), color.min()) >= selection.PLUS_MARGIN - 1e-9 and max(shape.max(), color.max()) <= 1 - selection.PLUS_MARGIN + 1e-9
         d = np.hypot(shape[:, None] - shape[None, :], color[:, None] - color[None, :])[np.triu_indices(5, 1)]
         assert d.min() >= 0.08 - 1e-9
         values = np.array(sorted(b["value"] for b in trial["bushes"]))
-        assert np.diff(values).min() >= sidecar["minGap"] - 1e-9 and values.min() >= ranking.PLUS_MIN_FRACTION * peak - 1e-9
+        assert np.diff(values).min() >= sidecar["minGap"] - 1e-9 and values.min() >= selection.PLUS_MIN_FRACTION * peak - 1e-9
         by_role = {b["role"]: np.array([b["shape"], b["color"]]) for b in trial["bushes"]}
         u1, u2 = np.array(sidecar["plus"][s]["u1"]), np.array(sidecar["plus"][s]["u2"])
         assert abs(np.dot(u1, u2)) < 1e-9
@@ -263,20 +263,20 @@ def test_the_axes_modes_follow_their_definitions():
 
 def test_a_plus_that_would_leave_the_map_is_shrunk_and_turned_and_the_others_are_not():
     corner = value_maps.ValueMap((value_maps.Bump(0.8, 0.8, 0.2, 0.0, 0.0, 4.0),))             # a peak near the corner: many pluses must fit
-    sidecar, _ = generate_pool(SESSION, **synthetic.overrides(valuemap=corner, ranking_plus_axes="aligned", ranking_pool_sets=30, **PLUS))
+    sidecar, _ = generate_pool(SESSION, **synthetic.overrides(valuemap=corner, selection_plus_axes="aligned", selection_pool_sets=30, **PLUS))
     plus = sidecar["plus"]
     assert any(m["scale"] < 1.0 for m in plus) and all(m["turn"] == 0.0 for m in plus) and sidecar["summary"]["fitted"] > 0.0      # aligned: stretched, never turned
-    random_, _ = generate_pool(SESSION, **synthetic.overrides(valuemap=corner, ranking_plus_axes="random", ranking_pool_sets=30, **PLUS))
+    random_, _ = generate_pool(SESSION, **synthetic.overrides(valuemap=corner, selection_plus_axes="random", selection_pool_sets=30, **PLUS))
     assert any(m["turn"] != 0.0 for m in random_["plus"]) and all(m["scales"][0] == m["scales"][1] for m in random_["plus"])    # random: shrunk together and turned
-    assert all(ranking.PLUS_MIN_SCALE - 1e-9 <= m["scale"] <= 1.0 and abs(m["turn"]) <= 45.0 + 1e-9 for m in plus)
+    assert all(selection.PLUS_MIN_SCALE - 1e-9 <= m["scale"] <= 1.0 and abs(m["turn"]) <= 45.0 + 1e-9 for m in plus)
     shape, color = np.array(sidecar["shape"]), np.array(sidecar["color"])
-    assert min(shape.min(), color.min()) >= ranking.PLUS_MARGIN - 1e-9 and max(shape.max(), color.max()) <= 1 - ranking.PLUS_MARGIN + 1e-9
-    plain, _ = plus_pool("aligned", ranking_plus_jitter=0.0, ranking_pool_sets=30)               # the same map, centred: far less to fit than at a corner
+    assert min(shape.min(), color.min()) >= selection.PLUS_MARGIN - 1e-9 and max(shape.max(), color.max()) <= 1 - selection.PLUS_MARGIN + 1e-9
+    plain, _ = plus_pool("aligned", selection_plus_jitter=0.0, selection_pool_sets=30)               # the same map, centred: far less to fit than at a corner
     assert plain["summary"]["meanScale"] > sidecar["summary"]["meanScale"] - 1e-9 or plain["summary"]["fitted"] <= sidecar["summary"]["fitted"]
 
 
 def test_the_centres_of_a_mode_are_spread_evenly_over_the_ellipse_around_the_peak():
-    sidecar, _ = plus_pool("aligned", ranking_pool_sets=24, ranking_plus_jitter=1.0)
+    sidecar, _ = plus_pool("aligned", selection_pool_sets=24, selection_plus_jitter=1.0)
     off = np.array([m["offset"] for m in sidecar["plus"]])
     d = np.sqrt(((off[:, None, :] - off[None, :, :]) ** 2).sum(-1)) + np.eye(len(off)) * 9
     assert d.min() > 0.1 * 0.18                                                                  # no two centres on top of each other (random draws would crowd)
@@ -284,10 +284,10 @@ def test_the_centres_of_a_mode_are_spread_evenly_over_the_ellipse_around_the_pea
 
 
 def test_the_centres_scatter_around_the_peak_without_always_being_the_best_bush():
-    sidecar, _ = plus_pool("mixed", ranking_pool_sets=60)
+    sidecar, _ = plus_pool("mixed", selection_pool_sets=60)
     assert 0.2 < sidecar["summary"]["centreScatter"] and sidecar["summary"]["meanCentreToPeak"] < 0.7
     assert 0.0 < sidecar["summary"]["centreIsBest"] < 1.0
-    none, _ = plus_pool("mixed", ranking_plus_jitter=0.0, ranking_pool_sets=30)
+    none, _ = plus_pool("mixed", selection_plus_jitter=0.0, selection_pool_sets=30)
     assert none["summary"]["centreScatter"] == pytest.approx(0.0, abs=1e-9)                     # no jitter: every centre is the peak (the check's own baseline)
 
 
@@ -296,11 +296,11 @@ def test_a_plus_pool_is_deterministic_and_refuses_what_it_cannot_draw():
     b, _ = plus_pool()
     assert a["shape"] == b["shape"] and a["value"] == b["value"]
     with pytest.raises(ValueError, match="five bushes"):
-        plus_pool(ranking_set_size=4)
+        plus_pool(selection_set_size=4)
     with pytest.raises(ValueError, match="no plus fits"):
-        plus_pool(ranking_plus_arm=40.0)
-    with pytest.raises(ValueError, match="unknown rankingDesign"):
-        generate_pool(SESSION, **synthetic.overrides(valuemap=ROTATED_MAP, ranking_design="star"))
+        plus_pool(selection_plus_arm=40.0)
+    with pytest.raises(ValueError, match="unknown selectionDesign"):
+        generate_pool(SESSION, **synthetic.overrides(valuemap=ROTATED_MAP, selection_design="star"))
 
 
 # --- the plans for the plus design (plus_plans.py) ---------------------------------------------------------------------------------
@@ -309,7 +309,7 @@ import plus_plans
 
 
 def planned(plan, difficulty, axes="mixed", **options):
-    return plus_pool(axes, ranking_plus_plan=plan, ranking_plus_difficulty=difficulty, **options)
+    return plus_pool(axes, selection_plus_plan=plan, selection_plus_difficulty=difficulty, **options)
 
 
 @pytest.mark.parametrize("plan", plus_plans.PLANS)
@@ -320,9 +320,9 @@ def test_every_plan_and_difficulty_draws_valid_pluses(plan, difficulty):
     for trial, meta in zip(sidecar["sets"], sidecar["plus"]):
         pts = np.array([[b["shape"], b["color"]] for b in trial["bushes"]])
         values = np.array(sorted(b["value"] for b in trial["bushes"]))
-        assert pts.min() >= ranking.PLUS_MARGIN - 1e-9 and pts.max() <= 1 - ranking.PLUS_MARGIN + 1e-9
-        assert np.diff(values).min() >= sidecar["minGap"] - 1e-9 and values.min() >= ranking.PLUS_MIN_FRACTION * peak - 1e-9
-        assert sorted(b["role"] for b in trial["bushes"]) == sorted(ranking.PLUS_ROLES)
+        assert pts.min() >= selection.PLUS_MARGIN - 1e-9 and pts.max() <= 1 - selection.PLUS_MARGIN + 1e-9
+        assert np.diff(values).min() >= sidecar["minGap"] - 1e-9 and values.min() >= selection.PLUS_MIN_FRACTION * peak - 1e-9
+        assert sorted(b["role"] for b in trial["bushes"]) == sorted(selection.PLUS_ROLES)
         assert meta["axes"] != "aligned" or meta["turn"] == 0.0                                   # aligned is only ever stretched
 
 
@@ -342,8 +342,8 @@ def test_the_tile_plan_covers_the_rewarding_region_better_than_the_spiral():
     assert plus_plans.metrics(tile, params)["coverageMean"] < plus_plans.metrics(spiral, params)["coverageMean"]
 
 
-def test_the_ring_plan_puts_the_three_centres_of_a_ranking_round_the_peak():
-    sidecar, _ = planned("ring", "free", ranking_plus_jitter=1.0)
+def test_the_ring_plan_puts_the_three_centres_of_a_selection_round_the_peak():
+    sidecar, _ = planned("ring", "free", selection_plus_jitter=1.0)
     off = np.array([m["offset"] for m in sidecar["plus"]])
     for r in range(len(off) // 3):
         angles = np.sort(np.arctan2(off[3 * r:3 * r + 3, 1], off[3 * r:3 * r + 3, 0]))
@@ -351,7 +351,7 @@ def test_the_ring_plan_puts_the_three_centres_of_a_ranking_round_the_peak():
 
 
 def test_an_unknown_plan_or_a_step_under_the_tie_gap_is_refused():
-    with pytest.raises(ValueError, match="unknown rankingPlusPlan"):
+    with pytest.raises(ValueError, match="unknown selectionPlusPlan"):
         planned("star", "free")
     with pytest.raises(ValueError, match="under the tie gap"):
         planned("ring", "0.01")
@@ -369,7 +369,7 @@ def test_a_random_plus_never_lies_along_the_feature_axes_in_the_plans(plan, diff
 
 
 def test_a_ladder_sometimes_puts_the_centre_below_other_bushes_and_still_hits_its_steps():
-    sidecar, params = planned("ring", "medium", ranking_pool_sets=60)
+    sidecar, params = planned("ring", "medium", selection_pool_sets=60)
     m = plus_plans.metrics(sidecar, params)
     assert 0.2 < m["centreBest"] < 0.8 and m["hit"] > 0.8
     peak = sidecar["peak"][2]

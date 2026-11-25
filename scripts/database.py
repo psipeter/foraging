@@ -86,7 +86,7 @@ def sessions_in_build(commit, code, repo=PROJECT_ROOT):
 
 
 def register_worlds(conn, directory=WORLD_DIR):
-    """Register every world and ranking pool file one folder under `directory` by sha256; returns the names registered."""
+    """Register every world and selection pool file one folder under `directory` by sha256; returns the names registered."""
     names = []
     for path in sorted(Path(directory).glob("*/*")):                                          # <experiment code>/<file>
         if path.suffix in (".world", ".json"):
@@ -127,7 +127,7 @@ def catalog_experiments(repo=PROJECT_ROOT):
 
 def build_plan(build_dir=None, commit=None, repo=PROJECT_ROOT):
     """What `publish` registers: the experiments (those the build holds when `build_dir` is given, else every catalog experiment), the commit (the build's own, from its
-    build_info.json, else `commit` or HEAD) with each experiment's session count read from git, the folder whose world and ranking pool files are registered (the build's,
+    build_info.json, else `commit` or HEAD) with each experiment's session count read from git, the folder whose world and selection pool files are registered (the build's,
     so the hashes are of the files the participant downloads), and the notes a human should see (a dirty build, a commit that is not HEAD)."""
     repo = Path(repo)
     notes = []
@@ -195,7 +195,7 @@ def publish(conn, plan, completion_codes=None, note=None):
         register_experiment(conn, e["code"], e["title"], e["requires"], e["order"], completion_codes.get(e["code"]))
         done.append(f"experiment {e['code']} ({e['title']}, order {e['order']}, requires {e['requires'] or 'nothing'})")
     names = register_worlds(conn, plan["worlds"])
-    done.append(f"{len(names)} world and ranking pool files from {plan['worlds']}")
+    done.append(f"{len(names)} world and selection pool files from {plan['worlds']}")
     register_release(conn, plan["commit"], plan["sessions"], note, plan.get("development", False))
     done.append(f"release {plan['commit'][:12]} with {plan['sessions']}")
     return done
@@ -477,7 +477,7 @@ def clear_rows(conn, before):
 
 
 def clear_runs(conn, before, log):
-    """Delete the runs started before `before` (their sessions, events, trajectory, ranking sets, feedback and consents go with them) and the participants created before it with no run left."""
+    """Delete the runs started before `before` (their sessions, events, trajectory, selection sets, feedback and consents go with them) and the participants created before it with no run left."""
     runs, people = clear_rows(conn, before)
     conn.execute("delete from public.runs where started_at < %s", (before,))
     conn.execute("delete from public.participants where participant_id = any(%s)", (people,))
@@ -493,7 +493,7 @@ def participant_rows(conn, pids):
 
 
 def delete_participants(conn, pids, log):
-    """Delete the named participants (matched by participant id, exactly) with every run, session, event, trajectory row, ranking set, consent and registry row."""
+    """Delete the named participants (matched by participant id, exactly) with every run, session, event, trajectory row, selection set, consent and registry row."""
     found, unknown, runs = participant_rows(conn, pids)
     conn.execute("delete from public.runs where participant_id = any(%s)", (list(found.values()),))
     conn.execute("delete from public.participants where participant_id = any(%s)", (list(found.values()),))

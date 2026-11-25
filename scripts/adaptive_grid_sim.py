@@ -1,23 +1,23 @@
-"""Simulation: how should the 3x3 ranking grid adapt? Three policies for placing a grid of nine bushes (axis-aligned, shape across and colour up) over the value map.
+"""Simulation: how should the 3x3 selection grid adapt? Three policies for placing a grid of nine bushes (axis-aligned, shape across and colour up) over the value map.
 
 A grid is a centre and a spacing `s`: its nine cells are the centre plus -s, 0, +s along each axis (clamped inside the unit square). The spacing is held between
 `s_max` (1/3: three cells that share the whole space evenly) and `s_min` (the smallest spacing at which, for a grid at the peak, the median value difference between
 neighbouring cells is at least twice the tie gap). Policies:
 
-    fixed      the grid at s_max in the middle of the map, every ranking (no adaptation).
-    staircase  the spacing follows the participant's performance (Kendall's tau of the ranking against the true values): s <- s * exp(-k * (tau - target)), a stochastic-approximation
+    fixed      the grid at s_max in the middle of the map, every selection (no adaptation).
+    staircase  the spacing follows the participant's performance (Kendall's tau of the selection against the true values): s <- s * exp(-k * (tau - target)), a stochastic-approximation
                staircase; the centre is a rank-weighted estimate of where the participant thinks the best cell is, plus a random offset of up to half a spacing.
     posterior  the spacing is the posterior spread of the participant's believed peak (k times, clamped); the centre is the posterior mean plus the same random offset. The posterior
-               is over (believed peak, breadth, choice temperature) of a Gaussian subjective map under Plackett-Luce choice, updated after every ranking with a forgetting factor
-               (the belief changes as people learn). It uses nothing but the participant's rankings: the true map never enters the placement.
+               is over (believed peak, breadth, choice temperature) of a Gaussian subjective map under Plackett-Luce choice, updated after every selection with a forgetting factor
+               (the belief changes as people learn). It uses nothing but the participant's selections: the true map never enters the placement.
 
 Simulated participants hold a Gaussian subjective map (peak b, breadth w) and rank the cells by Plackett-Luce at temperature tau over its values; the belief moves toward the truth as
-rho^t. Types: fast, slow, noisy (high tau), wrong (never learns, a fixed offset), sandbag (fast, but feigns ignorance for the first five rankings), centre (ranks by distance from the
-window's centre and knows nothing). Metrics: recovery (distance from the posterior-mean peak, computed from the rankings of each policy, to the participant's actual belief), pay (the two-term
+rho^t. Types: fast, slow, noisy (high tau), wrong (never learns, a fixed offset), sandbag (fast, but feigns ignorance for the first five selections), centre (ranks by distance from the
+window's centre and knows nothing). Metrics: recovery (distance from the posterior-mean peak, computed from the selections of each policy, to the participant's actual belief), pay (the two-term
 rule, 100 * (L + R) / 2 with L = true value of the top-ranked cell over the peak and R = (tau + 1) / 2), the scale against the belief error (how much the grid size tells a participant),
 and the honest minus the sandbagger's pay.
 
-    adaptive_grid_sim.py PSC_S1 PCX_S3 [--participants 100] [--rankings 10] [--out file.png] [--txt file.txt]
+    adaptive_grid_sim.py PSC_S1 PCX_S3 [--participants 100] [--selections 10] [--out file.png] [--txt file.txt]
 
 Not an engine file; nothing here is read by the game.
 """
@@ -32,7 +32,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import kendalltau, pearsonr
 
-import ranking
+import selection
 from world import REWARDS, load_session, stage_names
 
 DOCS = Path(__file__).resolve().parent.parent / "docs" / "pilots"
@@ -43,7 +43,7 @@ TYPES = ("fast", "slow", "noisy", "wrong", "sandbag", "centre")
 PEAKS = np.linspace(0.0, 1.0, 21)
 WIDTHS = np.array([0.10, 0.15, 0.22, 0.33, 0.50])
 TAUS = np.array([0.25, 0.5, 1.0, 2.0])
-FORGET = 0.85                      # the weight of the old log posterior each ranking
+FORGET = 0.85                      # the weight of the old log posterior each selection
 TARGET_TAU = 0.6                   # the staircase's target Kendall tau
 STAIR_K = 1.2
 OFFSET = 0.5                       # the random offset of a centre, in spacings
@@ -62,9 +62,9 @@ class World:
         i, j = np.unravel_index(int(np.argmax(field)), field.shape)
         self.peak = np.array([axis[i], axis[j]])
         self.vmax = float(field[i, j])
-        _, frame = ranking.peak_and_frame(self.params)
+        _, frame = selection.peak_and_frame(self.params)
         self.sigma = math.sqrt(frame[1] * frame[2])
-        self.gap = float(self.params.ranking_tie_gap)
+        self.gap = float(self.params.selection_tie_gap)
         self.s_min = self.find_s_min()
 
     def value(self, points):
@@ -102,7 +102,7 @@ def pl_loglik(u, order, tau):
 
 
 def sample_order(u, tau, rng):
-    """A Plackett-Luce ranking of the cells (Gumbel trick): indices from the first picked."""
+    """A Plackett-Luce selection of the cells (Gumbel trick): indices from the first picked."""
     return np.argsort(-(u / tau + rng.gumbel(size=len(u))))
 
 
@@ -112,7 +112,7 @@ class Estimator:
     def __init__(self, amp, power=1.0, forget=FORGET):
         px, py, w, t = np.meshgrid(PEAKS, PEAKS, WIDTHS, TAUS, indexing="ij")
         self.px, self.py, self.w, self.t = px.ravel(), py.ravel(), w.ravel(), t.ravel()
-        self.amp, self.power, self.forget = amp, power, forget          # `power` < 1 tempers the likelihood: the posterior stays wider than one ranking's evidence says
+        self.amp, self.power, self.forget = amp, power, forget          # `power` < 1 tempers the likelihood: the posterior stays wider than one selection's evidence says
         self.logp = np.zeros(len(self.px))
 
     def update(self, cells, order):
@@ -149,7 +149,7 @@ class Participant:
         b = self.world.peak + (self.b0 - self.world.peak) * self.rho ** (t + 1)
         w = self.w_true + (self.w0 - self.w_true) * self.rho ** (t + 1)
         tau = self.tau
-        if self.kind == "sandbag" and t < 5:                    # feigned ignorance: the first five rankings are broad and noisy
+        if self.kind == "sandbag" and t < 5:                    # feigned ignorance: the first five selections are broad and noisy
             b, w, tau = self.b0, 0.45, 2.0
         return b, w, tau
 
@@ -179,17 +179,17 @@ def make_estimator(policy, vmax):
     return Estimator(vmax)
 
 
-def run(policy, kind, world, rankings, rng):
+def run(policy, kind, world, selections, rng):
     person = Participant(kind, world, rng)
     est = make_estimator(policy, world.vmax)
     s_min = world.s_min
     s, centre = S_MAX, np.array([0.5, 0.5])
     rows = []
-    for t in range(rankings):
+    for t in range(selections):
         cells = grid_cells(centre, s)
         order = person.rank(cells, centre, t)
         values = world.value(cells)
-        tau_k = kendalltau(values, -np.argsort(order))[0]                   # tau of the ranking against the true values
+        tau_k = kendalltau(values, -np.argsort(order))[0]                   # tau of the selection against the true values
         tau_k = 0.0 if np.isnan(tau_k) else float(tau_k)
         top = cells[order[0]]
         level = float(world.value(top) / world.vmax)
@@ -219,13 +219,13 @@ def run(policy, kind, world, rankings, rng):
     return rows
 
 
-def simulate(session, participants, rankings, policies=POLICIES, seed=20261124):
+def simulate(session, participants, selections, policies=POLICIES, seed=20261124):
     world = World(session)
     out = {"session": session, "s_min": world.s_min, "peak": world.peak, "sigma": world.sigma, "data": {}, "policies": tuple(policies)}
     for pi, policy in enumerate(policies):
         for ki, kind in enumerate(TYPES):
             rng = np.random.default_rng([seed, pi, ki])
-            out["data"][(policy, kind)] = [run(policy, kind, world, rankings, rng) for _ in range(participants)]
+            out["data"][(policy, kind)] = [run(policy, kind, world, selections, rng) for _ in range(participants)]
     return out
 
 
@@ -237,21 +237,21 @@ def collect(result, policy, kind, key):
     return np.array([[row[key] for row in run_] for run_ in result["data"][(policy, kind)]])
 
 
-def summarize(result, rankings):
+def summarize(result, selections):
     lines = [f"{result['session']}: s_max {S_MAX:.3f}, s_min {result['s_min']:.3f} (peak {np.round(result['peak'], 2).tolist()}, map spread {result['sigma']:.2f}); "
-             f"{len(result['data'][('fixed', 'fast')])} participants of each type, {rankings} rankings", ""]
+             f"{len(result['data'][('fixed', 'fast')])} participants of each type, {selections} selections", ""]
     learners = ("fast", "slow", "noisy")
-    lines.append("recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at ranking 3, 6, 10")
+    lines.append("recovery: distance from the estimated peak to the participant's actual belief, mean over fast, slow and noisy learners (feature units), at selection 3, 6, 10")
     for policy in result["policies"]:
         e = np.mean([collect(result, policy, k, "err").mean(axis=0) for k in learners], axis=0)
-        lines.append(f"  {policy:14s} {e[2]:.3f} {e[5]:.3f} {e[rankings - 1]:.3f}")
+        lines.append(f"  {policy:14s} {e[2]:.3f} {e[5]:.3f} {e[selections - 1]:.3f}")
     lines.append("")
-    lines.append("pay per ranking (mean of 100*(L+R)/2) by participant type, over all rankings")
+    lines.append("pay per selection (mean of 100*(L+R)/2) by participant type, over all selections")
     lines.append("  " + "policy".ljust(14) + "".join(f"{k:>9s}" for k in TYPES))
     for policy in result["policies"]:
         lines.append("  " + policy.ljust(14) + "".join(f"{collect(result, policy, k, 'pay').mean():9.1f}" for k in TYPES))
     lines.append("")
-    lines.append("what the grid size tells a participant: correlation, across fast learners, of the mean spacing of rankings 5-10 with how wrong their belief is (0 = nothing)")
+    lines.append("what the grid size tells a participant: correlation, across fast learners, of the mean spacing of selections 5-10 with how wrong their belief is (0 = nothing)")
     for policy in result["policies"][1:]:
         sc = collect(result, policy, "fast", "s")[:, 4:].mean(axis=1)
         be = collect(result, policy, "fast", "belief_err")[:, 4:].mean(axis=1)
@@ -263,33 +263,33 @@ def summarize(result, rankings):
         d = collect(result, policy, "fast", "drift")[:, 1:]
         lines.append(f"  {policy:14s} {np.mean(d / s):+.2f}")
     lines.append("")
-    lines.append("what the grid shows: share of windows that contain the true peak, and share whose best cell is the middle one (fast learners, rankings 3-10)")
+    lines.append("what the grid shows: share of windows that contain the true peak, and share whose best cell is the middle one (fast learners, selections 3-10)")
     for policy in result["policies"]:
         lines.append(f"  {policy:14s} contains {collect(result, policy, 'fast', 'contains')[:, 2:].mean():.2f}   best cell is the middle {collect(result, policy, 'fast', 'centre_best')[:, 2:].mean():.2f}")
     lines.append("")
-    lines.append("sandbagging: total pay over the rankings, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)")
+    lines.append("sandbagging: total pay over the selections, honest fast learner minus the one who feigns ignorance for five (positive = honesty pays)")
     for policy in result["policies"]:
         gain = collect(result, policy, "fast", "pay").sum(axis=1).mean() - collect(result, policy, "sandbag", "pay").sum(axis=1).mean()
         lines.append(f"  {policy:14s} {gain:+7.1f} points")
     lines.append("")
-    lines.append("the ranker with no knowledge (centre) against the slow learner, mean pay per ranking")
+    lines.append("the ranker with no knowledge (centre) against the slow learner, mean pay per selection")
     for policy in result["policies"]:
         lines.append(f"  {policy:10s} centre {collect(result, policy, 'centre', 'pay').mean():5.1f}   slow {collect(result, policy, 'slow', 'pay').mean():5.1f}")
     return "\n".join(lines)
 
 
-def figure(results, rankings):
+def figure(results, selections):
     fig, axes = plt.subplots(len(results), 4, figsize=(19, 4.2 * len(results)), layout="constrained", squeeze=False)
     palette = ["#777777", "#1f77b4", "#d95f02", "#2ca02c", "#9467bd", "#8c564b"]
     colours = {p: palette[i % len(palette)] for i, p in enumerate(results[0]["policies"])}
-    x = np.arange(1, rankings + 1)
+    x = np.arange(1, selections + 1)
     for r, result in enumerate(results):
         ax = axes[r, 0]
         for policy in result["policies"]:
             e = np.mean([collect(result, policy, k, "err").mean(axis=0) for k in ("fast", "slow", "noisy")], axis=0)
             ax.plot(x, e, "o-", color=colours[policy], label=policy)
         ax.set_title(f"{result['session']}: recovery of the belief", fontsize=10)
-        ax.set_xlabel("ranking")
+        ax.set_xlabel("selection")
         ax.set_ylabel("distance of estimated peak from belief")
         ax.legend(fontsize=8)
         ax = axes[r, 1]
@@ -299,20 +299,20 @@ def figure(results, rankings):
         ax.axhline(result["s_min"], color="#999999", linewidth=0.6)
         ax.axhline(S_MAX, color="#999999", linewidth=0.6)
         ax.set_title("grid spacing (solid fast, dashed slow, dotted wrong)", fontsize=10)
-        ax.set_xlabel("ranking")
+        ax.set_xlabel("selection")
         ax = axes[r, 2]
         n_pol = len(result["policies"])
         width = 0.8 / n_pol
         for k, policy in enumerate(result["policies"]):
             ax.bar(np.arange(len(TYPES)) + (k - (n_pol - 1) / 2) * width, [collect(result, policy, t, "pay").mean() for t in TYPES], width, color=colours[policy], label=policy)
         ax.set_xticks(range(len(TYPES)), TYPES, fontsize=8)
-        ax.set_title("mean pay per ranking (points of 100)", fontsize=10)
+        ax.set_title("mean pay per selection (points of 100)", fontsize=10)
         ax = axes[r, 3]
         for policy in result["policies"]:
             ax.plot(x, collect(result, policy, "fast", "pay").mean(axis=0), "o-", color=colours[policy], label=f"{policy} fast")
             ax.plot(x, collect(result, policy, "sandbag", "pay").mean(axis=0), "x--", color=colours[policy], label=f"{policy} sandbag")
         ax.set_title("pay over the session: honest fast and sandbagger", fontsize=10)
-        ax.set_xlabel("ranking")
+        ax.set_xlabel("selection")
         if r == 0:
             ax.legend(fontsize=7, ncol=2)
     fig.suptitle("Adaptive 3x3 grid: fixed, staircase and posterior-driven placement (simulated participants)")
@@ -320,20 +320,20 @@ def figure(results, rankings):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Simulation of adaptive 3x3 ranking grids.")
+    ap = argparse.ArgumentParser(description="Simulation of adaptive 3x3 selection grids.")
     ap.add_argument("sessions", nargs="+")
     ap.add_argument("--policies", nargs="*", default=list(POLICIES), help="fixed, staircase, posterior, posterior:<power>:<forget>, truthdist:<K>")
     ap.add_argument("--participants", type=int, default=100)
-    ap.add_argument("--rankings", type=int, default=10)
+    ap.add_argument("--selections", type=int, default=10)
     ap.add_argument("--out", default=str(DOCS / "adaptive_grid_sim.png"))
     ap.add_argument("--txt", default=None)
     args = ap.parse_args()
-    results = [simulate(s, args.participants, args.rankings, tuple(args.policies)) for s in args.sessions]
-    report = "\n\n".join(summarize(r, args.rankings) for r in results)
+    results = [simulate(s, args.participants, args.selections, tuple(args.policies)) for s in args.sessions]
+    report = "\n\n".join(summarize(r, args.selections) for r in results)
     print(report)
     if args.txt:
         Path(args.txt).write_text(report + "\n")
-    fig = figure(results, args.rankings)
+    fig = figure(results, args.selections)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.out, dpi=100)
     print(args.out)

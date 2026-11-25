@@ -1,4 +1,4 @@
-"""A 3x3 ranking grid built from the participant's own recent harvests, tested on simulated foragers.
+"""A 3x3 selection grid built from the participant's own recent harvests, tested on simulated foragers.
 
 `grid_from_harvests` turns the last `n` harvests into an axis-aligned, evenly spaced 3x3 grid (shape across, colour up):
 
@@ -8,7 +8,7 @@
   * the middle of the grid is the recency-weighted mean of the harvests plus a random jitter of up to `jitter` spacings along each axis (0 = centred on the mean);
   * (optional, off by default) a probe: *widen* or *extrapolate* along the direction in which the participant's own rewards rose.
 
-The module also holds the simulation that checks it: simulated foragers (`agents.REGISTRY`: oracle, learner, softmax, curious, nearest) forage a session's worlds; a ranking is due at
+The module also holds the simulation that checks it: simulated foragers (`agents.REGISTRY`: oracle, learner, softmax, curious, nearest) forage a session's worlds; a selection is due at
 every patch leaving (as in the game); the grid is built from the harvests so far. `rules` draws the first four grids of one forager, one row per placement rule; `table` compares the rules
 over all foragers and worlds (spacing, share of windows clamped at the maximum, share of cells outside the range of the harvests, cells near a harvest, best cell, middle cell best,
 coverage of the high-value region).
@@ -137,8 +137,8 @@ def forage(kind, world):
     return visits
 
 
-def ranking_times(visits):
-    """Indices (counts of visits so far) at which a ranking falls due: the visit after which the next one is in another patch."""
+def selection_times(visits):
+    """Indices (counts of visits so far) at which a selection falls due: the visit after which the next one is in another patch."""
     return [i + 1 for i in range(len(visits) - 1) if visits[i][1] != visits[i + 1][1]]
 
 
@@ -165,7 +165,7 @@ RULES = [("variance x 3, centred on the mean", dict(spread="var", k=(3.0, 3.0), 
 
 
 def grid_record(world0, visits, count, n, rng, options, probe=None):
-    """The grid for the ranking after `count` harvests, with what it shows."""
+    """The grid for the selection after `count` harvests, with what it shows."""
     w = world0.sim_world
     recent = window(visits, count, n, 0)
     feats = np.array([[w.shape[b], w.color[b]] for b, _, _ in recent]) if recent else np.empty((0, 2))
@@ -192,7 +192,7 @@ def table(session, seeds, n, kinds=KINDS, rng_seed=20261124):
     G = np.array([(a, b) for a in axis for b in axis])
     region = G[world0.value(G) >= 0.5 * world0.vmax]
     histories = [(kind, w, forage(kind, w)) for w in worlds for kind in kinds]
-    lines = [f"{session}: last {n} harvests; s_min {world0.s_min:.3f}, s_max {S_MAX:.3f}; {len(worlds)} worlds x {len(kinds)} foragers; windows of rankings 3 and later", ""]
+    lines = [f"{session}: last {n} harvests; s_min {world0.s_min:.3f}, s_max {S_MAX:.3f}; {len(worlds)} worlds x {len(kinds)} foragers; windows of selections 3 and later", ""]
     lines.append(f"{'rule':40s} spacing  clamped  outside  near  best/peak  middle  region coverage")
     per_kind = {}
     for label, options in RULES:
@@ -200,7 +200,7 @@ def table(session, seeds, n, kinds=KINDS, rng_seed=20261124):
         recs, covers = [], []
         for kind, w, visits in histories:
             world0.sim_world = w
-            run = [grid_record(world0, visits, count, n, rng, options) for count in ranking_times(visits)]
+            run = [grid_record(world0, visits, count, n, rng, options) for count in selection_times(visits)]
             recs += run[2:]
             per_kind.setdefault((label, kind), []).extend((x["sx"] + x["sy"]) / 2 for x in run[2:])
             if run:
@@ -208,23 +208,23 @@ def table(session, seeds, n, kinds=KINDS, rng_seed=20261124):
                 covers.append(np.sqrt(((region[:, None, :] - cells[None, :, :]) ** 2).sum(-1)).min(axis=1).mean())
         lines.append(f"{label:40s} {np.mean([(x['sx'] + x['sy']) / 2 for x in recs]):.3f}    {np.mean([x['clamped'] for x in recs]):.2f}     {np.mean([x['outside'] for x in recs]):.2f}    "
                      f"{np.nanmean([x['near'] for x in recs]):.2f}   {np.mean([x['best_value'] for x in recs]):.2f}       {np.mean([x['middle_best'] for x in recs]):.2f}    {np.mean(covers):.3f}")
-    lines += ["", "spacing by forager (rankings 3 and later)", f"{'rule':40s}" + "".join(f"{k:>10s}" for k in kinds)]
+    lines += ["", "spacing by forager (selections 3 and later)", f"{'rule':40s}" + "".join(f"{k:>10s}" for k in kinds)]
     for label, _ in RULES:
         lines.append(f"{label:40s}" + "".join(f"{np.mean(per_kind[(label, k)]):10.3f}" for k in kinds))
     return "\n".join(lines)
 
 
-def rules_figure(session, agent, n, rankings=4, seed_index=0, rng_seed=7):
-    """One row per placement rule, the first `rankings` grids of one forager in columns: the value map, the recent harvests (red x; older ones grey), the sample mean (green +), the grid's
+def rules_figure(session, agent, n, selections=4, seed_index=0, rng_seed=7):
+    """One row per placement rule, the first `selections` grids of one forager in columns: the value map, the recent harvests (red x; older ones grey), the sample mean (green +), the grid's
     cells (blue) and the box through its outer cells (dashed); the same random draws in every row, so the rows differ by the rule only."""
     world0, worlds = worlds_for(session, seed_index + 1)
     w = worlds[seed_index]
     world0.sim_world = w
     visits = forage(agent, w)
-    times = ranking_times(visits)[:rankings]
+    times = selection_times(visits)[:selections]
     axis = np.linspace(0, 1, 101)
     field = world0.value(np.stack(np.meshgrid(axis, axis, indexing="ij"), axis=-1))
-    fig, axes = plt.subplots(len(RULES), rankings, figsize=(4.0 * rankings, 4.0 * len(RULES)), layout="constrained", squeeze=False)
+    fig, axes = plt.subplots(len(RULES), selections, figsize=(4.0 * selections, 4.0 * len(RULES)), layout="constrained", squeeze=False)
     for row, (label, options) in enumerate(RULES):
         for col, count in enumerate(times):
             recent = window(visits, count, n, 0)
@@ -246,7 +246,7 @@ def rules_figure(session, agent, n, rankings=4, seed_index=0, rng_seed=7):
             ax.plot(*world0.peak, "*", color="gold", markeredgecolor="black", markersize=14)
             ax.set_xlim(0, 1)
             ax.set_ylim(0, 1)
-            ax.set_title(f"ranking {col + 1}: {len(feats)} harvests in the window\nspacing {g['sx']:.2f} x {g['sy']:.2f}", fontsize=9)
+            ax.set_title(f"selection {col + 1}: {len(feats)} harvests in the window\nspacing {g['sx']:.2f} x {g['sy']:.2f}", fontsize=9)
             if col == 0:
                 ax.set_ylabel(label + "\ncolour", fontsize=9)
             if row == len(RULES) - 1:
@@ -256,7 +256,7 @@ def rules_figure(session, agent, n, rankings=4, seed_index=0, rng_seed=7):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="A ranking grid built from recent harvests, on simulated foragers.")
+    ap = argparse.ArgumentParser(description="A selection grid built from recent harvests, on simulated foragers.")
     ap.add_argument("mode", choices=["rules", "table"])
     ap.add_argument("session")
     ap.add_argument("--seeds", type=int, default=8)

@@ -1,4 +1,4 @@
-"""Validate logged runs: is the data self-consistent, is the scoring right, and did the game follow the ranking-break rules of the design?
+"""Validate logged runs: is the data self-consistent, is the scoring right, and did the game follow the selection-break rules of the design?
 
     ./venv/bin/python scripts/validate_run.py <session folder | run folder | run id> [--json]
     ./venv/bin/python scripts/validate_run.py --all [--json]       # every run under ForagingData/ (not _worlds, _db_backup*, other non-run folders)
@@ -7,10 +7,10 @@ Read-only. One table per session folder (ForagingData/<run>/<NN>/) of checks, ea
 line, and exit code 1 if any check FAILs. FAIL means the data or the scoring is wrong; WARN is a case the logs cannot decide (a world file
 that cannot be found, a reduced run). Three groups (docs/VALIDATION_PLAN.md, Layer 1):
 
-  scoring    foraging_points = the last running_total = the sum of the fruit rewards, each fruit pays the world's pre-drawn reward; each ranking set's
-             correct_pairs / total_pairs recomputed with `ranking.pair_scores`, its points, the `rank_set_end` event, ranking_points and `session_end`.
-  integrity  event seq and clock, session_start / session_end, trajectory frame count, ranking break and set events, the world file's hash.
-  breaks     the design's rules: a patch switch before each break, the cooldown, the minimum of harvested bushes, the last seconds, rankingEvery, the player
+  scoring    foraging_points = the last running_total = the sum of the fruit rewards, each fruit pays the world's pre-drawn reward; each selection set's
+             correct_pairs / total_pairs recomputed with `selection.pair_scores`, its points, the `rank_set_end` event, ranking_points and `session_end`.
+  integrity  event seq and clock, session_start / session_end, trajectory frame count, selection break and set events, the world file's hash.
+  breaks     the design's rules: a patch switch before each break, the cooldown, the minimum of harvested bushes, the last seconds, selectionEvery, the player
              still and no foraging fruit during a break, the foraging clock lasting sessionDuration, the pool played in order.
 
 Each check is a small function from a `Ctx` (one session's loaded data) to a list of `Result`, so tests call them directly.
@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-import ranking
+import selection
 import replay
 import rundata
 from replay import _payload
@@ -58,7 +58,7 @@ class Ctx:
     tile_centres: np.ndarray = None
     world_note: str = ""                # why the world is missing (a WARN detail), or where it was found
     world_found: bool = False
-    pool_tolerance: float = ranking.TIE_TOLERANCE
+    pool_tolerance: float = selection.TIE_TOLERANCE
     pool_size: int = None
     truncated: list = field(default_factory=list)
 
@@ -71,31 +71,31 @@ class Ctx:
         return self.row.get("foraging_points")
 
     @property
-    def ranking_every(self):
-        return self.config.get("rankingEvery") or 0
+    def selection_every(self):
+        return self.config.get("selectionEvery") or 0
 
     @property
     def schedule(self):
-        """The patch leavings after which a ranking is due (rankingLeavings), [] when the rule is 'every rankingEvery-th'."""
-        return [int(n) for n in (self.config.get("rankingLeavings") or [])]
+        """The patch leavings after which a selection is due (selectionLeavings), [] when the rule is 'every selectionEvery-th'."""
+        return [int(n) for n in (self.config.get("selectionLeavings") or [])]
 
     @property
-    def has_ranking(self):
-        return self.ranking_every > 0 or any(e["type"] in ("rank_break_start", "rank_set") for e in self.events)
+    def has_selection(self):
+        return self.selection_every > 0 or any(e["type"] in ("rank_break_start", "rank_set") for e in self.events)
 
     @property
-    def ranking_played(self):
+    def selection_played(self):
         return bool(self.sets) or any(e["type"] in ("rank_set", "rank_set_start", "rank_set_end") for e in self.events)
 
     @property
     def unsupported(self):
         """Why this log is of a format no longer validated (git history at b7e1895 has the code that handled them), else None."""
-        if self.config.get("isInterlude") or (bool(self.sets) and not self.has_ranking):
-            return "an Interlude session (trial rows, no ranking breaks)"
+        if self.config.get("isInterlude") or (bool(self.sets) and not self.has_selection):
+            return "an Interlude session (trial rows, no selection breaks)"
         if "foraging_points" not in self.row and "final_score" in self.row:
             return "the old final_score column (before 2026-11-14)"
         if any(e["type"] == "rank_break_start" for e in self.events) and not self.sets and not _of(self, "rank_set_start"):
-            return "ranking breaks of the early prototype (no rank_set_start events, no ranking_sets rows)"
+            return "selection breaks of the early prototype (no rank_set_start events, no ranking_sets rows)"
         return None
 
     @property
@@ -104,7 +104,7 @@ class Ctx:
 
     @property
     def set_ids(self):
-        """Tree ids of the bushes of the ranking sets: those the `rank_set` events carry, and (world known) every id past the world's table."""
+        """Tree ids of the bushes of the selection sets: those the `rank_set` events carry, and (world known) every id past the world's table."""
         ids = {int(b["id"]) for e in self.events if e["type"] == "rank_set" for b in (e.get("payload") or {}).get("bushes", [])}
         if self.fruit_reward is not None:
             ids |= {e["tree_id"] for e in self.events if e["tree_id"] >= len(self.fruit_reward)}
@@ -119,8 +119,8 @@ def _of(ctx, kind):
     return [e for e in ctx.events if e["type"] == kind]
 
 
-def _skip_no_ranking(name):
-    return [Result(name, SKIP, "the session has no ranking (rankingEvery 0)")]
+def _skip_no_selection(name):
+    return [Result(name, SKIP, "the session has no selection (selectionEvery 0)")]
 
 
 # --------------------------------------------------------------------------------------------------
@@ -160,7 +160,7 @@ def check_fruit_rewards(ctx):
         tree, k = e["tree_id"], e["k"]
         if tree in set_ids:
             if e["reward"] != 0:
-                problems.append(f"ranking-set bush {tree} paid {e['reward']} at t={e['t']:.3f}")
+                problems.append(f"selection-set bush {tree} paid {e['reward']} at t={e['t']:.3f}")
         elif not 0 <= tree < n or not 0 <= k < k_max:
             problems.append(f"fruit of bush {tree} k={k} is not in the world table ({n} bushes x {k_max} fruits) at t={e['t']:.3f}")
         else:
@@ -178,13 +178,13 @@ def _scored_values(row):
 
 
 def _check_dense_sets(ctx, names):
-    """The dense design's scoring (ranking.top_k_score, top_k_hits, paid_set_index; RankingBreak.FinishSet): a row's correct_pairs is the number of the picked bushes among the grid's best k, total_pairs is k, its points the
-    0 to rankingTopKPoints score if the ranking pays (rankingPaid 'all', or 'one': the pool set the world seed draws) and 0 in a practice session."""
+    """The dense design's scoring (selection.top_k_score, top_k_hits, paid_set_index; SelectionBreak.FinishSet): a row's correct_pairs is the number of the picked bushes among the grid's best k, total_pairs is k, its points the
+    0 to selectionTopKPoints score if the selection pays (selectionPaid 'all', or 'one': the pool set the world seed draws) and 0 in a practice session."""
     cfg = ctx.config
-    k, scale = int(cfg.get("rankingPicks") or 5), float(cfg.get("rankingTopKPoints") or 100.0)
-    paid_mode, practice = str(cfg.get("rankingPaid") or "one"), bool(cfg.get("isPractice"))
-    sets = int(ctx.pool_size or cfg.get("rankingPoolSets") or len(ctx.sets))
-    paid_index = ranking.paid_set_index(int(cfg.get("worldSeed") or 0), sets)
+    k, scale = int(cfg.get("selectionPicks") or 5), float(cfg.get("selectionTopKPoints") or 100.0)
+    paid_mode, practice = str(cfg.get("selectionPaid") or "one"), bool(cfg.get("isPractice"))
+    sets = int(ctx.pool_size or cfg.get("selectionPoolSets") or len(ctx.sets))
+    paid_index = selection.paid_set_index(int(cfg.get("worldSeed") or 0), sets)
     pairs, points = [], []
     for i, row in enumerate(ctx.sets):
         if not row["bushes"]:
@@ -193,10 +193,10 @@ def _check_dense_sets(ctx, names):
         bushes = row["bushes"]
         picked = [b for b in sorted((b for b in bushes if b.get("rank") is not None), key=lambda b: b["rank"])]
         by_id = {b["id"]: b["value"] for b in bushes}
-        hits = ranking.top_k_hits([b["id"] for b in picked], by_id, k)
+        hits = selection.top_k_hits([b["id"] for b in picked], by_id, k)
         if (hits, k) != (row["correct_pairs"], row["total_pairs"]):
             pairs.append(f"set {i}: row {row['correct_pairs']}/{row['total_pairs']}, recomputed {hits}/{k}")
-        score = ranking.top_k_score([b["value"] for b in picked], list(by_id.values()), k, scale)
+        score = selection.top_k_score([b["value"] for b in picked], list(by_id.values()), k, scale)
         pays = paid_mode == "all" or row["pool_index"] == paid_index
         expect = 0.0 if practice or not pays else score
         if row["points"] is not None and abs(row["points"] - expect) > TOL:
@@ -205,7 +205,7 @@ def _check_dense_sets(ctx, names):
     out.append(Result(names[1], FAIL if points else PASS, "; ".join(points) or f"points = the top-k score, paid {paid_mode} (set {paid_index} when one)"))
     ends = _of(ctx, "rank_set_end")
     if len(ends) != len(ctx.sets):
-        out.append(Result(names[2], SKIP, f"{len(ends)} rank_set_end events for {len(ctx.sets)} rows (see ranking set events)"))
+        out.append(Result(names[2], SKIP, f"{len(ends)} rank_set_end events for {len(ctx.sets)} rows (see selection set events)"))
     else:
         diffs = []
         for i, (e, row) in enumerate(zip(ends, ctx.sets)):
@@ -219,25 +219,25 @@ def _check_dense_sets(ctx, names):
 
 
 def check_ranking_sets(ctx):
-    names = ("ranking pair scores", "ranking points", "rank_set_end = row")
-    if not ctx.has_ranking:
-        return [Result(n, SKIP, "the session has no ranking") for n in names]
-    if not ctx.ranking_played:
-        return [Result(n, SKIP, "no ranking set was played") for n in names]
+    names = ("selection pair scores", "selection points", "rank_set_end = row")
+    if not ctx.has_selection:
+        return [Result(n, SKIP, "the session has no selection") for n in names]
+    if not ctx.selection_played:
+        return [Result(n, SKIP, "no selection set was played") for n in names]
     if not ctx.sets:
         return [Result(n, FAIL, "no ranking_sets rows") for n in names]
-    if str(ctx.config.get("rankingDesign") or "") == "dense":
+    if str(ctx.config.get("selectionDesign") or "") == "dense":
         return _check_dense_sets(ctx, names)
-    bonus, practice, mode = ctx.config.get("rankingBonusPerPair"), bool(ctx.config.get("isPractice")), ctx.config.get("rankingPointsMode") or "pair"
+    bonus, practice, mode = ctx.config.get("selectionBonusPerPair"), bool(ctx.config.get("isPractice")), ctx.config.get("selectionPointsMode") or "pair"
     pairs, points = [], []
-    if mode not in ranking.POINTS_MODES:
-        return [Result(n, FAIL, f"unknown rankingPointsMode {mode!r}") for n in names]
+    if mode not in selection.POINTS_MODES:
+        return [Result(n, FAIL, f"unknown selectionPointsMode {mode!r}") for n in names]
     for i, row in enumerate(ctx.sets):
         if not row["bushes"]:
             pairs.append(f"set {i}: no bushes")
             continue
         picked, values = _scored_values(row)
-        expected_points, correct, total = ranking.rankings_to_points(picked, values, bonus or 0.0, mode, ctx.pool_tolerance)
+        expected_points, correct, total = selection.selections_to_points(picked, values, bonus or 0.0, mode, ctx.pool_tolerance)
         if (correct, total) != (row["correct_pairs"], row["total_pairs"]):
             pairs.append(f"set {i}: row {row['correct_pairs']}/{row['total_pairs']}, recomputed {correct}/{total}")
         if bonus is None or row["points"] is None:
@@ -246,10 +246,10 @@ def check_ranking_sets(ctx):
         if abs(row["points"] - expect) > TOL:
             points.append(f"set {i}: points {row['points']}, expected {expect:g} ({row['correct_pairs']} correct pairs, bonus {bonus}, mode {mode or 'pair'}){' (practice: 0)' if practice else ''}")
     out = [Result(names[0], FAIL if pairs else PASS, "; ".join(pairs) or f"{len(ctx.sets)} sets, tolerance {ctx.pool_tolerance}")]
-    out.append(Result(names[1], WARN if bonus is None else (FAIL if points else PASS), "rankingBonusPerPair not in the config" if bonus is None else "; ".join(points) or f"points = the payout rule, mode {mode}"))
+    out.append(Result(names[1], WARN if bonus is None else (FAIL if points else PASS), "selectionBonusPerPair not in the config" if bonus is None else "; ".join(points) or f"points = the payout rule, mode {mode}"))
     ends = _of(ctx, "rank_set_end")
     if len(ends) != len(ctx.sets):
-        out.append(Result(names[2], SKIP, f"{len(ends)} rank_set_end events for {len(ctx.sets)} rows (see ranking set events)"))
+        out.append(Result(names[2], SKIP, f"{len(ends)} rank_set_end events for {len(ctx.sets)} rows (see selection set events)"))
     else:
         diffs = []
         for i, (e, row) in enumerate(zip(ends, ctx.sets)):
@@ -266,8 +266,8 @@ def check_session_totals(ctx):
     name = "ranking_points and session_end"
     out = []
     rp = ctx.row.get("ranking_points")
-    if not ctx.has_ranking:
-        out.append(Result("ranking_points", SKIP, "the session has no ranking"))
+    if not ctx.has_selection:
+        out.append(Result("ranking_points", SKIP, "the session has no selection"))
     elif rp is None:
         out.append(Result("ranking_points", WARN, "not recorded"))
     else:
@@ -282,7 +282,7 @@ def check_session_totals(ctx):
         if key in p and row_value is not None and abs(p[key] - row_value) > TOL:
             problems.append(f"{key}: event {p[key]}, session row {row_value}")
     missing = [k for k in ("foraging_points", "ranking_points") if k not in p]
-    out.append(Result("session_end payload = session row", FAIL if problems else (WARN if missing and ctx.has_ranking else PASS),
+    out.append(Result("session_end payload = session row", FAIL if problems else (WARN if missing and ctx.has_selection else PASS),
                       "; ".join(problems) or (f"payload lacks {missing}" if missing else "agree")))
     return out
 
@@ -346,8 +346,8 @@ def break_pairs(events):
 
 
 def check_break_events(ctx):
-    if not ctx.has_ranking:
-        return _skip_no_ranking("rank_break events balanced")
+    if not ctx.has_selection:
+        return _skip_no_selection("rank_break events balanced")
     pairs, problems = break_pairs(ctx.events)
     if pairs and pairs[-1][1] is None:
         problems.append(f"the break started at {pairs[-1][0]:.3f} never ended")
@@ -361,11 +361,11 @@ def _aborted_windows(ctx):
 
 
 def check_set_events(ctx):
-    name = "ranking set events"
-    if not ctx.has_ranking:
-        return _skip_no_ranking(name)
-    if not ctx.ranking_played:
-        return [Result(name, SKIP, "no ranking set was played")]
+    name = "selection set events"
+    if not ctx.has_selection:
+        return _skip_no_selection(name)
+    if not ctx.selection_played:
+        return [Result(name, SKIP, "no selection set was played")]
     counts = {k: len(_of(ctx, k)) for k in ("rank_set", "rank_set_start", "rank_set_end")}
     for s, e in _aborted_windows(ctx):          # a try cut short by a resume has its rank_set (and maybe rank_set_start) but no rank_set_end
         inside = {k: sum(s <= x["t"] <= e for x in _of(ctx, k)) for k in counts}
@@ -416,10 +416,10 @@ SCHEDULE_TOL = 0.25      # seconds: a break may not start earlier than its sched
 
 
 def _scheduled_breaks(ctx, breaks, times, start_payload, number, resumed):
-    """The fixed schedule (rankingTimes, RankingBreak.TickSchedule): break k starts at its scheduled foraging second or after, at most rankingMaxWait (the bout that outlasts it is cancelled) and one more
+    """The fixed schedule (selectionTimes, SelectionBreak.TickSchedule): break k starts at its scheduled foraging second or after, at most selectionMaxWait (the bout that outlasts it is cancelled) and one more
     second later; every scheduled break of a completed session happens; each `rank_due` event is numbered 1, 2, ... and says the scheduled time."""
     cfg = ctx.config
-    wait = float(cfg.get("rankingMaxWait") if cfg.get("rankingMaxWait") is not None else 10.0)
+    wait = float(cfg.get("selectionMaxWait") if cfg.get("selectionMaxWait") is not None else 10.0)
     problems = []
     for k, (s, _) in enumerate(breaks):
         nb = number(k, s)
@@ -430,7 +430,7 @@ def _scheduled_breaks(ctx, breaks, times, start_payload, number, resumed):
         if elapsed < times[nb - 1] - SCHEDULE_TOL:
             problems.append(f"break {nb} started at foraging second {elapsed:.2f}, before its time {times[nb - 1]:g}")
         elif elapsed > times[nb - 1] + wait + 1.0 and not resumed:
-            problems.append(f"break {nb} started at foraging second {elapsed:.2f}, later than its time {times[nb - 1]:g} plus rankingMaxWait {wait:g}")
+            problems.append(f"break {nb} started at foraging second {elapsed:.2f}, later than its time {times[nb - 1]:g} plus selectionMaxWait {wait:g}")
     due = [_payload(e) for e in _of(ctx, "rank_due")]
     if not resumed:
         if [p.get("n") for p in due] != list(range(1, len(due) + 1)):
@@ -445,26 +445,26 @@ def _scheduled_breaks(ctx, breaks, times, start_payload, number, resumed):
 
 
 def check_break_rules(ctx):
-    if not ctx.has_ranking:
-        return _skip_no_ranking("break rules")
+    if not ctx.has_selection:
+        return _skip_no_selection("break rules")
     cfg, breaks = ctx.config, _complete_breaks(ctx)
     out = []
     ev, tr = ctx.events, ctx.traj
     starts = [s for s, _ in breaks]
-    every, cooldown = max(ctx.ranking_every, 1), cfg.get("rankingCooldown")
+    every, cooldown = max(ctx.selection_every, 1), cfg.get("selectionCooldown")
     sched = ctx.schedule
     start_payload = {e["t"]: _payload(e) for e in _of(ctx, "rank_break_start")}
 
     def number(k, s):                   # a break's number: the logged one (a break played again after a resume keeps it), else its position
         return start_payload.get(s, {}).get("break") or k + 1
-    duration, last = cfg.get("sessionDuration"), cfg.get("rankingLastSeconds")
+    duration, last = cfg.get("sessionDuration"), cfg.get("selectionLastSeconds")
     resumed = bool(_of(ctx, "session_resume"))
-    times = [float(x) for x in (cfg.get("rankingTimes") or [])]
+    times = [float(x) for x in (cfg.get("selectionTimes") or [])]
     scheduled = bool(times)
     if scheduled:
         out += _scheduled_breaks(ctx, breaks, times, start_payload, number, resumed)
 
-    # a patch switch before each break, and as many as rankingEvery
+    # a patch switch before each break, and as many as selectionEvery
     if scheduled:
         pass                                      # (the fixed schedule replaces the patch-switch rules: the checks above)
     elif ctx.tile_centres is None:
@@ -485,17 +485,17 @@ def check_break_rules(ctx):
             if len(seg) == 0 or (seg == seg[0]).all():
                 problems.append(f"break {k + 1} at t={s:.3f}: the player stayed in tile {seg[0] if len(seg) else '?'} since t={ref_time:.3f}")
             nb = number(k, s)
-            need = (sched[nb - 1] - (sched[nb - 2] if nb > 1 else 0)) if nb <= len(sched) else every          # leavings since the last break: the schedule's step, or rankingEvery
+            need = (sched[nb - 1] - (sched[nb - 2] if nb > 1 else 0)) if nb <= len(sched) else every          # leavings since the last break: the schedule's step, or selectionEvery
             if len(seg) and not (seg == seg[0]).all() and changes < need:
-                (notes if cfg.get("rankingSettleDepth") or resumed else problems).append(f"break {k + 1}: {changes} tile changes since t={ref_time:.3f}, {need} leavings due")
+                (notes if cfg.get("selectionSettleDepth") or resumed else problems).append(f"break {k + 1}: {changes} tile changes since t={ref_time:.3f}, {need} leavings due")
             if not sched and logged.get("switches") is not None and logged["switches"] < every:
-                problems.append(f"break {k + 1}: logged switches {logged['switches']} < rankingEvery {every}")
+                problems.append(f"break {k + 1}: logged switches {logged['switches']} < selectionEvery {every}")
             if logged.get("tile") is not None and len(seg) and int(seg[-1]) != logged["tile"]:
                 notes.append(f"break {k + 1}: logged tile {logged['tile']}, nearest tile at the start {int(seg[-1])}")
             ref_time = e
         out.append(Result("break after a patch switch", FAIL if problems else (WARN if notes else PASS), "; ".join(problems + notes) or f"{len(breaks)} breaks, each after a tile change"))
 
-    # the scheduled leavings (rankingLeavings): each break comes at the next number of the schedule, and the qualifying leavings are numbered 1, 2, 3, ... (a resume restarts the count)
+    # the scheduled leavings (selectionLeavings): each break comes at the next number of the schedule, and the qualifying leavings are numbered 1, 2, 3, ... (a resume restarts the count)
     if sched and not scheduled:
         problems, leaving_events = [], [_payload(e) for e in _of(ctx, "rank_leaving")]
         if not resumed:
@@ -518,7 +518,7 @@ def check_break_rules(ctx):
     if scheduled:
         pass
     elif cooldown is None:
-        out.append(Result("break cooldown", WARN, "rankingCooldown not in the config"))
+        out.append(Result("break cooldown", WARN, "selectionCooldown not in the config"))
     else:
         problems = []
         for k in range(1, len(breaks)):
@@ -526,22 +526,22 @@ def check_break_rules(ctx):
                 continue
             gap = _foraging_time(breaks[k][0], breaks) - _foraging_time(breaks[k - 1][1], breaks)
             if gap < cooldown - COOLDOWN_TOL:
-                problems.append(f"break {k + 1} started {gap:.2f} foraging seconds after break {k} ended (rankingCooldown {cooldown})")
+                problems.append(f"break {k + 1} started {gap:.2f} foraging seconds after break {k} ended (selectionCooldown {cooldown})")
         out.append(Result("break cooldown", FAIL if problems else PASS, "; ".join(problems) or f"{max(len(breaks) - 1, 0)} gaps >= {cooldown} s"))
 
-    # enough bushes harvested between breaks (rankingMinBushes since the last ranking ended, since the session began before the first; a resume does not restore the count, so a break right after one only warns)
-    need = cfg.get("rankingMinBushes")
+    # enough bushes harvested between breaks (selectionMinBushes since the last selection ended, since the session began before the first; a resume does not restore the count, so a break right after one only warns)
+    need = cfg.get("selectionMinBushes")
     if scheduled:
         pass
     elif need is None or not starts:
-        out.append(Result("bushes between breaks", WARN if need is None else SKIP, "rankingMinBushes not in the config" if need is None else "no break"))
+        out.append(Result("bushes between breaks", WARN if need is None else SKIP, "selectionMinBushes not in the config" if need is None else "no break"))
     else:
         problems, notes, since = [], [], 0.0
         resume_times = [e["t"] for e in _of(ctx, "session_resume")]
         for k, (s, e) in enumerate(breaks):
             bushes = {f["tree_id"] for f in _of(ctx, "fruit") if since <= f["t"] < s and f["tree_id"] not in ctx.set_ids}
             if len(bushes) < need:
-                (notes if any(since <= t <= s for t in resume_times) else problems).append(f"break {number(k, s)} started after {len(bushes)} distinct bushes had a fruit since t={since:.3f}, rankingMinBushes {need}")
+                (notes if any(since <= t <= s for t in resume_times) else problems).append(f"break {number(k, s)} started after {len(bushes)} distinct bushes had a fruit since t={since:.3f}, selectionMinBushes {need}")
             since = e
         out.append(Result("bushes between breaks", FAIL if problems else (WARN if notes else PASS), "; ".join(problems + notes) or f"{len(breaks)} breaks, each after at least {need} bushes"))
 
@@ -549,7 +549,7 @@ def check_break_rules(ctx):
     if scheduled:
         pass
     elif duration is None or last is None:
-        out.append(Result("no break in the last seconds", WARN, "sessionDuration or rankingLastSeconds not in the config"))
+        out.append(Result("no break in the last seconds", WARN, "sessionDuration or selectionLastSeconds not in the config"))
     else:
         problems, notes = [], []
         for k, (s, _) in enumerate(breaks):
@@ -557,7 +557,7 @@ def check_break_rules(ctx):
             if left <= 0:
                 problems.append(f"break {k + 1} started with {left:.2f} s left")
             elif left <= last:        # the switch counted earlier, the start waited for a harvest bout to end: not decidable from the log
-                notes.append(f"break {k + 1} started with {left:.2f} s left (rankingLastSeconds {last}; a bout may have delayed it)")
+                notes.append(f"break {k + 1} started with {left:.2f} s left (selectionLastSeconds {last}; a bout may have delayed it)")
         out.append(Result("no break in the last seconds", FAIL if problems else (WARN if notes else PASS), "; ".join(problems + notes) or "ok"))
 
     # the player stays and no foraging fruit is taken
@@ -596,7 +596,7 @@ def check_break_rules(ctx):
     if not ctx.sets:
         out.append(Result("pool order", SKIP, "no ranking_sets rows"))
     else:
-        size = ctx.pool_size or cfg.get("rankingPoolSets")
+        size = ctx.pool_size or cfg.get("selectionPoolSets")
         idx = [r["pool_index"] for r in ctx.sets]
         first = idx[0]
         bad = [i for i, v in enumerate(idx) if v != (first + i) % size] if size else []
@@ -640,7 +640,7 @@ def load_ctx(folder):
         ctx.world_found, ctx.world_note = True, f"{path.name} sha256 {row['world_sha256'][:12]}"
         pool = _find_pool(path, row["world_file"])
         if pool:
-            ctx.pool_tolerance, ctx.pool_size = float(pool.get("tieTolerance", ranking.TIE_TOLERANCE)), len(pool.get("sets") or []) or None
+            ctx.pool_tolerance, ctx.pool_size = float(pool.get("tieTolerance", selection.TIE_TOLERANCE)), len(pool.get("sets") or []) or None
     except (FileNotFoundError, KeyError, ValueError, OSError) as err:
         ctx.world_note = f"{type(err).__name__}: {err}"[:300]
     return ctx

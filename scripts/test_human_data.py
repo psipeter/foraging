@@ -35,7 +35,7 @@ def event_row(run_id, index, seq, type_, reward=None, total=None, payload=None):
 
 
 def set_row(run_id, index, seq, correct, total=1):
-    row = {c: None for c in rundata.RANKING_COLUMNS}
+    row = {c: None for c in rundata.SELECTION_COLUMNS}
     row.update(run_id=run_id, session_index=index, seq=seq, set_index=seq, pool_index=seq + 5, set_size=2, correct_pairs=int(correct), total_pairs=total,
                points=10.0 if correct else 0.0, bushes=[{"id": 100 + seq, "slot": 0, "shape": 0.5, "color": 0.25, "moisture": 0.5, "value": 1.0, "rank": 1,
                                                        "start_time": 1.0, "finish_time": 2.0, "fruits": 3}])

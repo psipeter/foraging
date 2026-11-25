@@ -1,24 +1,24 @@
-"""Plans for the plus ranking design: where the pluses go, how they are oriented and stretched, and what spread of values a set has (docs/DECISIONS.md, "plus ranking").
+"""Plans for the plus selection design: where the pluses go, how they are oriented and stretched, and what spread of values a set has (docs/DECISIONS.md, "plus selection").
 
-`ranking.plus_sets` (the first plan, "spiral" with free values) places the centres of each axes mode on a sunflower spiral and fits whatever results. This module holds the plans the
-PI asked to play with; `ranking.plus_sets` hands over to `plus_sets` here when `rankingPlusPlan` or `rankingPlusDifficulty` is not the default. Not an engine file.
+`selection.plus_sets` (the first plan, "spiral" with free values) places the centres of each axes mode on a sunflower spiral and fits whatever results. This module holds the plans the
+PI asked to play with; `selection.plus_sets` hands over to `plus_sets` here when `selectionPlusPlan` or `selectionPlusDifficulty` is not the default. Not an engine file.
 
-A **ranking** is `RANKING` = 3 consecutive sets (aligned, random, random). The settings:
+A **selection** is `SELECTION` = 3 consecutive sets (aligned, random, random). The settings:
 
-Placement (`rankingPlusPlan`, where the centres go and how the random pluses turn and stretch):
+Placement (`selectionPlusPlan`, where the centres go and how the random pluses turn and stretch):
   spiral  the baseline: per axes mode a sunflower spiral over the jitter ellipse; random turn and stretch.
-  ring    each ranking is a triangle: its three centres 120 degrees apart on a ring around the peak, the ring's radius growing over the rankings (equal area) and its phase
-          turning by the golden angle, the mode at each corner rotating; the two random pluses of a ranking turn 45 degrees apart (a plus repeats every 90) and the stretch
+  ring    each selection is a triangle: its three centres 120 degrees apart on a ring around the peak, the ring's radius growing over the selections (equal area) and its phase
+          turning by the golden angle, the mode at each corner rotating; the two random pluses of a selection turn 45 degrees apart (a plus repeats every 90) and the stretch
           ratio is stratified over the session, so all turns and ratios are visited evenly.
   tile    greedy space filling: sets are placed one at a time, each the best of `TILE_CANDIDATES` draws (centre in the jitter ellipse, turn and stretch for a random plus) by how
           much it lowers the mean distance from the rewarding region (value at least `REGION_FRACTION` of the peak) to its nearest bush.
 
-Values (`rankingPlusDifficulty`):
+Values (`selectionPlusDifficulty`):
   free    the arms keep whatever lengths the fit gives (the baseline).
   easy | medium | hard | <number>   a ladder: the five values of a set are `delta` apart (a fraction of the peak: easy 0.16, medium 0.10, hard 0.06, or the number), the centre's
           place in the ladder drawn at random among those the peak and the floor allow, and each arm's length is solved to hit its value (the arms are assigned to the
           ladder's levels as best fit). A random plus that cannot hit its levels along its axes turns (up to 45 degrees); an aligned one only stretches.
-  mixed   easy, medium, hard in turn over the rankings.
+  mixed   easy, medium, hard in turn over the selections.
 """
 
 import itertools
@@ -26,11 +26,11 @@ import math
 
 import numpy as np
 
-import ranking
-from ranking import GOLDEN_ANGLE, PLUS_MARGIN, PLUS_MIN_FRACTION, PLUS_ROLES, peak_and_frame
+import selection
+from selection import GOLDEN_ANGLE, PLUS_MARGIN, PLUS_MIN_FRACTION, PLUS_ROLES, peak_and_frame
 from world import REWARDS, stage_names
 
-RANKING = 3
+SELECTION = 3
 PLANS = ("spiral", "ring", "tile", "cover")
 DIFFICULTY = {"easy": 0.16, "medium": 0.10, "hard": 0.06}
 TILE_CANDIDATES = 40
@@ -56,12 +56,12 @@ class Ctx:
         self.angle, self.s1, self.s2 = self.frame
         th = math.radians(self.angle)
         self.f1, self.f2 = np.array([math.cos(th), math.sin(th)]), np.array([-math.sin(th), math.cos(th)])
-        self.jitter = float(getattr(params, "ranking_plus_jitter", 1.0))
-        self.arm = float(getattr(params, "ranking_plus_arm", 1.0))
-        self.ratio = float(getattr(params, "ranking_plus_arm_ratio", 2.0))
-        self.sep = float(getattr(params, "ranking_plus_min_separation", 0.08))
+        self.jitter = float(getattr(params, "selection_plus_jitter", 1.0))
+        self.arm = float(getattr(params, "selection_plus_arm", 1.0))
+        self.ratio = float(getattr(params, "selection_plus_arm_ratio", 2.0))
+        self.sep = float(getattr(params, "selection_plus_min_separation", 0.08))
         self.floor = PLUS_MIN_FRACTION * self.peak[2]
-        self.options = {t: ranking.plus_fit_options(t) for t in (False, True)}
+        self.options = {t: selection.plus_fit_options(t) for t in (False, True)}
         axis = np.linspace(0.0, 1.0, 64)
         gs, gc = np.meshgrid(axis, axis, indexing="ij")
         field = self.value(gs, gc)
@@ -92,9 +92,9 @@ def rotated(u, deg):
 
 
 def axes_for(ctx, mode, phi=None, ratio=None):
-    """(u1, u2, length1, length2) nominal axes: aligned/bump from `ranking.plus_axes`; random with the given turn `phi` (radians) and stretch `ratio` (drawn when None)."""
+    """(u1, u2, length1, length2) nominal axes: aligned/bump from `selection.plus_axes`; random with the given turn `phi` (radians) and stretch `ratio` (drawn when None)."""
     if mode != "random":
-        return ranking.plus_axes(mode, ctx.frame, ctx.arm, ctx.ratio, ctx.rng)
+        return selection.plus_axes(mode, ctx.frame, ctx.arm, ctx.ratio, ctx.rng)
     phi = math.radians(ctx.rng.uniform(OFF_AXIS, 90.0 - OFF_AXIS)) if phi is None else phi
     r = math.exp(ctx.rng.uniform(-math.log(ctx.ratio), math.log(ctx.ratio))) if ratio is None else ratio
     m = math.sqrt(ctx.s1 * ctx.s2)
@@ -116,7 +116,7 @@ def points_ok(ctx, pts, v):
 
 
 def fit_free(ctx, centre, u1, u2, lengths, mode, flip):
-    """The nominal plus, shrunk and turned (random) or stretched (others) by the smallest change that fits (`ranking.plus_fit_options`); None when none fits."""
+    """The nominal plus, shrunk and turned (random) or stretched (others) by the smallest change that fits (`selection.plus_fit_options`); None when none fits."""
     for _cost, sc1, sc2, turn in ctx.options[mode == "random"]:
         v1, v2 = rotated(u1, flip * turn), rotated(u2, flip * turn)
         if mode == "random" and axis_distance(v1) < OFF_AXIS:
@@ -207,21 +207,21 @@ def fit_ladder(ctx, centre, u1, u2, mode, flip, delta, u):
 
 def build(ctx, mode, centre_planned, delta, phi=None, ratio=None, fallback=True, push=True):
     """One plus around `centre_planned`: the fit (free or ladder) with the arm draws and, as last resorts, the centre pulled toward the peak and then toward the map's middle (as
-    `ranking.plus_sets`). Returns (pts, v, ln, v1, v2, scale, turn, hit, centre, pull, inward) or None."""
+    `selection.plus_sets`). Returns (pts, v, ln, v1, v2, scale, turn, hit, centre, pull, inward) or None."""
     peak = np.array(ctx.peak[:2])
-    homes = [(pull, 0.0, peak + pull * (centre_planned - peak)) for pull in ranking.PLUS_PULLS] if fallback else [(1.0, 0.0, centre_planned)]
+    homes = [(pull, 0.0, peak + pull * (centre_planned - peak)) for pull in selection.PLUS_PULLS] if fallback else [(1.0, 0.0, centre_planned)]
     if fallback:
-        homes += [(0.0, t, peak + t * (0.5 - peak)) for t in ranking.PLUS_INWARD]
+        homes += [(0.0, t, peak + t * (0.5 - peak)) for t in selection.PLUS_INWARD]
     flip = ctx.rng.choice((-1.0, 1.0))
     spare = None                                                    # a ladder plus that misses a level: used only when no centre tried hits them all
     for k, (pull, inward, home) in enumerate(homes):
         centre = np.clip(home, PLUS_MARGIN, 1.0 - PLUS_MARGIN)
-        for _try in range(ranking.PLUS_TRIES if delta is None else 3):
+        for _try in range(selection.PLUS_TRIES if delta is None else 3):
             used = centre                                           # (a ladder may push the centre outward to take a lower place)
             u1, u2, l1, l2 = axes_for(ctx, mode, phi, ratio)
             u1, u2 = u1 * ctx.rng.choice((-1.0, 1.0)), u2 * ctx.rng.choice((-1.0, 1.0))
             if delta is None:
-                lengths = np.array([l1, l1, l2, l2]) * ctx.rng.uniform(*ranking.PLUS_ARM_JITTER, 4)
+                lengths = np.array([l1, l1, l2, l2]) * ctx.rng.uniform(*selection.PLUS_ARM_JITTER, 4)
                 out = fit_free(ctx, centre, u1, u2, lengths, mode, flip)
             else:
                 pushed, u = ladder_centre(ctx, centre, delta * ctx.peak[2], push)
@@ -243,7 +243,7 @@ def build(ctx, mode, centre_planned, delta, phi=None, ratio=None, fallback=True,
 # --------------------------------------------------------------------------------------------------
 
 def mode_of(set_index, mode_setting):
-    return ranking.PLUS_MIXED[set_index % len(ranking.PLUS_MIXED)] if mode_setting == "mixed" else mode_setting
+    return selection.PLUS_MIXED[set_index % len(selection.PLUS_MIXED)] if mode_setting == "mixed" else mode_setting
 
 
 def plan_spiral(ctx, modes):
@@ -258,22 +258,22 @@ def plan_spiral(ctx, modes):
 
 
 def plan_ring(ctx, modes):
-    """Each ranking a triangle around the peak: ring radius from the equal-area series, phase turned by the golden angle per ranking, the corner of each mode rotating; the two
-    random pluses of a ranking 45 degrees apart, the stretch ratio stratified over the rankings (a van der Corput order so neighbouring rankings differ)."""
-    n_rank = int(math.ceil(len(modes) / RANKING))
+    """Each selection a triangle around the peak: ring radius from the equal-area series, phase turned by the golden angle per selection, the corner of each mode rotating; the two
+    random pluses of a selection 45 degrees apart, the stretch ratio stratified over the selections (a van der Corput order so neighbouring selections differ)."""
+    n_rank = int(math.ceil(len(modes) / SELECTION))
     out = []
     offset = ctx.rng.uniform(0.0, 2.0 * math.pi)
     phase = ctx.rng.uniform()
-    order = ctx.rng.permutation(n_rank)                                     # which ring radius each ranking takes: radii are not monotone in time
+    order = ctx.rng.permutation(n_rank)                                     # which ring radius each selection takes: radii are not monotone in time
     for s in range(len(modes)):
-        r, j = divmod(s, RANKING)
-        corner = (j + r) % RANKING                                         # the mode of corner j rotates with the ranking
+        r, j = divmod(s, SELECTION)
+        corner = (j + r) % SELECTION                                         # the mode of corner j rotates with the selection
         radius = math.sqrt((order[r] + 0.5) / n_rank)
-        angle = offset + r * GOLDEN_ANGLE + corner * 2.0 * math.pi / RANKING
+        angle = offset + r * GOLDEN_ANGLE + corner * 2.0 * math.pi / SELECTION
         phi = ratio = None
         if modes[s] == "random":
-            seat = sum(1 for t in range(r * RANKING, s) if modes[t] == "random")       # 0 or 1: the first or second random plus of the ranking
-            u = ((r * 0.6180339887 + seat * 0.5) + phase) % 1.0                        # the two random pluses of a ranking half a cycle apart, the cycle over rankings the golden ratio
+            seat = sum(1 for t in range(r * SELECTION, s) if modes[t] == "random")       # 0 or 1: the first or second random plus of the selection
+            u = ((r * 0.6180339887 + seat * 0.5) + phase) % 1.0                        # the two random pluses of a selection half a cycle apart, the cycle over selections the golden ratio
             phi = math.radians(OFF_AXIS + (90.0 - 2.0 * OFF_AXIS) * u)                  # always off the axes
             ratio = math.exp(math.log(ctx.ratio) * (2.0 * ((order[r] * 0.6180339887 + 0.5 * seat) % 1.0) - 1.0))
         out.append((ctx.offset_to_centre(radius, angle), phi, ratio))
@@ -287,20 +287,20 @@ def coverage(region, points):
 
 
 def plus_sets(params, set_count, set_size, min_gap, rng, plan="spiral", difficulty="free"):
-    """The pool's sets by a plan and a difficulty; the same return as `ranking.plus_sets`: (pool, chosen, roles, meta) with `delta` (the ladder step as a share of the peak, None
+    """The pool's sets by a plan and a difficulty; the same return as `selection.plus_sets`: (pool, chosen, roles, meta) with `delta` (the ladder step as a share of the peak, None
     for free) and `hit` in each set's meta."""
     if set_size != 5:
-        raise ValueError(f"the plus design has five bushes, not rankingSetSize {set_size}")
+        raise ValueError(f"the plus design has five bushes, not selectionSetSize {set_size}")
     if plan not in PLANS:
-        raise ValueError(f"unknown rankingPlusPlan {plan!r}: one of {PLANS}")
+        raise ValueError(f"unknown selectionPlusPlan {plan!r}: one of {PLANS}")
     ctx = Ctx(params, min_gap, rng)
-    mode_setting = str(getattr(params, "ranking_plus_axes", "mixed") or "mixed")
+    mode_setting = str(getattr(params, "selection_plus_axes", "mixed") or "mixed")
     modes = [mode_of(s, mode_setting) for s in range(set_count)]
     deltas = [None] * set_count
     if difficulty != "free":
         steps = ("easy", "medium", "hard") if difficulty == "mixed" else None
         for s in range(set_count):
-            key = steps[(s // RANKING) % 3] if steps else difficulty
+            key = steps[(s // SELECTION) % 3] if steps else difficulty
             deltas[s] = DIFFICULTY[key] if key in DIFFICULTY else float(key)
             if deltas[s] * ctx.peak[2] < 1.1 * ctx.gap:
                 raise ValueError(f"difficulty {key}: a step of {deltas[s]:.2f} of the peak is under the tie gap {ctx.gap} (raise the difficulty's step)")
@@ -346,15 +346,15 @@ def plan_tile(ctx, modes, deltas, set_count):
 def plan_cover(ctx, modes, deltas, set_count):
     """Centres anywhere in the rewarding region (`COVER_REGION` of the peak or more), no tie to the peak: each set is the best of COVER_CANDIDATES draws by three coverage terms of the
     region it leaves: all the bushes over the whole pool, the centres alone over the whole pool (or the arms would do all the covering and the centres cluster in the middle), and all
-    the bushes over its own ranking (the three pluses of a ranking tile the region between them). The ladder keeps the centre where it is and draws its place in the ladder among
+    the bushes over its own selection (the three pluses of a selection tile the region between them). The ladder keeps the centre where it is and draws its place in the ladder among
     those its value allows (a plus that misses its ladder is taken only when none hits)."""
     pool_pts = ctx.region[ctx.value(ctx.region[:, 0], ctx.region[:, 1]) >= COVER_REGION * ctx.peak[2]]
     empty = np.empty((0, 2))
-    placed, centres, ranking_pts = empty, empty, empty
+    placed, centres, selection_pts = empty, empty, empty
     built = []
     for s in range(set_count):
-        if s % RANKING == 0:
-            ranking_pts = empty
+        if s % SELECTION == 0:
+            selection_pts = empty
         best = None
         for _ in range(COVER_CANDIDATES):
             centre = pool_pts[int(ctx.rng.integers(len(pool_pts)))] + ctx.rng.uniform(-0.008, 0.008, 2)
@@ -362,7 +362,7 @@ def plan_cover(ctx, modes, deltas, set_count):
             if out is None:
                 continue
             score = (coverage(ctx.region, np.vstack([placed, out[0]])) + coverage(ctx.region, np.vstack([centres, out[8][None, :]]))
-                     + coverage(ctx.region, np.vstack([ranking_pts, out[0]])) + (0.0 if out[7] else 1.0))
+                     + coverage(ctx.region, np.vstack([selection_pts, out[0]])) + (0.0 if out[7] else 1.0))
             if best is None or score < best[0]:
                 best = (score, out)
         if best is None:
@@ -370,7 +370,7 @@ def plan_cover(ctx, modes, deltas, set_count):
         built.append(best[1])
         placed = np.vstack([placed, best[1][0]])
         centres = np.vstack([centres, best[1][8][None, :]])
-        ranking_pts = np.vstack([ranking_pts, best[1][0]])
+        selection_pts = np.vstack([selection_pts, best[1][0]])
     return assemble(ctx, modes, deltas, built)
 
 
@@ -411,11 +411,11 @@ def metrics(sidecar, params):
     entropy = float(-(p[p > 0] * np.log(p[p > 0])).sum() / math.log(10))
     sets = [sorted(b["value"] / peak for b in s["bushes"]) for s in sidecar["sets"]]
     rank_cover = []
-    for r in range(len(sidecar["sets"]) // RANKING):
-        rp = pts[r * RANKING * 5:(r + 1) * RANKING * 5]
+    for r in range(len(sidecar["sets"]) // SELECTION):
+        rp = pts[r * SELECTION * 5:(r + 1) * SELECTION * 5]
         rank_cover.append(float(np.sqrt(((ctx.region[:, None, :] - rp[None, :, :]) ** 2).sum(-1)).min(axis=1).mean()))
     meta = sidecar["plus"]
-    return {"coverageMean": float(dist.mean()), "coverageP95": float(np.quantile(dist, 0.95)), "nearestBush": float(nn.min(axis=1).mean()), "rankingCoverage": float(np.mean(rank_cover)),
+    return {"coverageMean": float(dist.mean()), "coverageP95": float(np.quantile(dist, 0.95)), "nearestBush": float(nn.min(axis=1).mean()), "selectionCoverage": float(np.mean(rank_cover)),
             "valueEntropy": entropy, "stepMedian": float(np.median([np.diff(s).min() for s in sets])), "spanMedian": float(np.median([s[-1] - s[0] for s in sets])),
             "centreBest": float(np.mean([max(st["bushes"], key=lambda b: b["value"])["role"] == "centre" for st in sidecar["sets"]])),
             "hit": float(np.mean([m.get("hit", True) for m in meta])), "fitted": float(np.mean([m["scale"] < 1.0 or m["turn"] != 0.0 for m in meta])),

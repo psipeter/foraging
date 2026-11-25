@@ -14,18 +14,18 @@ using UnityEngine.InputSystem;
 //
 // A hint is shown once, as a pause popup (the game holds still until Enter); hints that fire together are queued. Triggers (an unknown one is logged as an error and never fires):
 //   bout                the nth harvest that took fruit, when it ends (`{points}` = what it earned)
-//   patch_switch        the nth patch leaving, as RankingBreak counts it (a settled move into another tile that qualifies: a bush harvested, not in the cooldown after a ranking, not in the last
-//                       seconds); needs a session with rankings
-//   selection_start     the nth selection (ranking break), a quarter second after the bushes of its first set have grown (the hint pauses the set's countdown)
-//   selection_end       the nth selection (ranking break), as it ends
+//   patch_switch        the nth patch leaving, as SelectionBreak counts it (a settled move into another tile that qualifies: a bush harvested, not in the cooldown after a selection, not in the last
+//                       seconds); needs a session with selections
+//   selection_start     the nth selection (selection break), a quarter second after the bushes of its first set have grown (the hint pauses the set's countdown)
+//   selection_end       the nth selection (selection break), as it ends
 //                       A hint whose prompt line names [Escape] ("Press [Escape] to pause") ends when the participant pauses: in a browser, when they have clicked back in after the pause; elsewhere, at the key.
-//   time_left           `@time_left 60`: the first moment 60 foraging seconds or fewer are left (not during a ranking break); the session clock pulses yellow while the hint is up
-// Foraging triggers (`bout`, `patch_switch`) are ignored while a ranking break is running. A foraging hint waiting in the queue holds back a ranking hint behind it (the queue is in order).
+//   time_left           `@time_left 60`: the first moment 60 foraging seconds or fewer are left (not during a selection break); the session clock pulses yellow while the hint is up
+// Foraging triggers (`bout`, `patch_switch`) are ignored while a selection break is running. A foraging hint waiting in the queue holds back a selection hint behind it (the queue is in order).
 // Each shown and dismissed hint is logged (`hint_shown`, `hint_dismissed`: id `trigger:n`, trigger, n). A resumed session skips the hints already shown (the server's `hints_shown`), and a trigger's
 // count carries on from the highest hint of it that was shown.
 public class TutorialHints : MonoBehaviour
 {
-    private const float RankingHintDelay = 0.25f;      // seconds after the first set's bushes have grown before the ranking hint appears (the set's countdown runs meanwhile; the hint then pauses it)
+    private const float SelectionHintDelay = 0.25f;      // seconds after the first set's bushes have grown before the selection hint appears (the set's countdown runs meanwhile; the hint then pauses it)
 
     private class Hint
     {
@@ -163,23 +163,23 @@ public class TutorialHints : MonoBehaviour
     private void OnEnable()
     {
         HarvestManager.OnHarvestBoutEnded += HandleBout;
-        RankingBreak.OnSetReady += HandleSetReady;
-        RankingBreak.OnLeaving += HandleLeaving;
-        RankingBreak.OnBreakEnded += HandleBreakEnded;
+        SelectionBreak.OnSetReady += HandleSetReady;
+        SelectionBreak.OnLeaving += HandleLeaving;
+        SelectionBreak.OnBreakEnded += HandleBreakEnded;
     }
 
     private void OnDisable()
     {
         AwaitingEscape = false;
         HarvestManager.OnHarvestBoutEnded -= HandleBout;
-        RankingBreak.OnSetReady -= HandleSetReady;
-        RankingBreak.OnLeaving -= HandleLeaving;
-        RankingBreak.OnBreakEnded -= HandleBreakEnded;
+        SelectionBreak.OnSetReady -= HandleSetReady;
+        SelectionBreak.OnLeaving -= HandleLeaving;
+        SelectionBreak.OnBreakEnded -= HandleBreakEnded;
     }
 
     private void HandleBout(HarvestBout bout)
     {
-        if (!RankingBreak.Active && !bout.endedBySession && bout.fruitRewards.Count > 0)
+        if (!SelectionBreak.Active && !bout.endedBySession && bout.fruitRewards.Count > 0)
         {
             _placeholder = bout.boutTotal.ToString("0");
             Fire("bout");
@@ -188,7 +188,7 @@ public class TutorialHints : MonoBehaviour
 
     private void HandleLeaving(int number)
     {
-        _counts["patch_switch"] = number - 1;          // RankingBreak's own count (it continues across a resume), so Fire makes it `number`
+        _counts["patch_switch"] = number - 1;          // SelectionBreak's own count (it continues across a resume), so Fire makes it `number`
         Fire("patch_switch");
     }
 
@@ -196,7 +196,7 @@ public class TutorialHints : MonoBehaviour
     {
         if (indexInBreak == 0)
         {
-            StartCoroutine(FireAfter("selection_start", RankingHintDelay));
+            StartCoroutine(FireAfter("selection_start", SelectionHintDelay));
         }
     }
 
@@ -239,7 +239,7 @@ public class TutorialHints : MonoBehaviour
             return;
         }
 
-        if (_sun != null && !RankingBreak.Active && !_sun.SessionComplete && _sun.SessionTimeRemaining > 0f)
+        if (_sun != null && !SelectionBreak.Active && !_sun.SessionComplete && _sun.SessionTimeRemaining > 0f)
         {
             foreach (Hint hint in _hints)
             {
@@ -266,7 +266,7 @@ public class TutorialHints : MonoBehaviour
             return;
         }
 
-        if (_queue.Count > 0 && (!RankingBreak.Active || _queue.Peek().trigger.StartsWith("selection")))       // only the ranking popups may appear during a ranking break
+        if (_queue.Count > 0 && (!SelectionBreak.Active || _queue.Peek().trigger.StartsWith("selection")))       // only the selection popups may appear during a selection break
         {
             Show(_queue.Dequeue());
         }

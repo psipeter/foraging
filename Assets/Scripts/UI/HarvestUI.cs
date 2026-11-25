@@ -40,7 +40,7 @@ public class HarvestUI : MonoBehaviour
     {
         HarvestManager.OnFruitCollected += HandleFruitCollected;
         HarvestManager.OnScoreChanged += HandleScoreChanged;
-        RankingBreak.OnSetScored += HandleSetScored;
+        SelectionBreak.OnSetScored += HandleSetScored;
         HarvestManager.OnHintChanged += HandleHintChanged;
     }
 
@@ -48,11 +48,11 @@ public class HarvestUI : MonoBehaviour
     {
         HarvestManager.OnFruitCollected -= HandleFruitCollected;
         HarvestManager.OnScoreChanged -= HandleScoreChanged;
-        RankingBreak.OnSetScored -= HandleSetScored;
+        SelectionBreak.OnSetScored -= HandleSetScored;
         HarvestManager.OnHintChanged -= HandleHintChanged;
     }
 
-    private const float SealedPopupScale = 1.6f;      // the "+???" after a ranking set, larger than a harvest popup
+    private const float SealedPopupScale = 1.6f;      // the "+???" after a selection set, larger than a harvest popup
 
     private HintPill _hint;
 
@@ -100,8 +100,8 @@ public class HarvestUI : MonoBehaviour
 
     private void HandleFruitCollected(float amount, Vector3 worldPos)
     {
-        // A ranking never shows outcomes: no +X popup.
-        if (canvas == null || floatingTextPrefab == null || RankingBreak.Active)
+        // A selection never shows outcomes: no +X popup.
+        if (canvas == null || floatingTextPrefab == null || SelectionBreak.Active)
         {
             return;
         }
@@ -175,9 +175,9 @@ public class HarvestUI : MonoBehaviour
 
     private void HandleScoreChanged(float runningTotal)
     {
-        if (RankingBreak.Active)
+        if (SelectionBreak.Active)
         {
-            return;     // a ranking moves no score
+            return;     // a selection moves no score
         }
 
         _scoreTarget = runningTotal;
@@ -196,7 +196,7 @@ public class HarvestUI : MonoBehaviour
         _punch = StartCoroutine(PunchScore());
     }
 
-    // A ranking set was scored: the harvest popup's motion with a sealed "+???" (the amount is shown only on the end screen), and the score plate punches, the same
+    // A selection set was scored: the harvest popup's motion with a sealed "+???" (the amount is shown only on the end screen), and the score plate punches, the same
     // whatever the set earned.
     private void HandleSetScored()
     {

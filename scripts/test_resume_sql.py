@@ -1,4 +1,4 @@
-"""server.resume_state of a session that stopped inside a ranking break (migration 20261116000000): the SQL function alone over a real PostgreSQL (pgserver) with the
+"""server.resume_state of a session that stopped inside a selection break (migration 20261116000000): the SQL function alone over a real PostgreSQL (pgserver) with the
 migrations applied, no Edge Functions (test_server.py runs those and needs deno). Skipped without pgserver or psycopg."""
 
 import glob
@@ -88,7 +88,7 @@ def test_the_hints_shown_come_back_in_the_order_they_were_shown_without_repeats(
 def test_the_progress_through_a_session_is_the_foraging_clock_over_its_duration(db):
     cfg = {"sessionDuration": 120.0}
     run = make_run(db, [(0, "session_start", None), (10, "rank_break_start", {"break": 1}), (30, "rank_break_end", {"break": 1}), (70, "fruit", None)], config=cfg)
-    assert db.execute("select server.session_progress(%s)", (run,)).fetchone()[0] == pytest.approx((70 - 20) / 120.0)       # 70 s on the clock, 20 of them held in the ranking
+    assert db.execute("select server.session_progress(%s)", (run,)).fetchone()[0] == pytest.approx((70 - 20) / 120.0)       # 70 s on the clock, 20 of them held in the selection
     over = make_run(db, [(0, "session_start", None), (130, "fruit", None)], config=cfg)
     assert db.execute("select server.session_progress(%s)", (over,)).fetchone()[0] == pytest.approx(1.0)
     done = make_run(db, [(0, "session_start", None), (100, "session_end", None)], config=cfg, completed=True)
@@ -105,7 +105,7 @@ def test_the_menu_reports_the_progress_of_an_experiment_in_progress(db):
     assert entry["session_foraging_seconds"] == pytest.approx(60.0) and entry["session_rankings"] == 0
 
 
-def test_the_standing_counts_the_foraging_seconds_and_the_rankings_ended_not_aborted(db):
+def test_the_standing_counts_the_foraging_seconds_and_the_selections_ended_not_aborted(db):
     run = make_run(db, [(0, "session_start", None), (10, "rank_break_start", {"break": 1}), (30, "rank_break_end", {"break": 1}), (31, "session_resume", {}),
                         (31, "rank_break_start", {"break": 2}), (35, "rank_break_end", {"break": 2, "aborted": True}), (70, "fruit", None)])
     standing = db.execute("select server.session_standing(%s)", (run,)).fetchone()[0]
@@ -114,7 +114,7 @@ def test_the_standing_counts_the_foraging_seconds_and_the_rankings_ended_not_abo
     assert db.execute("select server.session_standing(%s)", (done,)).fetchone()[0] == {"foraging_seconds": 0, "rankings": 0}
 
 
-def test_the_leaving_count_and_a_due_ranking_that_has_not_begun_come_back(db):
+def test_the_leaving_count_and_a_due_selection_that_has_not_begun_come_back(db):
     s = state(db, make_run(db, [(5, "rank_leaving", {"n": 1, "tile": 1, "due": True}), (6, "rank_break_start", {"break": 1, "leaving": 1}), (9, "rank_break_end", {"break": 1}),
                                 (20, "rank_leaving", {"n": 2, "tile": 0, "due": True}), (21, "rank_break_start", {"break": 2, "leaving": 2}), (24, "rank_break_end", {"break": 2}),
                                 (40, "rank_leaving", {"n": 3, "tile": 1, "due": False})]))
