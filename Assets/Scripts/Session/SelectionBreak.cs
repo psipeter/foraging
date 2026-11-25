@@ -605,7 +605,7 @@ public class SelectionBreak : MonoBehaviour
         bool paid = true;
         if (Dense)
         {
-            // the dense design: the best `pickCount` of the 25, scored 0 to selectionTopKPoints (scripts/selection.py top_k_score); one selection, drawn from the world seed, pays (selectionPaid "one")
+            // the dense design: the best `pickCount` of the 25, scored 0 to selectionTopKPoints (scripts/selection.py top_k_score); every selection pays (selectionPaid "all"; "one" pays the one drawn from the world seed)
             var pickedValues = new List<float>();
             foreach (int id in _picks)
             {

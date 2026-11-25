@@ -80,8 +80,8 @@ public class SessionConfig : ScriptableObject
     [FormerlySerializedAs("rankingGridPreset")] [SerializeField] private string selectionGridPreset = "balanced";
     [Tooltip("Dense design: points a selection is worth at most (the 'top_k' points mode: 100 x (picked sum - expected sum of a random pick) / (best sum - expected sum), from 0).")]
     [FormerlySerializedAs("rankingTopKPoints")] [SerializeField] private float selectionTopKPoints = 100f;
-    [Tooltip("Dense design: which selections pay: 'one' = one selection, drawn from the world seed, pays its points; 'all' = every selection pays.")]
-    [FormerlySerializedAs("rankingPaid")] [SerializeField] private string selectionPaid = "one";
+    [Tooltip("Dense design: which selections pay: 'all' (the default) = every selection pays, so five selections give up to 5 x selectionTopKPoints; 'one' = one selection, drawn from the world seed, pays its points.")]
+    [FormerlySerializedAs("rankingPaid")] [SerializeField] private string selectionPaid = "all";
     [Tooltip("The halo of the bush being aimed at is a copy of its canopy this many times larger (the main task uses 1.03), so it shows at the selection's distance.")]
     [FormerlySerializedAs("rankingRimScale")] [SerializeField] private float selectionRimScale = 1.15f;
     [Tooltip("How many times brighter the rim of the bush being aimed at is than in the main task.")]
@@ -420,7 +420,7 @@ public class SessionConfig : ScriptableObject
     public float SelectionGridDistance => selectionGridDistance;
     public string SelectionGridPreset => string.IsNullOrEmpty(selectionGridPreset) ? "balanced" : selectionGridPreset;
     public float SelectionTopKPoints => selectionTopKPoints;
-    public string SelectionPaid => string.IsNullOrEmpty(selectionPaid) ? "one" : selectionPaid;
+    public string SelectionPaid => string.IsNullOrEmpty(selectionPaid) ? "all" : selectionPaid;
     public string SelectionPlusPlan => string.IsNullOrEmpty(selectionPlusPlan) ? "spiral" : selectionPlusPlan;
     public string SelectionPlusDifficulty => string.IsNullOrEmpty(selectionPlusDifficulty) ? "free" : selectionPlusDifficulty;
     public float SelectionRimScale => selectionRimScale;

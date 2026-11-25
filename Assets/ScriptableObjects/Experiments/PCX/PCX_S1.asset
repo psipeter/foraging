@@ -53,7 +53,7 @@ MonoBehaviour:
   selectionGridDistance: 22
   selectionGridPreset: balanced
   selectionTopKPoints: 100
-  selectionPaid: one
+  selectionPaid: all
   selectionRimScale: 1.15
   selectionRimBoost: 3
   selectionMarkerLift: 0.75

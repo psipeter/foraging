@@ -182,7 +182,7 @@ def _check_dense_sets(ctx, names):
     0 to selectionTopKPoints score if the selection pays (selectionPaid 'all', or 'one': the pool set the world seed draws) and 0 in a practice session."""
     cfg = ctx.config
     k, scale = int(cfg.get("selectionPicks") or 5), float(cfg.get("selectionTopKPoints") or 100.0)
-    paid_mode, practice = str(cfg.get("selectionPaid") or "one"), bool(cfg.get("isPractice"))
+    paid_mode, practice = str(cfg.get("selectionPaid") or "all"), bool(cfg.get("isPractice"))
     sets = int(ctx.pool_size or cfg.get("selectionPoolSets") or len(ctx.sets))
     paid_index = selection.paid_set_index(int(cfg.get("worldSeed") or 0), sets)
     pairs, points = [], []

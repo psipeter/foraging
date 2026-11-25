@@ -31,7 +31,7 @@ SELECTION_FIELDS = {"selectionEvery": 1, "selectionLeavings.Array.size": 0, "sel
 SELECTION_TIMES = (30.0, 60.0, 90.0, 120.0, 150.0)
 DENSE_SELECTION_FIELDS = {"selectionDesign": "dense", "selectionTimes.Array.size": len(SELECTION_TIMES), **{f"selectionTimes.Array.data[{i}]": t for i, t in enumerate(SELECTION_TIMES)},
                         "selectionMaxWait": 10.0, "selectionSeconds": 45.0, "selectionPoolSets": len(SELECTION_TIMES), "selectionPicks": 5, "selectionGridSpacing": 7.0, "selectionGridDistance": 22.0, "selectionStageTilt": 30.0, "selectionStageDrop": 2.0,
-                        "selectionGridPreset": "balanced", "selectionTopKPoints": 100.0, "selectionPaid": "one",
+                        "selectionGridPreset": "balanced", "selectionTopKPoints": 100.0, "selectionPaid": "all",
                         "selectionPointsMode": "top_k", "selectionStageMargin": 5.5, "selectionText": SELECTION_TEXT}
 
 
