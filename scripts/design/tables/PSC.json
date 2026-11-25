@@ -2,31 +2,34 @@
  "code": "PSC",
  "session": "FOR_S1",
  "duration": 180,
- "note": "Pilot: Spacing: the travel time between patches, 3, 6 and 9 s, on a round Gaussian at Gini 0.5 (the statistics of PSP S2) whose centre (the corners of a triangle of radius 0.3 around the middle, rotated 60 degrees from PSP's) differs per session and from PSP's, so each session needs fresh learning; the gain of the 3 s cell is the calibrated one and the gains of the longer sessions are raised (by the learner's points on 20 worlds, 1133, 1045 and 983 at a common gain) so that the learner earns about the same in each, and S2 and S3 are longer (200 and 220 s) so that the number of bushes harvested falls less with travel. The participants are not told what varies. The world seeds were picked from 20 candidates per session (a small search) so that the optimal number of bushes per patch rises evenly across the sessions.",
+ "note": "Pilot: Spacing: the travel time between patches, 3, 6 and 9 s, on a Gaussian at Gini 0.5 that is stretched 2:1 along shape (S1), 1:2 (S2, S1 turned and reflected: the same interaction 0.09 and nonlinearity 0.40) or round (S3), centred at (0.712, 0.712), (0.288, 0.712) and (0.578, 0.21), so each session needs fresh learning. The gains are set so that the learner earns the same points in each session (the S1 gain 1.2545 is the calibrated one, 1128 learner points; the others are that gain scaled by the ratio of the learner's points at that common gain on the 40 check worlds, 1058 and 937 points: 1.3375 and 1.5113; docs/DECISIONS.md, 2026-11-25), and are higher for the longer-travel sessions; S2 and S3 are longer (200 and 220 s) so that the number of bushes harvested falls less with travel. The participants are not told what varies. The world seeds are those of the earlier round-map design (not searched again for these maps).",
  "cells": [
   {
    "id": 1,
-   "class": "round",
+   "class": "stretched",
    "gini": 0.5,
    "travel_time": 3.0,
+   "aspect": 2.0,
    "at": [
     0.712,
     0.712
    ],
-   "world_seed": 9610
+   "world_seed": 9610,
+   "gain": 1.2545
   },
   {
    "id": 2,
-   "class": "round",
+   "class": "stretched",
    "gini": 0.5,
    "travel_time": 6.0,
+   "aspect": 0.5,
    "at": [
-    0.21,
-    0.578
+    0.288,
+    0.712
    ],
    "world_seed": 9714,
    "duration": 200,
-   "gain": 1.4198
+   "gain": 1.3375
   },
   {
    "id": 3,
@@ -39,7 +42,7 @@
    ],
    "world_seed": 9805,
    "duration": 220,
-   "gain": 1.5094
+   "gain": 1.5113
   }
  ]
 }

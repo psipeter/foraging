@@ -41,6 +41,8 @@ public class RankingBreak : MonoBehaviour
         public int setSize;
         public float tieTolerance;
         public int fruitCount;
+        public string layout;                 // "grid": the dense design (25 bushes on a lattice, `pickCount` of them picked); else an arc
+        public int pickCount;
         public float[] treePos;
         public float[] canopyRadius;
         public PoolSet[] sets;
@@ -66,6 +68,9 @@ public class RankingBreak : MonoBehaviour
 
     // The running set's countdown (seconds), for the clock under the main one.
     public float SecondsLeft { get; private set; }
+
+    private bool Dense => _pool != null && _pool.layout == "grid";
+    private bool TimesMode => _config.RankingTimes.Length > 0;
 
     private SessionConfig _config;
     private WorldData _world;
@@ -99,6 +104,9 @@ public class RankingBreak : MonoBehaviour
     private int _switches;                  // qualifying leavings since the last break (the every-N rule)
     private int _leavings;                  // qualifying leavings in the session so far (the scheduled rule, SessionConfig.rankingLeavings)
     private bool _due;                      // a ranking is due at the next moment no harvest is under way
+    private float _dueAt = -1f;             // session seconds elapsed when the due ranking became due (the fixed schedule, SessionConfig.rankingTimes)
+    private int _pickTarget;                // picks that end the running set (all its bushes in an arc, `pickCount` in the dense design)
+    private TextMeshProUGUI _counterText;   // the dense design's "Picked 2 / 5"
     private int _rerunFrom = -1;            // a break played again after a resume starts at this set (-1: a break begun normally)
     private int _breakNumber;
     private int _poolIndex;
@@ -122,7 +130,7 @@ public class RankingBreak : MonoBehaviour
     {
         Points = 0f;        // statics outlive the scene: a session without breaks must not inherit the last one's
         PaidPoints = 0f;
-        if (config == null || config.RankingEvery <= 0 || world == null || !world.HasTiles)
+        if (config == null || (config.RankingEvery <= 0 && config.RankingTimes.Length == 0) || world == null || !world.HasTiles)
         {
             return null;
         }
@@ -252,6 +260,17 @@ public class RankingBreak : MonoBehaviour
             EnsureStageCamera();
         }
 
+        if (TimesMode)
+        {
+            TickSchedule();
+            if (_due && !_harvest.IsHarvesting)
+            {
+                StartCoroutine(RunBreak());
+            }
+
+            return;
+        }
+
         Vector3 p = _player.transform.position;
         int tile = _world.NearestTile(p.x, p.z);
         if (_tile < 0)
@@ -281,6 +300,33 @@ public class RankingBreak : MonoBehaviour
         if (_due && !_harvest.IsHarvesting)
         {
             StartCoroutine(RunBreak());
+        }
+    }
+
+    // The fixed schedule (SessionConfig.rankingTimes): the next ranking becomes due when the session's elapsed seconds (the clock is held in a ranking) reach its time, and starts at the next moment
+    // no harvest bout is under way; a bout that outlasts rankingMaxWait is cancelled. scripts/replay.py and validate_run.py mirror this.
+    private void TickSchedule()
+    {
+        float elapsed = _config.SessionDuration - _sun.SessionTimeRemaining;
+        float[] times = _config.RankingTimes;
+        if (!_due && _breakNumber < times.Length && elapsed >= times[_breakNumber])
+        {
+            _due = true;
+            _dueAt = elapsed;
+            if (_log != null)
+            {
+                _log.LogEvent("rank_due", payload: Json.Obj(("n", _breakNumber + 1), ("scheduled", times[_breakNumber]), ("elapsed", elapsed)));
+            }
+        }
+
+        if (_due && _dueAt < 0f)
+        {
+            _dueAt = elapsed;                          // a break played again after a resume
+        }
+
+        if (_due && _harvest.IsHarvesting && elapsed - _dueAt >= _config.RankingMaxWait)
+        {
+            _harvest.CancelBout();
         }
     }
 
@@ -335,6 +381,8 @@ public class RankingBreak : MonoBehaviour
             _poolIndex++;
         }
 
+        _player.SetStationary(false);
+
         while (_removingSet || _ungraying)
         {
             yield return null;
@@ -368,6 +416,7 @@ public class RankingBreak : MonoBehaviour
         _bushesSinceBreak.Clear();
         _switches = 0;
         _due = false;
+        _dueAt = -1f;
         _running = false;
     }
 
@@ -380,6 +429,7 @@ public class RankingBreak : MonoBehaviour
         Quaternion turn = Quaternion.Euler(0f, _camera.Yaw, 0f);
         _setTrees.Clear();
         _setSize = set.bushes.Length;
+        _pickTarget = Dense ? Mathf.Clamp(_pool.pickCount > 0 ? _pool.pickCount : 5, 1, _setSize) : _setSize;
         var created = new List<Tree>();
         var scales = new List<Vector3>();
         float discY = _treeGenerator.Terrain.SampleElevation(origin.x, origin.z) - _config.RankingStageDrop;
@@ -479,7 +529,7 @@ public class RankingBreak : MonoBehaviour
                 _firstHarvestTime = _setClock;
             }
 
-            if (_picks.Count == _setSize)
+            if (_picks.Count == _pickTarget)
             {
                 break;
             }
@@ -494,6 +544,7 @@ public class RankingBreak : MonoBehaviour
 
         _setLive = false;
         _harvest.SetBlocked(true);
+
         foreach (Tree tree in created)
         {
             tree.isHarvested = true;           // no highlight or ring while the set shrinks away
@@ -502,7 +553,11 @@ public class RankingBreak : MonoBehaviour
         FinishSet(set, indexInBreak, timedOut, paused);
         if (last)
         {
-            _player.SetStationary(false);
+            if (!Dense)
+            {
+                _player.SetStationary(false);
+            }
+
             HideHud();
             _removingSet = true;
             _ungraying = true;
@@ -544,9 +599,32 @@ public class RankingBreak : MonoBehaviour
             setIds.Add(_world.TreeCount + b.id);
         }
 
-        float tie = _pool.tieTolerance > 0f ? _pool.tieTolerance : 0.05f;
-        RankingSets.ScorePairs(setIds, values, _picks, tie, _config.RankingPointsMode, out int correct, out int total, out float weight);
-        float worth = weight * _config.RankingBonusPerPair;
+        int correct, total;
+        float worth;
+        float score = 0f;
+        bool paid = true;
+        if (Dense)
+        {
+            // the dense design: the best `pickCount` of the 25, scored 0 to rankingTopKPoints (scripts/ranking.py top_k_score); one ranking, drawn from the world seed, pays (rankingPaid "one")
+            var pickedValues = new List<float>();
+            foreach (int id in _picks)
+            {
+                pickedValues.Add(values[id]);
+            }
+
+            score = RankingSets.TopKScore(pickedValues, new List<float>(values.Values), _pickTarget, _config.RankingTopKPoints);
+            correct = RankingSets.TopKHits(_picks, values, _pickTarget);
+            total = _pickTarget;
+            paid = _config.RankingPaid == "all" || set.index == RankingSets.PaidSetIndex(_config.WorldSeed, _pool.sets.Length);
+            worth = paid ? score : 0f;
+        }
+        else
+        {
+            float tie = _pool.tieTolerance > 0f ? _pool.tieTolerance : 0.05f;
+            RankingSets.ScorePairs(setIds, values, _picks, tie, _config.RankingPointsMode, out correct, out total, out float weight);
+            worth = weight * _config.RankingBonusPerPair;
+        }
+
         float points = _config.IsPractice ? 0f : worth;
         Points += worth;
         PaidPoints += points;
@@ -564,7 +642,7 @@ public class RankingBreak : MonoBehaviour
 
         _log.LogEvent("rank_set_end", payload: Json.Obj(("picked", new Json.Raw("[" + string.Join(",", _picks) + "]")), ("pick_times", new Json.Raw("[" + string.Join(",", times) + "]")),
             ("correct_pairs", correct), ("total_pairs", total), ("first_harvest_time", _firstHarvestTime < 0f ? null : (object)_firstHarvestTime), ("timed_out", timedOut ? 1 : 0),
-            ("paused_seconds", paused), ("points", points), ("break", _breakNumber)));
+            ("paused_seconds", paused), ("points", points), ("break", _breakNumber), ("score", Dense ? (object)score : null), ("paid", Dense ? (object)(paid ? 1 : 0) : null)));
 
         var objects = new List<string>();
         foreach (PoolBush b in set.bushes)
@@ -604,7 +682,16 @@ public class RankingBreak : MonoBehaviour
 
         _picks.Add(tree.treeId);
         _pickTimes.Add(_setClock);
-        tree.SetRank(_picks.Count);
+        if (!Dense)
+        {
+            tree.SetRank(_picks.Count);                   // (the dense design marks nothing above a picked bush: the HUD counts the picks)
+        }
+
+        if (_counterText != null)
+        {
+            _counterText.text = $"Selected {_picks.Count} / {_pickTarget}";
+        }
+
         if (_log != null)
         {
             _log.LogEvent("rank_pick", tree.treeId, payload: Json.Obj(("rank", _picks.Count), ("set_time", _setClock), ("break", _breakNumber)));
@@ -673,7 +760,7 @@ public class RankingBreak : MonoBehaviour
         Vector3 position = origin + turn * new Vector3(centre.x, 0f, centre.y);
         position.y = discY;
         int seed = _config.WorldSeed * 31 + _breakNumber;
-        return RankingDisc.Create(_treeGenerator.Terrain.MaterialInstance, position, turn, centre, (maxX - minX) / 2f + margin, (maxZ - minZ) / 2f + margin, _config.WorldHalfExtent, seed, StageLayer);
+        return RankingDisc.Create(_treeGenerator.Terrain.MaterialInstance, position, turn, centre, (maxX - minX) / 2f + margin, (maxZ - minZ) / 2f + margin, _config.WorldHalfExtent, seed, StageLayer, _config.RankingStageTilt);
     }
 
     // A second (overlay) camera draws the stage layer over the world after clearing depth, so the real terrain cannot hide the disc below it; the main camera never
@@ -796,11 +883,22 @@ public class RankingBreak : MonoBehaviour
             Color plate = new Color(0.06f, 0.067f, 0.09f, 0.55f);
             TextMeshProUGUI banner = UiStyle.Label(_hud.transform, "Banner", _config.RankingText, 32f, TextAlignmentOptions.Center, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Color.white);
             UiStyle.HudPlate(banner, new Vector2(0f, -64f), new Vector2(1100f, 64f), 32f, plate, "BannerPlate");
+            _counterText = Dense ? UiStyle.Label(_hud.transform, "Counter", "", 40f, TextAlignmentOptions.Center, new Vector2(1f, 1f), new Vector2(1f, 1f), Color.white) : null;
+            if (_counterText != null)
+            {
+                UiStyle.HudPlate(_counterText, new Vector2(-(64f + 140f), -(44f + 34f + 76f)), new Vector2(280f, 64f), 40f, plate, "CounterPlate");
+            }
+
             _clockText = UiStyle.Label(_hud.transform, "Countdown", "", 46f, TextAlignmentOptions.Center, new Vector2(0f, 1f), new Vector2(0f, 1f), Color.white);
             UiStyle.HudPlate(_clockText, new Vector2(64f + 110f, -(44f + 34f + 76f)), new Vector2(220f, 68f), 46f, plate, "CountdownPlate");
         }
 
         SecondsLeft = _config.RankingSeconds;
+        if (_counterText != null)
+        {
+            _counterText.text = $"Selected 0 / {_pickTarget}";
+        }
+
         RefreshClock();
         _hudGroup.alpha = 0f;
         _hud.SetActive(true);

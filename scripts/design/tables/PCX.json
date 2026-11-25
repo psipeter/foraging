@@ -2,7 +2,7 @@
  "code": "PCX",
  "session": "FOR_S1",
  "duration": 180,
- "note": "Pilot: Complexity (draft, to be designed with the PI): the ladder at one Gini and one travel time, low to high.",
+ "note": "Pilot: Complexity: the ladder at one Gini and one travel time, low to high. S1 additive (a Gaussian on the corner, stretched 2:1 along shape), S2 multiplicative (an axis-aligned Gaussian stretched 2:1 along shape, centred at shape 0.12, colour 0.65), S3 non-separable (a rotated ridge). The interaction rises 0.09, 0.17, 0.40 and the nonlinearity 0.14, 0.51, 0.92 at a Gini of 0.55 (docs/DECISIONS.md, 2026-11-25).",
  "cells": [
   {
    "id": 1,
@@ -18,26 +18,15 @@
   },
   {
    "id": 2,
-   "class": "multiplicative",
+   "class": "stretched",
    "gini": 0.55,
    "travel_time": 5.0,
-   "corner": [
-    1,
-    1
+   "aspect": 2.0,
+   "at": [
+    0.12,
+    0.65
    ],
-   "aspect": 1.0,
-   "world_seed": 9202,
-   "center": [
-    [
-     0.12,
-     0.3
-    ],
-    [
-     0.65,
-     0.85
-    ]
-   ],
-   "interaction": 0.18
+   "world_seed": 9202
   },
   {
    "id": 3,

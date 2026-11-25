@@ -19,30 +19,52 @@ MonoBehaviour:
   rankingEvery: 1
   rankingLeavings: 
   rankingSets: 1
-  rankingSeconds: 20
+  rankingSeconds: 45
   rankingCooldown: 0
   rankingSettleDepth: 0
-  rankingPoolSets: 30
+  rankingPoolSets: 5
   rankingFadeSeconds: 0.4
   rankingGraySeconds: 0.25
   rankingFruitSeconds: 0.05
   rankingLastSeconds: 10
   rankingMinBushes: 1
-  rankingText: Rank these bushes from most to least valuable
+  rankingText: Select the 5 most valuable bushes. 100 points available.
   rankingSetSize: 5
   rankingArcSpan: 84
   rankingDistance: 16
   rankingTieGap: 0.25
+  rankingDesign: dense
+  rankingPlusAxes: mixed
+  rankingPlusJitter: 1
+  rankingPlusArm: 1
+  rankingPlusArmRatio: 2
+  rankingPlusPlan: spiral
+  rankingPlusDifficulty: free
+  rankingPlusMinSeparation: 0.08
+  rankingTimes:
+  - 30
+  - 60
+  - 90
+  - 120
+  - 150
+  rankingMaxWait: 10
+  rankingPicks: 5
+  rankingGridSpacing: 7
+  rankingGridDistance: 22
+  rankingGridPreset: balanced
+  rankingTopKPoints: 100
+  rankingPaid: one
   rankingRimScale: 1.15
   rankingRimBoost: 3
   rankingMarkerLift: 0.75
   rankingRankScale: 3
   rankingBonusPerPair: 4
-  rankingPointsMode: pair_mean_value
+  rankingPointsMode: top_k
   rankingAimTolerance: 1.5
   rankingCrosshairRadius: 1
-  rankingStageDrop: 3
-  rankingStageMargin: 4
+  rankingStageDrop: 2
+  rankingStageTilt: 30
+  rankingStageMargin: 5.5
   rankingStageWorldGray: 0.6
   instructionsFile: Experiments/PCX/instructions_S3.txt
   sessionLabel: 

@@ -4,13 +4,15 @@ Each pilot is three sessions of the same foraging task (180 s each, fixed order 
 
 Agents: **mvt** is the marginal-value-theorem forager at the optimal long-run rate (true values, no tuning on the world: a near-optimal reference); **learner** is a delta-rule learner that learns the map from what it sees; **nearest** takes the nearest bush with no learning; **best k** is the best fixed number of bushes per patch (chosen with hindsight). The point gain of each session is set so the learner earns about 1,125 points in every session of PCX and PSP (PSC fixes the gain on purpose, so its points fall with travel time).
 
+> **2026-11-25: the maps of PCX_S2, PSC and PSP were replaced by stretched Gaussians** (PCX_S2 2:1; PSC 2:1, 1:2, round; PSP 1:2, 2:1, round; DECISIONS, "Pilot value maps: stretched Gaussians in PCX_S2, PSC and PSP") and the cells realised again (the gains and learner points below are the new ones where marked; the **agent tables, mvt and best-k numbers, and bushes per patch below are of the earlier maps and are stale** until `agent_benchmark.py` is run on the new ones). On the 40 check worlds the learner earns 1118, 1126, 1131 (PCX), 1128, 1124, 1135 (PSC) and 1124, 1114, 1131 (PSP) points; nearest and oracle on those worlds: PCX 863, 930, 1071 and 1314, 1454, 1644; PSC 895, 979, 1041 and 1385, 1341, 1300; PSP 1057, 993, 982 and 1384, 1434, 1623.
+
 ---
 
 ## PCX: Pilot Complexity
 
 **What is varied.** The point-value map over the two visible features (shape, colour) is a single Gaussian bump, moved from a simple corner peak (S1, additive) to an axis-aligned peak away from the corner (S2, multiplicative) to a rotated ridge (S3, non-separable). The knob is how far the value of one feature depends on the other: interaction 0.09, 0.18, 0.40; nonlinearity 0.14, 0.43, 0.92. Held fixed: inequality of bush values (Gini 0.55), travel time (5 s) and the learner's expected points.
 
-**Where to see it.** `docs/pilots/PCX.png` (the three value maps; bushes as dots, contour at half the peak); `docs/pilots/PCX.txt` (numeric span-and-hold check); `docs/pilots/agents.md` (agent table).
+**Where to see it.** `docs/pilots/pilot_trends.png` (the three value maps with the world's bushes as dots, contour at half the peak, and the descriptors across sessions); `docs/pilots/PCX.txt` (numeric span-and-hold check); `docs/pilots/agents.md` (agent table).
 
 | | S1 additive | S2 multiplicative | S3 non-separable |
 |---|---:|---:|---:|
@@ -33,7 +35,7 @@ Agents: **mvt** is the marginal-value-theorem forager at the optimal long-run ra
 
 **What is varied.** How concentrated the points are among the bushes. The value map is a single round Gaussian bump; the Gini of bush values rises 0.4, 0.5, 0.6, so fewer bushes pay well and the best ones pay more (share of bushes above half the peak: 0.32, 0.23, 0.16). Held fixed: travel time (5 s), interaction and mean bush value (within tolerance), and the learner's expected points.
 
-**Where to see it.** `docs/pilots/PSP.png` (the three maps: the same round bump, narrower and taller); `docs/pilots/PSP.txt` (numeric check).
+**Where to see it.** `docs/pilots/pilot_trends.png` (the three maps: a Gaussian stretched 1:2, 2:1 and round, narrower and taller); `docs/pilots/PSP.txt` (numeric check).
 
 | | S1 Gini 0.4 | S2 Gini 0.5 | S3 Gini 0.6 |
 |---|---:|---:|---:|
@@ -59,7 +61,7 @@ Agents: **mvt** is the marginal-value-theorem forager at the optimal long-run ra
 
 **What is varied.** The travel time between patches: 3, 6 and 9 s. Patches are pushed farther apart, so the world holds fewer of them (79, 33 and 18 tiles). Each session has a different round value bump at Gini 0.5 (interaction 0.13 to 0.15, nonlinearity about 0.4), centred at a different point, so each needs fresh learning. To hold the number of bushes harvested roughly equal, the longer-travel sessions are longer (180, 200 and 220 s), and to hold the learner's points equal they have a larger gain (1.31, 1.42 and 1.51; peak bush 5.2, 5.7 and 6.0).
 
-**Where to see it.** `docs/pilots/PSC.png` (the three value maps); `docs/pilots/PSC.txt` (numeric check; mean bush value rises with the gain, 1.75 to 1.98, which the check flags by design); `docs/pilots/agents.md` (agent table); `docs/pilots/PSC_layout.png` (the top-down layout: the same patches spaced farther apart, drawn for the earlier worlds of this pilot, which had 76, 34 and 18 tiles).
+**Where to see it.** `docs/pilots/pilot_trends.png` (the three value maps and the hexagonal layouts); `docs/pilots/PSC.txt` (numeric check; mean bush value rises with the gain, 1.75 to 1.98, which the check flags by design); `docs/pilots/agents.md` (agent table); the top-down layouts are in the third row of `pilot_trends.png` (79, 33 and 18 tiles).
 
 Averages over 20 unselected worlds, each at its own session length:
 

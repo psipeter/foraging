@@ -17,13 +17,15 @@ public class RankingDisc
     public int TextureIndex { get; private set; }            // 0 arid, 1 grassland, 2 swamp
 
     private float _rx, _rz, _phase1, _phase2, _phase3;
+    private float _tilt;                                  // radians: the far side rises (0 = flat); `_rz` is then the half size along the slope
     private Vector2 _centre;                              // in the set's frame
 
     // `terrain` is the terrain's material instance (its shader, textures and tiling); `centre` and `turn` place the disc in the world (the set's frame is the player's position turned
     // by the view's yaw); `radiusX` and `radiusZ` are the outline's mean half sizes along the player's right and ahead; `halfExtent` is the world's, for the texture's scale.
-    public static RankingDisc Create(Material terrain, Vector3 position, Quaternion turn, Vector2 centre, float radiusX, float radiusZ, float halfExtent, int seed, int layer)
+    public static RankingDisc Create(Material terrain, Vector3 position, Quaternion turn, Vector2 centre, float radiusX, float radiusZ, float halfExtent, int seed, int layer, float tiltDegrees = 0f)
     {
-        var disc = new RankingDisc { _rx = radiusX, _rz = radiusZ, _centre = centre };
+        float tilt = tiltDegrees * Mathf.Deg2Rad;
+        var disc = new RankingDisc { _rx = radiusX, _rz = radiusZ / Mathf.Cos(tilt), _centre = centre, _tilt = tilt };      // `radiusZ` is the horizontal half size
         var rng = new System.Random(seed);
         disc.TextureIndex = rng.Next(3);
         disc._phase1 = (float)(rng.NextDouble() * Mathf.PI * 2f);
@@ -32,8 +34,9 @@ public class RankingDisc
 
         disc.Object = new GameObject("RankingDisc");
         disc.Object.layer = layer;
-        disc.Object.transform.SetPositionAndRotation(position, turn);
-        disc.Object.AddComponent<MeshFilter>().sharedMesh = disc.BuildMesh(position, turn, halfExtent);
+        Quaternion frame = turn * Quaternion.Euler(-tiltDegrees, 0f, 0f);            // tipped about the player's right: the far side up, a hillside
+        disc.Object.transform.SetPositionAndRotation(position, frame);
+        disc.Object.AddComponent<MeshFilter>().sharedMesh = disc.BuildMesh(position, frame, halfExtent);
         MeshRenderer renderer = disc.Object.AddComponent<MeshRenderer>();
         var top = new Material(terrain);
         top.SetFloat("_GrayAmount", 0f);
@@ -46,7 +49,7 @@ public class RankingDisc
         Material mask = Resources.Load<Material>("StageMask");
         if (mask != null)
         {
-            disc.AddMask(mask, Mathf.Max(radiusX, radiusZ) * MaskScale, layer);
+            disc.AddMask(mask, Mathf.Max(disc._rx, disc._rz) * MaskScale, layer);
         }
 
         return disc;
@@ -86,12 +89,13 @@ public class RankingDisc
         return 1f + 0.06f * Mathf.Sin(5f * angle + _phase1) + 0.035f * Mathf.Sin(8f * angle + _phase2) + 0.03f * Mathf.Sin(3f * angle + _phase3);
     }
 
-    // The surface height at a point of the set's frame (the player at the origin): a gentle dome over the oval, 0 at its edge.
+    // The surface height at a point of the set's frame (the player at the origin): the slope (0 when flat) plus a gentle dome over the oval, 0 at its edge.
     public float HeightAt(float x, float z)
     {
-        float u = (x - _centre.x) / _rx, v = (z - _centre.y) / _rz;
+        float dz = z - _centre.y;
+        float u = (x - _centre.x) / _rx, v = dz / Mathf.Cos(_tilt) / _rz;
         float rho = Mathf.Sqrt(u * u + v * v) / Bump(Mathf.Atan2(v, u));
-        return Dome * Mathf.Clamp01(1f - rho * rho);
+        return dz * Mathf.Tan(_tilt) + Dome * Mathf.Clamp01(1f - rho * rho);
     }
 
     private Mesh BuildMesh(Vector3 position, Quaternion turn, float halfExtent)

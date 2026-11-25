@@ -16,8 +16,8 @@ using UnityEngine.InputSystem;
 //   bout                the nth harvest that took fruit, when it ends (`{points}` = what it earned)
 //   patch_switch        the nth patch leaving, as RankingBreak counts it (a settled move into another tile that qualifies: a bush harvested, not in the cooldown after a ranking, not in the last
 //                       seconds); needs a session with rankings
-//   ranking_start       the nth ranking break, a quarter second after the bushes of its first set have grown (the hint pauses the set's countdown)
-//   ranking_end         the nth ranking break, as it ends
+//   selection_start     the nth selection (ranking break), a quarter second after the bushes of its first set have grown (the hint pauses the set's countdown)
+//   selection_end       the nth selection (ranking break), as it ends
 //                       A hint whose prompt line names [Escape] ("Press [Escape] to pause") ends when the participant pauses: in a browser, when they have clicked back in after the pause; elsewhere, at the key.
 //   time_left           `@time_left 60`: the first moment 60 foraging seconds or fewer are left (not during a ranking break); the session clock pulses yellow while the hint is up
 // Foraging triggers (`bout`, `patch_switch`) are ignored while a ranking break is running. A foraging hint waiting in the queue holds back a ranking hint behind it (the queue is in order).
@@ -157,7 +157,7 @@ public class TutorialHints : MonoBehaviour
 
     private static readonly string[] Triggers =
     {
-        "bout", "patch_switch", "ranking_start", "ranking_end", "time_left",
+        "bout", "patch_switch", "selection_start", "selection_end", "time_left",
     };
 
     private void OnEnable()
@@ -196,7 +196,7 @@ public class TutorialHints : MonoBehaviour
     {
         if (indexInBreak == 0)
         {
-            StartCoroutine(FireAfter("ranking_start", RankingHintDelay));
+            StartCoroutine(FireAfter("selection_start", RankingHintDelay));
         }
     }
 
@@ -208,7 +208,7 @@ public class TutorialHints : MonoBehaviour
 
     private void HandleBreakEnded()
     {
-        Fire("ranking_end");
+        Fire("selection_end");
     }
 
     // Counts the occurrence and queues the hints of this trigger that were waiting for it.
@@ -266,7 +266,7 @@ public class TutorialHints : MonoBehaviour
             return;
         }
 
-        if (_queue.Count > 0 && (!RankingBreak.Active || _queue.Peek().trigger.StartsWith("ranking")))       // only the ranking popups may appear during a ranking break
+        if (_queue.Count > 0 && (!RankingBreak.Active || _queue.Peek().trigger.StartsWith("selection")))       // only the ranking popups may appear during a ranking break
         {
             Show(_queue.Dequeue());
         }

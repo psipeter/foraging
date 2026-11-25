@@ -28,7 +28,7 @@ def instances_of(code, data=None):
         valuemap = value_maps.ValueMap(tuple(value_maps.Bump(**b) for b in m["bumps"]), m["noise"], m["equaliser"])
         fields = FOR._fields({"tileRadius": s["tile_radius"]}, c["world_seed"], valuemap)
         session_fields = {"sessionDuration": float(c.get("duration", FOR.SECONDS)), "instructionsFile": f"Experiments/{code}/instructions_S{n}.txt", "isPractice": False, "crosshairRadius": FOR.CROSSHAIR_RADIUS,
-                          "crosshairRingSizeDeg": FOR.CROSSHAIR_RING_DEG, **FOR.FEEDBACK_FIELDS, "rewardFeedbackMax": float(c["feedback_max"]), **FOR.RANKING_FIELDS}
+                          "crosshairRingSizeDeg": FOR.CROSSHAIR_RING_DEG, **FOR.FEEDBACK_FIELDS, "rewardFeedbackMax": float(c["feedback_max"]), **FOR.RANKING_FIELDS, **FOR.DENSE_RANKING_FIELDS}
         design = {"experiment": code, "index": n, "cell": c["id"], "knobs": c["knobs"], "nuisance_draw": c["draw"], "world_seed": c["world_seed"], "calibrator": c["calibrator"],
                   "anchor": {"agent": factors.ANCHOR_AGENT, "rate": factors.ANCHOR_RATE, "points": c.get("anchor_points", factors.anchor_points(120.0)), "duration": c.get("duration", FOR.SECONDS), "check_points": {a: round(v[0]) for a, v in c["achieved"]["points"].items()}},
                   **valuemap.describe()}

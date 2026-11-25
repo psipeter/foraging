@@ -1,0 +1,55 @@
+session / ranking: shape spacing x colour spacing, points inside, peak index (shape, colour), best-5 sum as a share of 5 peaks
+Complexity, session 1 (PCX_S1, preset balanced) (map stretched 2.00:1 along shape, grid colour:shape spacing ends 1.71)
+  1: 0.245 x 0.245, 6/25 = 24%, peak (4, 4), 0.81
+  2: 0.220 x 0.230, 7/25 = 28%, peak (4, 4), 0.84
+  3: 0.190 x 0.224, 8/25 = 32%, peak (4, 4), 0.86
+  4: 0.160 x 0.223, 9/25 = 36%, peak (4, 4), 0.87
+  5: 0.135 x 0.230, 10/25 = 40%, peak (4, 4), 0.89
+Complexity, session 2 (PCX_S2, preset balanced) (map stretched 2.00:1 along shape, grid colour:shape spacing ends 1.71)
+  1: 0.200 x 0.200, 7/25 = 28%, peak (0, 3), 0.73
+  2: 0.150 x 0.176, 8/25 = 32%, peak (0, 3), 0.80
+  3: 0.110 x 0.149, 9/25 = 36%, peak (0, 4), 0.85
+  4: 0.100 x 0.153, 10/25 = 40%, peak (1, 4), 0.91
+  5: 0.090 x 0.153, 13/25 = 52%, peak (0, 2), 0.88
+Complexity, session 3 (PCX_S3, preset balanced) (map stretched 5.91:1 along shape, grid colour:shape spacing ends 1.30)
+  1: 0.190 x 0.190, 9/25 = 36%, peak (2, 2), 0.88
+  2: 0.150 x 0.161, 10/25 = 40%, peak (1, 3), 0.91
+  3: 0.120 x 0.138, 11/25 = 44%, peak (4, 4), 0.91
+  4: 0.100 x 0.122, 12/25 = 48%, peak (0, 3), 0.93
+  5: 0.085 x 0.110, 13/25 = 52%, peak (3, 1), 0.96
+Spacing, session 1 (PSC_S1, preset balanced) (map stretched 2.00:1 along shape, grid colour:shape spacing ends 1.71)
+  1: 0.220 x 0.220, 6/25 = 24%, peak (3, 3), 0.77
+  2: 0.165 x 0.172, 7/25 = 28%, peak (3, 4), 0.85
+  3: 0.155 x 0.182, 9/25 = 36%, peak (4, 3), 0.80
+  4: 0.120 x 0.168, 10/25 = 40%, peak (2, 4), 0.92
+  5: 0.105 x 0.179, 12/25 = 48%, peak (4, 3), 0.85
+Spacing, session 2 (PSC_S2, preset balanced) (map stretched 0.50:1 along shape, grid colour:shape spacing ends 0.59)
+  1: 0.220 x 0.220, 6/25 = 24%, peak (1, 3), 0.77
+  2: 0.160 x 0.156, 7/25 = 28%, peak (0, 4), 0.81
+  3: 0.155 x 0.139, 9/25 = 36%, peak (0, 3), 0.88
+  4: 0.165 x 0.127, 10/25 = 40%, peak (0, 2), 0.91
+  5: 0.185 x 0.108, 11/25 = 44%, peak (1, 4), 0.84
+Spacing, session 3 (PSC_S3, preset balanced) (map stretched 1.00:1 along shape, grid colour:shape spacing ends 1.00)
+  1: 0.190 x 0.190, 6/25 = 24%, peak (2, 0), 0.79
+  2: 0.160 x 0.160, 9/25 = 36%, peak (3, 1), 0.87
+  3: 0.130 x 0.130, 11/25 = 44%, peak (1, 0), 0.89
+  4: 0.110 x 0.110, 12/25 = 48%, peak (4, 1), 0.92
+  5: 0.095 x 0.095, 13/25 = 52%, peak (0, 0), 0.91
+Sparsity, session 1 (PSP_S1, preset balanced) (map stretched 0.50:1 along shape, grid colour:shape spacing ends 0.59)
+  1: 0.190 x 0.190, 10/25 = 40%, peak (2, 3), 0.83
+  2: 0.145 x 0.130, 12/25 = 48%, peak (1, 4), 0.87
+  3: 0.120 x 0.095, 13/25 = 52%, peak (0, 1), 0.94
+  4: 0.105 x 0.072, 14/25 = 56%, peak (4, 0), 0.94
+  5: 0.100 x 0.059, 15/25 = 60%, peak (0, 2), 0.98
+Sparsity, session 2 (PSP_S2, preset balanced) (map stretched 2.00:1 along shape, grid colour:shape spacing ends 1.71)
+  1: 0.190 x 0.190, 6/25 = 24%, peak (1, 1), 0.78
+  2: 0.150 x 0.157, 7/25 = 28%, peak (0, 2), 0.80
+  3: 0.120 x 0.141, 9/25 = 36%, peak (3, 0), 0.88
+  4: 0.105 x 0.147, 11/25 = 44%, peak (0, 1), 0.85
+  5: 0.090 x 0.153, 13/25 = 52%, peak (4, 2), 0.86
+Sparsity, session 3 (PSP_S3, preset balanced) (map stretched 1.00:1 along shape, grid colour:shape spacing ends 1.00)
+  1: 0.190 x 0.190, 5/25 = 20%, peak (3, 2), 0.70
+  2: 0.140 x 0.140, 6/25 = 24%, peak (4, 1), 0.78
+  3: 0.115 x 0.115, 8/25 = 32%, peak (2, 0), 0.85
+  4: 0.115 x 0.115, 10/25 = 40%, peak (3, 3), 0.87
+  5: 0.105 x 0.105, 12/25 = 48%, peak (1, 2), 0.89

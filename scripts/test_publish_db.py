@@ -193,3 +193,22 @@ def test_clear_runs_deletes_older_runs_and_their_participants_and_keeps_the_rest
     assert runs == {ids["new"][1]} and ids["new"][0] in people and ids["old"][0] not in people
     assert db.execute("select count(*) as n from public.sessions where run_id = %s", (ids["old"][1],)).fetchone()["n"] == 0
     assert db.execute("select count(*) as n from public.releases where build_commit = 'clear-build'").fetchone()["n"] == 1
+
+
+def test_delete_participants_removes_the_named_ids_and_keeps_the_others(uri, db, tmp_path):
+    db.execute("insert into public.experiments (code, title) values ('DP', 'Delete test') on conflict do nothing")
+    database.register_release(db, "delete-build", {"DP": 1}, None)
+    ids = {}
+    for name in ("gone", "stays"):
+        pid, rid = str(uuid.uuid4()), str(uuid.uuid4())
+        _insert(db, "participants", participant_id=pid)
+        _insert(db, "runs", run_id=rid, participant_id=pid, experiment="DP", build_commit="delete-build")
+        _insert(db, "sessions", run_id=rid, session_index=0)
+        _insert(db, "pid_registry", prolific_pid=f"dp_{name}", participant_id=pid)
+        ids[name] = (pid, rid)
+    run_main(["delete-participants", "--pid", "dp_gone", "dp_missing"], uri, tmp_path)
+    runs = {str(r["run_id"]) for r in db.execute("select run_id from public.runs where experiment = 'DP'")}
+    pids = {r["prolific_pid"] for r in db.execute("select prolific_pid from public.pid_registry where prolific_pid like 'dp\\_%'")}
+    assert runs == {ids["stays"][1]} and pids == {"dp_stays"}
+    assert db.execute("select count(*) as n from public.sessions where run_id = %s", (ids["gone"][1],)).fetchone()["n"] == 0
+    assert db.execute("select count(*) as n from public.participants where participant_id = %s", (ids["gone"][0],)).fetchone()["n"] == 0

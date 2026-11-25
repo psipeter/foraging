@@ -61,7 +61,7 @@ public class ScoreScreen : MonoBehaviour
             UiStyle.Eyebrow(panel, "foraging", -sideX, top - 170f, 170f, TextAlignmentOptions.Center).color = UiStyle.ForagingTint;
             _foragingText = UiStyle.Text(panel, "Foraging", "0", 66f, TextAlignmentOptions.Center, -sideX, top - 230f, 170f, 100f, UiStyle.Muted);
             _foragingText.font = UiStyle.DisplayFont;
-            UiStyle.Eyebrow(panel, "ranking", sideX, top - 170f, 170f, TextAlignmentOptions.Center).color = UiStyle.RankingTint;
+            UiStyle.Eyebrow(panel, "selection", sideX, top - 170f, 170f, TextAlignmentOptions.Center).color = UiStyle.RankingTint;
             _ranking = UiStyle.Text(panel, "Ranking", "0", 66f, TextAlignmentOptions.Center, sideX, top - 230f, 170f, 100f, UiStyle.Muted);
             _ranking.font = UiStyle.DisplayFont;
             Caption(panel, config != null ? config.ScoreCaptionForaging : "", -sideX, top - 320f, 190f, 90f);

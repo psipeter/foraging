@@ -2,44 +2,31 @@ Pilot: Complexity (report): the sessions of PCX in play order
 
                                                 PCX_S1      PCX_S2      PCX_S3
 -- map
-map Gini                                         0.550       0.551       0.550
-interaction                                      0.092       0.178       0.400
+map Gini                                         0.550       0.550       0.550
+interaction                                      0.092       0.167       0.400
 log interaction                                  0.000       0.000       0.511
-nonlinearity                                     0.145       0.429       0.921
-shape share                                       0.29        0.36        0.28
-share above half peak                            0.211       0.221       0.322
-peak (bush)                                       6.66        6.89        6.53
-gain                                             1.666       1.722       1.632
+nonlinearity                                     0.145       0.510       0.921
+shape share                                       0.29        0.30        0.28
+share above half peak                            0.211       0.216       0.322
+peak (bush)                                       6.66        6.96        6.53
+gain                                             1.666       1.739       1.632
 -- world
 travel time (s)                                   5.00        5.00        5.00
 walk visits ceiling                               36.0        36.0        36.0
 tiles                                               43          42          43
-bush Gini                                        0.550       0.547       0.547
-mean bush value                                  1.786       1.931       2.225
-diversity within patches (SD)                    1.932       2.087       2.330
-contrast between patches (SD of means)           0.001       0.001       0.001
+bush Gini                                        0.550       0.546       0.547
+mean bush value                                  1.786       1.937       2.225
+diversity within patches (SD)                    1.932       2.085       2.330
+contrast between patches (SD of means)           0.001       0.002       0.001
 largest patch total deviation                     0.02        0.03        0.03
 share of fruits paying over 9                   0.0000      0.0000      0.0000
 largest fruit pay                                    8           8           8
 -- agents
-nearest, own world                                 843         930        1082
-learner, own world                                1094        1133        1194
-oracle, own world                                 1347        1452        1659
-anchor (learner)                                  1125        1125        1125
-dp_finite (optimal stopping)                      1375        1495        1721
-dp_average (optimal rate)                         1344        1502        1691
-mvt (marginal value)                              1344        1502        1691
-mvt_running (experienced rate)                    1342        1469        1683
-bushes per patch, dp_finite                       2.38        2.46        2.83
-bushes per patch, dp_average                      2.31        2.38        2.83
-bushes per patch, mvt                             2.31        2.38        2.83
-bushes per patch, mvt_running                     2.58        2.67        3.09
 
 Span and hold (the knob must rise by its span; the rest stay within tolerance):
-  vary  interaction           0.092     0.178     0.400   span +0.308      ok
-  hold  gini                  0.550     0.551     0.550   spread 0.001     ok
+  vary  interaction           0.092     0.167     0.400   span +0.308      ok
+  hold  gini                  0.550     0.550     0.550   spread 0.000     ok
   hold  travel_time           5.000     5.000     5.000   spread 0.000     ok
-  hold  mean_bush_value       1.786     1.931     2.225   spread 0.222     FLAG: over 0.1
-  hold  tile_sum_dev          0.016     0.026     0.026   max 0.026        ok
-  hold  learner            1094.000  1133.000  1194.000   spread 0.088     ok
-  limit max                   6.663     6.889     6.527   max 6.889        ok
+  hold  mean_bush_value       1.786     1.937     2.225   spread 0.222     FLAG: over 0.1
+  hold  tile_sum_dev          0.016     0.029     0.026   max 0.029        ok
+  limit max                   6.663     6.958     6.527   max 6.958        ok

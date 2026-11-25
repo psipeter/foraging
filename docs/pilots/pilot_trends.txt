@@ -1,0 +1,14 @@
+Complexity (span and hold check, `pilot_report.PILOTS`)
+  vary interaction: 0.092, 0.167, 0.400  span 0.308 (needs 0.3), rising: yes  -> ok
+  hold gini: 0.550, 0.550, 0.550  spread 0.000 (tolerance 0.03)  -> ok
+Complexity: map Gini 0.550, 0.550, 0.550; bush Gini 0.550, 0.546, 0.547; interaction 0.092, 0.167, 0.400; nonlinearity 0.145, 0.510, 0.921
+Spacing (span and hold check, `pilot_report.PILOTS`)
+  vary travel_time: a world metric (not read from the map; unchanged by the maps)
+  hold gini: 0.500, 0.500, 0.500  spread 0.000 (tolerance 0.03)  -> ok
+  hold interaction: 0.090, 0.090, 0.130  spread 0.040 (tolerance 0.05)  -> ok
+Spacing: map Gini 0.500, 0.500, 0.500; bush Gini 0.498, 0.496, 0.497; interaction 0.090, 0.090, 0.130; nonlinearity 0.401, 0.401, 0.414
+Spacing layout: PSC_S1, PSC_S2, PSC_S3
+Sparsity (span and hold check, `pilot_report.PILOTS`)
+  vary gini: 0.400, 0.500, 0.600  span 0.200 (needs 0.2), rising: yes  -> ok
+  hold interaction: 0.060, 0.081, 0.210  spread 0.150 (tolerance 0.15)  -> ok
+Sparsity: map Gini 0.400, 0.500, 0.600; bush Gini 0.396, 0.495, 0.593; interaction 0.060, 0.081, 0.210; nonlinearity 0.871, 0.762, 0.799

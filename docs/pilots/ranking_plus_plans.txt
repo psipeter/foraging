@@ -1,0 +1,73 @@
+session  plan:difficulty  cover    p95     nn  even  step  span   hit   fit moved
+PSC_S1   spiral:free     0.033  0.073  0.026  0.97  0.06  0.52  100%   97%   27%
+PSC_S1   spiral:easy     0.031  0.062  0.026  0.94  0.15  0.64   97%    7%   67%
+PSC_S1   spiral:hard     0.034  0.090  0.025  0.85  0.06  0.24  100%   17%   23%
+PSC_S1   spiral:mixed    0.029  0.059  0.027  0.96  0.10  0.40  100%   10%   37%
+PSC_S1   ring:free       0.030  0.064  0.029  0.98  0.06  0.57  100%   90%   27%
+PSC_S1   ring:easy       0.031  0.062  0.028  0.92  0.15  0.64  100%   13%   67%
+PSC_S1   ring:hard       0.034  0.086  0.024  0.86  0.06  0.24  100%    3%   13%
+PSC_S1   ring:mixed      0.029  0.056  0.027  0.96  0.09  0.40  100%   17%   33%
+PSC_S1   tile:free       0.025  0.045  0.035  0.99  0.06  0.55  100%   87%    0%
+PSC_S1   tile:easy       0.026  0.048  0.033  0.99  0.16  0.64  100%   10%    0%
+PSC_S1   tile:hard       0.026  0.050  0.033  0.92  0.06  0.24  100%   17%    0%
+PSC_S1   tile:mixed      0.025  0.046  0.035  0.97  0.10  0.40  100%   10%    0%
+PSC_S2   spiral:free     0.031  0.069  0.029  0.96  0.05  0.56  100%   90%   27%
+PSC_S2   spiral:easy     0.030  0.056  0.026  0.93  0.16  0.64   97%   17%   60%
+PSC_S2   spiral:hard     0.038  0.098  0.023  0.85  0.06  0.24  100%   20%   40%
+PSC_S2   spiral:mixed    0.030  0.064  0.028  0.97  0.10  0.40  100%   17%   40%
+PSC_S2   ring:free       0.030  0.064  0.028  0.97  0.05  0.53  100%  100%   23%
+PSC_S2   ring:easy       0.031  0.061  0.026  0.94  0.15  0.64   97%   20%   67%
+PSC_S2   ring:hard       0.041  0.108  0.023  0.86  0.06  0.24  100%   17%   33%
+PSC_S2   ring:mixed      0.031  0.072  0.029  0.96  0.10  0.40   97%   17%   43%
+PSC_S2   tile:free       0.025  0.044  0.035  0.99  0.06  0.54  100%   97%    0%
+PSC_S2   tile:easy       0.026  0.047  0.034  0.99  0.16  0.64  100%    7%    0%
+PSC_S2   tile:hard       0.027  0.059  0.030  0.92  0.06  0.24  100%   33%    0%
+PSC_S2   tile:mixed      0.025  0.049  0.036  0.98  0.10  0.40  100%   17%    0%
+PSC_S3   spiral:free     0.031  0.065  0.027  0.97  0.05  0.52  100%   93%   27%
+PSC_S3   spiral:easy     0.034  0.069  0.024  0.90  0.15  0.64   93%   17%   63%
+PSC_S3   spiral:hard     0.041  0.112  0.023  0.83  0.06  0.24   97%   20%   33%
+PSC_S3   spiral:mixed    0.030  0.064  0.026  0.97  0.09  0.40  100%    3%   47%
+PSC_S3   ring:free       0.032  0.070  0.027  0.96  0.05  0.54  100%  100%   23%
+PSC_S3   ring:easy       0.032  0.062  0.026  0.92  0.15  0.64   97%   13%   67%
+PSC_S3   ring:hard       0.040  0.108  0.023  0.84  0.06  0.24  100%   27%   30%
+PSC_S3   ring:mixed      0.031  0.063  0.028  0.93  0.10  0.40  100%   23%   53%
+PSC_S3   tile:free       0.025  0.046  0.035  0.99  0.05  0.55  100%   87%    0%
+PSC_S3   tile:easy       0.026  0.048  0.032  0.97  0.16  0.64  100%    7%    0%
+PSC_S3   tile:hard       0.027  0.053  0.030  0.93  0.06  0.24  100%   17%    0%
+PSC_S3   tile:mixed      0.025  0.046  0.033  0.99  0.10  0.40  100%   13%    0%
+PCX_S1   spiral:free     0.068  0.247  0.014  0.97  0.06  0.61  100%  100%   97%
+PCX_S1   spiral:easy    FAIL set 0: no plus fits (plan spiral, difficulty easy); relax a setting
+PCX_S1   spiral:hard     0.115  0.334  0.006  0.76  0.04  0.27    7%   67%   97%
+PCX_S1   spiral:mixed   FAIL set 0: no plus fits (plan spiral, difficulty mixed); relax a setting
+PCX_S1   ring:free       0.060  0.204  0.014  0.98  0.06  0.58  100%  100%   93%
+PCX_S1   ring:easy      FAIL set 0: no plus fits (plan ring, difficulty easy); relax a setting
+PCX_S1   ring:hard       0.107  0.345  0.006  0.76  0.05  0.27   13%   57%   87%
+PCX_S1   ring:mixed     FAIL set 0: no plus fits (plan ring, difficulty mixed); relax a setting
+PCX_S1   tile:free       0.032  0.074  0.023  0.98  0.06  0.55  100%  100%   27%
+PCX_S1   tile:easy      FAIL set 9: no plus fits (plan tile); relax a setting
+PCX_S1   tile:hard       0.054  0.171  0.019  0.82  0.05  0.25   80%   53%    0%
+PCX_S1   tile:mixed     FAIL set 9: no plus fits (plan tile); relax a setting
+PCX_S2   spiral:free     0.033  0.075  0.021  0.91  0.04  0.53  100%  100%   57%
+PCX_S2   spiral:easy     0.031  0.062  0.020  0.96  0.07  0.64   40%   47%   60%
+PCX_S2   spiral:hard     0.043  0.113  0.017  0.82  0.05  0.24   73%   40%   53%
+PCX_S2   spiral:mixed    0.032  0.077  0.021  0.94  0.06  0.40   50%   37%   57%
+PCX_S2   ring:free       0.035  0.081  0.020  0.91  0.04  0.49  100%   97%   53%
+PCX_S2   ring:easy       0.030  0.060  0.024  0.96  0.06  0.64   40%   53%   80%
+PCX_S2   ring:hard       0.047  0.120  0.016  0.79  0.05  0.24   67%   37%   67%
+PCX_S2   ring:mixed      0.030  0.067  0.024  0.95  0.05  0.40   50%   43%   60%
+PCX_S2   tile:free       0.024  0.045  0.030  0.99  0.05  0.58  100%   93%    0%
+PCX_S2   tile:easy       0.025  0.048  0.027  0.95  0.15  0.64   93%   30%    0%
+PCX_S2   tile:hard       0.026  0.056  0.026  0.92  0.06  0.24  100%   23%    0%
+PCX_S2   tile:mixed      0.024  0.047  0.031  0.98  0.09  0.40  100%   43%    0%
+PCX_S3   spiral:free     0.030  0.060  0.029  0.96  0.06  0.67  100%  100%   53%
+PCX_S3   spiral:easy     0.031  0.062  0.027  0.91  0.16  0.64  100%   27%   67%
+PCX_S3   spiral:hard     0.034  0.079  0.025  0.79  0.06  0.24   87%   33%   57%
+PCX_S3   spiral:mixed    0.029  0.058  0.031  0.96  0.10  0.40   97%   10%   53%
+PCX_S3   ring:free       0.031  0.063  0.029  0.96  0.06  0.66  100%  100%   50%
+PCX_S3   ring:easy       0.032  0.064  0.025  0.93  0.16  0.64   97%   20%   67%
+PCX_S3   ring:hard       0.034  0.083  0.024  0.79  0.05  0.25   87%   33%   63%
+PCX_S3   ring:mixed      0.030  0.062  0.028  0.96  0.10  0.41   90%   30%   63%
+PCX_S3   tile:free       0.026  0.047  0.035  0.97  0.06  0.63  100%  100%    0%
+PCX_S3   tile:easy       0.026  0.046  0.035  0.98  0.15  0.64  100%   23%    0%
+PCX_S3   tile:hard       0.030  0.072  0.029  0.83  0.06  0.24  100%   43%    0%
+PCX_S3   tile:mixed      0.026  0.048  0.032  0.98  0.10  0.40  100%   27%    0%

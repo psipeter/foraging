@@ -12,43 +12,62 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b3a30ec311e097feb7c70c7fe4e6d29, type: 3}
   m_Name: TUT_S1
   m_EditorClassIdentifier: Assembly-CSharp::SessionConfig
-  sessionDuration: 120
+  sessionDuration: 150
   worldSeed: 9102
   isPractice: 1
   freezeSun: 0
   rankingEvery: 1
   rankingLeavings: 
   rankingSets: 1
-  rankingSeconds: 20
+  rankingSeconds: 45
   rankingCooldown: 0
   rankingSettleDepth: 0
-  rankingPoolSets: 30
+  rankingPoolSets: 2
   rankingFadeSeconds: 0.4
   rankingGraySeconds: 0.25
   rankingFruitSeconds: 0.05
   rankingLastSeconds: 10
   rankingMinBushes: 1
-  rankingText: Rank these bushes from most to least valuable
+  rankingText: Select the 5 most valuable bushes. 100 points available.
   rankingSetSize: 5
   rankingArcSpan: 84
   rankingDistance: 16
   rankingTieGap: 0.25
+  rankingDesign: dense
+  rankingPlusAxes: mixed
+  rankingPlusJitter: 1
+  rankingPlusArm: 1
+  rankingPlusArmRatio: 2
+  rankingPlusPlan: spiral
+  rankingPlusDifficulty: free
+  rankingPlusMinSeparation: 0.08
+  rankingTimes:
+  - 30
+  - 90
+  rankingMaxWait: 10
+  rankingPicks: 5
+  rankingGridSpacing: 7
+  rankingGridDistance: 22
+  rankingGridPreset: balanced
+  rankingTopKPoints: 100
+  rankingPaid: one
   rankingRimScale: 1.15
   rankingRimBoost: 3
   rankingMarkerLift: 0.75
   rankingRankScale: 3
   rankingBonusPerPair: 4
-  rankingPointsMode: pair_mean_value
+  rankingPointsMode: top_k
   rankingAimTolerance: 1.5
   rankingCrosshairRadius: 1
-  rankingStageDrop: 3
-  rankingStageMargin: 4
+  rankingStageDrop: 2
+  rankingStageTilt: 30
+  rankingStageMargin: 5.5
   rankingStageWorldGray: 0.6
   instructionsFile: Experiments/TUT/instructions_S1.txt
   sessionLabel: Tutorial
   hintsFile: Experiments/TUT/hints_S1.txt
-  scoreCaptionForaging: points earned from harvesting bushes
-  scoreCaptionRanking: points earned from ranking bushes
+  scoreCaptionForaging: Points earned from harvesting bushes
+  scoreCaptionRanking: Points earned from selecting bushes
   scoreNote: '**Payment** is based on total points earned'
   controlsReminder: 'Mouse: look. W / S: walk. Space: hold to harvest. Escape: pause'
   controlsReminderOpacity: 0.35

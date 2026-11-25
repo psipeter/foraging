@@ -210,3 +210,170 @@ def test_an_unknown_points_mode_is_an_error():
     with pytest.raises(ValueError, match="unknown ranking points mode"):
         pair_weight("by_rank", 1.0, 2.0)
     assert pair_weight("pair_mean_value", 1.0, 3.0) == 2.0 and pair_weight("pair", 1.0, 3.0) == 1.0
+
+
+# --- the plus design -------------------------------------------------------------------------------------------------------------
+
+import value_maps
+
+ROTATED_MAP = value_maps.ValueMap((value_maps.Bump(0.6, 0.5, 0.18, 0.36, 30.0, 4.0),))        # a turned, stretched bump away from the corner: room for a plus around its peak
+PLUS = {"ranking_design": "plus"}
+
+
+def plus_pool(axes="mixed", **options):
+    return generate_pool(SESSION, **synthetic.overrides(valuemap=ROTATED_MAP, ranking_plus_axes=axes, **PLUS, **options))
+
+
+def test_the_ladder_design_is_the_default_and_unchanged_by_the_plus_fields():
+    ladder, _ = built()
+    assert "design" not in ladder and "plus" not in ladder and all("role" not in b for s in ladder["sets"] for b in s["bushes"])
+
+
+@pytest.mark.parametrize("axes", ["aligned", "bump", "random", "mixed"])
+def test_every_plus_has_a_centre_and_four_arms_that_look_good_stay_inside_and_differ(axes):
+    sidecar, params = plus_pool(axes)
+    peak = sidecar["peak"][2]
+    for s, trial in enumerate(sidecar["sets"]):
+        assert sorted(b["role"] for b in trial["bushes"]) == sorted(ranking.PLUS_ROLES)
+        shape, color = np.array([b["shape"] for b in trial["bushes"]]), np.array([b["color"] for b in trial["bushes"]])
+        assert min(shape.min(), color.min()) >= ranking.PLUS_MARGIN - 1e-9 and max(shape.max(), color.max()) <= 1 - ranking.PLUS_MARGIN + 1e-9
+        d = np.hypot(shape[:, None] - shape[None, :], color[:, None] - color[None, :])[np.triu_indices(5, 1)]
+        assert d.min() >= 0.08 - 1e-9
+        values = np.array(sorted(b["value"] for b in trial["bushes"]))
+        assert np.diff(values).min() >= sidecar["minGap"] - 1e-9 and values.min() >= ranking.PLUS_MIN_FRACTION * peak - 1e-9
+        by_role = {b["role"]: np.array([b["shape"], b["color"]]) for b in trial["bushes"]}
+        u1, u2 = np.array(sidecar["plus"][s]["u1"]), np.array(sidecar["plus"][s]["u2"])
+        assert abs(np.dot(u1, u2)) < 1e-9
+        assert abs(np.dot(by_role["+1"] - by_role["centre"], u2)) < 1e-9 and abs(np.dot(by_role["+2"] - by_role["centre"], u1)) < 1e-9     # each arm lies along its own axis
+
+
+def test_the_axes_modes_follow_their_definitions():
+    aligned, _ = plus_pool("aligned")
+    for m in aligned["plus"]:
+        assert m["axes"] == "aligned"
+        assert m["turn"] == 0.0 and m["u1"] in ([1.0, 0.0], [-1.0, 0.0]) and m["u2"] in ([0.0, 1.0], [0.0, -1.0])      # an aligned plus never turns: it is only stretched to fit
+    bump, _ = plus_pool("bump")
+    th = math.radians(30.0)
+    assert all(m["turn"] == 0.0 and abs(abs(np.dot(m["u1"], [math.cos(th), math.sin(th)])) - 1.0) < 1e-9 for m in bump["plus"])
+    mixed, _ = plus_pool("mixed")
+    assert [m["axes"] for m in mixed["plus"][:6]] == ["aligned", "random", "random", "aligned", "random", "random"]
+    angles = {round(math.degrees(math.atan2(m["u1"][1], m["u1"][0])) % 180, 3) for m in plus_pool("random")[0]["plus"]}
+    assert len(angles) > 10                                                                     # a different turn almost every set
+
+
+def test_a_plus_that_would_leave_the_map_is_shrunk_and_turned_and_the_others_are_not():
+    corner = value_maps.ValueMap((value_maps.Bump(0.8, 0.8, 0.2, 0.0, 0.0, 4.0),))             # a peak near the corner: many pluses must fit
+    sidecar, _ = generate_pool(SESSION, **synthetic.overrides(valuemap=corner, ranking_plus_axes="aligned", ranking_pool_sets=30, **PLUS))
+    plus = sidecar["plus"]
+    assert any(m["scale"] < 1.0 for m in plus) and all(m["turn"] == 0.0 for m in plus) and sidecar["summary"]["fitted"] > 0.0      # aligned: stretched, never turned
+    random_, _ = generate_pool(SESSION, **synthetic.overrides(valuemap=corner, ranking_plus_axes="random", ranking_pool_sets=30, **PLUS))
+    assert any(m["turn"] != 0.0 for m in random_["plus"]) and all(m["scales"][0] == m["scales"][1] for m in random_["plus"])    # random: shrunk together and turned
+    assert all(ranking.PLUS_MIN_SCALE - 1e-9 <= m["scale"] <= 1.0 and abs(m["turn"]) <= 45.0 + 1e-9 for m in plus)
+    shape, color = np.array(sidecar["shape"]), np.array(sidecar["color"])
+    assert min(shape.min(), color.min()) >= ranking.PLUS_MARGIN - 1e-9 and max(shape.max(), color.max()) <= 1 - ranking.PLUS_MARGIN + 1e-9
+    plain, _ = plus_pool("aligned", ranking_plus_jitter=0.0, ranking_pool_sets=30)               # the same map, centred: far less to fit than at a corner
+    assert plain["summary"]["meanScale"] > sidecar["summary"]["meanScale"] - 1e-9 or plain["summary"]["fitted"] <= sidecar["summary"]["fitted"]
+
+
+def test_the_centres_of_a_mode_are_spread_evenly_over_the_ellipse_around_the_peak():
+    sidecar, _ = plus_pool("aligned", ranking_pool_sets=24, ranking_plus_jitter=1.0)
+    off = np.array([m["offset"] for m in sidecar["plus"]])
+    d = np.sqrt(((off[:, None, :] - off[None, :, :]) ** 2).sum(-1)) + np.eye(len(off)) * 9
+    assert d.min() > 0.1 * 0.18                                                                  # no two centres on top of each other (random draws would crowd)
+    assert np.hypot(*off.T).max() <= 1.0 * 0.36 + 1e-6                                           # inside the ellipse (the longest spread is 0.36)
+
+
+def test_the_centres_scatter_around_the_peak_without_always_being_the_best_bush():
+    sidecar, _ = plus_pool("mixed", ranking_pool_sets=60)
+    assert 0.2 < sidecar["summary"]["centreScatter"] and sidecar["summary"]["meanCentreToPeak"] < 0.7
+    assert 0.0 < sidecar["summary"]["centreIsBest"] < 1.0
+    none, _ = plus_pool("mixed", ranking_plus_jitter=0.0, ranking_pool_sets=30)
+    assert none["summary"]["centreScatter"] == pytest.approx(0.0, abs=1e-9)                     # no jitter: every centre is the peak (the check's own baseline)
+
+
+def test_a_plus_pool_is_deterministic_and_refuses_what_it_cannot_draw():
+    a, _ = plus_pool()
+    b, _ = plus_pool()
+    assert a["shape"] == b["shape"] and a["value"] == b["value"]
+    with pytest.raises(ValueError, match="five bushes"):
+        plus_pool(ranking_set_size=4)
+    with pytest.raises(ValueError, match="no plus fits"):
+        plus_pool(ranking_plus_arm=40.0)
+    with pytest.raises(ValueError, match="unknown rankingDesign"):
+        generate_pool(SESSION, **synthetic.overrides(valuemap=ROTATED_MAP, ranking_design="star"))
+
+
+# --- the plans for the plus design (plus_plans.py) ---------------------------------------------------------------------------------
+
+import plus_plans
+
+
+def planned(plan, difficulty, axes="mixed", **options):
+    return plus_pool(axes, ranking_plus_plan=plan, ranking_plus_difficulty=difficulty, **options)
+
+
+@pytest.mark.parametrize("plan", plus_plans.PLANS)
+@pytest.mark.parametrize("difficulty", ["free", "medium", "easy"])
+def test_every_plan_and_difficulty_draws_valid_pluses(plan, difficulty):
+    sidecar, _ = planned(plan, difficulty)
+    peak = sidecar["peak"][2]
+    for trial, meta in zip(sidecar["sets"], sidecar["plus"]):
+        pts = np.array([[b["shape"], b["color"]] for b in trial["bushes"]])
+        values = np.array(sorted(b["value"] for b in trial["bushes"]))
+        assert pts.min() >= ranking.PLUS_MARGIN - 1e-9 and pts.max() <= 1 - ranking.PLUS_MARGIN + 1e-9
+        assert np.diff(values).min() >= sidecar["minGap"] - 1e-9 and values.min() >= ranking.PLUS_MIN_FRACTION * peak - 1e-9
+        assert sorted(b["role"] for b in trial["bushes"]) == sorted(ranking.PLUS_ROLES)
+        assert meta["axes"] != "aligned" or meta["turn"] == 0.0                                   # aligned is only ever stretched
+
+
+def test_the_ladder_puts_the_values_a_step_apart_and_a_harder_step_is_closer():
+    medium, params = planned("ring", "medium")
+    peak = medium["peak"][2]
+    for trial, meta in zip(medium["sets"], medium["plus"]):
+        if meta["hit"]:
+            steps = np.diff(sorted(b["value"] for b in trial["bushes"]))
+            assert np.all(np.abs(steps - meta["delta"] * peak) <= 0.61 * meta["delta"] * peak)      # every arm within 0.3 step of its level
+    easy, _ = planned("ring", "easy")
+    assert plus_plans.metrics(easy, params)["stepMedian"] > plus_plans.metrics(medium, params)["stepMedian"]
+
+
+def test_the_tile_plan_covers_the_rewarding_region_better_than_the_spiral():
+    (tile, params), (spiral, _) = planned("tile", "free"), plus_pool("mixed")
+    assert plus_plans.metrics(tile, params)["coverageMean"] < plus_plans.metrics(spiral, params)["coverageMean"]
+
+
+def test_the_ring_plan_puts_the_three_centres_of_a_ranking_round_the_peak():
+    sidecar, _ = planned("ring", "free", ranking_plus_jitter=1.0)
+    off = np.array([m["offset"] for m in sidecar["plus"]])
+    for r in range(len(off) // 3):
+        angles = np.sort(np.arctan2(off[3 * r:3 * r + 3, 1], off[3 * r:3 * r + 3, 0]))
+        assert len(angles) == 3                                                                   # three corners; the fit may move a centre, so only the count is exact
+
+
+def test_an_unknown_plan_or_a_step_under_the_tie_gap_is_refused():
+    with pytest.raises(ValueError, match="unknown rankingPlusPlan"):
+        planned("star", "free")
+    with pytest.raises(ValueError, match="under the tie gap"):
+        planned("ring", "0.01")
+
+
+@pytest.mark.parametrize("plan", plus_plans.PLANS)
+@pytest.mark.parametrize("difficulty", ["free", "medium"])
+def test_a_random_plus_never_lies_along_the_feature_axes_in_the_plans(plan, difficulty):
+    sidecar, _ = planned(plan, difficulty)
+    for meta in sidecar["plus"]:
+        if meta["axes"] == "random":
+            assert plus_plans.axis_distance(meta["u1"]) >= plus_plans.OFF_AXIS - 1e-6
+        else:
+            assert meta["turn"] == 0.0 and plus_plans.axis_distance(meta["u1"]) < 1e-6
+
+
+def test_a_ladder_sometimes_puts_the_centre_below_other_bushes_and_still_hits_its_steps():
+    sidecar, params = planned("ring", "medium", ranking_pool_sets=60)
+    m = plus_plans.metrics(sidecar, params)
+    assert 0.2 < m["centreBest"] < 0.8 and m["hit"] > 0.8
+    peak = sidecar["peak"][2]
+    for trial, meta in zip(sidecar["sets"], sidecar["plus"]):
+        if meta["hit"]:
+            steps = np.diff(sorted(b["value"] for b in trial["bushes"]))
+            assert np.all(np.abs(steps - meta["delta"] * peak) <= 0.61 * meta["delta"] * peak)

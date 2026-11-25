@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Globalization;
+using UnityEngine;
 
 // What a ranking break (RankingBreak) uses to score a set and to log its ranking_sets row (in SetRow.Columns order; `bushes` holds one object per bush in slot order).
 public static class RankingSets
@@ -76,5 +77,60 @@ public static class RankingSets
             firstHarvestTime < 0f ? "" : F(firstHarvestTime), F(points), F(pausedSeconds),
             setSize.ToString(), correct.ToString(), total.ToString(), "[" + string.Join(",", bushObjects) + "]",
         };
+    }
+
+    // The dense design's score (scripts/ranking.py top_k_score is the same rule): 0 to `scale`, the picked values' sum against the best `k` of the grid, from the expected sum of k random bushes
+    // (k times the grid's mean value); fewer picks than k (a timed-out ranking) simply sum fewer values.
+    public static float TopKScore(IReadOnlyList<float> pickedValues, IReadOnlyList<float> allValues, int k, float scale)
+    {
+        var sorted = new List<float>(allValues);
+        sorted.Sort((a, b) => b.CompareTo(a));
+        float best = 0f, mean = 0f;
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            mean += sorted[i];
+            if (i < k)
+            {
+                best += sorted[i];
+            }
+        }
+
+        float baseline = k * (sorted.Count > 0 ? mean / sorted.Count : 0f);
+        if (best - baseline <= 1e-9f)
+        {
+            return 0f;
+        }
+
+        float got = 0f;
+        for (int i = 0; i < pickedValues.Count && i < k; i++)
+        {
+            got += pickedValues[i];
+        }
+
+        return scale * Mathf.Clamp01((got - baseline) / (best - baseline));
+    }
+
+    // How many of the picked bushes are among the grid's best k (the ranking_sets row's `correct_pairs` in the dense design; `total_pairs` is k).
+    public static int TopKHits(IReadOnlyList<int> pickedIds, IReadOnlyDictionary<int, float> valuesById, int k)
+    {
+        var ids = new List<int>(valuesById.Keys);
+        ids.Sort((a, b) => valuesById[b].CompareTo(valuesById[a]));
+        int hits = 0;
+        foreach (int id in pickedIds)
+        {
+            if (ids.IndexOf(id) >= 0 && ids.IndexOf(id) < k)
+            {
+                hits++;
+            }
+        }
+
+        return hits;
+    }
+
+    // Which ranking (0-based) pays when only one does: drawn from the world seed (scripts/ranking.py paid_set_index).
+    public static int PaidSetIndex(int seed, int count)
+    {
+        ulong h = ((ulong)(uint)seed * 2654435761UL) >> 8;
+        return (int)(h % (ulong)System.Math.Max(count, 1));
     }
 }

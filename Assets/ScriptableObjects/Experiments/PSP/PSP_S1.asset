@@ -19,30 +19,52 @@ MonoBehaviour:
   rankingEvery: 1
   rankingLeavings: 
   rankingSets: 1
-  rankingSeconds: 20
+  rankingSeconds: 45
   rankingCooldown: 0
   rankingSettleDepth: 0
-  rankingPoolSets: 30
+  rankingPoolSets: 5
   rankingFadeSeconds: 0.4
   rankingGraySeconds: 0.25
   rankingFruitSeconds: 0.05
   rankingLastSeconds: 10
   rankingMinBushes: 1
-  rankingText: Rank these bushes from most to least valuable
+  rankingText: Select the 5 most valuable bushes. 100 points available.
   rankingSetSize: 5
   rankingArcSpan: 84
   rankingDistance: 16
   rankingTieGap: 0.25
+  rankingDesign: dense
+  rankingPlusAxes: mixed
+  rankingPlusJitter: 1
+  rankingPlusArm: 1
+  rankingPlusArmRatio: 2
+  rankingPlusPlan: spiral
+  rankingPlusDifficulty: free
+  rankingPlusMinSeparation: 0.08
+  rankingTimes:
+  - 30
+  - 60
+  - 90
+  - 120
+  - 150
+  rankingMaxWait: 10
+  rankingPicks: 5
+  rankingGridSpacing: 7
+  rankingGridDistance: 22
+  rankingGridPreset: balanced
+  rankingTopKPoints: 100
+  rankingPaid: one
   rankingRimScale: 1.15
   rankingRimBoost: 3
   rankingMarkerLift: 0.75
   rankingRankScale: 3
   rankingBonusPerPair: 4
-  rankingPointsMode: pair_mean_value
+  rankingPointsMode: top_k
   rankingAimTolerance: 1.5
   rankingCrosshairRadius: 1
-  rankingStageDrop: 3
-  rankingStageMargin: 4
+  rankingStageDrop: 2
+  rankingStageTilt: 30
+  rankingStageMargin: 5.5
   rankingStageWorldGray: 0.6
   instructionsFile: Experiments/PSP/instructions_S1.txt
   sessionLabel: 
@@ -56,10 +78,10 @@ MonoBehaviour:
     bumps:
     - centerShape: 0.456
       centerColor: 0.664
-      width: 0.2757615
-      widthColor: 0.2757615
+      width: 0.21324186
+      widthColor: 0.42648372
       angle: 0
-      height: 5.60166
+      height: 5.5293875
   rewardStd: 0.6
   targetFrameRate: 120
   uploadGraceSeconds: 4
@@ -140,18 +162,19 @@ MonoBehaviour:
   layout: tiles
   assignment: tiles
   rewardStage: 
-  designJson: '{"anchor": {"agent": "learner", "check_points": {"learner": 1119,
-    "nearest": 1035, "oracle": 1337}, "duration": 180.0, "points": 1125.0, "rate":
+  designJson: '{"anchor": {"agent": "learner", "check_points": {"learner": 1124,
+    "nearest": 1057, "oracle": 1384}, "duration": 180.0, "points": 1125.0, "rate":
     6.25}, "calibrator": 1, "cell": 1, "experiment": "PSP", "index": 1, "instance":
-    "PSP_S1", "knobs": {"at": [0.456, 0.664], "class": "round", "gini": 0.4, "travel_time":
-    5.0, "world_seed": 9301}, "nuisance_draw": 0, "value_map": {"bumps": [{"angle":
-    0.0, "center_color": 0.664, "center_shape": 0.456, "height": 4.0, "width": 0.2757614723763599,
-    "width_color": 0.2757614723763599}], "equaliser": {"type": "gain", "value": 1.400414937759336},
-    "noise": {"sd": 0.6, "type": "flat"}}, "value_map_descriptors": {"effective_weight_color":
-    5.2273, "effective_weight_shape": 5.4206, "effective_weight_total": 10.648, "fraction_above_half_max":
-    0.3241, "gini": 0.4, "interaction": 0.0978, "log_interaction": 0.0, "max": 5.6005,
-    "mean": 2.1565, "min": 0.0441, "nonlinearity": 0.6781, "range": 5.5564, "shape_share":
-    0.5091}, "world_seed": 9301}'
+    "PSP_S1", "knobs": {"aspect": 0.5, "at": [0.456, 0.664], "class": "stretched",
+    "gini": 0.4, "travel_time": 5.0, "world_seed": 9301}, "nuisance_draw": 0, "value_map":
+    {"bumps": [{"angle": 0.0, "center_color": 0.664, "center_shape": 0.456, "height":
+    4.0, "width": 0.2132418637671658, "width_color": 0.42648372753433156}], "equaliser":
+    {"type": "gain", "value": 1.3823469178783534}, "noise": {"sd": 0.6, "type": "flat"}},
+    "value_map_descriptors": {"effective_weight_color": 2.7853, "effective_weight_shape":
+    7.8935, "effective_weight_total": 10.6788, "fraction_above_half_max": 0.3483,
+    "gini": 0.4, "interaction": 0.0599, "log_interaction": 0.0, "max": 5.5282, "mean":
+    2.2141, "min": 0.0635, "nonlinearity": 0.871, "range": 5.4646, "shape_share":
+    0.7392}, "world_seed": 9301}'
   shapeVaries: 1
   shapeWhenFixed: 0.5
   colorVaries: 1

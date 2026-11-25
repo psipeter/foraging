@@ -1,0 +1,16 @@
+PSC_S1: last 8 harvests; s_min 0.130, s_max 0.333; 8 worlds x 5 foragers; windows of rankings 3 and later
+
+rule                                     spacing  clamped  outside  near  best/peak  middle  region coverage
+variance x 3, centred on the mean        0.204    0.06     0.02    0.57   0.94       0.36    0.050
+variance x 3, jitter up to 1 spacing     0.204    0.06     0.27    0.51   0.94       0.25    0.051
+variance x 3, jitter up to 2 spacings    0.204    0.06     0.42    0.43   0.90       0.16    0.058
+variance x 5, jitter up to 1 spacing     0.257    0.50     0.40    0.43   0.94       0.32    0.059
+SD x 1.5, jitter up to 1 spacing         0.302    0.62     0.55    0.35   0.94       0.42    0.067
+
+spacing by forager (rankings 3 and later)
+rule                                        oracle   learner   softmax   curious   nearest
+variance x 3, centred on the mean            0.149     0.229     0.233     0.235     0.244
+variance x 3, jitter up to 1 spacing         0.149     0.229     0.233     0.235     0.244
+variance x 3, jitter up to 2 spacings        0.149     0.229     0.233     0.235     0.244
+variance x 5, jitter up to 1 spacing         0.186     0.292     0.297     0.295     0.299
+SD x 1.5, jitter up to 1 spacing             0.264     0.321     0.323     0.323     0.324

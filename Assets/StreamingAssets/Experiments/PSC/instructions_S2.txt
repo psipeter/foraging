@@ -1,6 +1,6 @@
 Foraging task
 
-Harvest and rank bushes to collect **points**
+Harvest and select bushes to collect **points**
 The more points you earn, the more **money** you earn
 
 Press [Enter] to begin

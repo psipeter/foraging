@@ -191,7 +191,7 @@ SEARCH = {"de_maxiter": 60, "de_popsize": 12, "nm_maxiter": 150}        # the ef
 MULTIPLICATIVE_SHARE_OF_CAP = 0.9                       # the multiplicative rung asks for this share of the interaction an axis-aligned Gaussian of that Gini can reach: as interactive as that family gets
 ALIGNED_CAP = ((0.2, 0.06), (0.4, 0.12), (0.6, 0.21), (0.8, 0.37))        # what an axis-aligned Gaussian can reach, by Gini (docs/SESSION_FACTORS_PLAN.md, the reachable region)
 NONSEPARABLE_INTERACTION = 0.4                          # the interaction asked of the non-separable rung unless a cell says otherwise
-CLASS_KLASS = {"additive": "corner", "multiplicative": "aligned", "nonseparable": "rotated", "round": "round"}      # the family each rung of the ladder is searched in
+CLASS_KLASS = {"additive": "corner", "multiplicative": "aligned", "nonseparable": "rotated", "round": "round", "stretched": "stretched"}      # the family each rung of the ladder is searched in
 
 
 CORNER_STRETCHES = (1.0, 2.0, 3.0)                      # the additive rung's Gaussian is round or stretched 2:1 or 3:1 (PI, 2026-11-17); the long axis (shape or colour) is a nuisance
@@ -208,7 +208,7 @@ def aligned_cap(gini):
 
 def default_interaction(name, gini):
     """The interaction asked of a rung of the ladder at a Gini: additive None (the smallest its corner allows), multiplicative a share of what an aligned map can reach, non-separable 0.4."""
-    return {"additive": None, "multiplicative": MULTIPLICATIVE_SHARE_OF_CAP * aligned_cap(gini), "nonseparable": NONSEPARABLE_INTERACTION, "round": None}[name]
+    return {"additive": None, "multiplicative": MULTIPLICATIVE_SHARE_OF_CAP * aligned_cap(gini), "nonseparable": NONSEPARABLE_INTERACTION, "round": None, "stretched": None}[name]
 
 
 def _gaussian_from(x, rotated, scale, std):
@@ -224,11 +224,11 @@ def calibrate_map(gini, interaction, klass="aligned", scale=4.0, std=0.6, tol=(0
     that feature pays more when it is higher (1) or lower (0)), so both features pay monotonically; its widths have the ratio `aspect` (shape over colour; `corner_aspect`) and their size is solved for the Gini; the interaction and the shape share are what that gives (`interaction` is ignored). The gain is not touched: `scale` is the peak and the equaliser (`solve_gain`) sets the level afterwards."""
     from scipy.optimize import differential_evolution, minimize
     rotated = klass == "rotated"
-    at_corner = klass in ("corner", "round")
-    if at_corner:                                                                 # "round": a symmetric Gaussian centred exactly at `at` (shape, colour)
-        centre, aspect = (corner, aspect) if klass == "corner" else (at, 1.0)
+    at_corner = klass in ("corner", "round", "stretched")
+    if at_corner:                                                                 # "round": a symmetric Gaussian centred exactly at `at` (shape, colour); "stretched": the same stretched by `aspect` (shape width over colour width, axes on the features)
+        centre, aspect = {"corner": (corner, aspect), "round": (at, 1.0), "stretched": (at, aspect)}[klass]
         build = lambda x: ValueMap((Bump(float(centre[0]), float(centre[1]), float(x[0]) * aspect ** 0.5, float(x[0]) / aspect ** 0.5, 0.0, scale),), {"type": "flat", "sd": std})
-        bounds = [(0.08, 3.0)] if klass == "corner" else [(0.05, 1.5)]
+        bounds = [(0.08, 3.0)] if klass == "corner" else [(0.05, 1.5)]            # the one width left once the centre and the aspect are fixed: the Gini decides it
     else:
         build = lambda x: _gaussian_from(x, rotated, scale, std)
         ranges = (center, center) if np.ndim(center) == 1 else center

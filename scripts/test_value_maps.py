@@ -163,3 +163,13 @@ def test_a_calibrated_aligned_map_keeps_its_centre_inside_the_range_asked():
         ranges = (center, center) if np.ndim(center) == 1 else center
         b = vm.calibrate_map(0.5, 0.12, "aligned", center=center, share=(0.2, 0.8)).bumps[0]
         assert ranges[0][0] - 1e-6 <= b.center_shape <= ranges[0][1] + 1e-6 and ranges[1][0] - 1e-6 <= b.center_color <= ranges[1][1] + 1e-6
+
+
+@pytest.mark.parametrize("aspect", [0.5, 2.0])
+def test_a_stretched_map_is_centred_where_asked_has_the_stated_gini_and_stretch_and_a_flip_keeps_its_descriptors(aspect):
+    m = vm.calibrate_map(0.5, None, "stretched", aspect=aspect, at=(0.288, 0.712))
+    bump, d = m.bumps[0], m.descriptors()
+    assert (bump.center_shape, bump.center_color) == (0.288, 0.712) and abs(d["gini"] - 0.5) < 0.02
+    assert bump.width / bump.width_color == pytest.approx(aspect, rel=1e-6)
+    flipped = vm.calibrate_map(0.5, None, "stretched", aspect=1.0 / aspect, at=(0.712, 0.288)).descriptors()          # shape and colour swapped, then shape reflected
+    assert flipped["interaction"] == pytest.approx(d["interaction"], abs=2e-3) and flipped["nonlinearity"] == pytest.approx(d["nonlinearity"], abs=5e-3)

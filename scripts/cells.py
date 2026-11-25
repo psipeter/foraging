@@ -3,7 +3,7 @@
     ./venv/bin/python scripts/cells.py realize scripts/design/tables/FORX.json [--workers 6]
     ./venv/bin/python scripts/cells.py show FORX
 
-A table (`scripts/design/tables/<code>.json`) lists cells: {"id", "class" (additive, multiplicative or nonseparable), "gini", "travel_time"} and optionally "interaction".
+A table (`scripts/design/tables/<code>.json`) lists cells: {"id", "class" (additive, multiplicative, nonseparable, or "round" / "stretched": a Gaussian centred exactly at "at" ([shape, colour]), round or stretched by "aspect" (shape width over colour width, axes on the features), its size solved for the Gini), "gini", "travel_time"} and optionally "interaction".
 `realize` turns each cell into a session with `factors.realize` and writes `scripts/design/realized/<code>.json`, which the design module of that experiment reads (`design/tabled.py`), so that
 `build_experiment.py <code>` is fast and deterministic: realising a cell takes minutes (simulation), building a session does not.
 
