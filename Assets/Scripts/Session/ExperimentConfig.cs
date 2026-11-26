@@ -106,7 +106,7 @@ public class ExperimentConfig : ScriptableObject
         }
 
         files.Add(WorldData.PathFor(session));
-        if (session.SelectionEvery > 0)
+        if (session.SelectionEvery > 0 || session.SelectionTimes.Length > 0)
         {
             files.Add(WorldData.SelectionPoolPathFor(session));
         }

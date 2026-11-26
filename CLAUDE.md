@@ -157,7 +157,7 @@ One line per directory; the file-by-file description is `docs/CODEMAP.md`. **Kee
 - `Assets/StreamingAssets/Experiments/<code>/` — what one experiment downloads: instruction texts, generated `<session>_seed<N>.world` and `.ranking.json`. Shared texts (consent, introduction, resume) at the root.
 - `Assets/Editor/` — `BuildInfoWriter`, `ExperimentBuilder`, `ExperimentPlayer`, `SessionPreview`; `Assets/Shaders/`, `Materials/`, `Prefabs/`, `Audio/Ambient/`, `Scenes/SampleScene.unity` (the single scene).
 - `supabase/` — migrations, Edge Functions, local server (deploy: `docs/ONLINE_DATA_PLAN.md`).
-- `docs/` — `SCIENCE.md`, `DECISIONS.md`, `ONLINE_DATA_PLAN.md`, `SIMULATION.md`, `REGENERATING.md`, `CODEMAP.md`, `REVIEW_POLICY.md`, `SESSION_FACTORS_PLAN.md`, `pilots/`.
+- `docs/` — `SCIENCE.md`, `DECISIONS.md`, `ONLINE_DATA_PLAN.md`, `SIMULATION.md`, `REGENERATING.md`, `CODEMAP.md`, `REVIEW_POLICY.md`, `RETIRE_ARC_DESIGN.md` (what to delete once the dense selection is validated), `SESSION_FACTORS_PLAN.md`, `reviews/`, `pilots/`.
 - `.claude/` — agents (simplifier, red-team, arbiter) and the adversarial-review skill.
 - `scripts/` (Python, `./venv/bin/python`; `venv/` and `worlds/` gitignored) in groups:
   worlds (`world.py`, `tiles.py`, `selection.py`, `value_maps.py`, `factors.py`, `cells.py`, `design/`, `build_experiment.py`);
@@ -166,7 +166,7 @@ One line per directory; the file-by-file description is `docs/CODEMAP.md`. **Kee
   online and deployment (`database.py`, `server_*.py`, `load_test.py`, `webgl_smoke.mjs`, `deploy_webgl.sh`, `perf_*`);
   tests and review (`test_*.py`, `run_tests.py`, `conftest.py`, `synthetic.py`, `fixtures/`, `mutation_check.py`).
 - **Hash-sensitive files:** `ENGINE_FILES` (`sim.py`, `costs.py`, `perception.py`, `world.py`, `tiles.py`) and `AGENT_FILES` (`agents.py`, `specs.py`) are hashed into every recorded simulation result: even a comment edit moves the hashes. Edit them only when needed and batch the edits (`docs/SIMULATION.md`).
-- **Mirrored pairs (change both):** `HarvestManager` range/bearing/timer rules with `replay.py` (camera, canopy and terrain sampling also with `visibility.py`); `SelectionBreak` timing, blocks and events with `replay.py` and `visibility.py`; `SelectionSets.ScorePairs` / `PairWeight` with `selection.selections_to_points`; `scripts/world.py`'s placement, attribute and reward rules with the C# generator-side rules `WorldData` reads.
+- **Mirrored pairs (change both):** `HarvestManager` range/bearing/timer rules with `replay.py` (camera, canopy and terrain sampling also with `visibility.py`); `SelectionBreak` timing, blocks and events with `replay.py` and `visibility.py`; `SelectionSets.ScorePairs` / `PairWeight` with `selection.selections_to_points`; `SelectionSets.TopKScore` with `selection.top_k_score` (the dense selection's score); `HarvestManager.Aimed` with `replay._aimed` (an ellipsoid along each bush's own up axis; a tipped stage bush logs `up_x`, `up_y`, `up_z` in `rank_set`); `scripts/world.py`'s placement, attribute and reward rules with the C# generator-side rules `WorldData` reads.
 
 ---
 
@@ -235,7 +235,7 @@ Full text: `docs/ONLINE_DATA_PLAN.md`, "Data logging (as built)". The invariants
 - The clock `t` is unpaused session seconds; trajectory time is quantized to a microsecond because replay sums frame times.
 - **Selection breaks** hold the session clock; **change `SelectionBreak`'s timing, blocks and events together with `replay.py` and `visibility.py`** (a log has `rank_break_start`/`rank_break_end`, `rank_set`, `rank_leaving`; points are `foraging_points` + `ranking_points`).
 - **Resume:** a participant returning with the same Prolific ID continues the unfinished run (`DataLogger` restores clock, pose, score, fruits; the log gets `session_resume`, a discontinuity for `replay.py`).
-- **Stored names still say "ranking"** (participants see "selection"; the code was renamed 2026-11-25, `docs/DECISIONS.md` "Code rename"): the `ranking_sets` table, CSV and view, `ranking_points`, `ranking_pairs`, `session_rankings`, the `rank_*` events, and the pool file's name (`*.ranking.json`) and format (`ranking-pool`). Keep them; renaming them is a data-format change.
+- **Stored names still say "ranking"** (participants see "selection"; the code was renamed 2026-11-25, `docs/DECISIONS.md` "Code rename"): the `ranking_sets` table, CSV and view, `ranking_points`, `ranking_pairs`, `session_rankings`, the `rank_*` events, the tutorial hint ids (renamed `ranking_*` to `selection_*` on 2026-11-25: they are stored in `hint_shown` events and read back on a resume, harmless while no participant data exist), and the pool file's name (`*.ranking.json`) and format (`ranking-pool`). Keep them; renaming them is a data-format change.
 - `BuildInfoWriter` writes the gitignored `StreamingAssets/build_info.json`; the server refuses a commit not registered (`database.py register-release`).
 
 ---

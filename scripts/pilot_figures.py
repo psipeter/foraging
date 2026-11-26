@@ -22,7 +22,7 @@ import factors
 import pilot_report
 import sim
 import value_maps
-from selection import load_session
+from world import load_session
 
 DOCS = Path(__file__).resolve().parent.parent / "docs" / "pilots"
 EXPERIMENTS = (("PCX", "Complexity", "interaction"), ("PSC", "Spacing", "travel time"), ("PSP", "Sparsity", "Gini"))

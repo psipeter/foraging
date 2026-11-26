@@ -206,3 +206,13 @@ def test_a_tall_real_bush_in_front_hides_a_sets_bush_in_a_break_as_it_does_outsi
     # the real bush stays through a break, so it occludes like any bush: a tall one 20 away hides a low one behind it at 40, when both are straight ahead
     log = make_log([[0.0, 20.0]], shape=1.0, events=break_events())
     assert 101 not in set(seen(log)["tree_id"]) and 0 in set(seen(log)["tree_id"])
+
+
+def test_an_upright_bush_is_sampled_at_the_unit_spheres_own_axes_and_a_wall_bush_is_as_tall_as_it_is_wide():
+    # a golden value of the sampling before bushes could be tipped (a rotated basis gave 0.818182 here)
+    assert abs(float(seen(make_log([[20.0, 10.0]], yaw=60.0, radius=2.5))["visible_fraction"][0]) - 8.0 / 11.0) < 1e-9
+    log = make_log([[0.0, 30.0]], radius=2.0)
+    log.bushes.up = np.array([[0.0, 0.0, -1.0]])                        # grown out of a wall facing the player (the stage's normal points back at the player)
+    log.bushes.ground = np.array([0.0])
+    s = seen(log)
+    assert abs(float(s["height"][0]) - math.degrees(math.atan2(2.0, float(s["distance"][0])))) < 1e-9     # the extent across the bush's axis (its radius), not its half-height

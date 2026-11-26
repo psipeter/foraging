@@ -52,7 +52,7 @@ docs/        SCIENCE.md (goals, design, findings), DECISIONS.md (design choices 
              FN, RW, FI, PL, PA and the cleanup), ONLINE_DATA_PLAN.md (online data collection: schema, upload protocol, resume, deploying; its last section
              "Data logging (as built)" describes the logger), SIMULATION.md (the results database, the assessment battery, agent rules), REGENERATING.md (what to
              regenerate after a change, per kind of change), REVIEW_POLICY.md (what code review optimizes; see "Adversarial review" in CLAUDE.md),
-             SESSION_FACTORS_PLAN.md (the session factors and their calibration), pilots/ (reports of the pilots PCX, PSC, PSP and the agent benchmark `agents.md`),
+             RETIRE_ARC_DESIGN.md (notes for deleting the older arc, ladder, pair and patch-leaving selection design once the dense one is validated), reviews/ (saved adversarial reviews), SESSION_FACTORS_PLAN.md (the session factors and their calibration), pilots/ (reports of the pilots PCX, PSC, PSP and the agent benchmark `agents.md`),
              CODEMAP.md (this file), and the figures value_map_examples.png, value_map_gallery.png, value_map_region.png, independence_correlations.png
 .claude/     agents/ (simplifier, red-team, arbiter) and skills/adversarial-review/
 scripts/     Python (run with ./venv/bin/python; venv/ and worlds/ are gitignored):

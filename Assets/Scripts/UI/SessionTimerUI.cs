@@ -179,7 +179,7 @@ public class SessionTimerUI : MonoBehaviour
         }
 
         // The selection sets' points appear only here (during play a set shows a sealed "+???"). The totals are on the experiment's completion screen, after the last of these.
-        bool split = sessionConfig != null && sessionConfig.SelectionEvery > 0;
+        bool split = sessionConfig != null && (sessionConfig.SelectionEvery > 0 || sessionConfig.SelectionTimes.Length > 0);
         _score = ScoreScreen.Show(GameManager.PartLabel, _lastTotalScore, SelectionBreak.Points, split, "Press [Enter] to continue", FindFirstObjectByType<CameraController>(), sessionConfig);
         Music.PlayScore();
     }

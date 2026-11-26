@@ -11,7 +11,7 @@ How the five grids of a session are chosen (a table and a solver, 2026-11-25):
      `MIN_RISE` over the session; the first and last counts lie in the session's ranges (`SPEC`, default 4 to 7 and 10 to 13 of 25, that is 16 to 28% and 40 to 52%); the geometric-mean spacing never grows, falls by at most 30% per selection and ends at 50 to 72% of its first value, and every step of the count is at least 1 (no plateau); and the peak's column and row differ from the selection before's (always where the other constraints allow; `repeat` "both" (hard), else "soft" (a cost of `repeat` per repeated column or row), tried in that order at each relaxation level of the other constraints, `RELAX`). Costs, by preset (`PRESETS`): the count's
      rise being uneven (second difference) or flat, the first grid being narrow, the spacing's total fall and the last count being above the least allowed, the peak at the same cell, column or row as at another selection (more when consecutive), a border coordinate of the peak's index, and an uneven fall of the spacing.
   3. **Presets** `even`, `balanced`, `diverse` weight those costs differently; `plans` returns all three for a session and `options` writes them side by side (`docs/pilots/pilot_selection_options.txt`).
-     `PRESET` names the one a session uses in the figure (default `balanced`).
+     The figure uses `balanced` unless a preset is given.
   Where a map pins the peak (a corner, or an edge position such as Complexity 2's shape 0.12) only what is left can vary. No history, no displacement. A session has 5 selections (human pilots: 4.7 on average, 1 to 8).
 
     dense_grid.py figure SESSIONS [--preset even|balanced|diverse] [--out file.png]
@@ -49,7 +49,6 @@ SPEC = {                       # per-session overrides: first and last count ran
     "PCX_S3": {"first": (4, 11), "last_ratio": 1.3},
 }
 DEFAULT_SPEC = {"first": (4, 7), "last": (10, 13), "last_ratio": None, "zoom": (0.50, 0.72), "min_step": 1, "repeat": "both", "first_geo_min": 0.19}
-PRESET = {}                    # session -> preset used by `figure` (default "balanced")
 PRESETS = {                    # cost weights
     "even": {"even": 8.0, "plateau": 6.0, "same_cell": 3.0, "same_line": 0.5, "neighbour": 0.3, "edge": 0.3, "smooth": 30.0, "shrink": 1.0, "last_count": 0.4, "broad_first": 15.0, "repeat": 10.0},
     "balanced": {"even": 3.0, "plateau": 4.0, "same_cell": 4.0, "same_line": 2.0, "neighbour": 1.0, "edge": 1.0, "smooth": 30.0, "shrink": 1.0, "last_count": 0.4, "broad_first": 15.0, "repeat": 10.0},
@@ -86,7 +85,6 @@ def count_inside(world, cells):
 
 def build_table(world, ratio):
     """For one selection's colour:shape ratio: arrays over (spacing in S_GRID, i, j): `fit` and `count` inside the region."""
-    S, I, J, A, B = (len(S_GRID), N, N, N, N)
     s = S_GRID[:, None, None, None, None]
     i = np.arange(N)[None, :, None, None, None]
     j = np.arange(N)[None, None, :, None, None]
@@ -104,7 +102,7 @@ def build_table(world, ratio):
     return {"fit": fit_i[:, :, None] & fit_j[:, None, :], "count": count}
 
 
-def solve(world, spec, ratios, tables, weights, selections=5):
+def solve(spec, ratios, tables, weights, selections=5):
     """The cheapest plan over the tables: a list of (spacing index, i, j) per selection, and its cost, or (None, inf) when none meets the hard constraints."""
     geo = lambda si, r: S_GRID[si] * np.sqrt(ratios[r])
     # state arrays: cost, positions (B, r) as i * N + j, spacing index, previous spacing index, count, previous count
@@ -211,7 +209,7 @@ def _best_plan(world, spec, last_ratio, weights, selections):
     for power in RATIO_POWERS:
         ratios = [1.0 + (r / (selections - 1)) ** power * (last_ratio - 1.0) for r in range(selections)]
         tables = [build_table(world, ratio) for ratio in ratios]
-        plan, cost = solve(world, spec, ratios, tables, weights, selections)
+        plan, cost = solve(spec, ratios, tables, weights, selections)
         if plan is not None and cost < best[0]:
             best = (cost, plan, ratios)
     return best if best[1] is not None else None
@@ -240,7 +238,7 @@ def figure(sessions, selections=5, preset=None):
     lines = ["session / selection: shape spacing x colour spacing, points inside, peak index (shape, colour), best-5 sum as a share of 5 peaks"]
     for row, session in enumerate(sessions):
         world, last_ratio = load_world(session)
-        name = preset or PRESET.get(session, "balanced")
+        name = preset or "balanced"
         grids = plan_session(session, world, last_ratio, PRESETS[name], selections)
         field = world.value(np.stack(np.meshgrid(axis, axis, indexing="ij"), axis=-1))
         bump = world.params.reward_function["bumps"][0]

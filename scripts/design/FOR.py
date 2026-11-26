@@ -21,13 +21,13 @@ TILE_FIELDS = {"tilePlacement": "balanced", "tileSumTol": 1.0, "tileRadius": 45.
 FEEDBACK_FIELDS = {"rewardFeedbackMax": REWARD_SCALE, "pitchSemitoneRange": 12.0}      # popup size and pick pitch rise with the points up to the session's maximum (here the map's peak); the pitch spans an octave from 440 Hz in every session
 CROSSHAIR_RING_DEG = 3.5            # the harvest ring the crosshair becomes on a bush (SessionConfig.crosshairRingSizeDeg)
 CROSSHAIR_RADIUS = 7.0              # the hidden hit circle of the crosshair (degrees; SessionConfig.crosshairRadius)
-# a selection set in place after every patch leaving that follows a harvested bush (`selectionEvery` 1, no `selectionLeavings` schedule, no cooldown, `selectionMinBushes` 1 since the last selection; `SessionConfig.selection*`; the arc fields: 5 bushes, 16 units, 84 degrees): 20 s a set, one set per break
+# the older selection design (a set of bushes on an arc after patch leavings, ordered-pair points; `selectionEvery` 1, `selectionBonusPerPair`, ...): kept in SELECTION_FIELDS for the template FOR_S1 only; docs/RETIRE_ARC_DESIGN.md
 SELECTION_TEXT = "Select the 5 most valuable bushes. 100 points available."           # the banner of a selection (a "selection" to participants), pilots and tutorial
 SELECTION_FIELDS = {"selectionEvery": 1, "selectionLeavings.Array.size": 0, "selectionMinBushes": 1, "selectionSets": 1, "selectionSeconds": 20.0, "selectionCooldown": 0.0, "selectionPoolSets": 30, "selectionSettleDepth": 0.0, "selectionBonusPerPair": 4.0, "selectionPointsMode": "pair_mean_value", "selectionCrosshairRadius": 1.0, "selectionStageDrop": 3.0, "selectionStageMargin": 4.0, "selectionStageWorldGray": 0.6, "selectionText": SELECTION_TEXT}
 
 
 # The dense selection of the pilots (2026-11-25, DECISIONS "Dense 5x5 selection grid" and "Build of the dense selection"): a selection at 30, 60, 90, 120 and 150 s of the session clock (soft: it waits for a harvest bout to end, 10 s at most),
-# the best 5 of a 5x5 grid of bushes picked in 45 s from a stage camera of its own (the player's camera does not move), scored 0 to 100 (one selection, drawn from the world seed, pays). The grids are planned by `scripts/dense_grid.py` (preset balanced).
+# the best 5 of a 5x5 grid of bushes (on a wall in front of the player; the camera does not move) picked in 45 s, scored 0 to 100 (every selection pays, so up to 500 over a session). The grids are planned by `scripts/dense_grid.py` (preset balanced).
 SELECTION_TIMES = (30.0, 60.0, 90.0, 120.0, 150.0)
 DENSE_SELECTION_FIELDS = {"selectionDesign": "dense", "selectionTimes.Array.size": len(SELECTION_TIMES), **{f"selectionTimes.Array.data[{i}]": t for i, t in enumerate(SELECTION_TIMES)},
                         "selectionMaxWait": 10.0, "selectionSeconds": 45.0, "selectionPoolSets": len(SELECTION_TIMES), "selectionPicks": 5, "selectionGridSpacing": 7.0, "selectionGridDistance": 28.0, "selectionStageTilt": 90.0, "selectionStageDrop": -5.1,

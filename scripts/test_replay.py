@@ -634,3 +634,12 @@ def test_without_a_crosshair_radius_the_log_is_replayed_by_the_old_cone():
     yaw, pitch = look(0.0, 7.0, 0.0, 10.0)
     old = dict(CFG)                                        # no crosshairRadius in the config: the 35 degree cone of yaw, pitch ignored
     assert press_events(replay_harvests(cross_log(hold(0.0, 7.0, yaw, pitch + 25.0), cfg=old)))
+
+
+def test_a_bush_grown_out_of_a_wall_is_aimed_along_its_own_axis_not_the_worlds():
+    centres, eye = np.array([[0.0, 0.0, 30.0]]), np.zeros(3)
+    forward = np.array([0.0, 1.5, 30.0]) / np.linalg.norm([0.0, 1.5, 30.0])        # a ray that passes 1.5 above the bush's centre
+    upright = replay._aimed(centres, np.array([2.0]), np.array([1.0]), eye, forward, 0.0)
+    tipped = replay._aimed(centres, np.array([2.0]), np.array([1.0]), eye, forward, 0.0, up=np.array([[0.0, 0.0, -1.0]]))
+    assert not upright[0]                                   # half the height is 1: the ray goes over it
+    assert tipped[0]                                        # its axis points at the eye, so it is 2 across in every direction on the screen

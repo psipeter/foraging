@@ -11,7 +11,7 @@ fruit counts come from the logged fruit events, and the events logged in the gap
 have no frames to be derived from: `verify` leaves them out.
 
 A foraging session with selection breaks (SelectionBreak: `rank_break_start` / `rank_break_end` events) plays a selection set in place: the real bushes are
-still there but grey and not harvestable, the set's bushes (not in the world file; their table is the `rank_set` event) stand on an arc, the harvest is aimed (no range, the selection's
+still there but grey and not harvestable, the set's bushes (not in the world file; their table is the `rank_set` event) stand in front of the player (on the selection stage), the harvest is aimed (no range, the selection's
 tolerance) and quick (`selectionFruitSeconds` a fruit), and presses are discarded from the break's start and each set's end up to the next
 `rank_go` (or the break's end). `with_selection_bushes` appends those bushes to the table and `break_windows` gives the windows.
 
@@ -100,6 +100,11 @@ def find_world_file(name, sha, archive=None):
     raise FileNotFoundError(f"no file named {name} with sha256 {sha[:12]}... in {DATA_DIR / '_worlds'} or {WORLD_DIR}")
 
 
+def old_ranking_config(config):
+    """True for a logged config written before 9fdeb23 renamed the `ranking*` fields to `selection*` (its keys would be silently ignored, and the replay of its selection rules wrong)."""
+    return any(k.startswith("ranking") and k[7:8].isupper() for k in config)
+
+
 def load_session_log(folder):
     """Load a session folder (a path, or a session id under ForagingData/) and its world."""
     folder = Path(folder)
@@ -109,6 +114,8 @@ def load_session_log(folder):
         folder = DATA_DIR / str(folder)
     data = rundata.read_session(folder)
     row = data["session"]
+    if old_ranking_config(row.get("config") or {}):
+        raise ValueError("unsupported log format: the config has ranking* keys (written before 9fdeb23 renamed them selection*)")
     archive = folder.resolve().parent.parent / "_worlds"          # <out>/<run>/<session>
     header, grids = read_unity_world(find_world_file(row["world_file"], row["world_sha256"], archive))
     n, fruits = len(header["canopyRadius"]), int(header["fruitCount"])
@@ -431,9 +438,9 @@ def steps(log, dt=0.1):
 
     Returns arrays over the grid: t, x, z, yaw (unwrapped degrees), pitch, forward/back/harvest key states (0/1),
     `reward` (sum of the fruit rewards that arrive in the step, from the logged events), `harvesting` (1 inside a
-    bout), `tree` (the bush being harvested, else -1) and `selection` (1 inside a selection break: the player stands still selection
-    a set, the real bushes are grey and not harvestable, and the tree ids of the bouts are those of the set's bushes). Pose is linearly interpolated, except across a teleport
-    (a selection break's teleport or a resume), where the earlier pose is held until the jump; discrete states take the latest
+    bout), `tree` (the bush being harvested, else -1) and `selection` (1 inside a selection break: the player stands still while
+    a set is played, the real bushes are grey and not harvestable, and the tree ids of the bouts are those of the set's bushes). Pose is linearly interpolated, except across a teleport
+    (a resume), where the earlier pose is held until the jump; discrete states take the latest
     frame at or before the step start.
     """
     tr = log.traj

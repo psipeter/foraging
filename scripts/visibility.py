@@ -114,10 +114,10 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
     # Sample points (n, P, 3) in world coordinates and their outward normals. A bush's up axis is the world's, except on a tipped selection stage (it grows out of the stage): its canopy
     # is then the same ellipsoid turned, with the two horizontal axes of the unit sphere taken across the up axis.
     up_axes = bush_up(b)
-    side = np.cross(up_axes, np.array([1.0, 0.0, 0.0]))
-    side[np.linalg.norm(side, axis=-1) < 1e-6] = np.array([0.0, 0.0, 1.0])
+    side = np.cross(up_axes, np.array([0.0, 0.0, 1.0]))                  # an upright bush: side = x, side2 = z, the unit sphere's own axes
+    side[np.linalg.norm(side, axis=-1) < 1e-6] = np.array([1.0, 0.0, 0.0])
     side /= np.linalg.norm(side, axis=-1, keepdims=True)
-    side2 = np.cross(up_axes, side)
+    side2 = np.cross(side, up_axes)
     centres_ground = np.stack([b.pos[:, 0], ground, b.pos[:, 1]], axis=-1)
     across = dirs[None, :, 0, None] * side[:, None, :] + dirs[None, :, 2, None] * side2[:, None, :]            # (n, P, 3)
     pts = centres_ground[:, None, :] + rx[:, None, None] * across + (ry[:, None] * dirs[None, :, 1])[..., None] * up_axes[:, None, :]
@@ -174,7 +174,7 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
             d = mid[i] - eye
             dd = float(np.linalg.norm(d))
             width = math.degrees(2.0 * math.atan2(rx[i], dd))
-            height = math.degrees(math.atan2(ry[i], dd))
+            height = math.degrees(math.atan2(math.hypot(ry[i] * up_axes[i, 1], rx[i] * math.sqrt(max(1.0 - up_axes[i, 1] ** 2, 0.0))), dd))      # the canopy's vertical half-extent (a bush seen end-on, on a wall, is as tall as it is wide)
             if max(width, height) < min_angular_deg:
                 continue
             zc_m = float(d @ fwd)

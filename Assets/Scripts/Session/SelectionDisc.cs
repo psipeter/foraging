@@ -1,6 +1,6 @@
 using UnityEngine;
 
-// The floating disc of a selection stage: a small bumpy oval of terrain, a little bigger than the arc of bushes, with a short underside. Its top uses the
+// The floating disc of a selection stage: a small bumpy oval of terrain, a little bigger than the set's bushes, with a short underside. Its top uses the
 // terrain's own shader and textures with a fixed moisture (0 arid, 0.5 grassland, 1 swamp: the three key textures), so it looks like the real ground. It is built in code for each set
 // in the set's own frame (x to the player's right, z ahead, the player at the origin), and `HeightAt` gives the surface height the bushes stand on.
 public class SelectionDisc
@@ -22,7 +22,7 @@ public class SelectionDisc
 
     // `terrain` is the terrain's material instance (its shader, textures and tiling); `centre` and `turn` place the disc in the world (the set's frame is the player's position turned
     // by the view's yaw); `radiusX` and `radiusZ` are the outline's mean half sizes along the player's right and ahead; `halfExtent` is the world's, for the texture's scale.
-    public static SelectionDisc Create(Material terrain, Vector3 position, Quaternion turn, Vector2 centre, float radiusX, float radiusZ, float halfExtent, int seed, int layer, float tiltDegrees = 0f)
+    public static SelectionDisc Create(Material terrain, Vector3 position, Quaternion turn, Vector2 centre, float radiusX, float radiusZ, float halfExtent, int seed, int layer, float tiltDegrees)
     {
         float tilt = tiltDegrees * Mathf.Deg2Rad;
         var disc = new SelectionDisc { _rx = radiusX, _rz = radiusZ, _centre = centre, _tilt = tilt };      // `radiusZ` is the half size along the slope
@@ -92,10 +92,9 @@ public class SelectionDisc
     // The surface height at a point of the stage: `x` in the set's frame (to the player's right), `z` the distance along the slope from the stage's middle; the slope (0 when flat) plus a gentle dome over the oval, 0 at its edge.
     public float HeightAt(float x, float z)
     {
-        float dz = z;                                       // along the slope from the middle
-        float u = (x - _centre.x) / _rx, v = dz / _rz;
+        float u = (x - _centre.x) / _rx, v = z / _rz;               // z: along the slope from the middle
         float rho = Mathf.Sqrt(u * u + v * v) / Bump(Mathf.Atan2(v, u));
-        return dz * Mathf.Sin(_tilt) + Dome * Mathf.Cos(_tilt) * Mathf.Clamp01(1f - rho * rho);
+        return z * Mathf.Sin(_tilt) + Dome * Mathf.Cos(_tilt) * Mathf.Clamp01(1f - rho * rho);
     }
 
     private Mesh BuildMesh(Vector3 position, Quaternion turn, float halfExtent)
@@ -111,13 +110,14 @@ public class SelectionDisc
             uv2[i] = new Vector2(moisture, 0f);
         }
 
-        vertices[0] = new Vector3(0f, Dome, 0f);
+        float dome = Dome * Mathf.Cos(_tilt);                           // the dome bulges along the surface's normal: on a wall it would stand the bushes behind the drawn surface
+        vertices[0] = new Vector3(0f, dome, 0f);
         for (int r = 1; r <= Rings; r++)
         {
             float rho = r / (float)Rings;
             for (int s = 0; s < Segments; s++)
             {
-                vertices[1 + (r - 1) * Segments + s] = Point(s, rho, Dome * (1f - rho * rho));
+                vertices[1 + (r - 1) * Segments + s] = Point(s, rho, dome * (1f - rho * rho));
             }
         }
 

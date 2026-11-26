@@ -97,6 +97,8 @@ class Ctx:
             return "the old final_score column (before 2026-11-14)"
         if any(e["type"] == "rank_break_start" for e in self.events) and not self.sets and not _of(self, "rank_set_start"):
             return "selection breaks of the early prototype (no rank_set_start events, no ranking_sets rows)"
+        if replay.old_ranking_config(self.config):
+            return "a config with the ranking* keys (before 9fdeb23 renamed them selection*)"
         return None
 
     @property
@@ -663,7 +665,7 @@ def validate_session(folder):
     try:
         ctx = load_ctx(folder)
     except ValueError as err:
-        old = "header" in str(err)
+        old = "header" in str(err) or "unsupported" in str(err)
         return [Result("load", FAIL, ("unsupported log format: " if old else "unreadable: ") + str(err)[:300])]
     except (OSError, KeyError, TypeError) as err:
         return [Result("load", FAIL, f"unreadable: {type(err).__name__}: {err}"[:300])]

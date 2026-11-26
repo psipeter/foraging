@@ -5,13 +5,15 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
-// A selection break: a selection set played in place, inside a foraging session, so the participant stays in the foraging stage (SessionConfig.selection*,
-// docs/DECISIONS.md "FOR: selection breaks inside the session"). After the patch switches of the leaving schedule (`selectionLeavings`; none: every `selectionEvery`-th, 1 in FOR and TUT) (a settled crossing into another tile of a tiles
-// world) the real bushes fade to grayscale (and cannot be aimed at) and a set of selection bushes grows on an arc in front of the player, on the terrain they stand on. The player
-// harvests them from most to least points under these rules (stationary, any bush in view, a started harvest is finished). The session clock is held
-// while a break runs (SunController.ClockHeld) and a second countdown shows the set's own seconds; outcomes are hidden and the selection bushes pay nothing
-// (zero fruit rewards), so the score does not move. The sets come from the session's pool file (scripts/selection.py pool), used in order.
-// Created at runtime by GameManager (no scene wiring). Change its timing, blocks and events together with scripts/replay.py, visibility.py and validate_run.py. The arc is placed on whatever ground is there (no wait for flat ground: it looked fine in the first playtest).
+// A selection break: a selection played in place, inside a foraging session, so the participant stays in the foraging stage (SessionConfig.selection*,
+// docs/DECISIONS.md "FOR: selection breaks inside the session"). The pilots' design is dense: at the scheduled times (`selectionTimes` of the session clock, waiting up to
+// `selectionMaxWait` for a harvest bout to end) the real bushes fade to grayscale (and cannot be aimed at) and a stage rises in front of the player: a 5x5 grid of selection bushes
+// on a wall (`selectionStageTilt`; the player's camera never moves), the grid's orientation cycling over the four reversals. The player aims at bushes (stationary, any bush in
+// view, a started harvest is finished) and picks the best `selectionPicks` of the 25 in `selectionSeconds`. The session clock is held while a break runs (SunController.ClockHeld) and
+// a second countdown shows the selection's own seconds; outcomes are hidden and the selection bushes pay nothing (zero fruit rewards), so the score does not move; the selection is
+// scored from the values of the picks (SelectionSets.TopKScore) and the points are added at the end. The older design (an arc of bushes after patch leavings, ordered pairs, `selectionLeavings`)
+// is still in this class and in the pool generators; docs/RETIRE_ARC_DESIGN.md lists what would go. The sets come from the session's pool file (scripts/selection.py pool), used in order.
+// Created at runtime by GameManager (no scene wiring). Change its timing, blocks and events together with scripts/replay.py, visibility.py and validate_run.py.
 public class SelectionBreak : MonoBehaviour
 {
     [Serializable]
@@ -19,7 +21,6 @@ public class SelectionBreak : MonoBehaviour
     {
         public int id;
         public int slot;
-        public float bearing;
         public float shape;
         public float color;
         public float moisture;
@@ -37,8 +38,6 @@ public class SelectionBreak : MonoBehaviour
     private class PoolFile
     {
         public string format;
-        public int n;
-        public int setSize;
         public float tieTolerance;
         public int fruitCount;
         public string layout;                 // "grid": the dense design (25 bushes on a lattice, `pickCount` of them picked); else an arc
@@ -167,7 +166,9 @@ public class SelectionBreak : MonoBehaviour
         {
             // What the sets were worth (the end screen shows it) is the correct pairs times the bonus: the paid points are 0 in a practice session, so they would restart the screen at 0.
             // Only the pair count is stored, so in a points mode that weights pairs the practice figure after a resume is this unweighted estimate (the paid points are exact).
-            Points = config.SelectionPointsMode == "pair" ? Mathf.Max(ResumeInfo.Pending.ranking_points, ResumeInfo.Pending.ranking_pairs * config.SelectionBonusPerPair)
+            // (In the dense design `ranking_pairs` holds the hits, not pairs, and a score is not a multiple of them: the paid points are all that is known, 0 in a practice session.)
+            Points = config.SelectionDesign == "dense" ? ResumeInfo.Pending.ranking_points
+                : config.SelectionPointsMode == "pair" ? Mathf.Max(ResumeInfo.Pending.ranking_points, ResumeInfo.Pending.ranking_pairs * config.SelectionBonusPerPair)
                 : config.IsPractice ? ResumeInfo.Pending.ranking_pairs * config.SelectionBonusPerPair : ResumeInfo.Pending.ranking_points;
             PaidPoints = ResumeInfo.Pending.ranking_points;
             // Continuing an interrupted session: the numbering, the pool and the rows carry on. The pool continues from the sets that were scored (a set shown but not scored is
@@ -373,7 +374,7 @@ public class SelectionBreak : MonoBehaviour
             _real[i].isHarvested = true;
         }
 
-        yield return GrayFade(1f);
+        yield return GrayFade(_real, 0f, 1f);                 // the world's bushes fade to grayscale over the gray-fade seconds, then the stage grows
 
         for (int s = firstSet; s < _config.SelectionSets; s++)
         {
@@ -402,7 +403,7 @@ public class SelectionBreak : MonoBehaviour
         _harvest.SetFruitSeconds(-1f);
         _player.SetStationary(false);
         _harvest.SetBlocked(false);
-        HideHud();
+        FadeHud(0f);
         if (_log != null)
         {
             _log.LogEvent("rank_break_end", payload: Json.Obj(("break", _breakNumber)));
@@ -421,7 +422,7 @@ public class SelectionBreak : MonoBehaviour
         _running = false;
     }
 
-    // One set: the bushes grow on the arc in front of the player, the countdown runs until every bush is ranked or the seconds are used, the set is scored (hidden)
+    // One set: the bushes grow in front of the player, the countdown runs until the picks are made or the seconds are used, the set is scored (hidden)
     // and logged, and the bushes shrink away. After the break's last set the player is free to move at once; the set's bushes
     // shrink and the real ones regrow around them, and harvesting is allowed again when that is done.
     private IEnumerator RunSet(PoolSet set, int indexInBreak, bool last)
@@ -470,7 +471,7 @@ public class SelectionBreak : MonoBehaviour
         _harvest.RefreshTrees();
         if (_log != null)
         {
-            // The set's bush table (where the arc fell, so replay.py and visibility.py can place the bushes): they are not in the world file.
+            // The set's bush table (where the bushes stand, so replay.py and visibility.py can place the bushes): they are not in the world file.
             var table = new List<string>();
             foreach (PoolBush b in set.bushes)
             {
@@ -566,7 +567,7 @@ public class SelectionBreak : MonoBehaviour
                 _player.SetStationary(false);
             }
 
-            HideHud();
+            FadeHud(0f);
             _removingSet = true;
             _ungraying = true;
             StartCoroutine(RemoveSet(created, scales, _disc));
@@ -706,12 +707,6 @@ public class SelectionBreak : MonoBehaviour
         }
     }
 
-    // The world's bushes fade to grayscale over the gray-fade seconds (`to` 1; the arc's bushes grow after it).
-    private IEnumerator GrayFade(float to)
-    {
-        yield return GrayFade(_real, 1f - to, to);
-    }
-
     private IEnumerator GrayFadeBack()
     {
         yield return GrayFade(_real, 1f, 0f);
@@ -750,7 +745,7 @@ public class SelectionBreak : MonoBehaviour
         GrayTerrain(to);
     }
 
-    // A disc of terrain just bigger than the set's arc, below the player's ground, in the set's frame (the player at the origin, z ahead).
+    // A disc of terrain just bigger than the set's bushes, in the set's frame (the player at the origin, z ahead).
     private SelectionDisc BuildDisc(PoolSet set, Vector3 origin, Quaternion turn, float discY)
     {
         float minX = float.MaxValue, maxX = float.MinValue, minLattice = float.MaxValue, maxLattice = float.MinValue;
@@ -954,9 +949,4 @@ public class SelectionBreak : MonoBehaviour
         _hudFade = null;
     }
 
-    // The line and the countdown fade out.
-    private void HideHud()
-    {
-        FadeHud(0f);
-    }
 }

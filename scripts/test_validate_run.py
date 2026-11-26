@@ -459,3 +459,56 @@ def test_a_weighted_points_mode_is_recomputed_from_the_picks_and_an_unknown_mode
     assert failing(ctx) == set()
     ctx.config["selectionPointsMode"] = "by_rank"
     assert failing(ctx) == {"selection pair scores", "selection points", "rank_set_end = row"}
+
+
+# --- the dense (top-k) scoring ------------------------------------------------------------------------------------------------------------
+
+def dense_ctx(picked_ids, points, correct, logged_values=None):
+    """One dense selection set of 25 bushes (values 0..24, id = value), the picks in rank order, the row's and the rank_set_end event's score."""
+    values = logged_values or {i: float(i) for i in range(25)}
+    bushes = [{"id": i, "slot": i, "value": values[i], "rank": picked_ids.index(i) + 1 if i in picked_ids else None} for i in range(25)]
+    row = {"seq": 0, "set_index": 0, "pool_index": 0, "points": points, "correct_pairs": correct, "total_pairs": 5, "bushes": bushes}
+    end = event(5.0, "rank_set_end", payload={"correct_pairs": correct, "total_pairs": 5, "points": points})
+    config = dict(CONFIG, selectionDesign="dense", selectionPicks=5, selectionTopKPoints=100.0, selectionPaid="all", isPractice=False)
+    ctx = golden()
+    ctx.row["config"] = config
+    ctx.sets, ctx.events, ctx.pool_size = [row], [end], 1
+    return ctx
+
+
+def dense_results(ctx):
+    return {r.name: r for r in v._check_dense_sets(ctx, ("pairs", "points", "events"))}
+
+
+def test_the_dense_score_is_recomputed_from_the_picks_and_the_best_five_score_100():
+    r = dense_results(dense_ctx([24, 23, 22, 21, 20], 100.0, 5))
+    assert r["pairs"].status == PASS and r["points"].status == PASS and r["events"].status == PASS
+    assert dense_results(dense_ctx([24, 23, 22, 21, 20], 90.0, 5))["points"].status == FAIL               # a wrong score is found
+    assert dense_results(dense_ctx([24, 23, 22, 21, 20], 100.0, 4))["pairs"].status == FAIL               # a wrong hit count is found
+
+
+def test_a_selection_cut_short_is_scored_on_the_picks_made_against_the_baseline_of_five_average_bushes():
+    # picks 24, 23, 22: sum 69; five random bushes average 5 * 12 = 60; the best five sum 110: score 100 * (69 - 60) / (110 - 60) = 18
+    assert dense_results(dense_ctx([24, 23, 22], 18.0, 3))["points"].status == PASS
+    assert dense_results(dense_ctx([24, 23, 22], 100.0 * (69 - 60 + 12 + 12) / 50, 3))["points"].status == FAIL      # a missing pick counted as an average bush
+
+
+def test_the_logged_values_are_rounded_to_four_decimals_so_a_hundredth_of_a_point_is_tolerated():
+    values = {i: round(i + 0.00004 * (i % 3), 4) for i in range(25)}
+    picked = [24, 23, 22, 21, 20]
+    exact = 100.0 * (sum(i + 0.00004 * (i % 3) for i in picked) - 5 * np.mean([i + 0.00004 * (i % 3) for i in range(25)])) / (110 - 5 * 12)
+    assert dense_results(dense_ctx(picked, round(exact, 4), 5, values))["points"].status == PASS
+    assert dense_results(dense_ctx(picked, round(exact, 4) + 0.5, 5, values))["points"].status == FAIL
+
+
+def test_a_practice_session_pays_no_dense_points():
+    ctx = dense_ctx([24, 23, 22, 21, 20], 0.0, 5)
+    ctx.row["config"]["isPractice"] = True
+    assert dense_results(ctx)["points"].status == PASS
+
+
+def test_a_log_with_the_pre_rename_ranking_config_keys_is_unsupported_not_misread():
+    ctx = golden()
+    ctx.row["config"]["rankingEvery"] = 1
+    assert "ranking*" in ctx.unsupported and failing(ctx) == {"format"}
+    assert replay.old_ranking_config({"rankingEvery": 1}) and not replay.old_ranking_config({"selectionEvery": 1, "rankScale": 3})

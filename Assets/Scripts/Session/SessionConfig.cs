@@ -96,7 +96,7 @@ public class SessionConfig : ScriptableObject
     [FormerlySerializedAs("rankingPointsMode")] [SerializeField] private string selectionPointsMode = "pair";
     [Tooltip("Degrees beyond a canopy's edge at which the crosshair still selects it in a selection when crosshairRadius is 0, the cone rule (0 = the crosshair must be inside the canopy; with the crosshair, selectionCrosshairRadius decides).")]
     [FormerlySerializedAs("rankingAimTolerance")] [SerializeField] private float selectionAimTolerance = 1.5f;
-    [Tooltip("The crosshair's hidden hit circle during a selection (degrees), in place of crosshairRadius: the bushes of a set stand at least 2 degrees apart in the view, so a circle of up to 1 degree can touch only one of them. 0 = crosshairRadius. Read by scripts/replay.py from the log.")]
+    [Tooltip("The crosshair's hidden hit circle during a selection (degrees), in place of crosshairRadius: the bushes of a set stand about 2 degrees apart in the view, so a circle of 1 degree touches only one of them almost always (on the wall, the two upper bushes of an outer squat column overlap by about 0.5 square degrees in 8 of 50 grids; 0.8 degrees has no overlap). 0 = crosshairRadius. Read by scripts/replay.py from the log.")]
     [FormerlySerializedAs("rankingCrosshairRadius")] [SerializeField] private float selectionCrosshairRadius = 1f;
     [Tooltip("How far below the player's ground the disc's surface lies (units), so the player looks down onto the bushes. The camera is never moved.")]
     [FormerlySerializedAs("rankingStageDrop")] [SerializeField] private float selectionStageDrop = 3f;
