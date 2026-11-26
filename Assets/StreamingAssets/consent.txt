@@ -1,4 +1,68 @@
-version: PLACEHOLDER-1
-Consent to participate in a research study
+version: IRB-1
+CONSENT TO TAKE PART IN RESEARCH
+Dartmouth College
 
-PLACEHOLDER CONSENT TEXT
+<b>Study title:</b> Reward learning, choice, and attention
+<b>Principal Investigator:</b> Alireza Soltani
+
+<b>You are being asked to take part in a research study. Taking part in research is voluntary.</b>
+
+<b>Study Summary:</b>
+The purpose of this study is to better understand how we learn from reward feedback, make decisions based on that learning, and how these processes are influenced by attention. There are no physical or psychological risks associated with this study beyond the potential tiredness from looking at a computer screen and pressing keys on a keyboard. Monitoring with an infrared camera has no known health risks.
+
+Your decision whether or not to take part will have no effect on the quality of your academic standing or job status. Please ask questions if there is anything about this study that you do not understand.
+
+<b>What is the purpose of this study?</b>
+The purpose of the study is to explore how people learn from rewards, use what they have learned to make decisions, and how their attention is controlled and affects these processes.
+
+<b>Will you benefit from taking part in this study?</b>
+You will not personally benefit from being in this research study. We hope to gather information that may help people in the future.
+
+<b>What does this study involve?</b>
+Your participation in this study may last up to 6 hours, which is divided across multiple sessions (over two or more days).
+
+During the study, you will see one or more visual cues (such as images or shapes) or no cues at all, along with additional information displayed on a computer screen. You will then select between two or more choice options based on this information. On some trials, you will receive feedback, which will tell you whether your choice was correct or incorrect, or whether it was rewarded or not. At certain points, you may also be asked to report what you have learned from the cues and how confident you are about your learning or choices. You will use a keyboard, buttons, or your eye movements to make and report your decisions, etc. The visual cues you see may include photographs, drawings, simple geometric shapes, or patterns such as sinewave gratings.
+
+We may monitor your eye movements and pupil dilation using an infrared camera placed on the table in front of you. You will be asked to rest your chin on a chinrest to minimize head movement during this process. The infrared camera works like a regular camera but is sensitive to infrared light. Additionally, you may be asked to complete a questionnaire about your learning or performance on the task.
+
+<b>What are the options if you do not want to take part in this study?</b>
+The alternative is not to take part in this study.
+
+<b>If you take part in this study, what activities will be done only for research purposes?</b>
+If you take part in this study, the following activities will be done only for research purposes: monitoring your eye movements, recording your choices and responses on the keyboard.
+
+<b>What are the risks involved with being enrolled in this study?</b>
+This study does not involve any physical or psychological side effects or risks, other than potential tiredness from looking at a computer screen and pressing keys on a keyboard. You are free to stop participating at any time.
+
+There are no known health risks associated with monitoring eye movements using an infrared camera.
+
+All data collected during this study will remain confidential, and your name will not appear in any reports or publications resulting from this research.
+
+<b>Will my data be deidentified and used in the future for other purposes?</b>
+Your data (choice and responses on the keyboard and eye movements) might be stripped of identifiers and used for future research. Any future research that uses your data will be reviewed by the Committee for the Protection of Human Subjects at Dartmouth College, who will determine if the research requires your permission or may be properly done without further permission from you.
+
+<b>Other important items you should know:</b>
+
+• <b>Leaving the study:</b> You may choose to stop taking part in this study at any time. If you decide to stop taking part, it will have no effect on your academic standing, or job status.
+• <b>Number of people in this study:</b> We expect (500) people to enroll in this study here, and (0) at other study sites.
+• <b>Funding:</b> National Science Foundation provides funding to Dartmouth College for this research. <b>How will your privacy be protected?</b>
+
+<b>The information collected as data for this study includes:</b>
+The data collected in this study include behavioral measures, such as button-press data, eye movements, and pupil dilation. Your name and age will be collected along with your answers to the questionnaire. We will also record your gender, handedness, age, and other basic information that will not and cannot be used to identify anything private about you. We may also ask for your average household income to better understand how the incentive provided by compensation from the experiment could affect your performance.
+
+Data collected for this study will be maintained indefinitely.
+
+We are careful to protect the identities of the people in this study. We also keep the information collected for this study secure and confidential. Behavioral data and responses from computer-based questionnaires will be stored on password-protected computers in the lab and identified only by randomized IDs.
+
+If research data is shared electronically or physically outside the institution, all identifying information will be removed to ensure anonymity.
+
+<b>Will you be paid to take part in this study?</b>
+Yes or no. You will be paid for your participation based on the number of hours you participate in the experiment, your performance, and what options you choose during the experiment (overall $10-20/hour). You may also choose to instead get one T-point for every hour of experimental data collection. Because of the nature of online experiments, the overall payment for online version of the experiment will be $5-10/hour.
+
+<b>Whom should you call with questions about this study?</b>
+If you have questions about this study or concerns about a research related problem or injury, you can call the research director for this study: Dr. Alireza Soltani (603) 646-2998 during normal business hours.
+
+If you have questions, concerns, complaints, or suggestions about human research at Dartmouth, you may call the Office of the Committee for the Protection of Human Subjects at Dartmouth College (603) 646-6482 during normal business hours.
+
+<b>CONSENT</b>
+I have read the above information about Reward learning, Choice, and Attention and have been given time to ask questions. I agree to take part in this study and I will be given a copy of this signed consent form.

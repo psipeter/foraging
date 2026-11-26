@@ -17,7 +17,8 @@ public class MenuScreen : MonoBehaviour
     {
         public string Code;
         public string Title;
-        public string Detail;      // the length column: "21 sessions · ~65 min", the progress, or "Completed"
+        public string Detail;      // the length column: "3 sessions" over "~15 minutes", the progress, or "Completed"
+        public string Payment = "-";   // the payment column: "$a to finish +" over "$b per 100 points", "-" when the experiment states none
         public string Action;      // the button's caption
         public bool Enabled;
         public string Requires;    // the titles of the experiments to finish first, "-" for none
@@ -65,11 +66,23 @@ public class MenuScreen : MonoBehaviour
         return seconds < 45f ? "under a minute left" : $"~{Mathf.Max(1f, Mathf.Round(seconds / 60f)):F0} min left";
     }
 
-    // "21 sessions · ~65 min", or without the time when the experiment is not in this build.
+    // "3 sessions" over "~15 minutes" (two lines), or without the time when the experiment is not in this build.
     private static string LengthText(ExperimentConfig config, int sessions)
     {
         string count = sessions == 1 ? "1 session" : $"{sessions} sessions";
-        return config != null ? $"{count} · ~{MinutesOf(config, RunModes.Apply(config.Sessions)):F0} min" : count;
+        return config != null ? $"{count}\n~{MinutesOf(config, RunModes.Apply(config.Sessions)):F0} minutes" : count;
+    }
+
+    // "$a to finish +" over "$b per 100 points", from the experiment's payment fields; "-" when it states neither amount.
+    private static string PaymentText(ExperimentConfig config)
+    {
+        if (config == null || (config.PaymentFinish <= 0f && config.PaymentBonus <= 0f))
+        {
+            return "-";
+        }
+
+        string finish = $"${config.PaymentFinish:F2} to finish";
+        return config.PaymentBonus <= 0f ? finish : $"{finish} +\n${config.PaymentBonus:F2} per {config.PaymentBonusPoints:F0} points";
     }
 
     // The rows for a logged-in participant: the server's experiments in its order, each with the standing it reported.
@@ -81,7 +94,7 @@ public class MenuScreen : MonoBehaviour
             ExperimentConfig config = catalog != null ? catalog.Find(s.code) : null;
             List<SessionConfig> played = config != null ? RunModes.Apply(config.Sessions) : null;
             int sessions = played != null ? CountSessions(played) : s.n_sessions;
-            var row = new Row { Code = s.code, Title = s.title, Requires = RequiresText(config, catalog), Unmet = !s.unlocked };
+            var row = new Row { Code = s.code, Title = s.title, Requires = RequiresText(config, catalog), Payment = PaymentText(config), Unmet = !s.unlocked };
             switch (s.status)
             {
                 case "finished":
@@ -146,7 +159,7 @@ public class MenuScreen : MonoBehaviour
                     rows.Add(new Row
                     {
                         Code = experiment.Code, Title = experiment.Title, Detail = LengthText(experiment, CountSessions(RunModes.Apply(experiment.Sessions))), Action = "Start", Enabled = true,
-                        Requires = RequiresText(experiment, catalog)
+                        Requires = RequiresText(experiment, catalog), Payment = PaymentText(experiment)
                     });
                 }
             }
@@ -175,8 +188,8 @@ public class MenuScreen : MonoBehaviour
 
     private const string MenuTitle = "Foraging Study";
 
-    // The panel's columns (x from the row's centre): the name at the left edge, then the length, the prerequisite and the actions (the button).
-    private const float RowWidth = 1388f, NameX = -482f, NameWidth = 360f, LengthX = -100f, LengthWidth = 360f, RequiresX = 270f, RequiresWidth = 340f, ButtonX = 575f, ButtonWidth = 190f;
+    // The panel's columns (x from the row's centre): the name at the left edge, then the length, the prerequisite, the payment and the actions (the button).
+    private const float PanelWidth = 1560f, RowWidth = 1448f, NameX = -542f, NameWidth = 300f, LengthX = -237f, LengthWidth = 250f, RequiresX = 13f, RequiresWidth = 190f, PaymentX = 298f, PaymentWidth = 320f, ButtonX = 583f, ButtonWidth = 190f;
 
     private void Build(IList<Row> rows, string header, string footer, bool consentLink)
     {
@@ -184,11 +197,12 @@ public class MenuScreen : MonoBehaviour
         int n = Mathf.Min(rows.Count, MaxRows);
         const float rowHeight = 96f, rowGap = 16f, headerHeight = 44f, pad = 48f;
         float height = pad * 2f + headerHeight + n * (rowHeight + rowGap) - rowGap;
-        Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, 1500f, height, UiStyle.PanelRadius).transform;
+        Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, PanelWidth, height, UiStyle.PanelRadius).transform;
         float top = height / 2f - pad;
         Header(panel, "Experiment", NameX, NameWidth, top - headerHeight / 2f);
         Header(panel, "Length", LengthX, LengthWidth, top - headerHeight / 2f);
         Header(panel, "Prerequisite", RequiresX, RequiresWidth, top - headerHeight / 2f);
+        Header(panel, "Payment", PaymentX, PaymentWidth, top - headerHeight / 2f);
         Header(panel, "Actions", ButtonX, ButtonWidth, top - headerHeight / 2f);
         float y = top - headerHeight - rowHeight / 2f;
         for (int i = 0; i < n; i++)
@@ -236,13 +250,14 @@ public class MenuScreen : MonoBehaviour
 
         Color tint = row.PillStyle == 1 ? UiStyle.Good : row.PillStyle == 2 ? UiStyle.Muted : new Color(0.66f, 0.80f, 1f);
         bool bar = row.Progress >= 0f;
-        TextMeshProUGUI length = UiStyle.Text(r, "Length", row.Detail, 26f, TextAlignmentOptions.MidlineLeft, LengthX, bar ? 12f : 0f, LengthWidth, 40f, tint);
+        bool twoLines = row.Detail != null && row.Detail.Contains("\n");
+        TextMeshProUGUI length = UiStyle.Text(r, "Length", row.Detail, twoLines ? 24f : 26f, TextAlignmentOptions.MidlineLeft, LengthX, bar ? 12f : 0f, LengthWidth, twoLines ? 68f : 40f, tint);
         length.font = UiStyle.BoldFont;
         length.textWrappingMode = TextWrappingModes.NoWrap;
         if (bar)
         {
             // a finished experiment is a full green bar, one under way a partly filled accent one
-            const float barWidth = 300f;
+            const float barWidth = 240f;
             float left = LengthX - LengthWidth / 2f;
             UiStyle.Rounded(r, "Bar", new Color(1f, 1f, 1f, 0.12f), left + barWidth / 2f, -22f, barWidth, 10f, 5f);
             float fillWidth = Mathf.Max(barWidth * row.Progress, 10f);
@@ -256,6 +271,10 @@ public class MenuScreen : MonoBehaviour
         requires.fontSizeMin = 18f;
         requires.fontSizeMax = 26f;
         requires.textWrappingMode = TextWrappingModes.NoWrap;
+
+        TextMeshProUGUI payment = UiStyle.Text(r, "Payment", row.Payment, 22f, TextAlignmentOptions.MidlineLeft, PaymentX, 0f, PaymentWidth, 68f, row.Payment == "-" ? UiStyle.Muted : dim ? UiStyle.Muted : UiStyle.Ink);
+        payment.font = UiStyle.DisplayFont;
+        payment.textWrappingMode = TextWrappingModes.NoWrap;
 
         string code = row.Code;
         Button button = UiStyle.Pill(r, "Button", row.Action, ButtonX, 0f, ButtonWidth, () => Choose(code), row.Action == "View code" || row.Action == "Done", 64f);

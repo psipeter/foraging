@@ -24,6 +24,12 @@ public class ExperimentConfig : ScriptableObject
     [SerializeField] private float estimatedMinutes = 0f;
     [Tooltip("The points a typical participant earns in it (shown as \"~N\"). 0: not known, shown as a dash. PLACEHOLDER until pilot data exist.")]
     [SerializeField] private float typicalPoints = 0f;
+    [Tooltip("The menu's Payment column, in dollars: what completing the experiment pays. Shown as \"$a to finish +\". 0 here and in the bonus: a dash. The menu only displays it (Prolific pays): it must match the study page.")]
+    [SerializeField] private float paymentFinish = 0f;
+    [Tooltip("The bonus in dollars for each `paymentBonusPoints` points earned (shown as \"$b per 100 points\").")]
+    [SerializeField] private float paymentBonus = 0f;
+    [Tooltip("The points one bonus amount is paid for.")]
+    [SerializeField] private float paymentBonusPoints = 100f;
 
     public string Code => code;
     public string Title => title;
@@ -33,6 +39,9 @@ public class ExperimentConfig : ScriptableObject
     public int SessionCount => sessions.Count;
     public bool CountsTowardTotal => countsTowardTotal;
     public float TypicalPoints => typicalPoints;
+    public float PaymentFinish => paymentFinish;
+    public float PaymentBonus => paymentBonus;
+    public float PaymentBonusPoints => paymentBonusPoints;
 
 
     // The minutes the menu quotes: the stated estimate, else MinutesOf the sessions.

@@ -105,22 +105,67 @@ public class ConsentScreen : MonoBehaviour
     private void BuildId(string presetId, string problem)
     {
         UiStyle.Backdrop(transform);
-        Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, 820f, 600f, UiStyle.PanelRadius).transform;
-        UiStyle.Eyebrow(panel, "Welcome", 0f, 232f, 708f);
-        UiStyle.Text(panel, "Title", "Foraging study", UiStyle.Title, TextAlignmentOptions.Left, 0f, 156f, 708f, 90f);
-        UiStyle.Text(panel, "Intro", "Enter your name/ID to continue", UiStyle.Body, TextAlignmentOptions.TopLeft, 0f, 80f, 708f, 60f)
-            .textWrappingMode = TextWrappingModes.Normal;
+        Transform panel = UiStyle.Rounded(transform, "Panel", UiStyle.Glass, 0f, 0f, 820f, 782f, UiStyle.PanelRadius).transform;
+        UiStyle.Eyebrow(panel, "Welcome", 0f, 323f, 708f);
+        UiStyle.Text(panel, "Title", "Foraging study", UiStyle.Title, TextAlignmentOptions.Left, 0f, 247f, 708f, 90f);
 
         bool locked = !string.IsNullOrEmpty(presetId) && IdPattern.IsMatch(presetId);   // a malformed ID from the address can be corrected
-        UiStyle.Text(panel, "IdLabel", locked ? "Your Prolific ID" : "Prolific ID or participant ID", UiStyle.Small, TextAlignmentOptions.Left, 0f, 6f, 708f, 36f, UiStyle.Muted);
-        _id = Field(panel, "IdField", presetId ?? "", 0f, -58f, 708f, 88f);
+        UiStyle.Text(panel, "IdLabel", locked ? "Your Prolific ID" : "Prolific ID or participant ID", UiStyle.Small, TextAlignmentOptions.Left, 0f, 157f, 708f, 36f, UiStyle.Muted);
+        _id = Field(panel, "IdField", presetId ?? "", 0f, 93f, 708f, 88f);
         _id.characterLimit = 64;
         _id.interactable = !locked;
-        _problem = UiStyle.Text(panel, "Problem", problem ?? "", UiStyle.Small, TextAlignmentOptions.Left, 0f, -126f, 708f, 36f, new Color(0.95f, 0.55f, 0.45f));
-        _continue = UiStyle.Pill(panel, "Continue", "Continue", 0f, -196f, 708f, AcceptId);
+        _problem = UiStyle.Text(panel, "Problem", problem ?? "", UiStyle.Small, TextAlignmentOptions.Left, 0f, 25f, 708f, 36f, new Color(0.95f, 0.55f, 0.45f));
+        Requirement(panel, "Headphones", -62f, "This game has sound. Please use headphones.", box => Icon(box, "HeadphonesIcon", "headphones", 0f, 56f));
+        Requirement(panel, "Keyboard", -158f, "Please use a computer with a keyboard and mouse.", box =>
+        {
+            Keys(box, -32f);
+            Icon(box, "MouseIcon", "mouse", 48f, 48f);
+        });
+        _continue = UiStyle.Pill(panel, "Continue", "Continue", 0f, -313f, 708f, AcceptId);
         _id.onValueChanged.AddListener(_ => RefreshId());
         RefreshId(problem);
         _id.ActivateInputField();
+    }
+
+    // A note under the ID field: a picture on a rounded plate at the left (`draw` fills the plate) and the text beside it.
+    private static void Requirement(Transform panel, string name, float y, string text, System.Action<Transform> draw)
+    {
+        Image plate = UiStyle.Rounded(panel, name + "Plate", UiStyle.Field, -274f, y, 160f, 80f, 20f);
+        draw(plate.transform);
+        UiStyle.Text(panel, name + "Text", text, UiStyle.Small, TextAlignmentOptions.Left, 90f, y, 528f, 80f, UiStyle.Ink).textWrappingMode = TextWrappingModes.Normal;
+    }
+
+    // One of the icons in Resources/Icons (Tabler outline icons, MIT licence; white on transparent), `size` reference pixels square.
+    private static void Icon(Transform parent, string name, string resource, float x, float size)
+    {
+        Texture2D texture = Resources.Load<Texture2D>("Icons/" + resource);
+        if (texture == null)
+        {
+            return;
+        }
+
+        var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+        go.transform.SetParent(parent, false);
+        UiStyle.Place(go.GetComponent<RectTransform>(), x, 0f, size, size);
+        var image = go.GetComponent<Image>();
+        image.sprite = Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height), new Vector2(0.5f, 0.5f), 100f);
+        image.color = UiStyle.Ink;
+        image.raycastTarget = false;
+    }
+
+    // The W A S D keys as an inverted T of small outlined caps, centred at `x` on the plate.
+    private static void Keys(Transform plate, float x)
+    {
+        const float cap = 26f, gap = 3f;
+        string[] letters = { "W", "A", "S", "D" };
+        float[,] at = { { 0f, 1f }, { -1f, 0f }, { 0f, 0f }, { 1f, 0f } };        // column, row (row 1 = the top one)
+        for (int i = 0; i < letters.Length; i++)
+        {
+            float cx = x + at[i, 0] * (cap + gap), cy = (at[i, 1] - 0.5f) * (cap + gap);
+            UiStyle.Rounded(plate, "Key" + letters[i] + "Edge", UiStyle.Muted, cx, cy, cap, cap, 6f);
+            UiStyle.Rounded(plate, "Key" + letters[i], UiStyle.Field, cx, cy, cap - 3f, cap - 3f, 5f);
+            UiStyle.Text(plate, "Key" + letters[i] + "Letter", letters[i], 18f, TextAlignmentOptions.Center, cx, cy, cap, cap, UiStyle.Ink);
+        }
     }
 
     private void RefreshId(string keepProblem = null)
