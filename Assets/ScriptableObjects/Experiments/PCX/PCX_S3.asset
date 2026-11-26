@@ -50,7 +50,7 @@ MonoBehaviour:
   selectionMaxWait: 10
   selectionPicks: 5
   selectionGridSpacing: 7
-  selectionGridDistance: 22
+  selectionGridDistance: 28
   selectionGridPreset: balanced
   selectionTopKPoints: 100
   selectionPaid: all
@@ -62,8 +62,8 @@ MonoBehaviour:
   selectionPointsMode: top_k
   selectionAimTolerance: 1.5
   selectionCrosshairRadius: 1
-  selectionStageDrop: 2
-  selectionStageTilt: 30
+  selectionStageDrop: -5.1
+  selectionStageTilt: 90
   selectionStageMargin: 5.5
   selectionStageWorldGray: 0.6
   instructionsFile: Experiments/PCX/instructions_S3.txt

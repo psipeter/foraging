@@ -40,7 +40,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from perception import hidden_by_bushes, hidden_by_terrain, sample_grid, unit_directions
-from replay import break_windows, bush_ground, canopy_height, load_session_log, with_selection_bushes
+from replay import break_windows, bush_ground, bush_up, canopy_height, load_session_log, with_selection_bushes
 
 
 # --------------------------------------------------------------------------------------------------
@@ -111,13 +111,19 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
     ry = canopy_height(cfg, b.shape) * 0.5
     ground = bush_ground(b, elevation, half)          # a selection stage's bushes stand on their disc (the logged y)
     dirs = unit_directions()
-    # Sample points (n, P, 3) in world coordinates and their outward normals.
-    pts = np.empty((n, len(dirs), 3))
-    pts[:, :, 0] = b.pos[:, None, 0] + rx[:, None] * dirs[None, :, 0]
-    pts[:, :, 1] = ground[:, None] + ry[:, None] * dirs[None, :, 1]
-    pts[:, :, 2] = b.pos[:, None, 1] + rx[:, None] * dirs[None, :, 2]
-    normals = np.stack([dirs[None, :, 0] / rx[:, None], dirs[None, :, 1] / ry[:, None], dirs[None, :, 2] / rx[:, None]], axis=-1)
-    mid = np.stack([b.pos[:, 0], ground + ry * 0.5, b.pos[:, 1]], axis=-1)       # middle of the visible canopy
+    # Sample points (n, P, 3) in world coordinates and their outward normals. A bush's up axis is the world's, except on a tipped selection stage (it grows out of the stage): its canopy
+    # is then the same ellipsoid turned, with the two horizontal axes of the unit sphere taken across the up axis.
+    up_axes = bush_up(b)
+    side = np.cross(up_axes, np.array([1.0, 0.0, 0.0]))
+    side[np.linalg.norm(side, axis=-1) < 1e-6] = np.array([0.0, 0.0, 1.0])
+    side /= np.linalg.norm(side, axis=-1, keepdims=True)
+    side2 = np.cross(up_axes, side)
+    centres_ground = np.stack([b.pos[:, 0], ground, b.pos[:, 1]], axis=-1)
+    across = dirs[None, :, 0, None] * side[:, None, :] + dirs[None, :, 2, None] * side2[:, None, :]            # (n, P, 3)
+    pts = centres_ground[:, None, :] + rx[:, None, None] * across + (ry[:, None] * dirs[None, :, 1])[..., None] * up_axes[:, None, :]
+    normals = across / rx[:, None, None] + (dirs[None, :, 1] / ry[:, None])[..., None] * up_axes[:, None, :]
+    mid = centres_ground + (ry * 0.5)[:, None] * up_axes       # middle of the visible canopy
+    tipped = up_axes[:, 1] < 1.0 - 1e-6                        # such bushes do not occlude (the occlusion test below takes upright ellipsoids)
 
     tr = log.traj
     if dt is None:
@@ -157,7 +163,7 @@ def visible_bushes(log, dt=0.1, aspect=None, max_distance=None, min_angular_deg=
         # Other bushes' canopies, for the points that are still in view.
         mi, pi = np.nonzero(ok)
         if bush_occlusion and len(mi):
-            behind = hidden_by_bushes(eye, pts[candidates[mi], pi], candidates[mi], candidates, b.pos, ground, rx, ry)        # only bushes that exist now (and are near enough) hide others
+            behind = hidden_by_bushes(eye, pts[candidates[mi], pi], candidates[mi], candidates[~tipped[candidates]], b.pos, ground, rx, ry)        # only bushes that exist now (and are near enough) hide others
             ok[mi[behind], pi[behind]] = False
 
         frac_visible = ok.mean(axis=1)

@@ -100,6 +100,7 @@ public class SelectionBreak : MonoBehaviour
     private GameObject _stageCamera;
     private int _mainCullingMask;
     private SelectionDisc _disc;
+    private float _stageCentreZ;                       // the stage's middle ahead of the player (the pool's z), set by BuildDisc
     private int _tile = -1;
     private int _switches;                  // qualifying leavings since the last break (the every-N rule)
     private int _leavings;                  // qualifying leavings in the session so far (the scheduled rule, SessionConfig.selectionLeavings)
@@ -437,10 +438,11 @@ public class SelectionBreak : MonoBehaviour
 
         foreach (PoolBush b in set.bushes)
         {
-            float local_x = _pool.treePos[2 * b.id], local_z = _pool.treePos[2 * b.id + 1];
+            float lattice = _pool.treePos[2 * b.id + 1] - _stageCentreZ;            // along the slope from the stage's middle
+            float local_x = _pool.treePos[2 * b.id], local_z = _stageCentreZ + lattice * Mathf.Cos(_config.SelectionStageTilt * Mathf.Deg2Rad);
             Vector3 offset = turn * new Vector3(local_x, 0f, local_z);
             var attributes = new TreeAttributes { shape = b.shape, color = b.color, moisture = b.moisture };
-            float ground = discY + _disc.HeightAt(local_x, local_z);
+            float ground = discY + _disc.HeightAt(local_x, lattice);
             Tree tree = _treeGenerator.CreateTree(_world.TreeCount + b.id, origin.x + offset.x, origin.z + offset.z, attributes, new int[Mathf.Max(_pool.fruitCount, 1)], ground);
             if (tree == null)
             {
@@ -448,6 +450,11 @@ public class SelectionBreak : MonoBehaviour
             }
 
             TreeGenerator.SetLayerRecursively(tree.gameObject, StageLayer);
+            tree.transform.rotation = Quaternion.FromToRotation(Vector3.up, _disc.Object.transform.up) * tree.transform.rotation;       // a bush grows out of the stage (upright on a flat one)
+            foreach (Renderer stageRenderer in tree.GetComponentsInChildren<Renderer>())
+            {
+                stageRenderer.receiveShadows = false;          // the real world's shadows must not fall on the stage (a steep stage's near rows lie below the ground and the terrain would shade them)
+            }
 
             tree.isHarvested = true;           // not aimable (no highlight, no ring) until the set has finished growing
             _setTrees[b.id] = tree;
@@ -476,7 +483,8 @@ public class SelectionBreak : MonoBehaviour
             }
 
             _log.LogEvent("rank_set", payload: Json.Obj(("break", _breakNumber), ("set", set.index), ("fruits", Mathf.Max(_pool.fruitCount, 1)), ("bushes", new Json.Raw("[" + string.Join(",", table) + "]")),
-                ("stage", true), ("disc_texture", _disc.TextureIndex)));
+                ("stage", true), ("disc_texture", _disc.TextureIndex),
+                ("up_x", (double)_disc.Object.transform.up.x), ("up_y", (double)_disc.Object.transform.up.y), ("up_z", (double)_disc.Object.transform.up.z)));
         }
 
         ShowHud();
@@ -745,22 +753,26 @@ public class SelectionBreak : MonoBehaviour
     // A disc of terrain just bigger than the set's arc, below the player's ground, in the set's frame (the player at the origin, z ahead).
     private SelectionDisc BuildDisc(PoolSet set, Vector3 origin, Quaternion turn, float discY)
     {
-        float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
+        float minX = float.MaxValue, maxX = float.MinValue, minLattice = float.MaxValue, maxLattice = float.MinValue;
         foreach (PoolBush b in set.bushes)
         {
-            float x = _pool.treePos[2 * b.id], z = _pool.treePos[2 * b.id + 1], r = _pool.canopyRadius[b.id];
+            float x = _pool.treePos[2 * b.id], lattice = _pool.treePos[2 * b.id + 1], r = _pool.canopyRadius[b.id];
             minX = Mathf.Min(minX, x - r);
             maxX = Mathf.Max(maxX, x + r);
-            minZ = Mathf.Min(minZ, z - r);
-            maxZ = Mathf.Max(maxZ, z + r);
+            minLattice = Mathf.Min(minLattice, lattice - r);
+            maxLattice = Mathf.Max(maxLattice, lattice + r);
         }
 
-        var centre = new Vector2((minX + maxX) / 2f, (minZ + maxZ) / 2f);
+        // The pool's lattice is laid along the stage's slope (rows `gridSpacing` apart on the stage): the stage's middle stays where the pool put it (`_stageCentreZ`, ahead of the player), a row's
+        // distance from it along the slope is `lattice`, and its place is `lattice * cos(tilt)` further ahead and `lattice * sin(tilt)` higher (a stage tipped to 90 degrees is a wall in front of
+        // the player). With no tilt this is the pool's own z. The logged x, z and y of each bush are the result, which replay and visibility read.
+        _stageCentreZ = (minLattice + maxLattice) / 2f;
+        var centre = new Vector2((minX + maxX) / 2f, _stageCentreZ);
         float margin = _config.SelectionStageMargin;
         Vector3 position = origin + turn * new Vector3(centre.x, 0f, centre.y);
         position.y = discY;
         int seed = _config.WorldSeed * 31 + _breakNumber;
-        return SelectionDisc.Create(_treeGenerator.Terrain.MaterialInstance, position, turn, centre, (maxX - minX) / 2f + margin, (maxZ - minZ) / 2f + margin, _config.WorldHalfExtent, seed, StageLayer, _config.SelectionStageTilt);
+        return SelectionDisc.Create(_treeGenerator.Terrain.MaterialInstance, position, turn, centre, (maxX - minX) / 2f + margin, (maxLattice - minLattice) / 2f + margin, _config.WorldHalfExtent, seed, StageLayer, _config.SelectionStageTilt);
     }
 
     // A second (overlay) camera draws the stage layer over the world after clearing depth, so the real terrain cannot hide the disc below it; the main camera never

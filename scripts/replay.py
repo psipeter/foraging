@@ -52,6 +52,7 @@ class Bushes:
     fruit_reward: np.ndarray    # (n, fruit_count) reward of the k-th fruit taken from each bush
     shape: np.ndarray = None    # (n,) shape attribute (sets the canopy height; see visibility.py)
     ground: np.ndarray = None   # (n,) the ground height under a bush where it is not the terrain's (a selection stage's disc; nan elsewhere); None: the terrain everywhere
+    up: np.ndarray = None       # (n, 3) each bush's up axis where it is not the world's (a bush on a tipped selection stage grows out of the stage); None: upright everywhere
 
 
 @dataclass
@@ -145,13 +146,18 @@ def _forward(yaw, pitch):
     return np.array([math.sin(y) * math.cos(p), -math.sin(p), math.cos(y) * math.cos(p)])
 
 
-def _aimed(centres, rx, ry, eye, forward, radius_deg):
-    """HarvestManager.Aimed for several bushes: does the view ray from `eye` along `forward` meet each canopy's ellipsoid (horizontal radius rx, vertical radius ry, centred on the
-    ground), grown by distance x tan(radius)? A ray starting inside it counts."""
+def _aimed(centres, rx, ry, eye, forward, radius_deg, up=None):
+    """HarvestManager.Aimed for several bushes: does the view ray from `eye` along `forward` meet each canopy's ellipsoid (radius rx across the bush's up axis, ry along it, centred on the
+    ground), grown by distance x tan(radius)? A ray starting inside it counts. `up` (n, 3): each bush's up axis (None: the world's; a bush on a tipped selection stage grows out of it)."""
     grow = np.linalg.norm(centres - eye, axis=-1) * math.tan(math.radians(radius_deg))
-    radii = np.stack([rx + grow, ry + grow, rx + grow], axis=-1)
-    p, q = (eye - centres) / radii, forward / radii
-    a, b, c = (q * q).sum(-1), (p * q).sum(-1), (p * p).sum(-1) - 1.0
+    across, along = rx + grow, ry + grow
+    up = np.broadcast_to(np.array([0.0, 1.0, 0.0]), centres.shape) if up is None else up
+    e = eye - centres
+    e_along, f_along = (e * up).sum(-1), (forward * up).sum(-1)
+    e_across, f_across = e - up * e_along[..., None], forward - up * f_along[..., None]
+    a = (f_across * f_across).sum(-1) / across ** 2 + f_along ** 2 / along ** 2
+    b = (e_across * f_across).sum(-1) / across ** 2 + e_along * f_along / along ** 2
+    c = (e_across * e_across).sum(-1) / across ** 2 + e_along ** 2 / along ** 2 - 1.0
     disc = b * b - a * c
     return (disc >= 0.0) & ((-b + np.sqrt(np.maximum(disc, 0.0))) / a > 0.0)
 
@@ -168,6 +174,11 @@ def canopy_height(config, shape):
     """Full canopy height (Tree.ApplyAttributes) from the logged config."""
     return canopy_height_of(shape, (config["shapeRange"]["x"], config["shapeRange"]["y"]),
                             (config["canopyHeightRange"]["x"], config["canopyHeightRange"]["y"]))
+
+
+def bush_up(b):
+    """Each bush's up axis (n, 3): the world's unless the bush stands on a tipped selection stage (the `rank_set` event's `up_x`, `up_y`, `up_z`; a log without them: upright)."""
+    return np.broadcast_to(np.array([0.0, 1.0, 0.0]), (len(b.pos), 3)).copy() if b.up is None else b.up
 
 
 def bush_ground(b, elevation, half):
@@ -197,6 +208,7 @@ def with_selection_bushes(log):
     n0, n_fruits = len(b.pos), b.fruit_reward.shape[1]
     pos, radius, shape, ids, sets = [b.pos], [b.canopy_radius], [b.shape if b.shape is not None else np.zeros(n0)], [np.arange(n0)], []
     ground = [np.full(n0, np.nan)]
+    up = [np.tile([0.0, 1.0, 0.0], (n0, 1))]
     ends = sorted(e["t"] for e in log.events if e["type"] == "rank_set_end")
     break_ends = sorted(e["t"] for e in log.events if e["type"] == "rank_break_end")        # a set whose try was interrupted (a resume) stands until its break's aborted end
     total = n0
@@ -206,13 +218,15 @@ def with_selection_bushes(log):
         radius.append(np.array([r["radius"] for r in rows], dtype=float))
         shape.append(np.array([r["shape"] for r in rows], dtype=float))
         ground.append(np.array([r.get("y", np.nan) for r in rows], dtype=float))
+        payload = _payload(e)
+        up.append(np.tile([payload.get("up_x", 0.0), payload.get("up_y", 1.0), payload.get("up_z", 0.0)], (len(rows), 1)))
         ids.append(np.array([int(r["id"]) for r in rows]))
         sets.append({"t": e["t"], "end": min(next((x for x in ends if x > e["t"] - 1e-9), np.inf), next((x for x in break_ends if x > e["t"] - 1e-9), np.inf)), "slots": np.arange(total, total + len(rows))})
         total += len(rows)
     if not sets:
         return b, sets, ids[0]
     extended = Bushes(pos=np.concatenate(pos), canopy_radius=np.concatenate(radius), fruit_reward=np.concatenate([b.fruit_reward, np.zeros((total - n0, n_fruits), dtype=int)]),
-                      shape=np.concatenate(shape), ground=np.concatenate(ground))
+                      shape=np.concatenate(shape), ground=np.concatenate(ground), up=np.concatenate(up))
     return extended, sets, np.concatenate(ids)
 
 
@@ -236,6 +250,7 @@ def replay_harvests(log):
         ground = bush_ground(b, elevation, half)
         half_height = 0.5 * canopy_height(cfg, b.shape)
         centres = np.stack([b.pos[:, 0], ground, b.pos[:, 1]], axis=-1)
+        b_up = bush_up(b)
         release_radius = crosshair * max(float(cfg.get("crosshairReleaseScale") or 1.0), 1.0)
     # In a selection break the hit circle is selectionCrosshairRadius (0 or a log without it: the crosshairRadius), small enough that neighbouring bushes of a set are not both touched.
     selection_crosshair = float(cfg.get("selectionCrosshairRadius") or 0.0) or crosshair
@@ -321,7 +336,7 @@ def replay_harvests(log):
                 if crosshair > 0.0:
                     cand = np.flatnonzero((edge <= gaps[idx]) | aim_now)
                     if len(cand):
-                        cand = cand[_aimed(centres[idx[cand]], b.canopy_radius[idx[cand]], half_height[idx[cand]], eye, forward, selection_crosshair if in_break else crosshair)]
+                        cand = cand[_aimed(centres[idx[cand]], b.canopy_radius[idx[cand]], half_height[idx[cand]], eye, forward, selection_crosshair if in_break else crosshair, b_up[idx[cand]])]
                     if len(cand):
                         focus = int(idx[cand[np.argmin(edge[cand])]])
                 else:
@@ -339,7 +354,7 @@ def replay_harvests(log):
         if target >= 0:
             edge, bearing = _measure(b, np.array([target]), x, z, yaw)
             if crosshair > 0.0:
-                inside = edge[0] <= gaps[target] and bool(_aimed(centres[[target]], b.canopy_radius[[target]], half_height[[target]], eye, forward, release_radius)[0])
+                inside = edge[0] <= gaps[target] and bool(_aimed(centres[[target]], b.canopy_radius[[target]], half_height[[target]], eye, forward, release_radius, b_up[[target]])[0])
             else:
                 inside = edge[0] <= gaps[target] and bearing[0] <= angle_now
             now_in = bool(aim_now or inside)

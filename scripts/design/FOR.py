@@ -30,7 +30,7 @@ SELECTION_FIELDS = {"selectionEvery": 1, "selectionLeavings.Array.size": 0, "sel
 # the best 5 of a 5x5 grid of bushes picked in 45 s from a stage camera of its own (the player's camera does not move), scored 0 to 100 (one selection, drawn from the world seed, pays). The grids are planned by `scripts/dense_grid.py` (preset balanced).
 SELECTION_TIMES = (30.0, 60.0, 90.0, 120.0, 150.0)
 DENSE_SELECTION_FIELDS = {"selectionDesign": "dense", "selectionTimes.Array.size": len(SELECTION_TIMES), **{f"selectionTimes.Array.data[{i}]": t for i, t in enumerate(SELECTION_TIMES)},
-                        "selectionMaxWait": 10.0, "selectionSeconds": 45.0, "selectionPoolSets": len(SELECTION_TIMES), "selectionPicks": 5, "selectionGridSpacing": 7.0, "selectionGridDistance": 22.0, "selectionStageTilt": 30.0, "selectionStageDrop": 2.0,
+                        "selectionMaxWait": 10.0, "selectionSeconds": 45.0, "selectionPoolSets": len(SELECTION_TIMES), "selectionPicks": 5, "selectionGridSpacing": 7.0, "selectionGridDistance": 28.0, "selectionStageTilt": 90.0, "selectionStageDrop": -5.1,
                         "selectionGridPreset": "balanced", "selectionTopKPoints": 100.0, "selectionPaid": "all",
                         "selectionPointsMode": "top_k", "selectionStageMargin": 5.5, "selectionText": SELECTION_TEXT}
 

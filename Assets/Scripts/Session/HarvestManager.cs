@@ -428,18 +428,22 @@ public class HarvestManager : MonoBehaviour
         _forward = new Vector3(Mathf.Sin(yaw) * Mathf.Cos(pitch), -Mathf.Sin(pitch), Mathf.Cos(yaw) * Mathf.Cos(pitch));
     }
 
-    // True when the view ray passes within `radiusDegrees` of the bush's canopy: the ray meets the canopy's ellipsoid (horizontal radius, half the height vertically, centred on
-    // the ground) grown by distance x tan(radius), the width of the circle at the bush. scripts/replay.py mirrors this.
+    // True when the view ray passes within `radiusDegrees` of the bush's canopy: the ray meets the canopy's ellipsoid (radius `CanopyRadius` across the bush's up axis, half the height along it,
+    // centred on the ground) grown by distance x tan(radius), the width of the circle at the bush. The up axis is the world's except for a bush on a tipped selection stage (it grows out of the
+    // stage). scripts/replay.py mirrors this.
     private bool Aimed(Tree tree, float radiusDegrees)
     {
         Vector3 centre = tree.GetWorldCenter();
         float grow = (_eye - centre).magnitude * Mathf.Tan(radiusDegrees * Mathf.Deg2Rad);
-        var radii = new Vector3(tree.CanopyRadius + grow, tree.CanopyHalfHeight + grow, tree.CanopyRadius + grow);
-        Vector3 p = Vector3.Scale(_eye - centre, new Vector3(1f / radii.x, 1f / radii.y, 1f / radii.z));
-        Vector3 q = Vector3.Scale(_forward, new Vector3(1f / radii.x, 1f / radii.y, 1f / radii.z));
-        float a = Vector3.Dot(q, q);
-        float b = Vector3.Dot(p, q);
-        float c = Vector3.Dot(p, p) - 1f;
+        float across = tree.CanopyRadius + grow, along = tree.CanopyHalfHeight + grow;
+        Vector3 up = tree.transform.up;
+        Vector3 e = _eye - centre;
+        float eAlong = Vector3.Dot(e, up), fAlong = Vector3.Dot(_forward, up);
+        Vector3 eAcross = e - up * eAlong, fAcross = _forward - up * fAlong;
+        float across2 = across * across, along2 = along * along;
+        float a = Vector3.Dot(fAcross, fAcross) / across2 + fAlong * fAlong / along2;
+        float b = Vector3.Dot(eAcross, fAcross) / across2 + eAlong * fAlong / along2;
+        float c = Vector3.Dot(eAcross, eAcross) / across2 + eAlong * eAlong / along2 - 1f;
         float discriminant = b * b - a * c;
         return discriminant >= 0f && (-b + Mathf.Sqrt(discriminant)) / a > 0f;
     }

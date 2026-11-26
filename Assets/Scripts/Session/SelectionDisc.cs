@@ -25,7 +25,7 @@ public class SelectionDisc
     public static SelectionDisc Create(Material terrain, Vector3 position, Quaternion turn, Vector2 centre, float radiusX, float radiusZ, float halfExtent, int seed, int layer, float tiltDegrees = 0f)
     {
         float tilt = tiltDegrees * Mathf.Deg2Rad;
-        var disc = new SelectionDisc { _rx = radiusX, _rz = radiusZ / Mathf.Cos(tilt), _centre = centre, _tilt = tilt };      // `radiusZ` is the horizontal half size
+        var disc = new SelectionDisc { _rx = radiusX, _rz = radiusZ, _centre = centre, _tilt = tilt };      // `radiusZ` is the half size along the slope
         var rng = new System.Random(seed);
         disc.TextureIndex = rng.Next(3);
         disc._phase1 = (float)(rng.NextDouble() * Mathf.PI * 2f);
@@ -45,7 +45,7 @@ public class SelectionDisc
         under.SetFloat("_Smoothness", 0f);
         renderer.sharedMaterials = new[] { top, under };
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        renderer.receiveShadows = true;
+        renderer.receiveShadows = false;                  // the real terrain's shadow would fall on a stage that lies below the ground
         Material mask = Resources.Load<Material>("StageMask");
         if (mask != null)
         {
@@ -89,13 +89,13 @@ public class SelectionDisc
         return 1f + 0.06f * Mathf.Sin(5f * angle + _phase1) + 0.035f * Mathf.Sin(8f * angle + _phase2) + 0.03f * Mathf.Sin(3f * angle + _phase3);
     }
 
-    // The surface height at a point of the set's frame (the player at the origin): the slope (0 when flat) plus a gentle dome over the oval, 0 at its edge.
+    // The surface height at a point of the stage: `x` in the set's frame (to the player's right), `z` the distance along the slope from the stage's middle; the slope (0 when flat) plus a gentle dome over the oval, 0 at its edge.
     public float HeightAt(float x, float z)
     {
-        float dz = z - _centre.y;
-        float u = (x - _centre.x) / _rx, v = dz / Mathf.Cos(_tilt) / _rz;
+        float dz = z;                                       // along the slope from the middle
+        float u = (x - _centre.x) / _rx, v = dz / _rz;
         float rho = Mathf.Sqrt(u * u + v * v) / Bump(Mathf.Atan2(v, u));
-        return dz * Mathf.Tan(_tilt) + Dome * Mathf.Clamp01(1f - rho * rho);
+        return dz * Mathf.Sin(_tilt) + Dome * Mathf.Cos(_tilt) * Mathf.Clamp01(1f - rho * rho);
     }
 
     private Mesh BuildMesh(Vector3 position, Quaternion turn, float halfExtent)
@@ -134,8 +134,7 @@ public class SelectionDisc
         vertices[vertices.Length - 1] = new Vector3(0f, -UnderPoint, 0f);
         for (int i = 0; i < topCount; i++)
         {
-            Vector3 world = position + turn * vertices[i];
-            uv[i] = new Vector2(world.x, world.z) / (2f * halfExtent);
+            uv[i] = new Vector2(position.x + vertices[i].x, position.z + vertices[i].z) / (2f * halfExtent);      // the texture lies in the stage's own plane (a world-xz projection would smear it on a steep one)
         }
 
         var top = new System.Collections.Generic.List<int>();
@@ -179,6 +178,15 @@ public class SelectionDisc
         mesh.SetTriangles(top, 0);
         mesh.SetTriangles(under, 1);
         mesh.RecalculateNormals();
+        // Lit as if flat on the ground whatever the tilt (a stage tipped steeply would face away from the sun and be dark): the tilt is taken out of the normals, the dome's relief kept.
+        Vector3 upInMesh = Quaternion.Inverse(turn) * Vector3.up;
+        Vector3[] normals = mesh.normals;
+        for (int i = 0; i < normals.Length; i++)
+        {
+            normals[i] = (upInMesh + (normals[i] - Vector3.up)).normalized;
+        }
+
+        mesh.normals = normals;
         mesh.RecalculateTangents();
         mesh.RecalculateBounds();
         return mesh;

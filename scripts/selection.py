@@ -360,9 +360,22 @@ NEW_FIELDS = ("selection_design", "selection_times", "selection_max_wait", "sele
 TOPK_PRESETS = ("even", "balanced", "diverse")
 
 
-def grid_slot_position(a, b, spacing, distance):
-    """The stage position (x to the right, z ahead, the player at the origin) of grid slot (a, b): the shape index a runs left to right, the colour index b near to far, the grid's middle `distance` ahead."""
+def grid_slot_position(a, b, spacing, distance, flip_shape=False, flip_color=False):
+    """The stage position (x to the right, z ahead, the player at the origin) of grid slot (a, b): the shape index a runs left to right, the colour index b near to far, the grid's middle `distance` ahead.
+    `flip_shape` / `flip_color` reverse that axis (shape right to left, colour far to near): the grid's orientation, see `grid_orientations`."""
+    a = GRID_N - 1 - a if flip_shape else a
+    b = GRID_N - 1 - b if flip_color else b
     return np.array([(a - (GRID_N - 1) / 2.0) * spacing, distance + (b - (GRID_N - 1) / 2.0) * spacing])
+
+
+def grid_orientations(count, seed):
+    """The orientation of each of `count` grids, (flip_shape, flip_color): the four orientations in a seeded random order, again in a new random order when there are more grids than four (so the
+    best region of a grid does not always lie in the same part of the stage, and a participant must read the bushes, not the places)."""
+    rng = np.random.default_rng(int(seed))
+    order = []
+    while len(order) < count:
+        order += [(bool(o & 1), bool(o >> 1)) for o in rng.permutation(4)]
+    return order[:count]
 
 
 def dense_sets(params, count=None):
@@ -410,7 +423,7 @@ def paid_set_index(seed, count):
 # --------------------------------------------------------------------------------------------------
 
 def dense_pool(params, seed, rng_fruit):
-    """The pool file of the dense design: set s is the grid planned for selection s (25 bushes, ids s * 25 + slot), the positions the same lattice in every set. Returns (sidecar, params)."""
+    """The pool file of the dense design: set s is the grid planned for selection s (25 bushes, ids s * 25 + slot), the positions the same lattice in every set but for its orientation (`grid_orientations`). Returns (sidecar, params)."""
     grids = dense_sets(params)
     count = len(grids)
     spacing, distance = float(getattr(params, "selection_grid_spacing", 7.0)), float(getattr(params, "selection_grid_distance", 18.0))
@@ -420,7 +433,9 @@ def dense_pool(params, seed, rng_fruit):
     n = count * size
     pos, shape, color, mois, radius, value = np.zeros((n, 2)), np.zeros(n), np.zeros(n), np.zeros(n), np.zeros(n), np.zeros(n)
     sets = []
+    orientations = grid_orientations(count, seed)
     for s, g in enumerate(grids):
+        flip_shape, flip_color = orientations[s]
         cells = np.clip(np.asarray(g["cells"], dtype=float), 0.0, 1.0)
         vals = np.asarray(REWARDS[stage_names(params)[2]](params.reward_function, cells[:, 0], cells[:, 1]), dtype=float)
         bushes = []
@@ -429,10 +444,10 @@ def dense_pool(params, seed, rng_fruit):
             i = s * size + slot
             shape[i], color[i], mois[i], value[i] = cells[slot, 0], cells[slot, 1], moisture, vals[slot]
             radius[i] = float(canopy_radius(params, shape[i]))
-            pos[i] = grid_slot_position(a, b, spacing, distance)
+            pos[i] = grid_slot_position(a, b, spacing, distance, flip_shape, flip_color)
             bushes.append({"id": i, "slot": slot, "bearing": 0.0, "shape": float(shape[i]), "color": float(color[i]), "moisture": float(mois[i]), "value": float(value[i])})
         by_value = sorted(bushes, key=lambda x: -x["value"])
-        plan = {"peakIndex": list(map(int, g["index"])), "spacing": float(g["s"]), "ratio": float(g["ratio"]), "inside": int(g["inside"]),
+        plan = {"peakIndex": list(map(int, g["index"])), "spacing": float(g["s"]), "ratio": float(g["ratio"]), "inside": int(g["inside"]), "flipShape": flip_shape, "flipColor": flip_color,
                 "best": top_k_values(vals, picks), "randomExpected": float(picks * vals.mean())}
         sets.append({"index": s, "start": [0.0, 0.0], "yaw": 0.0, "bushes": bushes, "trueOrder": [b["id"] for b in by_value], "minGap": None, "valueSpan": float(by_value[0]["value"] - by_value[-1]["value"]), "grid": plan})
     fruit_count = int(params.fruit_count)

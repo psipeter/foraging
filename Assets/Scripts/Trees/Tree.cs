@@ -477,7 +477,7 @@ public class Tree : MonoBehaviour
             return;
         }
 
-        Vector3 crown = GetWorldCenter() + Vector3.up * (canopy.transform.lossyScale.y * 0.5f);
+        Vector3 crown = GetWorldCenter() + transform.up * (canopy.transform.lossyScale.y * 0.5f);       // the bush's own up (a bush on a selection stage may be tipped)
         float dist = Vector3.Distance(_rankCamera.position, crown);
         if (sessionConfig == null)
         {
@@ -729,7 +729,7 @@ public class Tree : MonoBehaviour
     public Vector3 GetVisibleCenter()
     {
         Vector3 center = GetWorldCenter();
-        return canopy != null ? center + Vector3.up * (canopy.transform.lossyScale.y * 0.25f) : center;
+        return canopy != null ? center + transform.up * (canopy.transform.lossyScale.y * 0.25f) : center;
     }
 
     public Vector3 GetFruitWorldPosition(int index)
