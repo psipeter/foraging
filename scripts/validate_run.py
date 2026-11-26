@@ -34,6 +34,7 @@ PASS, WARN, FAIL, SKIP = "PASS", "WARN", "FAIL", "SKIP"
 TOL = 1e-6              # points are whole numbers; a sum differing by more than this is wrong
 CLOCK_TOL = 1.5         # seconds a session's foraging time may differ from sessionDuration
 COOLDOWN_TOL = 0.05     # seconds
+DENSE_POINTS_TOL = 0.01    # points: the logged bush values are rounded to 4 decimals, so the dense score recomputed from them differs from the game's by up to about 0.002
 STILL_TOL = 1e-3        # world units the player may move in a break
 SETTLE_SECONDS = 0.25   # seconds after a break's start in which the last momentum may still move the player
 SETTLE_MOVE = 0.5       # world units it may move in them
@@ -199,7 +200,7 @@ def _check_dense_sets(ctx, names):
         score = selection.top_k_score([b["value"] for b in picked], list(by_id.values()), k, scale)
         pays = paid_mode == "all" or row["pool_index"] == paid_index
         expect = 0.0 if practice or not pays else score
-        if row["points"] is not None and abs(row["points"] - expect) > TOL:
+        if row["points"] is not None and abs(row["points"] - expect) > DENSE_POINTS_TOL:
             points.append(f"set {i}: points {row['points']}, expected {expect:g} (score {score:g}, pays {pays}, mode {paid_mode}){' (practice: 0)' if practice else ''}")
     out = [Result(names[0], FAIL if pairs else PASS, "; ".join(pairs) or f"{len(ctx.sets)} sets, top-{k} hits")]
     out.append(Result(names[1], FAIL if points else PASS, "; ".join(points) or f"points = the top-k score, paid {paid_mode} (set {paid_index} when one)"))
